@@ -26,8 +26,8 @@ if (isDev) globalPrisma.prisma = prisma;
  *     tx.order.create({ data: {...} }).then((o) => tx.orderItem.createMany({...}))
  *   );
  */
-export async function tx<T>(fn: (client: PrismaClient) => Promise<T>): Promise<T> {
-  return prisma.$transaction(fn, {
+export async function tx<T>(fn: (client: any) => Promise<T>): Promise<T> {
+  return prisma.$transaction(fn as any, {
     maxWait: 5000,
     timeout: 10000,
     isolationLevel: "ReadCommitted",

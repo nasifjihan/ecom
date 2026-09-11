@@ -22,6 +22,7 @@ const strictLimiter = rateLimit({
   max: RATE_LIMITS.STRICT.max,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) => `${req.ip}:${req.path}`,
   store: new RedisStore({ sendCommand: sendRedis as any }),
   handler: (req, _res, next) =>
@@ -33,6 +34,7 @@ const publicLimiter = rateLimit({
   max: RATE_LIMITS.PUBLIC.max,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  validate: false,
   store: new RedisStore({ sendCommand: sendRedis as any }),
   handler: (_req, _res, next) =>
     next(new RateLimitError("Rate limit exceeded — wait 1 minute")),
@@ -43,6 +45,7 @@ const authLimiter = rateLimit({
   max: RATE_LIMITS.AUTHENTICATED.max,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) =>
     (req as any).ctx?.admin?.id?.toString() ||
     (req as any).ctx?.customer?.id?.toString() ||
@@ -60,6 +63,12 @@ export default function rateLimitMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
+  // Graceful degradation: if Redis not connected, skip rate-limiting entirely
+  // (prevents hanging when Docker services aren't running locally).
+  if ((redis as any).status !== "ready") {
+    next();
+    return;
+  }
   if (STRICT_PATHS.test(req.path)) {
     strictLimiter(req, res, next);
     return;
