@@ -548,6 +548,308 @@ async function seedFashionBDStore() {
   }
 
   console.log("  ✅ Orders baseline (Rest of BD shipping zone + Fatema cart 5 items) added.");
+
+  const fashionId = store.id;
+
+  const generalGroupEx = await prisma.customerGroup.findFirst({
+    where: { storeId: fashionId, name: "General" },
+  });
+  if (!generalGroupEx) {
+    await prisma.customerGroup.create({
+      data: {
+        storeId: fashionId,
+        name: "General",
+        discountPercent: "0.00",
+        isSystem: true,
+      },
+    });
+    console.log("  ✅ CustomerGroup: General (system, 0%) added");
+  }
+
+  const vipGroupEx = await prisma.customerGroup.findFirst({
+    where: { storeId: fashionId, name: "VIP" },
+  });
+  let vipGroupId = vipGroupEx?.id;
+  if (!vipGroupEx) {
+    const vip = await prisma.customerGroup.create({
+      data: {
+        storeId: fashionId,
+        name: "VIP",
+        discountPercent: "5.00",
+        minimumSpend: "5000.00",
+        isSystem: false,
+      },
+    });
+    vipGroupId = vip.id;
+    console.log("  ✅ CustomerGroup: VIP (5% min 5000 BDT) added");
+  }
+
+  const passwordHash = bcrypt.hashSync("Customer@123", 10);
+  const customerEmails: string[] = Array.from({ length: 20 }, (_, i) => `c${i + 1}@fashionbd.xyz`);
+  const firstNames = [
+    "Aarav", "Ayesha", "Sakib", "Nusrat", "Rafid", "Tahiya", "Mahir", "Zara", "Ishrak", "Maliha",
+    "Tanvir", "Sadia", "Rakin", "Fariha", "Jubaer", "Nowrin", "Wasif", "Sumaiya", "Mehedi", "Hridita",
+  ];
+  const lastNames = [
+    "Ahmed", "Rahman", "Khan", "Islam", "Chowdhury", "Hossain", "Uddin", "Akter", "Karim", "Begum",
+    "Hasan", "Rana", "Sultana", "Mia", "Khatun", "Bhuiyan", "Ali", "Sharma", "Saha", "Das",
+  ];
+  const BD_PHONE_RE = /^(\+?8801|01)[3-9]\d{8}$/;
+  const demoCustomerIds: bigint[] = [];
+
+  for (let i = 0; i < 20; i++) {
+    const email = customerEmails[i]!;
+    const custEx = await prisma.customer.findFirst({ where: { storeId: fashionId, email } });
+    let cid: bigint;
+    if (!custEx) {
+      const isVIP = i < 2;
+      const customer = await prisma.customer.create({
+        data: {
+          storeId: fashionId,
+          email,
+          passwordHash,
+          firstName: firstNames[i]!,
+          lastName: lastNames[i]!,
+          phone: `017${String(10000000 + i).padStart(8, "0")}`,
+          status: "ACTIVE",
+          acceptMarketing: i % 2 === 0,
+          groupId: isVIP ? vipGroupId : undefined,
+          storeCredit: (i * 100).toFixed(2),
+          loyaltyPoints: i * 50,
+        },
+      });
+      cid = customer.id;
+      console.log(`  ✅ Demo customer ${email} added (VIP=${i < 2})`);
+    } else {
+      cid = custEx.id;
+    }
+    demoCustomerIds.push(cid);
+
+    if (i < 5) {
+      const addrEx = await prisma.customerAddress.findFirst({
+        where: { customerId: cid, type: "shipping" },
+      });
+      if (!addrEx) {
+        await prisma.customerAddress.create({
+          data: {
+            customerId: cid,
+            type: "shipping",
+            label: i < 3 ? "Home" : "Office",
+            firstName: firstNames[i]!,
+            lastName: lastNames[i]!,
+            address1: `House ${i + 1}, Road ${i + 2}, Dhanmondi ${i + 1}`,
+            city: "Dhaka",
+            state: "Dhaka",
+            countryCode: "BD",
+            phone: `017${String(20000000 + i).padStart(8, "0")}`,
+            isDefault: true,
+          },
+        });
+      }
+    } else if (i < 10) {
+      const addrEx = await prisma.customerAddress.findFirst({
+        where: { customerId: cid, type: "shipping" },
+      });
+      if (!addrEx) {
+        await prisma.customerAddress.create({
+          data: {
+            customerId: cid,
+            type: "shipping",
+            label: "Home",
+            firstName: firstNames[i]!,
+            lastName: lastNames[i]!,
+            address1: `Flat 4B, Kazir Dewri, GEC Mor`,
+            city: "Chattogram",
+            state: "Chattogram",
+            countryCode: "BD",
+            phone: `018${String(30000000 + i).padStart(8, "0")}`,
+            isDefault: true,
+          },
+        });
+      }
+    }
+  }
+
+  const fatemaCust = await prisma.customer.findFirst({
+    where: { storeId: fashionId, email: "fatema@fashionbd.xyz" },
+  });
+  if (fatemaCust) demoCustomerIds.push(fatemaCust.id);
+
+  const couponSeed = [
+    {
+      code: "WELCOME10",
+      description: "Welcome 10% off for new customers — min 3000 BDT",
+      type: "PERCENTAGE",
+      amount: "10",
+      isActive: true,
+      newCustomersOnly: true,
+      minSubtotal: "3000.00",
+    },
+    {
+      code: "FLAT500",
+      description: "Flat 500 BDT off — min 5000 BDT, once per customer",
+      type: "FIXED_CART",
+      amount: "500",
+      isActive: true,
+      minSubtotal: "5000.00",
+      perCustomerLimit: 1,
+    },
+  ] as const;
+
+  for (const c of couponSeed) {
+    const couponEx = await prisma.coupon.findFirst({
+      where: { storeId: fashionId, code: c.code },
+    });
+    if (!couponEx) {
+      await prisma.coupon.create({
+        data: {
+          storeId: fashionId,
+          code: c.code,
+          description: c.description,
+          type: c.type as any,
+          amount: c.amount,
+          isActive: c.isActive,
+          newCustomersOnly: (c as any).newCustomersOnly ?? false,
+          minSubtotal: c.minSubtotal,
+          perCustomerLimit: (c as any).perCustomerLimit ?? null,
+        },
+      });
+      console.log(`  ✅ Coupon ${c.code} added`);
+    }
+  }
+
+  const shirtsCat = await prisma.category.findFirst({ where: { storeId: fashionId, slug: "shirts" } });
+  const richmanBrand = await prisma.brand.findFirst({ where: { storeId: fashionId, slug: "richman" } });
+
+  const flashSaleSlug = "richman-20pc-2026";
+  const flashSaleEx = await prisma.flashSale.findFirst({
+    where: { storeId: fashionId, slug: flashSaleSlug },
+  });
+  let flashSaleId: bigint | undefined = flashSaleEx?.id;
+  if (!flashSaleEx) {
+    const flashSale = await prisma.flashSale.create({
+      data: {
+        storeId: fashionId,
+        name: "Fall Richman 2026",
+        slug: flashSaleSlug,
+        startsAt: new Date("2026-09-13T00:00:00"),
+        endsAt: new Date("2026-09-20T23:59:59"),
+        discountPercent: "20",
+        bannerTitle: "Richman Shirts 20% OFF",
+        bannerSubtitle: "7 days only on all Richman formal/casual shirts",
+        bannerCtaText: "Shop Now",
+        bannerCtaUrl: "/collections/richman-shirts",
+        isActive: true,
+      },
+    });
+    flashSaleId = flashSale.id;
+    console.log(`  ✅ Flash Sale "Fall Richman 2026" added (13-20 Sep 2026)`);
+  }
+
+  const richmanProducts = await prisma.product.findMany({
+    where: {
+      storeId: fashionId,
+      brandId: richmanBrand?.id,
+    },
+    take: 5,
+  });
+  if (flashSaleId && richmanProducts.length > 0) {
+    for (let i = 0; i < richmanProducts.length; i++) {
+      const p = richmanProducts[i]!;
+      const itemEx = await prisma.flashSaleItem.findFirst({
+        where: {
+          flashSaleId: flashSaleId!,
+          productId: p.id,
+        },
+      });
+      if (!itemEx) {
+        const productPrice = Number(p.regularPrice ?? 0);
+        const salePrice = productPrice > 0 ? (productPrice * 0.8).toFixed(2) : null;
+        await prisma.flashSaleItem.create({
+          data: {
+            flashSaleId: flashSaleId!,
+            productId: p.id,
+            discountPct: "20",
+            salePrice,
+            stockLimit: 20,
+            sortOrder: i,
+          },
+        });
+      }
+    }
+    console.log(`  ✅ FlashSaleItem rows linked (${richmanProducts.length} Richman products)`);
+  }
+
+  const allCatalogProducts = await prisma.product.findMany({
+    where: { storeId: fashionId },
+    select: { id: true },
+  });
+  const productIdsForReviews = allCatalogProducts.map((p) => p.id);
+
+  const reviewBodies = [
+    "Nice product. Fits well!",
+    "Great quality for the price. Highly recommend.",
+    "Excellent fabric and stitching. Would buy again.",
+    "Good value. Shipping was fast too.",
+    "Perfect size and color. Exactly as described.",
+    "Very happy with the purchase. 5 stars!",
+    "Comfortable and stylish. Good brand.",
+    "Satisfactory. Will shop here again.",
+  ];
+
+  const deliveredOrders = await prisma.order.findMany({
+    where: { storeId: fashionId, status: { in: ["DELIVERED", "COMPLETED"] } },
+    select: { id: true, customerId: true, items: { select: { productId: true } } },
+  });
+
+  const verifiedOrdersByCustomer = new Map<string, bigint[]>();
+  for (const o of deliveredOrders) {
+    const key = String(o.customerId);
+    if (!verifiedOrdersByCustomer.has(key)) verifiedOrdersByCustomer.set(key, []);
+    verifiedOrdersByCustomer.get(key)!.push(o.id);
+  }
+
+  for (let i = 0; i < 30; i++) {
+    const randomProductIdx = Math.floor(Math.random() * productIdsForReviews.length);
+    const productId = productIdsForReviews[randomProductIdx]!;
+    const randomCustomerIdx = Math.floor(Math.random() * demoCustomerIds.length);
+    const customerId = demoCustomerIds[randomCustomerIdx]!;
+    const rating = 3 + Math.floor(Math.random() * 3);
+    const status = i < 10 ? "pending" : "approved";
+
+    const custKey = String(customerId);
+    const ordersForCust = verifiedOrdersByCustomer.get(custKey) ?? [];
+    const chosenOrderId = ordersForCust.length > 0
+      ? (Math.random() < 0.5 ? ordersForCust[Math.floor(Math.random() * ordersForCust.length)] : undefined)
+      : undefined;
+    const verified = chosenOrderId !== undefined ? true : Math.random() < 0.4;
+
+    const reviewEx = await prisma.review.findFirst({
+      where: {
+        storeId: fashionId,
+        customerId,
+        productId,
+        orderId: chosenOrderId ?? null,
+      },
+    });
+    if (!reviewEx) {
+      await prisma.review.create({
+        data: {
+          storeId: fashionId,
+          productId,
+          customerId,
+          orderId: chosenOrderId ?? null,
+          rating,
+          title: rating === 5 ? "Amazing!" : rating === 4 ? "Great" : rating === 3 ? "Okay" : "Review",
+          body: reviewBodies[i % reviewBodies.length],
+          status,
+          verified,
+        },
+      });
+    }
+  }
+  console.log("  ✅ 30 reviews seeded (10 pending, 20 approved)");
+
   console.log("  ✅ Store + Settings baseline seeded.");
   return store;
 }

@@ -47,6 +47,10 @@ import {
   checkoutRouter,
   paymentIpnRouter,
 } from "./modules/orders";
+import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
+import { adminInventoryRouter } from "./modules/inventory";
+import { marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter } from "./modules/marketing";
+import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -107,6 +111,14 @@ export function buildApp(): Express {
   app.use("/api/admin/payments", adminPaymentsRouter);
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
+  app.use("/api/admin/customers", adminCustomersRouter);
+  app.use("/api/storefront/account", customerSelfRouter);
+  app.use("/api/admin/inventory", adminInventoryRouter);
+  app.use("/api/admin/marketing/coupons", marketingCouponsRouter);
+  app.use("/api/admin/marketing/flash-sales", marketingFlashSalesRouter);
+  app.use("/api/admin/marketing/reviews", marketingReviewsRouter);
+  app.use("/api/super/dashboard", superDashboardRouter);
+  app.use("/api/admin/dashboard", storeDashboardRouter);
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads"), { maxAge: "1y", immutable: true }));
 
   // =============== 404 catch-all ===============
