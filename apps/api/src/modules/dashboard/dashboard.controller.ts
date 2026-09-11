@@ -7,11 +7,16 @@ import type {
 } from "./dashboard.dto";
 import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
-import { PaginationSchema } from "@ecom/zod-schemas";
+import { z } from "zod";
+import { DashboardRangeQueryDto, StoreDashboardExportDto } from "./dashboard.dto";
 
-const BaseRangeQuery = PaginationSchema.extend({
-  from: undefined as any,
-  to: undefined as any,
+const BaseRangeQuery = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+}).superRefine((v, ctx) => {
+  if (v.from !== undefined && v.to !== undefined && v.from > v.to) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "from must be before to", path: ["from"] });
+  }
 });
 
 class DashboardController extends BaseController {
@@ -65,6 +70,7 @@ superDashboardRouter.get(
   "/stats",
   authMiddleware("super"),
   rbacMiddleware("super.*"),
+  validate({ query: BaseRangeQuery }),
   dashboardController.superStats,
 );
 
@@ -81,6 +87,7 @@ storeDashboardRouter.get(
   "/stats",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("dashboard.*"),
+  validate({ query: BaseRangeQuery }),
   dashboardController.storeStats,
 );
 
@@ -95,5 +102,6 @@ storeDashboardRouter.get(
   "/export",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("dashboard.*"),
+  validate({ query: StoreDashboardExportDto }),
   dashboardController.exportStore,
 );

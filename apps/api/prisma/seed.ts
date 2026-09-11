@@ -321,17 +321,17 @@ async function seedFashionBDStore() {
   }
 
   // ===== CATALOG BASELINE: Categories + Brands + Attributes + Terms =====
-  const fashionId = store.id;
+  const storeId_324 = store.id;
 
   // 2 Root Categories: Women -> Dresses; Men -> Shirts
   const womenCatEx = await prisma.category.findFirst({
-    where: { storeId: fashionId, slug: "women" },
+    where: { storeId: storeId_324, slug: "women" },
   });
   let womenCatId = womenCatEx?.id;
   if (!womenCatEx) {
     const women = await prisma.category.create({
       data: {
-        storeId: fashionId,
+        storeId: storeId_324,
         name: "Women",
         slug: "women",
         description: "Women's Fashion Collection Bangladesh",
@@ -344,7 +344,7 @@ async function seedFashionBDStore() {
     womenCatId = women.id;
     const dresses = await prisma.category.create({
       data: {
-        storeId: fashionId,
+        storeId: storeId_324,
         parentId: womenCatId,
         name: "Dresses",
         slug: "dresses",
@@ -357,13 +357,13 @@ async function seedFashionBDStore() {
     console.log(`  ✅ Category tree: Women (id=${womenCatId}) → Dresses (id=${dresses.id})`);
   }
   const menCatEx = await prisma.category.findFirst({
-    where: { storeId: fashionId, slug: "men" },
+    where: { storeId: storeId_324, slug: "men" },
   });
   let menCatId = menCatEx?.id;
   if (!menCatEx) {
     const men = await prisma.category.create({
       data: {
-      storeId: fashionId,
+      storeId: storeId_324,
       name: "Men",
       slug: "men",
       description: "Men's Fashion Collection BD",
@@ -376,7 +376,7 @@ async function seedFashionBDStore() {
     menCatId = men.id;
     const shirts = await prisma.category.create({
       data: {
-      storeId: fashionId,
+      storeId: storeId_324,
         parentId: menCatId,
         name: "Shirts",
         slug: "shirts",
@@ -395,20 +395,20 @@ async function seedFashionBDStore() {
     { slug: "cats-eye", name: "Cats Eye", websiteUrl: "https://catseye.com.bd", sortOrder: 1, description: "Luxury retail fashion — suits, sarees, leather goods" },
   ] as const;
   for (const b of brands) {
-    const ex = await prisma.brand.findFirst({ where: { storeId: fashionId, slug: b.slug } });
+    const ex = await prisma.brand.findFirst({ where: { storeId: storeId_324, slug: b.slug } });
     if (!ex) {
-      await prisma.brand.create({ data: { storeId: fashionId, ...b, isActive: true, seoTitle: `${b.name} — Buy Online Bangladesh`, metaDesc: `Shop ${b.name} products at Fashion BD. Authentic, fast delivery.` } });
+      await prisma.brand.create({ data: { storeId: storeId_324, ...b, isActive: true, seoTitle: `${b.name} — Buy Online Bangladesh`, metaDesc: `Shop ${b.name} products at Fashion BD. Authentic, fast delivery.` } });
       console.log(`  ✅ Brand added: ${b.name}`);
     }
   }
 
   // 2 Attributes + Terms: Size (S/M/L/XL/XXL/Free) Color (Black/White/Red/Blue)
   async function upsertAttrWithTerms(slug: string, name: string, type: string, terms: Array<{ slug: string; name: string; value?: string; swatchUrl?: string }>) {
-    let attr = await prisma.attribute.findFirst({ where: { storeId: fashionId, slug } });
+    let attr = await prisma.attribute.findFirst({ where: { storeId: storeId_324, slug } });
     if (!attr) {
       attr = await prisma.attribute.create({
         data: {
-          storeId: fashionId, slug, name, type, isFilterable: true, isActive: true, sortOrder: slug === "size" ? 0 : 1 },
+          storeId: storeId_324, slug, name, type, isFilterable: true, isActive: true, sortOrder: slug === "size" ? 0 : 1 },
       });
       console.log(`  ✅ Attribute created: ${name} (slug=${slug})`);
     }
@@ -549,15 +549,16 @@ async function seedFashionBDStore() {
 
   console.log("  ✅ Orders baseline (Rest of BD shipping zone + Fatema cart 5 items) added.");
 
-  const fashionId = store.id;
+  // ===== BATCH #8 BASELINE: Customer Groups, 20 demo customers, 2 coupons, 1 flash sale, 30 reviews =====
+  const demoStoreId = store.id;
 
   const generalGroupEx = await prisma.customerGroup.findFirst({
-    where: { storeId: fashionId, name: "General" },
+    where: { storeId: demoStoreId, name: "General" },
   });
   if (!generalGroupEx) {
     await prisma.customerGroup.create({
       data: {
-        storeId: fashionId,
+        storeId: demoStoreId,
         name: "General",
         discountPercent: "0.00",
         isSystem: true,
@@ -567,13 +568,13 @@ async function seedFashionBDStore() {
   }
 
   const vipGroupEx = await prisma.customerGroup.findFirst({
-    where: { storeId: fashionId, name: "VIP" },
+    where: { storeId: demoStoreId, name: "VIP" },
   });
   let vipGroupId = vipGroupEx?.id;
   if (!vipGroupEx) {
     const vip = await prisma.customerGroup.create({
       data: {
-        storeId: fashionId,
+        storeId: demoStoreId,
         name: "VIP",
         discountPercent: "5.00",
         minimumSpend: "5000.00",
@@ -599,13 +600,13 @@ async function seedFashionBDStore() {
 
   for (let i = 0; i < 20; i++) {
     const email = customerEmails[i]!;
-    const custEx = await prisma.customer.findFirst({ where: { storeId: fashionId, email } });
+    const custEx = await prisma.customer.findFirst({ where: { storeId: demoStoreId, email } });
     let cid: bigint;
     if (!custEx) {
       const isVIP = i < 2;
       const customer = await prisma.customer.create({
         data: {
-          storeId: fashionId,
+          storeId: demoStoreId,
           email,
           passwordHash,
           firstName: firstNames[i]!,
@@ -671,7 +672,7 @@ async function seedFashionBDStore() {
   }
 
   const fatemaCust = await prisma.customer.findFirst({
-    where: { storeId: fashionId, email: "fatema@fashionbd.xyz" },
+    where: { storeId: demoStoreId, email: "fatema@fashionbd.xyz" },
   });
   if (fatemaCust) demoCustomerIds.push(fatemaCust.id);
 
@@ -698,12 +699,12 @@ async function seedFashionBDStore() {
 
   for (const c of couponSeed) {
     const couponEx = await prisma.coupon.findFirst({
-      where: { storeId: fashionId, code: c.code },
+      where: { storeId: demoStoreId, code: c.code },
     });
     if (!couponEx) {
       await prisma.coupon.create({
         data: {
-          storeId: fashionId,
+          storeId: demoStoreId,
           code: c.code,
           description: c.description,
           type: c.type as any,
@@ -718,18 +719,18 @@ async function seedFashionBDStore() {
     }
   }
 
-  const shirtsCat = await prisma.category.findFirst({ where: { storeId: fashionId, slug: "shirts" } });
-  const richmanBrand = await prisma.brand.findFirst({ where: { storeId: fashionId, slug: "richman" } });
+  const shirtsCat = await prisma.category.findFirst({ where: { storeId: demoStoreId, slug: "shirts" } });
+  const richmanBrand = await prisma.brand.findFirst({ where: { storeId: demoStoreId, slug: "richman" } });
 
   const flashSaleSlug = "richman-20pc-2026";
   const flashSaleEx = await prisma.flashSale.findFirst({
-    where: { storeId: fashionId, slug: flashSaleSlug },
+    where: { storeId: demoStoreId, slug: flashSaleSlug },
   });
   let flashSaleId: bigint | undefined = flashSaleEx?.id;
   if (!flashSaleEx) {
     const flashSale = await prisma.flashSale.create({
       data: {
-        storeId: fashionId,
+        storeId: demoStoreId,
         name: "Fall Richman 2026",
         slug: flashSaleSlug,
         startsAt: new Date("2026-09-13T00:00:00"),
@@ -748,7 +749,7 @@ async function seedFashionBDStore() {
 
   const richmanProducts = await prisma.product.findMany({
     where: {
-      storeId: fashionId,
+      storeId: demoStoreId,
       brandId: richmanBrand?.id,
     },
     take: 5,
@@ -781,7 +782,7 @@ async function seedFashionBDStore() {
   }
 
   const allCatalogProducts = await prisma.product.findMany({
-    where: { storeId: fashionId },
+    where: { storeId: demoStoreId },
     select: { id: true },
   });
   const productIdsForReviews = allCatalogProducts.map((p) => p.id);
@@ -798,7 +799,7 @@ async function seedFashionBDStore() {
   ];
 
   const deliveredOrders = await prisma.order.findMany({
-    where: { storeId: fashionId, status: { in: ["DELIVERED", "COMPLETED"] } },
+    where: { storeId: demoStoreId, status: { in: ["DELIVERED", "COMPLETED"] } },
     select: { id: true, customerId: true, items: { select: { productId: true } } },
   });
 
@@ -826,7 +827,7 @@ async function seedFashionBDStore() {
 
     const reviewEx = await prisma.review.findFirst({
       where: {
-        storeId: fashionId,
+        storeId: demoStoreId,
         customerId,
         productId,
         orderId: chosenOrderId ?? null,
@@ -835,7 +836,7 @@ async function seedFashionBDStore() {
     if (!reviewEx) {
       await prisma.review.create({
         data: {
-          storeId: fashionId,
+          storeId: demoStoreId,
           productId,
           customerId,
           orderId: chosenOrderId ?? null,

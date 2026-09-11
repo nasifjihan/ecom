@@ -62,14 +62,18 @@ export class SuperDashboardRepo {
 
   async mrrLast30d(): Promise<number> {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const result: any = await prisma.billingSubscription.aggregate({
+    const rows = await prisma.billingSubscription.findMany({
       where: {
         status: "active",
         createdAt: { gte: cutoff },
       },
-      _sum: { amount: true },
+      select: { plan: { select: { priceMonthly: true } } },
     });
-    return Number(result._sum.amount ?? 0);
+    let total = 0;
+    for (const row of rows) {
+      total += Number(row.plan?.priceMonthly ?? 0);
+    }
+    return Math.round(total * 100) / 100;
   }
 
   async getSuperStats(range: DateRange): Promise<{

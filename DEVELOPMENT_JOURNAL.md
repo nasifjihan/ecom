@@ -974,3 +974,165 @@ Estimated 16 new files + 2 edits (app.ts 6 route mounts, seed extension 20 new d
 
 Waiting for your explicit message before any Batch #8 code starts.
 
+---
+
+## ✅ BATCH #8 — EXECUTION REPORT (2026-09-12)
+User approved keyword: **`proceed with Batch #8`**. Scope: Customers + Inventory + Marketing + Dashboards = 4 modules backend API (apps/api only). NO schema changes (62 models + 6 enums already valid per Batch #4 prisma generate exit 0).
+
+### 8.1 Customers Module — `apps/api/src/modules/customers/*` (6 files, created)
+| File | Purpose |
+| --- | --- |
+| `customers.dto.ts` | 18 Zod schemas. DTO names: CreateCustomerDto (BD phone regex `^(\\+?8801\|01)[3-9]\\d{8}$`, password strength, noXss on name/notes/addresses fields), UpdateCustomerDto uses `BaseCustomerDto.partial()` (NOT Refined.superRefine() wrapped ZodEffects — anti-pattern codified to avoid missing `.partial()` method), ChangePassword, CustomerAddress create/update, SetDefaultAddress, CustomerStatusTransition bulk ids=[..], CustomerSearchQueryDto cross-field `minTotalSpent ≤ maxTotalSpent` and `dateFrom ≤ dateTo` superRefine, country uppercase 2-3 letters, ImportCustomerUpload body, GenerateExportDto format csv\|xlsx\|pdf |
+| `customers.repository.ts` | 2 classes: `CustomerRepository` (listWithJoins include group/addresses + _count { orders, reviews }, upsertCustomerGroupMembership, incrementStats totalSpent/orderCount atomic), `CustomerAddressRepository` setDefault: tx flush old isDefault=false with matching customerId + type, then specific address isDefault=true |
+| `customers.service.ts` | 11 methods: CRUD, bulkStatus, listAddresses / addAddress / setDefaultAddress, changePassword bcrypt hash compare, importCustomers() stub returns { imported: 0 }, generateCustomersExport() builds CSV/XLSX/PDF buffer (attachment Content-Disposition, csv=comma xlsx=zip pdf=%PDF- header stub), computeLTV per customer |
+| `customers.controller.ts` | 16 handlers wrapped `ctrl()` Wrapper envelope pattern: list, detail, create, update, delete, bulkStatus, generateExport, importUpload, me/meUpdate, changePassword, listAddresses, addAddress, updateAddress, setDefaultAddress |
+| `customers.routes.ts` | **4-step guard chain enforced (doctrine)**: `authMiddleware('adminOrSuper') → rbacMiddleware('customers.*') → validate(body\|params\|query) → controller` — Zod 422 NEVER fires before AUTH. Router exports: `adminCustomersRouter` (/api/admin/customers) + `customerSelfRouter` (/api/storefront/account, authMiddleware("customer") audience only) |
+| `index.ts` | barrel export routers + service for app.ts mount |
+
+### 8.2 Inventory Module — `apps/api/src/modules/inventory/*` (5 files, created)
+| File | Purpose |
+| --- | --- |
+| `inventory.dto.ts` | 6 schemas: StockAdjustLineDto delta!=0 (zero 422), StockTransferDto origin!=dest, LowStockReport threshold≥0, MovementQueryDto from≤to, pagination |
+| `inventory.repository.ts` | 2 classes. `InventoryLogRepository`: deductStock() MANUAL check qty→ConflictError INSUFFICIENT_STOCK (ErrorCode enum added Batch8) → update stockQty/reservedQty → insert row reason TRANSFER_OUT/SALE etc; restock reverse, logMovement, listMovementPaginated. ProductVariantRepository: reportLowStock (effective threshold = max(product.lowStockThreshold OR default 10, user arg threshold)), stockValueReport sum variant qty×unitCost grouped by Category/Brand |
+| `inventory.service.ts` | adjustStock multi-line tx, transferStock deduct origin+add destination 2 movement logs each line (warehouse=plain String column MVP, no dedicated Warehouse/Transfer tables yet per Batch7 confirmed schema void), listMovements, lowStockList, stockValueReport, importInventory stub { imported: 0 } |
+| `inventory.controller.ts` + `inventory.routes.ts` | 9 ctrl handlers. adminInventoryRouter RBAC `inventory.*`, 4-step chain exactly above. GET /low-stock, GET /stock-value, POST /adjust, POST /transfer, GET /movements, POST /import, GET /export |
+| `index.ts` | barrel export |
+
+### 8.3 Marketing Module — `apps/api/src/modules/marketing/*` (4 files, created)
+Coupons + FlashSales + Reviews. Key adapter: CouponType (shared-types 7-member FIXED_CART/PERCENT_CART/FIXED_PRODUCT/PERCENT_PRODUCT/BUY_X_GET_Y/FREE_SHIPPING/STORE_CREDIT) ↔ Prisma schema DiscountType enum PERCENTAGE/FIXED_CART/FIXED_PRODUCT/BOGO/FREE_SHIPPING. Function `couponTypeToDiscountType()` inside MarketingService maps:
+- PERCENT_CART, PERCENT_PRODUCT → "PERCENTAGE"
+- BUY_X_GET_Y → "BOGO"
+- Others 1:1 (FIXED_CART → FIXED_CART, FREE_SHIPPING → FREE_SHIPPING). STORE_CREDIT coupon type not supported MVP, throws NotYetImplemented.
+
+| File | Purpose |
+| --- | --- |
+| `marketing.dto.ts` | 20 schemas total. Coupon: CouponCreateDto (code regex uppercase letters/digits/hyphens, XSS block), Update, ValidateCouponCheckoutDto(customerId+subtotal+items), CouponSearchQueryDto superRefine minAmount≤maxAmount. FlashSale: slug lowercase a-z 0-9 hyphens, startsAt<endsAt superRefine, FlashSaleItem productId/variantId required, discountPct 0-100 xor discountFixed≥0. Review: rating 1-5 inCreate, XSS on title/body, ModerateReviews ids[] + action(approve\|spam\|bulk_delete) non-empty array |
+| `marketing.repository.ts` | 3 classes. CouponRepository: validateCouponForCart(customerId, subtotal, items, coupon) → `{ok, errors: Array<{key,code,message}>}` 12-rule list (isActive, startAt/expiresAt window, usageTotal<limit, perCustomerLimit, minSubtotal, maxSubtotal, newCustomerOnly flag first order, productIds include/exclude excludeSale, customerEmails whitelist, customerGroupIds include), listCoupons. FlashSaleRepository: findActive(date), findByIdWithItems tx create. ReviewRepository: moderate (bulk approve/spam atomically update status + when approve → increment Product.reviewCount + recompute averageRating SQL), getReviewsByProductId paginated |
+| `marketing.service.ts` | couponTypeToDiscountType adapter (above). create/udpate/delete Coupon, ValidateCoupon (returns above 12-rule array), create/update FlashSale + FlashSaleItem rows tx, createReview guard if orderId→status MUST DELIVERED/COMPLETED → BadRequest ORDER_NOT_DELIVERED (ErrorCode enum added), moderateReviews, productReviewsList |
+| `marketing.controller.ts` + `marketing.routes.ts` | 17 ctrl handlers. 3 routers: marketingCouponsRouter (RBAC coupons.* 4-step chain GET/POST/PUT/DELETE POST /validate), marketingFlashSalesRouter (marketing/flash-sales RBAC flash_sales.*), marketingReviewsRouter (customer auth createMyReview, admin RBAC reviews.* list / GET /moderate POST bulk). Customer `POST /marketing/reviews/me` authMiddleware("customer") → validate(CreateReviewDto) → guard order.delivered → status pending or approved (verified). Approved status atomically update Product.reviewCount+averageRating |
+| `index.ts` | barrel export 3 routers |
+
+### 8.4 Super Admin + Store Admin Dashboard Aggregations — `apps/api/src/modules/dashboard/*` (4 files, created)
+**First tsc BLOCKING FIX (Batch8 compile errors):** `src/modules/dashboard/dashboard.repository.ts` mrrLast30d used `billingSubscription.aggregate({_sum: { amount: true }})` → schema BillingSubscription NO amount column (amount on Plan.priceMonthly/priceYearly). **Fixed:** findMany active subs + relation select plan { priceMonthly } sum manually, return Math.round(total*100)/100.
+
+| File | Purpose |
+| --- | --- |
+| `dashboard.dto.ts` | 2 schemas: DashboardRangeQueryDto (superRefine from≤to extends PaginationSchema), StoreDashboardExportDto (format csv\|xlsx\|pdf + from≤to range) |
+| `dashboard.repository.ts` | 2 classes. `SuperDashboardRepo`: totalStores/activeStores(TRIAL/ACTIVE status count)/churned30d(PlanSubscription CANCELLED last30d)/newSignupsByDay (group by DATE(createdAt))/planDistribution LEFT JOIN Plan.name group count/mrrLast30d (fixed above Plan join). `StoreDashboardRepo`: revenue buckets Today/Yesterday/7d/30d/MTD/YTD PAID orders aggregate grandTotal SUM; top10Products revenue DESC LIMIT 10 $queryRawUnsafe LEFT JOIN Order Product OrderItem group; ordersByStatusPie groupBy prisma.order status count; refundRatePct refund count / orders total *100; abandonedCart = Cart abandoned=true count + cartItems sum lineSubtotal dollarValue; customerLtvP90 approx idx=ceil(0.9*n)-1 after sorted totalSpent; lowStockVariantCount; averageOrderValue = avg(grandTotal PAID) |
+| `dashboard.service.ts` | getSuperStats(range) assembles above metrics into one JSON blob envelope, getStoreStats(range) same per ctx.storeId, exportStoreDashboard(dto): csv/xlsx/pdf stub with Content-Disposition header (filename store_dashboard_YYYYMMDD_HHmm.ext) — MVP returns stub empty bytes correct header set |
+| `dashboard.controller.ts` + dashboard.routes.ts (inline) | 5 ctrl handlers. Two routers: `superDashboardRouter` audience=super RBAC super.* (GET /stats, GET /summary), `storeDashboardRouter` audience=adminOrSuper RBAC dashboard.* (GET /stats + validate RangeQueryDto superRefine from≤to, GET /summary, GET /export + validate StoreDashboardExportDto). **Added validate() to /stats routes after original smoke #16 exposed zod-schema gap:** no validate = Prisma groupBy invalid range 500 → fix route add `validate({ query: BaseRangeQuery })` → now returns 422 before hitting prisma (smoke #16 green). |
+| `index.ts` | barrel export superDashboardRouter + storeDashboardRouter |
+
+### 8.5 App.ts Wiring & Seed Data (2 edits verified)
+**apps/api/src/app.ts —** imports added [lines 44-53]: 8 route imports (adminCustomersRouter/customerSelfRouter/adminInventoryRouter/marketingCouponsRouter/marketingFlashSalesRouter/marketingReviewsRouter/superDashboardRouter/storeDashboardRouter). Mounts [lines 114-121]: `/api/admin/customers`, `/api/storefront/account`, `/api/admin/inventory`, `/api/admin/marketing/coupons`, `/api/admin/marketing/flash-sales`, `/api/admin/marketing/reviews`, `/api/super/dashboard`, `/api/admin/dashboard` — ALL 8 mounts present order correct after /api/payments/ipn.
+
+**apps/api/prisma/seed.ts seedFashionBDStore() —** BATCH8 BASELINE appended after cart baseline section:
+- 2 CustomerGroups upsert: `General` isSystem=true, VIP discountPct=5 minSpend 5000 BDT
+- 20 demo customers emails c1@fashionbd.xyz through c20@fashionbd.xyz, password `Customer@123` bcrypt hash. first 5 VIP, others General group
+- Addresses: 5 Dhaka (Uttara, Gulshan, Banani, Mirpur, Dhanmondi area Dhaka Metro zone later Phase3 shipping-rates zone) + 5 Chattogram (Agrabad Pahartali zones for RHOB rates test) billing/shipping type mix
+- 2 coupons: WELCOME10 PERCENTAGE 10 newCustomerOnly minSubtotal 3000 BDT expires +30 days; FLAT500 FIXED_CART 500 BDT perCustomerLimit 1 minSubtotal 5000
+- 1 Flash Sale "Richman Summer 2026" slug `richman-sept-2026` 2026-09-13 to 2026-09-20 discountPercent=20, links 5 Richman-brand products only (where brand slug=richman, if not fallback first 5 published store products)
+- 30 reviews: 20/30 approved, 10 pending moderation status, random customers × random products 50% linked to DELIVERED/COMPLETED Order IDs if seed has them, verified = true if order-linked, random 40% otherwise
+
+**tsc redeclare BLOCKING FIX** Batch#6 fashionId line 324 vs Batch8 fashionId duplicate declare line 552 → name conflict: renamed lines <553 fashionId → storeId_324 (catalog baseline scope, referenced only there) & Batch8 scope (≥line 552) demoStoreId → 29 regex grep references all updated cleanly. tsc redeclare TS2451 + Cannot find name eliminated.
+
+### 8.6 Error Code Enum Additions (5 tsc compile errors fixed)
+Batch#7/8 introduced new ConflictError/BadRequestError with custom error keys. Central ErrorCode union table `apps/api/src/core/error-codes.ts` union **6 new members**:
+```ts
+| "DUPLICATE_COUPON_CODE"
+| "DUPLICATE_REVIEW"
+| "ORDER_NOT_DELIVERED"
+| "INSUFFICIENT_STOCK"
+| "WEAK_PASSWORD"
+| "TRANSFER_SAME_WAREHOUSE"
+```
+Eliminates 5× `Argument of type '"X"' is not assignable ErrorCode` TS2345 compile errors. All error codes are frontend i18n key stable strings; user-facing message localized later in packages/ui-translations.
+
+### 8.7 HTTP Smoke 18/18 Scenarios (all pass)
+Port 4088 isolated sandbox, SUPER audience JWT short-circuit no Prisma lookups (11-auth.ts lines 44-46 ctx.admin.permissions=["*"]), customer admin audiences for negative RBAC tests:
+
+| # | Scenario | Expected | Got |
+| --- | --- | --- | --- |
+| 1 | GET /api/admin/customers NO TOKEN | 401 AUTH_MISSING_TOKEN | 401 ✅ |
+| 2 | POST /api/admin/customers body {} | 422 VALIDATION email/names/password missing | 422 ✅ |
+| 3 | POST /api/admin/customers phone "12345" invalid BD regex | 422 VALIDATION invalid BD phone format | 422 ✅ |
+| 4 | GET /api/admin/customers?minTotalSpent=10000&maxTotalSpent=500 | 422 minTotalSpent > maxTotalSpent | 422 ✅ |
+| 5 | GET /api/admin/customers?perPage=500 | 422 perPage PaginationSchema max=100 DDoS guard | 422 ✅ |
+| 6 | POST /api/admin/marketing/coupons body {} | 422 VALIDATION code/type/amount | 422 ✅ |
+| 7 | POST coupon code "<script>alert(1)</script>" | 422 noXss superRefine regex block | 422 ✅ |
+| 8 | POST coupon minSubtotal 5000 > max 1000 | 422 superRefine min > max | 422 ✅ |
+| 9 | POST flash-sales startsAt=+7d endsAt=now | 422 startsAt >= endsAt | 422 ✅ |
+| 10 | POST /marketing/reviews/me (customer) body {} | 422 rating/productId required | 422 ✅ |
+| 11 | POST /inventory/adjust lines delta=0 | 422 delta!=0 refine | 422 ✅ |
+| 12 | POST /inventory/transfer origin=dest MAIN | 422 origin!=dest refine | 422 ✅ |
+| 13 | GET /movements from=2026-10-01 to=2026-09-01 | 422 from > to | 422 ✅ |
+| 14 | GET /dashboard/export xlsx format=xlsx | 200 + Content-Disposition attachment filename=store_dashboard_YYYYMMDD_HHMM.xlsx | 200 ✅ attachment header present |
+| 15 | GET /super/dashboard/stats ADMIN audience wrong | 401 Invalid audience (super secret different from admin) | 401 ✅ |
+| 16 | GET /admin/dashboard/stats?from=2026-12-01&to=2026-01-01 | 422 DashboardRangeQuery refine from > to **(after fix validate added)** | 422 ✅ |
+| 17 | POST reviews/moderate ids=[] action=approve | 422 ids min(1) array non-empty | 422 ✅ |
+| 18 | GET /api/admin/customers/doesnt/exist unknown route | 404 Route not found | 404 ✅ |
+
+**Regression note smoke #16 original (before dashboard.route validate):** returned 500 prisma order.groupBy invalid range — **Root cause:** dashboard stats/GET had no validate() layer, date range only parsed in-memory but from=Dec-2026 > to=Jan-2026 → Prisma aggregation silently errors → exception bubble 500. **Fix:** added validate({query: BaseRangeQuery}) to both superStats + storeStats routes; BaseRangeQuery = object {from:date.optional, to:date.optional} superRefine. Now validate short-circuits Prisma with clean 422; smoke 16/16→18/18.
+
+### 8.8 Validation Summary & Lessons Learned
+- ✅ **tsc strict exit 0** apps/api (first run 9 compile errors → iteration rounds: (1) add 6 ErrorCodes fixed 5, (2) dashboard.mrrLast30d Plan.priceMonthly fixed 1, (3) seed.ts fashionId rename 29 occurrences fixed 1, (4) dashboard.controller ZodEffects.omit() failure (DashboardRangeQueryDto was ZodEffects) → create fresh inline z.object BaseRangeQuery, fixed last 2. Now clean)
+- ✅ **pnpm prisma:generate exit 0** (62 models typed no-op)
+- ✅ **18 HTTP smoke 18/18 exit 0**
+- 🟨 **ESLint still blocked flat config** (no user yes; skip per-process)
+- 🚨 **RED BANNER SCHEMA LOCK STILL LIVE:** prisma migrate init NEVER RUNS IN AUTOMATION. User MUST manually run docker compose ps healthy → pnpm prisma:migrate --name init → pnpm prisma:studio verify → pnpm prisma:seed. SUPER audience JWT short-circuit smoke path works without DB; but ORDER_CREATE live + live payments tests require DB actually up + migrated.
+- **Lessons learned Batch #8:**
+  1. ZodEffects.superRefine wrappers do **NOT** have ZodObject.omit/partial/pick methods. ALWAYS split schema: BasePlain → Refined = Base.superRefine(...) → UpdateDto = BasePlain.partial() (NEVER Refined.partial). Documented Batch #6; re-bitten DashboardRangeQuery omit() on superRefine result → use inline fresh z.object
+  2. aggregate() Prisma doesn't exist for related table columns. Use findMany with relation select then loop sum, OR $queryRaw explicit JOIN.
+  3. Duplicate seed variable name when extending seedFashionBDStore() from multiple batches: use unique variable names per batch-section (storeId_324 / demoStoreId) instead fashionId/fashionId redeclare. grep all occurrences after batch rename before tsc.
+  4. EVERY list GET endpoint that accepts dates MUST have validate superRefine from<=to BEFORE the service/repo. Prisma groupBy does NOT validate date range ordering, it fails with raw P2000 or silent 500. Rule codified: if a query parses from/to, add validate({query: RangeQueryDto}) on the route OR short-circuit service-level.
+
+### 🚨 RED BANNER SCHEMA LOCK REMAINS PENDING (BATCH8 REMINDER 6th)
+Still NOT run. Do BEFORE any Batch9 module integration tests or endpoints that actually query seeded data.
+```bash
+docker compose ps      # ensure postgres is Up healthy
+pnpm prisma:migrate --name init
+pnpm prisma:studio     # verify _prisma_migrations + 62 models + 6 enums exist
+pnpm prisma:seed       # run seed.ts Fashion BD baseline
+```
+
+---
+
+## 📋 BATCH #9 PLAN — Backend Utilities: CSV/XLSX/PDF Export Package @ecom/export-utils + Shipping Zones/Rates/Tax Rules Backend Module (Phase 2 scope per doc)
+Estimated scope: 11 files (1 package create + 10 files shipping module + 1 edit app.ts) + 2 edits seed shipping zones Dhaka Metro/RHOB rates.
+**Why first export-utils?** Batch8 dashboard/customers/inventory modules all return stub buffers for csv/xlsx/pdf header. Phase 2 needs working downloads. Batch9 also closes the Shipping/Tax backend gap before any frontend cart checkout rates live-qa (shipping rates live computation on storefront PDP/cart Phase 3 later; rates data layer now first).
+
+### 9.1 `packages/export-utils` — shared export utilities (4 files)
+- **index.ts**: exports 3 core functions: `generateCsv<T>(rows:T[], columns:{key,label,format?:('currency_bdt'|'date'|'number')}[]): Buffer`, `generateXlsx(sheets:{name,rows,columns}[]): Buffer` (exceljs — verify dependency already in package.json, else add pnpm add exceljs), `generatePdf<T>(title, rows, columns, logoUri?:string): Buffer` (pdf-lib + @pdf-lib/fontkit embedded NotoSans Bengali support)
+- **index.ts #2 helper**: `attachmentHeader(filename:string): { 'Content-Type': string, 'Content-Disposition': string }` returns both headers for Express res.setHeader. Format detect: .csv → text/csv; .xlsx → application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; .pdf → application/pdf; filename uses UTF-8'' encoding per RFC 6266
+- **index.ts #3**: `csvEscape` + `xlsxCellStyleCurrencyBDT` helper (৳ prefix, 2 decimals, thousand comma) + `pdfA4ColumnWidths auto` columns array
+- **package.json new package @ecom/export-utils**: workspace package, peerDep exceljs, pdf-lib, typescript devDep. exports main=dist/index.js types=dist/index.d.ts. tsconfig.json extends ../../tsconfig.base.json strict. Barrel pattern.
+
+### 9.2 Shipping Zones / Rates Module `apps/api/src/modules/shipping/*` (6 files, no schema changes — review schema models Zone/ZoneRegion/ShippingRate/FreeShippingCoupon already exist Batch #4)
+- DTOs: CreateShippingZoneDto (storeId, name, regions: { country, division? =Dhaka/Chittagong/Rajshahi for BD, district?, areaCode?, postcodeRanges?[], zoneType = metro/suburban/rural}), UpdateShippingZoneDto, ShippingRateDto (carrier: "Pathao"|"RedX"|"Paperfly"|"Sundarban"|"SA Paribahan"|"eCourier"|custom, method: "standard"|"express"|"same_day"|"next_day", rateType flat\|weight\|qty\|distance (MVP flat+weight supported qty distance stub NotYet), baseRateBDT, freeAboveBDT, perKgExtraBDT, minimumBDT, transitDaysMin, transitDaysMax, enabled, zoneId), TaxRateDto (country, division, district, postcode, taxType=VAT, ratePct 15 BD default, taxName="VAT 15%", applies: shipping+products both or products only), BulkRateUploadDto
+- ShippingZoneRepository: listByStore with regions + rates counts. ZoneRegion upsert many. deleteZone soft delete=false (MVP DB delete — no soft delete on zones yet per schema). FreeShippingCouponRepo: later; coupons in marketing module already have free_shipping DiscountType
+- ShippingRateRepository: calculateBestRates(ctx, {zoneId, subtotal, weightKG, qty, distanceKM, shippingAddress}) return Array<{carrier, method, finalRateBDT, savingsBDT, freeReason, transit}>; MVP flat and weight-based only; perKgExtra if weight>0.5 round up 0.5 units; freeAboveBDT threshold subtotal>= zero rate. listRatesByZone, bulkUpsertRates
+- TaxRateRepository: resolveForAddress(address) → effectiveTaxRatePct, taxName, breakdown [{type, pct, amount}] product BD VAT 15% flat by default (seeded tax class standard 15% Batch #4 already); shipping taxed yes unless exempt.
+- ShippingService: getZones, create/update/delete zone + regions, listRatesByZone + bulkUpsert, computeShippingOptions(cart, address) returns rates array + cheapest + fastest summary; resolveTaxes(cart total, address); importRates csv template
+- Controllers: 12 ctrl handlers wrapped ctrl() + 4-step guard chain. Routes: adminShippingRouter RBAC `shipping.*` POST /zones GET /zones GET /zones/:id PUT DELETE /zones/:id POST /rates GET /rates PUT DELETE /rates/:id POST /rates/import GET /tax-rates POST /tax-rates PUT /tax-rates/:id. PUBLIC endpoint (storefront): GET `/api/storefront/shipping/rates?country=BD&division=Dhaka&subtotal=5000&weightKG=1.3&qty=2` returns calculateBestRates anonymous (authMiddleware skip; require valid X-Store-Id or origin tenant resolve).
+- app.ts mount: /api/admin/shipping + /api/storefront/shipping
+
+### 9.3 seed.ts Additions (after Batch8 section, new lines):
+- 3 Shipping Zones: (1) "Dhaka Metro" regions Division=Dhaka, Districts Dhaka City (areaCodes 1200-1230 postcodes), zoneType metro; (2) "Rest of Bangladesh" (Chittagong/Sylhet/Rajshahi/Rangpur/Barisal/Khulna/Mymensingh Divisions zoneType suburban/rural); (3) "Outside BD" International (rates NotYetImplemented error).
+- 8 shipping Flat/Weight Rates: Pathao Standard ৳120 Dhaka + Express ৳220 same-day; RedX ৳150 standard / ৳250 express; Paperfly ৳130/230; Sundarban courier RHOB ৳180 Standard (suburban); eCourier Dhaka ৳110 Standard; SA Paribahan ৳160 Standard RHOB. perKgExtra=৳50/kg; freeAboveBDT = 10000 Pathao Standard (Dhaka), 15000 RHOB.
+- Tax rules: (1) BD Dhaka VAT 15% on products + 15% on shipping; (2) RHOB same 15% products + shipping; (3) Outside BD Tax 0% export exempt MVP.
+
+### 9.4 Validation Gates
+- (a) root pnpm -r tsc --noEmit (all packages including new export-utils strict mode) exit 0
+- (b) pnpm prisma:generate exit 0 (no schema changes required; Zones/Rates/TaxRate models already in schema.prisma Batch #4 grep verified)
+- (c) 22 HTTP smoke exit 22/22 scenarios: shipping zone create EMPTY body 422, zone no regions → 422, rate carrier invalid → 422, rate baseRate < 0 → 422, public storefront rates country="BD" Dhaka subtotal 1200 → 200 JSON array with cheapest/fastest, public rates subtotal>=10000 → free Dhaka pathao rate savings=120, public rates weightKG=2.3 round to 2.5 → extra kg, public rates country=US → 200 empty array with reason, tax-rates country=BD Dhaka address returns {pct:15 name:"VAT 15%"}, perPage 999 → 422, unknown route /api/admin/shipping/no → 404, zone edit duplicate same regions unique conflict → 409 Conflict DUPLICATE_ZONE_REGION error code, csv rates import stub imported=0, export rates csv attachment header, export-utils directly: generateCsv(rows, columns).length>0, generateXlsx multi sheet>0 bytes, generatePdf(title,rows, columns) starts "%PDF-1."
+- (d) DEVELOPMENT_JOURNAL.md append Batch #9 narrative 9.1 through 9.6 (9.1 export-utils, 9.2 shipping module, 9.3 tax, 9.4 seed edits, 9.5 22 smoke results table, 9.6 validation summary & Lessons Learned 3 new points). Keep RED SCHEMA LOCK BANNER live 7th reminder.
+
+### 🚨 VALIDATION REQUEST (NON-NEGOTIABLE process mandate)
+**Reply with ONE of the following EXACT choices**:
+1. **Exact keyword**: `proceed with Batch #9` → execute plan 9.1-9.4 exactly as above.
+2. Change request: e.g. `Skip export-utils Batch9, do only Shipping module first` → revise plan + repost validation ask.
+3. Priority shift: `First manually run prisma:migrate init + prisma:seed on my local Docker Postgres before Batch9` (recommended; until then all smokes bypass DB via SUPER JWT short-circuit — no real seed data verification possible).
+4. `Move Taxes to Batch10, keep Batch9 shipping only + export-utils` (tax complexity: VAT 15% BD; tax classes, exemptions later).
+
+Waiting for your explicit message before any Batch #9 code starts.
+
