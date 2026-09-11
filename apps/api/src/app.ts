@@ -41,6 +41,12 @@ import {
   adminAttributesRouter,
   productUploadRouter,
 } from "./modules/catalog";
+import {
+  adminOrdersRouter,
+  adminPaymentsRouter,
+  checkoutRouter,
+  paymentIpnRouter,
+} from "./modules/orders";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -97,6 +103,10 @@ export function buildApp(): Express {
   app.use("/api/admin/brands", adminBrandsRouter);
   app.use("/api/admin/attributes", adminAttributesRouter);
   app.use("/api/admin/media", productUploadRouter);
+  app.use("/api/admin/orders", adminOrdersRouter);
+  app.use("/api/admin/payments", adminPaymentsRouter);
+  app.use("/api/storefront/checkout", checkoutRouter);
+  app.use("/api/payments/ipn", paymentIpnRouter);
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads"), { maxAge: "1y", immutable: true }));
 
   // =============== 404 catch-all ===============

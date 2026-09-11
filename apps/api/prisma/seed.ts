@@ -441,6 +441,113 @@ async function seedFashionBDStore() {
 
   console.log("  ✅ Catalog baseline (2 cats, 2 brands, 2 attributes + 10 terms) added.");
 
+  // ===== ORDERS BASELINE: Shipping zones (rest-of-BD), Customer Cart, 5 CartItems =====
+  // 1) Rest-of-BD Shipping Zone (Dhaka Metro already added above lines 279-302)
+  let restZone = await prisma.shippingZone.findFirst({ where: { storeId: store.id, name: "Rest of Bangladesh" } });
+  if (!restZone) {
+    restZone = await prisma.shippingZone.create({
+      data: {
+        storeId: store.id,
+        name: "Rest of Bangladesh",
+        countries: ["BD"],
+        states: [],
+        postcodes: [],
+      },
+    });
+    await prisma.shippingMethod.create({
+      data: { zoneId: restZone.id, code: "flat_rate_rob", name: "Flat Rate (Outside Dhaka)", baseCost: "180.00", perItemCost: "30.00" },
+    });
+    console.log(`  ✅ Shipping Zone "Rest of Bangladesh" + Flat Rate added`);
+  }
+
+  // 2) Fashion BD Customer Fatema — if already exists, use her id to link cart
+  const fatemaEx = await prisma.customer.findFirst({ where: { storeId: store.id, email: "fatema@fashionbd.xyz" } });
+  if (fatemaEx) {
+    // 3) Cart for Fatema if missing
+    const cartEx = await prisma.cart.findFirst({ where: { storeId: store.id, customerId: fatemaEx.id }, orderBy: { createdAt: "desc" } });
+    if (!cartEx) {
+      const cart = await prisma.cart.create({
+        data: {
+          storeId: store.id,
+          customerId: fatemaEx.id,
+          token: `cart-seed-fashionbd-${Date.now()}`,
+          currencyCode: "BDT",
+        },
+      });
+      // Look up shirts category + Richman brand for product fallback seed reference
+      const shirtsCat = await prisma.category.findFirst({ where: { storeId: store.id, slug: "shirts" } });
+      const richman = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "richman" } });
+      const catsEye = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "cats-eye" } });
+      // Fake product rows (5) if none exist yet for the demo cart — SIMPLE products, taxClass=Standard (from 304-321)
+      const stdTax = await prisma.taxClass.findFirst({ where: { storeId: store.id, name: "Standard" } });
+      const productSeedList = [
+        { slug: "richman-formal-cotton-shirt-navy", name: "Richman Formal Cotton Shirt — Navy", brandId: richman?.id, price: "3290.00" },
+        { slug: "richman-slim-fit-shirt-white", name: "Richman Slim Fit Oxford Shirt — White", brandId: richman?.id, price: "2890.00" },
+        { slug: "cats-eye-casual-denim-shirt", name: "Cats Eye Casual Denim Shirt — Indigo", brandId: catsEye?.id, price: "3690.00" },
+        { slug: "cats-eye-premium-linen-shirt", name: "Cats Eye Premium Linen Shirt — Beige", brandId: catsEye?.id, price: "4490.00" },
+        { slug: "richman-party-wear-satin-shirt", name: "Richman Party Wear Satin Shirt — Black", brandId: richman?.id, price: "3990.00" },
+      ] as const;
+      const insertedPIds: bigint[] = [];
+      for (const p of productSeedList) {
+        const pEx = await prisma.product.findFirst({ where: { storeId: store.id, slug: p.slug } });
+        if (!pEx) {
+          const newP = await prisma.product.create({
+            data: {
+              storeId: store.id,
+              type: "SIMPLE",
+              name: p.name,
+              slug: p.slug,
+              brandId: p.brandId ?? undefined,
+              taxClassId: stdTax?.id ?? undefined,
+              regularPrice: p.price,
+              description: `${p.name} — 100% cotton/denim/linen. Authentic ${(p.brandId === richman?.id ? "Richman" : "Cats Eye")}.`,
+              status: "published",
+              manageStock: true,
+              stockQty: 50,
+              categoryIds: undefined as any,
+            } as any,
+          });
+          insertedPIds.push(newP.id);
+          // Link to Shirts category via ProductCategory pivot if we have both
+          if (shirtsCat) {
+            try {
+              await prisma.$executeRawUnsafe(
+                `INSERT INTO "ProductCategory" ("productId", "categoryId", "sortOrder") VALUES ($1::bigint, $2::bigint, 0) ON CONFLICT DO NOTHING`,
+                Number(newP.id),
+                Number(shirtsCat.id),
+              );
+            } catch {}
+          }
+        } else {
+          insertedPIds.push(pEx.id);
+        }
+      }
+      // 5 CartItem rows for Fatema cart
+      const qtyMap = [2, 1, 1, 2, 1];
+      let lineIdx = 0;
+      for (const pid of insertedPIds) {
+        const p = await prisma.product.findUniqueOrThrow({ where: { id: pid } });
+        const qty = qtyMap[lineIdx] ?? 1;
+        const lineTotal = (Number(p.regularPrice ?? 0) * qty).toFixed(2);
+        await prisma.cartItem.create({
+          data: {
+            cartId: cart.id,
+            productId: pid,
+            quantity: qty,
+            unitPrice: p.regularPrice ?? "0",
+            lineTotal,
+            lineTax: (Number(lineTotal) * 0.15).toFixed(2),
+          },
+        });
+        lineIdx++;
+      }
+      console.log(`  ✅ Cart baseline for Fatema@fashionbd.xyz: cartId=${cart.id} 5 items (Richman/CatsEye shirts)`);
+    }
+  } else {
+    console.log("  ℹ️  Skipped cart baseline (customer fatema@fashionbd.xyz not seeded yet — runs after seedCustomers)");
+  }
+
+  console.log("  ✅ Orders baseline (Rest of BD shipping zone + Fatema cart 5 items) added.");
   console.log("  ✅ Store + Settings baseline seeded.");
   return store;
 }
