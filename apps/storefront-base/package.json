@@ -1,0 +1,49 @@
+{
+  "name": "@ecom/storefront-base",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "next": "15.0.0-rc.1",
+    "@reduxjs/toolkit": "^2.2.7",
+    "react-redux": "^9.1.2",
+    "next-themes": "^0.3.0",
+    "zod": "^3.23.8",
+    "react-hook-form": "^7.53.0",
+    "@hookform/resolvers": "^3.9.0",
+    "sonner": "^1.5.0",
+    "swiper": "^11.1.14",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.2",
+    "@ecom/shared-types": "workspace:*",
+    "@ecom/utils": "workspace:*",
+    "@ecom/zod-schemas": "workspace:*",
+    "@ecom/api-client": "workspace:*",
+    "@ecom/ui": "workspace:*",
+    "lucide-react": "^0.441.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1",
+    "tailwindcss": "^3.4.12",
+    "postcss": "^8.4.47",
+    "autoprefixer": "^10.4.20"
+  }
+}

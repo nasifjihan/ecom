@@ -1,0 +1,22 @@
+// ============================================================
+// TEMPORARY STUB SCHEMA — Batch 3 bootstrap only
+// This is replaced in Batch #4 with the full PROJECT_DOCUMENTATION.md
+// Section 4 schema. Keeps prisma generate working so we can boot.
+// ============================================================
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Store {
+  id        BigInt    @id @default(autoincrement())
+  slug      String    @unique
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}

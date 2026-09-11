@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+*.local
+.DS_Store
+.env
+.env.*
+!.env.test
+.pnpm-store
+logs
+*.log
+tmp/
+temp/

@@ -52,9 +52,9 @@ export function moneyMul(amount: number | string, multiplier: number): number {
  * Money-safe add. Again: Decimal arithmetic via Prisma Decimal in services — this is UI quick helper.
  */
 export function moneyAdd(...amounts: (number | string)[]): number {
-  const totalCents = amounts.reduce((acc, a) => {
-    const n = typeof a === "string" ? parseFloat(a) : a;
-    return acc + Math.round((n || 0) * 100);
+  const totalCents = amounts.reduce<number>((acc, a) => {
+    const n = typeof a === "string" ? parseFloat(a) : Number(a);
+    return acc + Math.round(((Number.isFinite(n) ? n : 0) || 0) * 100);
   }, 0);
   return totalCents / 100;
 }

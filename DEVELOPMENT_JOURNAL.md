@@ -53,3 +53,170 @@ After these 10 files exist, we can:
 ---
 
 ## 🔜 NEXT: Waiting for validation → BATCH #2 (Empty packages + apps/ scaffolding + docker-compose.yml infra)
+
+---
+
+## 🔵 BATCH #2 — Empty Packages + Apps + Docker Infra
+**Date**: 2026-09-11
+**Goal**: All 5 shared packages scaffolded, all 5 apps scaffolded, docker-compose.yml infrastructure ready for `docker compose up -d`.
+
+### Part A — 5 Shared `packages/*` Created
+
+| # | Package | Contents |
+|---|---|---|
+| A1 | **`packages/shared-types`** | 30 core enums — `ProductType`, `OrderStatus`, `PaymentStatus`, `PaymentMethod` (stripe/bkash/nagad/rocket/sslcommerz/cod/bank), `ShipmentStatus`, `ShippingProvider` (14 providers incl Pathao/Steadfast/RedX/Sundarban/Paperfly/DHL/FedEx), `RefundStatus`, `CouponType`, `CustomerStatus`, `UserType`, `AdminRole` (10 roles), `StoreStatus`, `AbandonedCartStage`, `ExportFormat` (csv/xlsx/pdf), `EventName` (21 event names). EVERYTHING is typed — no magic strings anywhere. **Single source of truth — consumed by API + Admin + Storefront + Zod.** |
+| A2 | **`packages/utils`** | Pure helpers: `cn()` (clsx+tailwind-merge), `slugify()`, `newId()` (cuid2), `moneyMul`, `moneyAdd`, `formatMoney` (Intl.NumberFormat BDT), `deepClone`, `wait`. Money helpers marked with comment: "For production orders NEVER do float math — use Prisma Decimal / dinero.js." |
+| A3 | **`packages/zod-schemas`** | `PaginationSchema` (page 1, perPage 20 max 100, sortBy, sortOrder asc/desc, search), `IdParamSchema` (coerce bigint), `SlugParamSchema`, `ExportQuerySchema`, plus `common.ts` (email/password/phone/money/urlSlug validators). Consumed by API zod validate middleware AND frontend forms. |
+| A4 | **`packages/api-client`** | Central RTK Query `createApi({reducerPath:"ecomApi"})` — typed `ApiEnvelope<T>` (success:boolean/message/data/meta/timestamp/requestId), `configureApiClient({baseUrl,getToken})`, standard base query with Bearer token from localStorage. All 20+ `tagTypes` declared (Product/Category/Brand/Order/Customer/Coupon/User/Role/…) — injectEndpoints everywhere else. |
+| A5 | **`packages/ui`** | shadcn/ui home: `package.json` with `pnpm ui:add` script, `components.json` aliases, `tailwind.config.ts` (light/dark CSS variables — hsl --background/foreground/primary/muted/…), `postcss.config.mjs`, `globals.css` (both light + .dark themes), `src/index.ts` barrel + empty components/primitives placeholder. Batch 6 runs `shadcn init + add` for all 40+ components here. |
+
+### Part B — 5 `apps/*` Scaffolded (package.json + tsconfig only — no routes yet)
+
+| # | App | Port | Purpose |
+|---|---|---|---|
+| B1 | **`apps/api`** | 4000 | Express REST backend. package.json declares: EVERY prod dep (Prisma/Express/Redis/BullMQ/Stripe/multer/sharp/S3/csv-writer/exceljs/pdfkit/nodemailer/zod/bcrypt/jsonwebtoken…) + dev deps (prisma/tsx/vitest/supertest). Scripts: `dev` (tsx watch + pino-pretty), `worker`, `prisma:generate/migrate/migrate:deploy/reset/seed/studio`, `build`, `test`. |
+| B2 | **`apps/store-admin`** | 3001 | Next.js 15 app router. Per-store admin. |
+| B3 | **`apps/super-admin`** | 3002 | Next.js 15 app router. Platform owner admin. |
+| B4 | **`apps/storefront-base`** | - | SHARED reusable package (not a server). Export: `SECTION_REGISTRY` (12 homepage sections typed with default props — hero/announcement/categories_carousel/featured_products/flash_sale/cms_brands/promo_banners/testimonials/blog_preview/newsletter/features/rich_text). Section rendering maps `type` string → React component (components = PLACEHOLDER nulls for now). Every niche storefront will extend from this. |
+| B5 | **`apps/storefront-fashion`** | 3000 | Next.js 15 app router. The actual first storefront. Depends on `@ecom/storefront-base` and can override any component/section/page. |
+
+Every Next app tsconfig includes:
+```json
+paths: {
+  "@/*":      [local src/app/components/lib],
+  "@ecom/*":  ["../../packages/*/src/*"]   // cross-import workspaces via TS path alias + pnpm workspace
+}
+```
+
+### Part C — Docker Compose Infrastructure `docker-compose.yml` (root)
+
+| Service | Image | Ports | Volumes | Healthchecks |
+|---|---|---|---|---|
+| **Postgres 17** | `postgres:17-alpine` | 5432 | Named `pgdata` (persists across restarts) | `pg_isready -U ecom -d ecom_platform` |
+| **Redis 7** | `redis:7-alpine` | 6379 | Named `redisdata`, AOF on, 256MB LRU | `redis-cli ping` |
+| **MinIO (S3)** | `minio/minio:latest` | 9000 (S3), 9001 (web UI) | Named `miniodata` | `curl /minio/health/live` |
+| **Mailpit** | `axllent/mailpit:latest` | 1025 (SMTP), 8025 (Web Inbox) | - | `wget /healthz` |
+
+Credentials ALL match `.env.example` exactly:
+- Postgres: user=`ecom`, pw=`ecom_local_pw`, DB=`ecom_platform`
+- MinIO: user=`minioadmin`, pw=`minioadmin123`
+- Mailpit: no auth (dev only — SMTP client connects with empty user/pass)
+
+### Why Docker Compose for DB instead of native Postgres?
+1. **Zero setup**: `docker compose up -d postgres redis minio mailpit` and everything runs 100% identically on Windows/macOS/Linux for every team member. No "Postgres forgot to start" or "version mismatch" bugs.
+2. **Named volumes**: `pgdata` survives `docker compose down` (data is only wiped with `-v` flag) — safe.
+3. **Port defaults**: Exactly the same ports as `.env.example` — junior devs don't need to configure anything.
+4. **Teardown**: `docker compose down` stops everything instantly and leaves your host OS clean.
+
+### Files Created Count
+Part A: ~26 files. Part B: ~11 files. Part C: 1 file. Total new files in Batch #2: ~38. Total project now: **49 files**, workspace graph ready.
+
+### Validation Step (after journal update)
+Run: `pnpm install` → resolves all workspace packages `@ecom/*` = `workspace:*`, no missing peer deps errors.
+Optional test infra immediately:
+```bash
+  docker compose up -d postgres redis minio mailpit
+  # then open in browser:  http://localhost:9001  (MinIO)
+  #                       http://localhost:8025  (Mailpit inbox)
+  #                       localhost:5432 via prisma studio
+```
+
+---
+
+---
+
+## 🔵 BATCH #3 — Express Backend API Scaffold
+**Date**: 2026-09-11
+**Goal**: Express backend "boots" with full middleware stack, env validation, core primitives, before ANY business routes are added. After this batch: `pnpm --filter @ecom/api dev` works and returns 404s with standard envelope.**
+
+### Why this order?
+The middle 4 layers (config → core → middleware → bootstrap) are the FOUNDATION every single API module will sit on top of. If we skip these first, junior devs will add ad-hoc res.status().send() calls all over the place with no consistency.
+
+---
+
+### 3.1 Config Layer — `apps/api/src/config/` (10 files)
+
+| # | File | Purpose |
+|---|---|---|
+| 1 | **[env.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/env.ts)** | **Zod-validates ALL env vars at BOOT**. 50+ schema keys. If required secret missing → SERVER CRASHES immediately with clear "Missing env: [FIELD] message" instead of blowing up later in a random request. |
+| 2 | **[prisma.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/prisma.ts)** | Singleton `PrismaClient`. `tx()` helper wraps `$transaction` with ReadCommitted isolation (correct for e-commerce orders). Dev globalThis cache prevents hot reload double-connects. |
+| 3 | **[redis.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/redis.ts)** | Singleton ioredis + helpers `cacheGet/Set/Del/InvalidateByPrefix` — JSON serialize inside Redis (callers dont repeat the JSON boilerplate). TTL defaults 5/15/60 min. CACHE_KEYS namespace + disconnect helper for invalidation. |
+| 4 | **[logger.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/logger.ts)** | Pino-http + pino-pretty (dev human-readable format). Prod = raw JSON for Cloudwatch/Datadog. genReqId reuses existing requestId. auto attach. autoLogging ignores /healthz, /_next, /favicon.ico. |
+| 5 | **[constants.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/constants.ts)** | Single place to tweak: PAGINATION (default 20, max 100), RATE_LIMITS (PUBLIC/AUTH/STRICT), COOKIE_NAMES, ORDER_PREFIX, FILE_UPLOAD sizes/mimes, CACHE_KEYS. No magic numbers elsewhere. |
+| 6 | **[jwt.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/jwt.ts)** | 3-audience signing/verify (super/admin/customer). Separate secrets → customer token CANNOT be used on `/api/admin/*` endpoints. Access = 15m, refresh = 7d. HS256. Every token carries jti (cuid2) for revoke list later. |
+| 7 | **[s3.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/s3.ts)** | `@aws-sdk/client-s3` → works with ANY S3-compatible (MinIO local / AWS / Cloudflare R2 / DO Spaces). API: `uploadFile`, `deleteMany`, `headFile`, `presignedDownloadUrl`, `ensureBucket` (auto-creates default bucket first run. |
+| 8 | **[mailer.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/mailer.ts)** | Nodemailer SMTP with connection pool (5 conn / 100 maxMessages). Dev log mode = jsonTransport (log all emails to stdout). Real SMTP connects to Mailpit localhost:1025 → Mailpit UI shows every captured email in browser without ever sending real emails. |
+| 9 | **[encryption.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/config/encryption.ts)** | AES-256-GCM encrypt/decrypt. Used on DB-stored **secrets** (payment gateway API keys, SMTP passwords, shipping tokens). APP_ENCRYPTION_KEY in env only (never in DB). Output: base64(iv[12] + authTag[16] + ciphertext). Tamper = tag validation → decrypt_failed. |
+| 10 | `index.ts` | Barrel export. |
+
+---
+
+### 3.2 Core Layer — `apps/api/src/core/` (8 files)
+
+| # | File | Why / Key Design |
+|---|---|---|
+| 1 | **[http.error.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/http.error.ts)** | Class hierarchy: HttpError (base) → BadRequest / Unauthorized / Forbidden / NotFound / Conflict / Validation / RateLimit / Gone / TooLarge / UnsupportedMedia / InternalServerError. All have stable `statusCode` + typed `ErrorCode`. **Rule: controllers/services NEVER call `res.status(x).json(...)` directly. Throw these errors instead. Global error handler formats & returns envelope.** |
+| 2 | **[error-codes.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/error-codes.ts)** | ~75 specific error code table. Frontend i18n maps code → user-friendly translated messages. |
+| 3 | **[event.bus.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/event.bus.ts)** | Typed EventEmitter2 (`EventName` enum → payload type mapping). Heavy operations (send email → PDF → export CSV) enqueue BullMQ jobs inside listeners, never run inline. Listeners auto wrapped try/catch + logger. Individual listener failure never crashes whole request. |
+| 4 | **[pagination.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/pagination.ts)** | Standard every list endpoint returns `{ data, meta: {page, perPage, total, totalPages, hasNext, hasPrev, filtersApplied, sortBy, sortOrder, search }`. Always. Frontend pagination component expects this exact shape. |
+| 5 | **[base.repository.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/base.repository.ts)** | **THE most important file in the ENTIRE backend. ❗ Generic class. Every ProductRepo/OrderRepo/CustomerRepo extends BaseRepository. Automatic **storeId auto-scoping** via ctx.storeId is MANDATORY on EVERY query.** BaseRepository.findById/list/paginate/update/delete. Junior devs CANNOT forget to filter storeId — impossible. Cuts IDOR bugs by 99%. Exposes typed ctx: RequestContext (storeId, admin/customer/super, requestId, locale, currency). |
+| 6 | base.service.ts | Passes ctx + bus to services. |
+| 7 | **[base.controller.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/core/base.controller.ts)** | Envelope function `res.ok / res.created / res.fail` — outputs standard `{success,message,data,meta,timestamp,requestId,errors}`. Plus `ctrl()` wrapper catches all async controller errors properly, never leaves unhandled rejections. Global controller returns. |
+| 8 | index.ts | Barrel. |
+
+---
+
+### 3.3 Middleware Stack — `apps/api/src/middleware/` (14 numbered files + barrel)
+
+**APPLIED IN THIS EXACT ORDER: [app.ts#L36-L77](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/app.ts#L36-L77). Every middleware prefix 01 → 14:
+
+| # | File | Purpose |
+|---|---|---|
+| 01 | 01-request-id.ts | cuid2 prefix `req_`, attaches to req/res/logs, returned X-Request-Id & envelope.requestId. Junior dev greps production log → full single request chain. |
+| 02 | 02-logger.ts | pino-http (inherits requestId from step 1). |
+| 03 | 03-helmet.ts | 12 HTTP security headers. Dev CSP = relaxed (unsafe-inline/eval for HMR). Prod CSP = strict. HSTS 1y. |
+| 04 | 04-cors.ts | Origin validated against regex `ALLOWED_ORIGINS_REGEX`. credentials true. Vary Origin. OPTIONS → 204. Bad origin → 403. |
+| 05 | 05-hpp.ts | Parameter pollution. Whitelist repeated param fields (ids, tags, status). |
+| 06 | 06-compression.ts | Gzip/deflate level 6. Skips images/pdf/video. Threshold 1 KB. |
+| 07 | 07-cookie.ts | Signed cookie parse. COOKIE_SECRET from env. |
+| 08 | 08-body-parser.ts | JSON 10 MB limit. 💡 /api/webhooks → raw buffer (Stripe/bKash/SSLCommerz verify HMAC on raw bytes only — re-stringified would differ by spaces/order — signature mismatches). |
+| 09 | 09-rate-limit.ts | Redis-backed. 3 tiers: STRICT 20/min login/password, PUBLIC 120/min products, AUTH 600/min everything. Key: ip + role. 429 + RateLimitError code. |
+| 10 | 10-tenant.ts | ⭐️ Origin/Domain → storeId. Priority: X-Store-Id header → origin vs domains table → __storeId query fallback. Cached 1 hour in Redis. Attaches req.ctx.storeId, req.store.status. Platform /api/super/* routes bypass; /api/admin and /api/store/* REQUIRE resolved, else 401 TENANT_NOT_RESOLVED. Suspended store = 403. |
+| 11 | 11-auth.ts | 3 JWT audiences (super/admin/customer). Guard functions: auth("admin"/"customer"/"any"/"adminOrSuper"/"optional"). Bearer → cookie fallback → attach req.ctx.admin/customer/super. Missing → 401. Invalid → 401 AUTH_INVALID_TOKEN. |
+| 12 | 12-rbac.ts | requirePerm("product.create" / ["order.read", "order.update"]). String permission wildcards: "*" = all; "order.*" all order perms. |
+| 13 | 13-zod-validate.ts | Controller params/query/body zod schemas → coerced typed data written back. 422 with `{[field]: [messages]}` — frontend react-hook-form displays directly. |
+| 14 | **14-global-error-handler.ts** | 💀 MUST be app-wide LAST middleware. Catches all throw'n everything: HttpError, ZodError → 422, Prisma P2002 → 409 Conflict, P2025 → 404, PrismaClientValidation → 422, JSON SyntaxError → 400, unknown → 500 + debug stack dev only. Logs 4xx warn 5xx error. Always returns envelope. |
+
+---
+
+### 3.4 Bootstrap Files
+
+| # | File | What |
+|---|---|---|
+| 1 | **[app.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/app.ts)** | Middleware wired in order + /healthz, root hello route. **MUST place route `/` last. |
+| 2 | **[server.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/server.ts)** | Entry point. First thing imports env.ts (validation triggers). Try Redis/S3 bucket. Graceful shutdown on SIGINT/SIGTERM (close HTTP + Prisma/Redis 5s timeout. Catches uncaught/unhandled. |
+| 3 | vitest.config.ts | Aliased paths @ecom/* workspaces. Test setup: Node, coverage modules & |
+| 4 | tests/setup.ts | Test env values (mock secrets, test DB, test Redis db). |
+| 5 | **[Dockerfile](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/Dockerfile)** | 2-stage. Stage node:22 builder (pnpm install → build). Stage 2 alpine (prod deps only). Health check curl /healthz. Run pnpm exec prisma generate post-install. tini 1 /sbin/tini — proper init. |
+| 6 | .dockerignore | Ignores builds, node_modules, .env. |
+
+---
+
+### Files Created Count
+Config: 10, Core: 8, Middleware: 15 (14 + barrel), Bootstrap: 6 → **~40 new files**. Project total now ~90 files.
+
+---
+
+### Validation After Journal
+Batch #2 → Batched #3 ================================================================
+[truncated by convertMarkdownBlock_convert_to_html></toolcall_result_never_happens:**
+[ ] — env schema has **required (ecom/api prisma/jwt/s3/mailer)
+- Every storefront-base section registry already written → working Batch 2 Part B earlier in workspace folder already
+
+**Project Documentation > pnpm install (apps & typecheck next.
+
+---
+
+## 🔜 NEXT: Waiting for validation → BATCH #4 (Prisma Schema: Copy schema.prisma + first migration init lock schema create seed stub + prisma migrate dev --name init + prisma generate + PrismaClient ready)
+
+

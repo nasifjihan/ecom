@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Ecom Base TSConfig",
   "compilerOptions": {
-    /* Strictness — NON-NEGOTIABLE for junior devs */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -12,7 +11,6 @@
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": false,
 
-    /* Standard options */
     "target": "ES2022",
     "module": "Preserve",
     "moduleResolution": "Bundler",
@@ -27,22 +25,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "jsx": "preserve",
-    "incremental": true,
-
-    /* Path aliases for every workspace package (extend in packages if needed) */
-    "baseUrl": ".",
-    "paths": {
-      "@ecom/shared-types": ["packages/shared-types/src/index.ts"],
-      "@ecom/shared-types/*": ["packages/shared-types/src/*"],
-      "@ecom/utils": ["packages/utils/src/index.ts"],
-      "@ecom/utils/*": ["packages/utils/src/*"],
-      "@ecom/zod-schemas": ["packages/zod-schemas/src/index.ts"],
-      "@ecom/zod-schemas/*": ["packages/zod-schemas/src/*"],
-      "@ecom/api-client": ["packages/api-client/src/index.ts"],
-      "@ecom/api-client/*": ["packages/api-client/src/*"],
-      "@ecom/ui": ["packages/ui/src/index.ts"],
-      "@ecom/ui/*": ["packages/ui/src/*"]
-    }
+    "incremental": true
   },
   "exclude": ["node_modules", "dist", ".next", "build", "coverage"]
 }
