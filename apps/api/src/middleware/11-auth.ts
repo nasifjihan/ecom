@@ -6,7 +6,7 @@
  * Bearer in Authorization header OR (customer/admin) in httpOnly secure cookie.
  */
 import type { Request, Response, NextFunction } from "express";
-import { jwt as jwtCfg } from "../config";
+import { jwt as jwtCfg, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config";
 import { UnauthorizedError, ForbiddenError } from "../core";
 import type { TokenAudience } from "../config/jwt";
 import { COOKIE_NAMES } from "../config";
@@ -29,7 +29,7 @@ function readToken(req: Request, audience: TokenAudience): string | undefined {
   return undefined;
 }
 
-function attachToCtx(
+async function attachToCtx(
   req: Request,
   audience: TokenAudience,
   decoded: Awaited<ReturnType<typeof jwtCfg.verifyAccessToken>>,
@@ -45,7 +45,35 @@ function attachToCtx(
     req.ctx.super = { id: obj.id };
     req.ctx.admin = { id: obj.id, role: "SUPER", permissions: ["*"] };
   } else if (audience === "admin") {
-    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions: [] };
+    let permissions: string[] = [];
+    const storeId = (decoded as any).storeId;
+    const sub = decoded.sub;
+    const role = decoded.role;
+    if (sub && storeId && role) {
+      const cacheKey = `admin:perms:${storeId}:${role}:${sub}`;
+      const cached = await cacheGet<string[]>(cacheKey);
+      if (cached) {
+        permissions = cached;
+      } else {
+        try {
+          const admin = await prisma.adminUser.findFirst({
+            where: { id: BigInt(sub), storeId: BigInt(storeId) },
+            include: { role: true },
+          });
+          if (admin && admin.roleId) {
+            const assignments = await prisma.permissionAssignment.findMany({
+              where: { roleId: admin.roleId },
+              select: { permission: true },
+            });
+            permissions = assignments.map((a) => a.permission);
+            await cacheSet(cacheKey, permissions, CACHE_KEYS.TTL_DEFAULT);
+          }
+        } catch {
+          permissions = [];
+        }
+      }
+    }
+    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions };
   } else {
     req.ctx.customer = { id: obj.id };
   }
@@ -67,7 +95,7 @@ export default function authMiddleware(guard: AuthGuardType = "any") {
         if (!tok) continue;
         try {
           const decoded = jwtCfg.verifyAccessToken(tok, aud);
-          attachToCtx(req, aud, decoded);
+          await attachToCtx(req, aud, decoded);
           found = true;
           break;
         } catch {

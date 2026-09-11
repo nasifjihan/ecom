@@ -26,7 +26,7 @@ export type TokenPayload = {
 const SECRETS: Record<TokenAudience, { access: string; refresh: string }> = {
   super: {
     access: env.JWT_SUPER_ACCESS_SECRET,
-    refresh: env.JWT_ADMIN_REFRESH_SECRET,
+    refresh: env.JWT_SUPER_REFRESH_SECRET,
   },
   admin: {
     access: env.JWT_ADMIN_ACCESS_SECRET,

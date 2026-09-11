@@ -20,6 +20,19 @@ import {
 } from "./middleware";
 import { NotFoundError, envelope, ctrl } from "./core";
 import { env } from "./config";
+import { authRoutes } from "./modules/auth";
+import {
+  superStoresRouter,
+  superDomainsRouter,
+  storeSelfRouter,
+  superPlansRouter,
+} from "./modules/stores";
+import {
+  adminUsersRouter,
+  adminRolesRouter,
+  superAdminUsersRouter,
+  superRolesRouter,
+} from "./modules/admin-users";
 
 let _app: Express | null = null;
 
@@ -60,12 +73,16 @@ export function buildApp(): Express {
     envelope(res, { message: "E-Commerce Platform API — see /healthz", data: { version: "0.1.0" } });
   }));
 
-  // =============== MODULE ROUTES (mounted here as we build modules) ===============
-  // Modules added in later batches are mounted via `registerRoutes(app)`.
-  // Example:
-  //   import authRoutes from "../modules/auth/routes";
-  //   app.use("/api/admin/auth", authRoutes);
-  // For now, NO real routes → every unknown path will hit the 404 below.
+  // =============== MODULE ROUTES (Batch #5 wired) ===============
+  app.use("/api/auth", authRoutes);
+  app.use("/api/super/stores", superStoresRouter);
+  app.use("/api/super/domains", superDomainsRouter);
+  app.use("/api/super/plans", superPlansRouter);
+  app.use("/api/super/admin-users", superAdminUsersRouter);
+  app.use("/api/super/roles", superRolesRouter);
+  app.use("/api/store", storeSelfRouter);
+  app.use("/api/admin/users", adminUsersRouter);
+  app.use("/api/admin/roles", adminRolesRouter);
 
   // =============== 404 catch-all ===============
   app.all(
