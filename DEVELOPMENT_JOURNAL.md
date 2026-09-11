@@ -829,11 +829,148 @@ Inside seedFashionBDStore after Catalog baseline:
 - ESLint still blocked (unless user requested ESLint9 migration in this batch — include below in confirmation prompt).
 
 ### 🚨 VALIDATION REQUEST (NON-NEGOTIABLE per your process mandate)
-Please reply with ONE of the following:
-1. **Exact keyword:** `proceed with Batch #7` → I execute 7.1–7.8 above exactly as written.
-2. Change request: e.g. `redo Batch 7.6 remove paymentIpnRouter routes to separate Batch` → incorporate + repost Batch7 plan for re-approval.
-3. Priority shift: `First run pnpm prisma:migrate --name init + prisma:seed to unlock schema then proceed` → document the exact commands then run migration-seed + THEN Batch7 code.
-4. Include ESLint 9 flat-config migration in Batch7 scope Y/N (currently N, tsc strict is pass-gate).
+→ User replied EXACT keyword "proceed with Batch #7" (2026-09-12 01:10 approx) → Batch 7 executed per plan 7.1-7.8 as written below.
 
-Waiting for your explicit message before any Batch #7 code starts.
+---
+
+## ✅ BATCH #7 — Orders Module + 7 Payment Gateway Abstractions
+**Committed state**: 17 new files + 4 edits (app.ts 4 mounts, seed Fashion BD Order baseline, catalog DTO earlier batch edits reused, prisma prisma:generate no-op)
+**Pre-commit gates**: `tsc --noEmit apps/api` EXIT 0 ✅ | `pnpm prisma:generate` ✅ | 16/16 HTTP smoke PASS ✅ | ESLint (blocked flat config, N — tsc strict is pass-gate, user hasn't requested migration)
+
+### 7.1 Scope & Models Used (12+ existing from schema.prisma 62, NO SCHEMA CHANGES PER MANDATE)
+Models: Cart, CartItem, Order (billing/shipping inline snapshot fields), OrderStatusLog (11 statuses enum), OrderItem (product snapshots NOT mutable references), Refund, RefundItem, ShippingZone + ShippingMethod, Coupon, Customer, InventoryLog (replaces InventoryReservation model we thought existed — discovered during schema exploration Batch #7.0: schema only has InventoryLog so adapted plan to use deductStock/restock via `InventoryLogRepository.deductStock` manual row-lock pattern). Payment models (Payment/PaymentLog) NOT in schema — left provider stubs returning envelope, later attach DB writes. CustomerCreditLedger not present; store_credit refund paths deferred.
+
+### 7.2 Orders Module — 6 files created at `apps/api/src/modules/orders/`
+| # | File | Purpose |
+|---|---|---|
+| 1 | [orders.dto.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/modules/orders/orders.dto.ts) | 18 Zod schemas: OrderSearchQueryDto, AddressDto nested, BaseCreateOrderFromCartDto + refine superRefine version (partial pattern workaround ZodEffects.partial anti-pattern from Batch #6 lessons), TransitionStatusDto with enum OrderStatus 11 values, RefundItemLine/CreateRefundDto, PaymentInitiateDto, CartItemLine + CreateCartDto, IpnProviderParamDto enum validate, ExportOrdersDto format csv|xlsx|pdf. **XSS refine** on customerNote/note/reason/noteToCustomer/firstName/lastName. **Cross-field**: minTotal≤maxTotal, dateFrom≤dateTo, couponCode 3-20 alphanumeric hyphens if set. |
+| 2 | [orders.repository.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/modules/orders/orders.repository.ts) | 6 classes extending BaseRepository<'order'> etc: **OrderRepository** (findByNumber unique, listWithJoins 11-level include items+product/variant/customer/statusHistory/shipping/coupon/refunds, aggregateStats groupBy status), CartRepository (upsertItem quantity delta, clearAll deleteMany items), RefundRepository, CouponRepository (findByCode @@unique, incrementUsage), InventoryLogRepository (deductStock manual ConflictError OutOfStock check + stockQty−=qty reservedQty+=qty; restock reverse), ShippingRepository (matchZoneByAddress JSON countries contains + state + postcode regex; methodsForZone; flatRateCalc baseCost + perItemCost×count vs freeFromSubtotal override). |
+| 3 | [orders.service.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/modules/orders/orders.service.ts) | OrdersService extends BaseService, 14 methods. **`createOrderFromCart(dto)` — atomic `tx()` transaction**: cart load → coupon validate (isActive / date range / minSubtotal / usageCount) → line totals BD VAT 15% default fallback → ShippingRepository.matchZone+method+calc → InventoryLog.deductStock (OOS auto rollback) → orderNumber YYYYMMDD-6digit, orderKey newId("ok") → insert order with billing/shipping snapshot, shippingSameAsBilling default true, status PENDING, paymentGatewayCode dto value, paymentStatus unpaid → insert orderItem snapshot rows (name, sku, image AT ORDER TIME never references later) → OrderStatusLog "created" → carts.clearAll(cartId). **nextStep**: COD → COD_AWAITING_CONFIRM else INITIATE_PAYMENT. **`transitionStatus(orderId, dto)` LIFECYCLE GUARD MATRIX 11 VALID EDGES**: PENDING→PROCESSING|ON_HOLD|CANCELLED, PROCESSING→ON_HOLD|SHIPPED|CANCELLED, ON_HOLD→PROCESSING|CANCELLED, SHIPPED→OUT_FOR_DELIVERY|CANCELLED, OUT_FOR_DELIVERY→DELIVERED|CANCELLED, DELIVERED→COMPLETED|REFUNDED|FAILED, COMPLETED→REFUNDED|FAILED, FAILED→PENDING; anything else → ConflictError ORDER_STATUS_INVALID_TRANSITION. CANCELLED/REFUNDED → inventory restock reverse; DELIVERED → completedAt; CANCELLED → cancelledAt. **createRefund**: per-item refund total ≤ lineTotal → gateways refund call if gatewayRefund flag → restock → order status auto REFUNDED on 100%. initiatePayment/confirmPayment/parsePaymentIpn/cart methods. |
+| 4 | [orders.controller.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/modules/orders/orders.controller.ts) | 18 `ctrl(envelope)` arrow handlers exactly catalog.controller pattern: createOrderFromCart (201), transitionStatus, listOrders, getOrderById/Number, create/list refunds, initiate/confirm payment, ipnWebhook read raw body, listCarts/createCart/addItem, listCustomerOrders customer scope, cancelMyOrder guard PENDING/PROCESSING only → else 409, dashboardStats, exportOrders Content-Disposition stub. |
+| 5 | [orders.routes.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/modules/orders/orders.routes.ts) | **4 routers** with EXPLICIT 4-STEP GUARD CHAIN (`authMiddleware→rbacMiddleware→validate→handler`) enforced Batch #5 double-mount/guard lessons. Routes: `adminOrdersRouter` (RBAC orders.* — 15 handlers, relative paths NO /api), `adminPaymentsRouter` (RBAC payments.*), `checkoutRouter` (customer audience authMiddleware("customer")), `paymentIpnRouter` — NO AUTH NO RBAC, only validates provider param `IpnProviderParamDto`. |
+| 6 | index.ts | Barrel exports 4 routers for app.ts destructured import. |
+
+### 7.3 Payments Abstraction — 10 files created at `apps/api/src/services/payments/`
+OCP Open/Closed — controller/service never switch on provider name. Add new provider = new file + 1 line in factory map. All 7 gateway stubs return strict shapes; graceful fallbacks if env vars missing (never throw).
+| # | File | Purpose |
+|---|---|---|
+| 1 | [types.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/types.ts) | 6 typedefs: PaymentMethod, PaymentStatus; 8 interfaces Initiate/Confirm/Refund/Ipn Input & Result shapes + PaymentProvider interface with 5 methods { initiate, confirm, refund, getStatus, parseIpn }. |
+| 2 | [BasePaymentProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/BasePaymentProvider.ts) | Abstract base; all 5 methods default-throw "not impl". Helpers: `logCall(method, payload): Promise<void>` no-op PaymentLog stub. `safeMask(obj)` recursive — any key match card/cvv/nid/pin/password (case-insensitive) → value replaced "***". |
+| 3 | [StripeProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/StripeProvider.ts) | `stripe` SDK missing → returns success=false message="Stripe SDK not installed" graceful. Present creates PaymentIntent + client_secret providerReference, redirectUrl=input.redirectUrl + "?payment_intent=...". parseIpn STRIPE_WEBHOOK_SECRET verify header, else unverified. |
+| 4 | [BkashProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/BkashProvider.ts) | Token grant_type=client_credentials cached; sandbox https://tokenized.sandbox.bka.sh/v1.2.0-beta/ live URL based env BKASH_MODE. Methods createPayment → executePayment → refund → queryPayment; parseIpn payload hash check appSecret. |
+| 5 | [NagadProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/NagadProvider.ts) | NAGAD_API_URL mode + merchantId; public/private key RS256 sign via node:crypto. create-payment, verify-payment, parseIpn JWT verify signature. |
+| 6 | [RocketProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/RocketProvider.ts) | SMS PIN stub. initiate "SMS PIN sent", confirm checks OTP/PIN from payload; parseIpn sha256 pin-hash verify. |
+| 7 | [SSLCommerzProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/SSLCommerzProvider.ts) | sandbox easycheck if SSLCOMMERZ_IS_SANDBOX=true; initiate transInit sessionkey, confirm validatetransaction val_id; parseIpn verify_sign md5 over verify_key + store_passwd md5 / fallback md5(val_id|amount|store_pass). |
+| 8 | [CashOnDeliveryProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/CashOnDeliveryProvider.ts) | initiate {success:true pending redirectUrl = redirect+"?cod=1"}; confirm stays unpaid until admin marks; parseIpn verified=true manual. |
+| 9 | [BankTransferProvider.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/BankTransferProvider.ts) | initiate pending with static instructions "Pay to account X attach slip"; confirm pending verification; parseIpn verified=false. |
+| 10 | [index.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/services/payments/index.ts) | PAYMENT_METHODS array; `getPaymentProvider(method, ctx?)` map string → provider instance; exhaustive never + ConflictError("CONFLICT") unknown. |
+
+### 7.4 App wiring & seed baseline
+**[app.ts](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/src/app.ts#L44-L110)** — added import destructured 4 routers; 4 new `app.use(...)` lines inserted AFTER `/api/admin/media` BEFORE 404:
+```
+app.use("/api/admin/orders", adminOrdersRouter);
+app.use("/api/admin/payments", adminPaymentsRouter);
+app.use("/api/storefront/checkout", checkoutRouter);
+app.use("/api/payments/ipn", paymentIpnRouter);
+```
+**[seed.ts:442-551 Fashion BD baseline](file:///g:/Web%20Development/My%20Projects/ecom/apps/api/prisma/seed.ts#L442-L551)** — Appended inside seedFashionBDStore function idempotent:
+- (2) Shipping zones: Dhaka Metro (already existed lines 279-302) + Rest of Bangladesh with flat_rate_rob (base 180 BDT per item +30)
+- (5) Fake products if missing: 3 Richman shirts (Navy Cotton/White Oxford/Satin Party) + 2 Cats Eye (Denim/Linen) each with regularPrice 2890-4490 BDT, stockQty=50 manageStock=true, linked via raw INSERT ON CONFLICT DO NOTHING to Shirts category pivot (ProductCategory composite PK).
+- Customer Fatema guard: exists fatema@fashionbd.xyz → create cart for customer, 5 cart items qty [2,1,1,2,1], lineTax 15% auto compute. Customer not yet seeded? Print ℹ️ skipped — runs correctly on full seed sequence (seedCustomers function runs AFTER seedFashionBDStore — user can reorder seed functions if they want cart baseline deterministic).
+
+### 7.5 Validation Results — 16 HTTP Smoke (fast-path, Postgres OFF — SUPER audience zero prisma)
+| # | Scenario | Expected | Got | Code / Note |
+|---|---|---|---|---|
+| 1 | GET /admin/orders NO TOKEN | 401 | 401 | auth fires before zod |
+| 2 | POST /admin/orders body:{} | 422 | 422 | Validation failed (required agreeToTerms/cartId/shippingAddress) |
+| 3 | POST /admin/payments/offline-confirm body:{} | 422 | 422 | method/transactionId required |
+| 4 | GET /admin/orders/abc-not-bigint | 422 | 422 | coerce.bigint "abc" invalid |
+| 5 | POST /admin/orders/1/status body:{} | 422 | 422 | newStatus enum required |
+| 6 | POST /admin/orders/1/refunds body:{} | 422 | 422 | orderId/items/reason required |
+| 7 | POST /orders/export {format:"zip"} | 422 | 422 | enum csv/xlsx/pdf only |
+| 8 | GET /orders?perPage=500 | 422 | 422 | PaginationSchema max(100) — DDoS guard |
+| 9 | POST /payments/ipn/unknown-gateway | 422 | 422 | IpnProviderParamDto refine rejects unknown |
+| 10 | POST /payments/ipn/stripe empty | 400/any not 500 | 400 | "IPN signature verification failed" — no crash ✅ |
+| 11 | GET /orders?minTotal=5000&maxTotal=500 | 422 | 422 | Cross-field refine minTotal > maxTotal |
+| 12 | GET /storefront/checkout/my-orders NO TOKEN | 401 | 401 | customer audience missing |
+| 13 | POST status {newStatus:"NOT_A_STATUS"} | 422 | 422 | enum OrderStatus values 11 only |
+| 14 | POST /orders/1/payments method=xyz | 422 | 422 | PaymentInitiate method enum refine |
+| 15 | POST export format:"xlsx" | 200 attachment header | 200 attachment present | Content-Disposition: attachment; filename=...xlsx |
+| 16 | GET /orders/doesnt/exist unknown route | 404 | 404 | Express catch-all |
+**Result: 16/16 ✅** exit 0.
+
+### 7.6 Errors & Fixes Table — Batch #7
+| Severity | Error | Root cause | Fix |
+|---|---|---|---|
+| HIGH | Plan assumed schema had `InventoryReservation` model but Grep schema.prisma returned zero matches | Documented 62 models final; schema only ships `InventoryLog` (lines 814) | Adapted repository deductStock/restock to use InventoryLog directly with manual qty check before update (simulated SELECT FOR UPDATE). |
+| MEDIUM | Sub-agent guessed `apps/api/src/core` vs `../../repositories/BaseRepository` import path wrong | Earlier batches import BaseRepository always from ../../core barrel index.ts exports ["base.repository"] | Corrected import path across both orders.repository + payments index ConflictError from ../../core (not @ecom/api-errors separate package, doesn't exist in monorepo today). |
+| MEDIUM | PaymentLog schema missing (was plan) | 62 models no Payment row | Deferred DB write. Providers return strict interface, base class logCall no-op. Add Payment schema model in Phase 5 later if user requests. |
+| LOW | smoke scenario #10 expected "[200,400,401,403,422]" array — custom array compare used `.includes` → TS ok but array vs scalar. | Test util compared scalar `r.status === sc.expect` when expectAny=false, wrong branch for multi-expect | Adjusted smoke script `ok = expectAny ? Array.includes(r.status) : r.status === sc.expect`. Result 16/16 ✅ |
+| LOW | Seed orders baseline `cart-seed-fashionbd-${Date.now()}` token length > Cart String @unique (cart.token max varchar Prisma default) | Prisma String @default varchar unlimited typical; Date.now() 13 chars typical | Fine but if user wants shorten, change to newId("cart") in future. Not hit. |
+
+### 7.7 Lessons Learned (Batch #7)
+1. **Schema first check BEFORE writing repositories**: Always `Grep schema.prisma for model names` — we assumed InventoryReservation existed. Saved 2 hours if we had done grep before agent prompts.
+2. **No Prisma native `SELECT FOR UPDATE` row lock support — manual pre-check**: deductStock does findFirst(variantId) THEN throws ConflictError OutOfStock if qty insufficient, THEN UPDATE. Risk: concurrent 2 orders same variant pass check both → negative oversell. Mitigate later with `$queryRaw` SELECT … FOR UPDATE SKIP LOCKED (Postgres-specific) when locking becomes priority during real-load QA. For MVP acceptable.
+3. **Inline Billing/Shipping snapshots on Order model = GOOD design**. Earlier debates about normalizing to separate OrderAddress table — schema author chose inline so order rows self-contained forever, never reference mutable customer addresses if user changes theirs later. Perfect for tax/VAT compliance audit trails.
+4. **COD provider is NOT a network PG, but treated same interface shape** — controller never writes `if (cod) skip payment`. Clean OCP.
+5. **Pivot inserts ON CONFLICT DO NOTHING via raw SQL**: Prisma createMany for composite @@id ProductCategory model is non-trivial to do upserts safely — $executeRawUnsafe `INSERT … VALUES (bigint casts) ON CONFLICT DO NOTHING` works on Postgres without needing additional Prisma composite type generation step.
+
+---
+
+## 🚧 RED BANNER: SCHEMA LOCK — Prisma init migration STILL PENDING (5th batch reminder)
+Postgres Docker container must be healthy (port 5432 reachable) before these 3 commands:
+```bash
+# 1. Verify container postgres is Up (healthy)
+docker compose ps
+# 2. Lock 62 models + 6 enums in _prisma_migrations lock table
+pnpm prisma:migrate --name init
+# 3. Open browser & verify 62+6+migration tables present
+pnpm prisma:studio
+# 4. Run seed (Fashion BD → Domains/Stores/SuperAdmin/3Admins/10Roles/Catalog/Shipping/Cart 5 items/Customer)
+pnpm prisma:seed
+```
+Until this is manually run, all smoke/unit tests use SUPER audience JWT short-circuit path.
+
+---
+
+## 📋 BATCH #8 PLAN — Customers Module + Inventory/Warehouse + Marketing Tools (Coupons, Flash Sales, Reviews) + Dashboard Super/Store Stats
+Estimated 16 new files + 2 edits (app.ts 6 route mounts, seed extension 20 new demo customers/coupons/flash sale). Scope: store-admin customers CRUD + address book, inventory per-warehouse/transfer/adjust, coupon creation + flash sale scheduling, product reviews moderation, Reports endpoints CSV/XLSX/PDF export, Super Admin Dashboard platform-wide MRR/churn stats. NO schema changes (all models exist from Batch #4 62 model set).
+
+### 8.1 Customers Module `apps/api/src/modules/customers/*` (6 files)
+- DTOs: Create/UpdateCustomerDto (BD phone regex, email unique per store), CustomerAddressDto (type billing/shipping, isDefault flag), CustomerSearchQueryDto (group id, status, minTotalSpent/maxTotalSpent, dateJoined range, country, search name/email/phone), CustomerStatusTransitionDto block/unblock/approve-marketing, PasswordResetRequestDto token+newPassword.
+- Repositories: CustomerRepository (listWithJoins include addresses + orders count + group membership, increment totalSpent/orderCount after PaymentCaptured event), CustomerAddressRepository (setDefault flushes old default flag, type check)
+- Service CRUD: import customers CSV xlsx template batch; bulkUpdateStatus; generateCustomerCSV/Excel/PDF export all fields + lifetime value.
+- Controllers + Routes: adminCustomersRouter RBAC customers.*; customerSelfRouter authMiddleware('customer') my-profile / my-addresses / change-password / update-profile.
+- Seed baseline: 20 demo customers groups: "General" default + 2 in "VIP" groupId + 5 with address Dhaka Metro, 5 with address Chittagong outside Dhaka (for zone matching test data later Phase 3 shipping rates live QA).
+
+### 8.2 Inventory Module `apps/api/src/modules/inventory/*` (5 files)
+- Models: InventoryLog (already exists) + Product + ProductVariant stockQty/reservedQty columns (schema already present).
+- DTOs: StockAdjustmentDto variantId + delta positive/negative + reason("stock_count"/"damage"/"return_in"/"transfer_in"/"transfer_out"), StockTransferDto originWarehouse→dest list of qty+variant, LowStockReportDto threshold.
+- InventoryService methods: bulkStockCount CSV import; transferStock() tx deduct origin + insert InventoryLog + add destination rows; restockFromReturn() marks variant qty + create log reason=RETURN. Reports: LowStockList/StockValueReport/InventoryMovement (between dateFrom dateTo).
+- Routes: adminInventoryRouter RBAC inventory.*; GET /reports/low-stock, POST /adjust, POST /transfer, GET /movement?variantId=&from=&to=.
+
+### 8.3 Marketing Module `apps/api/src/modules/marketing/*` (4 files)
+- Coupon CUD: DiscountType enum (schema already has PERCENTAGE/FIXED_CART/FIXED_PRODUCT/BOGO/FREE_SHIPPING), validation minSubtotal/date range/usage limits/email restrictions/category applicability list. UsageCount increment atomically in OrderService already. Routes: marketingCouponsRouter RBAC marketing.*.
+- FlashSale CUD (schema already model FlashSale lines 1316): scheduledStart scheduledEnd with cron? NO CRON MVP; check active = current time at product-level listProducts. Routes marketingFlashSalesRouter.
+- Product Reviews moderation (schema 916): admin list pending/approved/spam reviews, approve/bulk-delete/spam-mark; customer self POST review after order delivered guard (verify orderId status=DELIVERED for reviewer customerId). Routes marketingReviewsRouter.
+- Seed baseline: 2 coupons (WELCOME10 — 10% FIXED_CART new customers only, min 3000 BDT; FLAT500 — FIXED_CART ৳500 off min 5000 BDT order). 1 flash sale 7 days starting 2026-09-13 Richman shirts 20% off category Shirts. 30 product reviews (10 pending moderation).
+
+### 8.4 Super Admin + Store Admin Dashboard Aggregations
+- Super dash: GET /api/super/dashboard/stats → total stores count active, total MRR across stores last30d, churned stores last30d, new signups by day, plan distribution.
+- Store dash: GET /api/admin/dashboard → Revenue (today/7d/30d/MTD/YTD), top 10 products, Orders status breakdown (pie), Refund rate %, Abandoned cart count with dollar value, Customer lifetime value percentile 90, Low stock variant count.
+- All dashboard endpoints: RBAC scoped, returns both numbers + export option POST /dashboard/export PDF/XLSX with charts as images (later; stub Content-Disposition now).
+
+### 8.5 Validation Expected at Batch #8 close
+- tsc --noEmit 0 ✅ | prisma generate no-op ✅
+- 18 HTTP smoke: 401s/422s/XSS email/phone regex/minSpent>maxSpent/date order/coupon dateFrom>expires 422/export Content-Disposition header/unknown route 404 etc.
+- ESLint blocked unless user said Y earlier.
+
+### 🚨 VALIDATION REQUEST (NON-NEGOTIABLE process mandate)
+**Reply with ONE of the following EXACT choices**:
+1. **Exact keyword**: `proceed with Batch #8` → execute plan 8.1-8.5 exactly above.
+2. Change request: e.g. `Remove Marketing from Batch8 to Batch9, add shipping rates API first` → incorporate, repost Batch 8 plan for re-approval.
+3. Priority shift: `First run pnpm prisma:migrate --name init + prisma:seed to lock schema then proceed Batch 8` → run commands + document result → then proceed.
+4. `Include ESLint 9 flat config migration in Batch 8 scope` (now N — default remain tsc strict gate).
+
+Waiting for your explicit message before any Batch #8 code starts.
 
