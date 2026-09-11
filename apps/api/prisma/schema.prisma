@@ -1,22 +1,1941 @@
 // ============================================================
-// TEMPORARY STUB SCHEMA — Batch 3 bootstrap only
-// This is replaced in Batch #4 with the full PROJECT_DOCUMENTATION.md
-// Section 4 schema. Keeps prisma generate working so we can boot.
+// PROVIDER & DATASOURCE
 // ============================================================
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
+// ============================================================
+// PLATFORM / SUPER-ADMIN LEVEL (NO storeId)
+// ============================================================
+
+enum PlanType {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+model Plan {
+  id           BigInt                @id @default(autoincrement())
+  name         String                @unique
+  type         PlanType
+  priceMonthly Decimal               @db.Decimal(12, 2)
+  priceYearly  Decimal               @db.Decimal(12, 2)
+  features     Json
+  stores       Store[]
+  billingSubs  BillingSubscription[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model BillingSubscription {
+  id                BigInt    @id @default(autoincrement())
+  storeId           BigInt    @unique
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  planId            BigInt
+  plan              Plan      @relation(fields: [planId], references: [id])
+  externalId        String?   @unique
+  status            String
+  currentPeriodEnd  DateTime?
+  cancelAtPeriodEnd Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
 model Store {
-  id        BigInt    @id @default(autoincrement())
-  slug      String    @unique
+  id          BigInt               @id @default(autoincrement())
+  name        String
+  slug        String               @unique
+  planId      BigInt?
+  plan        Plan?                @relation(fields: [planId], references: [id])
+  status      String               @default("active")
+  trialEndsAt DateTime?
+  billingSub  BillingSubscription?
+
+  domains              Domain[]
+  admins               AdminUser[]
+  generalSettings      StoreGeneralSetting?
+  brandSettings        StoreBrandSetting?
+  layoutSettings       StoreLayoutSetting?
+  paymentSettings      PaymentGatewayConfig[]
+  shippingZones        ShippingZone[]
+  taxClasses           TaxClass[]
+  emailSettings        StoreEmailSetting?
+  seoSettings          StoreSeoSetting?
+  securitySettings     StoreSecuritySetting?
+  localizationSettings StoreLocalizationSetting?
+
+  products             Product[]
+  categories           Category[]
+  brands               Brand[]
+  attributes           Attribute[]
+  collections          Collection[]
+  customerGroups       CustomerGroup[]
+  customers            Customer[]
+  reviews              Review[]
+  orders               Order[]
+  refunds              Refund[]
+  returns              ReturnRequest[]
+  coupons              Coupon[]
+  flashSales           FlashSale[]
+  giftCards            GiftCard[]
+  banners              Banner[]
+  pages                CmsPage[]
+  blogs                BlogPost[]
+  faqs                 Faq[]
+  menus                Menu[]
+  mediaFolders         MediaFolder[]
+  mediaFiles           MediaFile[]
+  themes               ThemeConfig[]
+  homepageSections     HomepageSection[]
+  pageBuilderLayouts   PageBuilderLayout[]
+  roles                Role[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  emailTemplates       EmailTemplate[]
+  abandonedCarts       AbandonedCart[]
+  suppliers            Supplier[]
+  subscriptionProducts SubscriptionProduct[]
+  subscriptions        CustomerSubscription[]
+  carts                Cart[]
+  affiliates           Affiliate[]
+  blogCategories       BlogCategory[]
+  digitalDownloads     DigitalDownload[]
+  apiIntegrations      ApiIntegration[]
+  webhooks             Webhook[]
+  currencies           Currency[]
+  languages            Language[]
+  currencyRateLogs     CurrencyRateLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([status])
+}
+
+model Domain {
+  id         BigInt   @id @default(autoincrement())
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  hostname   String   @unique
+  type       String
+  primary    Boolean  @default(false)
+  sslEnabled Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([hostname])
+  @@index([storeId])
+}
+
+model PlatformAdmin {
+  id              BigInt    @id @default(autoincrement())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  role            String    @default("super_owner")
+  twoFactorSecret String?
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============================================================
+// ADMIN USERS, ROLES & PERMISSIONS (PER STORE)
+// ============================================================
+model Role {
+  id          BigInt                 @id @default(autoincrement())
+  storeId     BigInt
+  store       Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  isSystem    Boolean                @default(false)
+  permissions PermissionAssignment[]
+  admins      AdminUser[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model PermissionAssignment {
+  id         BigInt   @id @default(autoincrement())
+  roleId     BigInt
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission String
+  createdAt  DateTime @default(now())
+
+  @@index([roleId, permission])
+}
+
+model AdminUser {
+  id              BigInt           @id @default(autoincrement())
+  storeId         BigInt
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email           String
+  passwordHash    String
+  name            String
+  phone           String?
+  avatarUrl       String?
+  roleId          BigInt
+  role            Role             @relation(fields: [roleId], references: [id])
+  status          String           @default("active")
+  twoFactorSecret String?
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  auditLogs       AuditLog[]
+  orderStatusLogs OrderStatusLog[]
+  refunds         Refund[]
+  authoredPosts   BlogPost[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([storeId, email])
+}
+
+model AuditLog {
+  id         BigInt     @id @default(autoincrement())
+  storeId    BigInt
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  adminId    BigInt?
+  admin      AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  action     String
+  objectType String
+  objectId   String
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime   @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([adminId])
+}
+
+// ============================================================
+// STORE SETTINGS (ALL HAVE 1-TO-1 WITH store)
+// ============================================================
+model StoreGeneralSetting {
+  id              BigInt   @id @default(autoincrement())
+  storeId         BigInt   @unique
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tagline         String?
+  logoUrl         String?
+  faviconUrl      String?
+  emailFrom       String
+  emailFromName   String
+  phone           String?
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  state           String?
+  postalCode      String?
+  countryCode     String?
+  timezone        String   @default("Asia/Dhaka")
+  dateFormat      String   @default("DD/MM/YYYY")
+  weightUnit      String   @default("kg")
+  dimensionUnit   String   @default("cm")
+  maintenanceMode Boolean  @default(false)
+  maintenanceMsg  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model StoreBrandSetting {
+  id                BigInt   @id @default(autoincrement())
+  storeId           BigInt   @unique
+  store             Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  themeSlug         String   @default("classic")
+  colorPrimary      String   @default("#2563eb")
+  colorSecondary    String   @default("#64748b")
+  colorAccent       String   @default("#f59e0b")
+  colorSuccess      String   @default("#10b981")
+  colorWarning      String   @default("#f59e0b")
+  colorError        String   @default("#ef4444")
+  colorBackground   String   @default("#ffffff")
+  colorSurface      String   @default("#f8fafc")
+  colorText         String   @default("#0f172a")
+  colorTextMuted    String   @default("#64748b")
+  colorBorder       String   @default("#e2e8f0")
+  headingFont       String   @default("Inter")
+  bodyFont          String   @default("Inter")
+  baseFontSize      Int      @default(16)
+  borderRadius      String   @default("md")
+  buttonStyle       String   @default("solid")
+  cardShadow        String   @default("sm")
+  darkModeEnabled   Boolean  @default(false)
+  defaultMode       String   @default("light")
+  containerMaxWidth Int      @default(1280)
+  sectionPaddingY   Int      @default(48)
+  sectionPaddingX   Int      @default(16)
+  customCss         String?  @db.Text
+  customJs          String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model StoreLayoutSetting {
+  id                           BigInt   @id @default(autoincrement())
+  storeId                      BigInt   @unique
+  store                        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  headerLogoPosition           String   @default("left")
+  headerLayout                 String   @default("v1")
+  headerStickyEnabled          Boolean  @default(true)
+  headerTransparentHome        Boolean  @default(false)
+  headerShowSearch             Boolean  @default(true)
+  headerShowWishlist           Boolean  @default(true)
+  headerShowCompare            Boolean  @default(true)
+  headerShowAccount            Boolean  @default(true)
+  headerShowCart               Boolean  @default(true)
+  headerShowCurrencySwitcher   Boolean  @default(true)
+  headerShowLangSwitcher       Boolean  @default(true)
+  headerAnnouncementEnabled    Boolean  @default(false)
+  headerAnnouncementText       String?
+  headerAnnouncementBg         String?
+  headerAnnouncementTextColor  String?
+  headerContactPhone           String?
+  headerContactEmail           String?
+  footerColumns                Int      @default(4)
+  footerLayout                 String   @default("v1")
+  footerBgColor                String?
+  footerTextColor              String?
+  footerCopyrightText          String?
+  footerShowPaymentIcons       Boolean  @default(true)
+  footerShowSocialIcons        Boolean  @default(true)
+  footerShowNewsletter         Boolean  @default(true)
+  productGridProductsPerRow    Int      @default(4)
+  productGridProductsPerPage   Int      @default(12)
+  productCardStyle             String   @default("classic")
+  productCardShowRating        Boolean  @default(true)
+  productCardShowBrand         Boolean  @default(true)
+  productCardShowWishlist      Boolean  @default(true)
+  productCardShowCompare       Boolean  @default(true)
+  productCardShowQuickView     Boolean  @default(true)
+  productCardShowBadges        Boolean  @default(true)
+  productPageLayout            String   @default("v1")
+  productGalleryThumbsPosition String   @default("bottom")
+  productShowDescriptionTab    Boolean  @default(true)
+  productShowSpecsTab          Boolean  @default(true)
+  productShowReviewsTab        Boolean  @default(true)
+  productShowFaqTab            Boolean  @default(true)
+  productShowSku               Boolean  @default(true)
+  productShowBrand             Boolean  @default(true)
+  productShowStockCount        Boolean  @default(true)
+  productShowBreadcrumbs       Boolean  @default(true)
+  productShowSocialShare       Boolean  @default(true)
+  productRelatedCount          Int      @default(4)
+  productUpsellPosition        String   @default("after_description")
+  cartPageLayout               String   @default("standard")
+  cartShowCrossSells           Boolean  @default(true)
+  cartShowCouponField          Boolean  @default(true)
+  checkoutGuestEnabled         Boolean  @default(true)
+  checkoutLayout               String   @default("multi_step")
+  checkoutShowCompanyField     Boolean  @default(true)
+  checkoutShowAddress2Field    Boolean  @default(true)
+  checkoutShowOrderNotes       Boolean  @default(true)
+  checkoutShowTrustBadges      Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model StoreEmailSetting {
+  id             BigInt   @id @default(autoincrement())
+  storeId        BigInt   @unique
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  mailer         String   @default("smtp")
+  host           String?
+  port           Int?
+  encryption     String?
+  username       String?
+  password       String?
+  fromAddress    String
+  fromName       String
+  templateHeader String?  @db.Text
+  templateFooter String?  @db.Text
+  accentColor    String?
+  logoUrl        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model StoreSeoSetting {
+  id                    BigInt   @id @default(autoincrement())
+  storeId               BigInt   @unique
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  homeSeoTitle          String?
+  homeMetaDescription   String?
+  ogImageUrl            String?
+  productTitleFormat    String   @default("{product_name} | {store_name}")
+  productDescFormat     String   @default("{short_description}")
+  categoryTitleFormat   String   @default("{category_name} | {store_name}")
+  brandTitleFormat      String   @default("{brand_name} | {store_name}")
+  blogTitleFormat       String   @default("{post_title} | {store_name}")
+  enableSchemaOrg       Boolean  @default(true)
+  autoGenerateCanonical Boolean  @default(true)
+  robotsTxt             String?  @db.Text
+  googleAnalyticsId     String?
+  googleTagManagerId    String?
+  facebookPixelId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model StoreSecuritySetting {
+  id                   BigInt   @id @default(autoincrement())
+  storeId              BigInt   @unique
+  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  adminTwoFaRequired   Boolean  @default(false)
+  passwordMinLength    Int      @default(8)
+  passwordRequireUpper Boolean  @default(true)
+  passwordRequireNum   Boolean  @default(true)
+  passwordRequireSym   Boolean  @default(false)
+  loginMaxAttempts     Int      @default(5)
+  loginLockMinutes     Int      @default(15)
+  adminIpWhitelist     Json?
+  recaptchaEnabled     Boolean  @default(false)
+  recaptchaSiteKey     String?
+  recaptchaSecret      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model StoreLocalizationSetting {
+  id                BigInt   @id @default(autoincrement())
+  storeId           BigInt   @unique
+  store             Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  defaultCurrency   String   @default("USD")
+  allowedCurrencies Json?
+  defaultLanguage   String   @default("en")
+  allowedLanguages  Json?
+  currencyFormat    String   @default("{symbol}{amount}")
+  thousandSeparator String   @default(",")
+  decimalSeparator  String   @default(".")
+  decimals          Int      @default(2)
+  enableRtl         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ============================================================
+// PAYMENT, SHIPPING, TAX
+// ============================================================
+model PaymentGatewayConfig {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  description  String?
+  enabled      Boolean  @default(false)
+  testMode     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  credentials  Json?
+  instructions String?  @db.Text
+  feeFixed     Decimal  @default(0) @db.Decimal(12, 2)
+  feePercent   Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, code])
+}
+
+model ShippingZone {
+  id        BigInt           @id @default(autoincrement())
+  storeId   BigInt
+  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  countries Json
+  states    Json?
+  postcodes Json?
+  methods   ShippingMethod[]
+  orders    Order[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model ShippingMethod {
+  id                      BigInt       @id @default(autoincrement())
+  zoneId                  BigInt
+  zone                    ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  code                    String
+  name                    String
+  description             String?
+  enabled                 Boolean      @default(true)
+  sortOrder               Int          @default(0)
+  baseCost                Decimal      @default(0) @db.Decimal(12, 2)
+  perItemCost             Decimal      @default(0) @db.Decimal(12, 2)
+  freeFromSubtotal        Decimal?     @db.Decimal(12, 2)
+  costRules               Json?
+  liveRateConfig          Json?
+  taxClassId              BigInt?
+  taxClass                TaxClass?    @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
+  deliveryEstimateMinDays Int?
+  deliveryEstimateMaxDays Int?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+}
+
+model TaxClass {
+  id              BigInt           @id @default(autoincrement())
+  storeId         BigInt
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String
+  rates           TaxRate[]
+  products        Product[]
+  shippingMethods ShippingMethod[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model TaxRate {
+  id          BigInt   @id @default(autoincrement())
+  taxClassId  BigInt
+  taxClass    TaxClass @relation(fields: [taxClassId], references: [id], onDelete: Cascade)
+  countryCode String
+  state       String?
+  postcode    String?
+  city        String?
+  rate        Decimal  @db.Decimal(5, 2)
+  name        String
+  compound    Boolean  @default(false)
+  priority    Int      @default(1)
+
+  @@index([taxClassId, countryCode])
+}
+
+// ============================================================
+// CATALOG
+// ============================================================
+
+enum ProductType {
+  SIMPLE
+  VARIABLE
+  DIGITAL
+  SUBSCRIPTION
+  MADE_TO_ORDER
+}
+
+model Category {
+  id             BigInt            @id @default(autoincrement())
+  storeId        BigInt
+  store          Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String
+  parentId       BigInt?
+  parent         Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Category[]        @relation("CategoryTree")
+  imageUrl       String?
+  bannerUrl      String?
+  description    String?           @db.Text
+  displayMode    String            @default("products")
+  sortOrder      Int               @default(0)
+  isActive       Boolean           @default(true)
+  menuIncluded   Boolean           @default(true)
+  megaMenuConfig Json?
+  seoTitle       String?
+  metaDesc       String?
+  canonicalUrl   String?
+  ogImageUrl     String?
+  translations   Json?
+  products       ProductCategory[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([storeId, slug, parentId])
+  @@index([storeId, isActive])
+}
+
+model Brand {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  slug         String
+  logoUrl      String?
+  bannerUrl    String?
+  websiteUrl   String?
+  description  String?   @db.Text
+  sortOrder    Int       @default(0)
+  isActive     Boolean   @default(true)
+  seoTitle     String?
+  metaDesc     String?
+  canonicalUrl String?
+  ogImageUrl   String?
+  translations Json?
+  products     Product[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model Attribute {
+  id                BigInt             @id @default(autoincrement())
+  storeId           BigInt
+  store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name              String
+  slug              String
+  type              String             @default("select")
+  sortOrder         Int                @default(0)
+  isFilterable      Boolean            @default(true)
+  isActive          Boolean            @default(true)
+  terms             AttributeTerm[]
+  productAttributes ProductAttribute[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model AttributeTerm {
+  id                    BigInt                 @id @default(autoincrement())
+  attributeId           BigInt
+  attribute             Attribute              @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  name                  String
+  slug                  String
+  value                 String?
+  sortOrder             Int                    @default(0)
+  swatchUrl             String?
+  productAttributeTerms ProductAttributeTerm[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([attributeId, slug])
+}
+
+model Collection {
+  id          BigInt              @id @default(autoincrement())
+  storeId     BigInt
+  store       Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  type        String              @default("manual")
+  rules       Json?
+  imageUrl    String?
+  bannerUrl   String?
+  description String?             @db.Text
+  sortOrder   Int                 @default(0)
+  isActive    Boolean             @default(true)
+  products    ProductCollection[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model Product {
+  id                    BigInt                 @id @default(autoincrement())
+  storeId               BigInt
+  store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type                  ProductType            @default(SIMPLE)
+  name                  String
+  slug                  String
+  sku                   String?
+  barcode               String?
+  shortDescription      String?                @db.VarChar(500)
+  description           String?                @db.Text
+  regularPrice          Decimal?               @db.Decimal(12, 2)
+  salePrice             Decimal?               @db.Decimal(12, 2)
+  salePriceStartAt      DateTime?
+  salePriceEndAt        DateTime?
+  manageStock           Boolean                @default(true)
+  stockQty              Int?
+  reservedStock         Int                    @default(0)
+  allowBackorder        Boolean                @default(false)
+  lowStockThreshold     Int?
+  weight                Decimal?               @db.Decimal(10, 3)
+  length                Decimal?               @db.Decimal(10, 3)
+  width                 Decimal?               @db.Decimal(10, 3)
+  height                Decimal?               @db.Decimal(10, 3)
+  brandId               BigInt?
+  brand                 Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  taxClassId            BigInt?
+  taxClass              TaxClass?              @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
+  categories            ProductCategory[]
+  collections           ProductCollection[]
+  images                ProductImage[]
+  variants              ProductVariant[]
+  attributes            ProductAttribute[]
+  upsells               ProductLink[]          @relation("Upsells")
+  crossSells            ProductLink[]          @relation("CrossSells")
+  inventoryLogs         InventoryLog[]
+  reviews               Review[]
+  isDigital             Boolean                @default(false)
+  digitalFileId         BigInt?
+  digitalFile           MediaFile?             @relation("ProductDigitalFile", fields: [digitalFileId], references: [id], onDelete: SetNull)
+  downloadLimit         Int?
+  downloadExpiryDays    Int?
+  virtual               Boolean                @default(false)
+  individuallySold      Boolean                @default(false)
+  requireShipping       Boolean                @default(true)
+  status                String                 @default("published")
+  featured              Boolean                @default(false)
+  allowReviews          Boolean                @default(true)
+  seoTitle              String?
+  metaDesc              String?
+  canonicalUrl          String?
+  ogImageUrl            String?
+  schemaType            String?
+  translations          Json?
+  fulfillmentType       String                 @default("own")
+  supplierId            BigInt?
+  supplier              Supplier?              @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierCost          Decimal?               @db.Decimal(12, 2)
+  supplierSku           String?
+  averageRating         Decimal                @default(0) @db.Decimal(3, 2)
+  reviewCount           Int                    @default(0)
+  viewCount             Int                    @default(0)
+  saleCount             Int                    @default(0)
+  wishlistItems         WishlistItem[]
+  compareItems          CompareItem[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  flashSaleItems        FlashSaleItem[]
+  subscriptionProducts  SubscriptionProduct[]
+  customerSubscriptions CustomerSubscription[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([storeId, slug])
+  @@index([storeId, status])
+  @@index([storeId, brandId])
+  @@index([storeId, type])
+}
+
+model ProductImage {
+  id        BigInt     @id @default(autoincrement())
+  productId BigInt
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaId   BigInt?
+  media     MediaFile? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  imageUrl  String
+  altText   String?
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  @@index([productId, sortOrder])
+}
+
+model ProductCategory {
+  productId  BigInt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  categoryId BigInt
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  primary    Boolean  @default(false)
+
+  @@id([productId, categoryId])
+}
+
+model ProductCollection {
+  productId    BigInt
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collectionId BigInt
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([productId, collectionId])
+}
+
+model ProductAttribute {
+  id            BigInt                 @id @default(autoincrement())
+  productId     BigInt
+  product       Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributeId   BigInt
+  attribute     Attribute              @relation(fields: [attributeId], references: [id])
+  isForVariants Boolean                @default(false)
+  terms         ProductAttributeTerm[]
+
+  @@index([productId, attributeId])
+}
+
+model ProductAttributeTerm {
+  id                 BigInt           @id @default(autoincrement())
+  productAttributeId BigInt
+  productAttribute   ProductAttribute @relation(fields: [productAttributeId], references: [id], onDelete: Cascade)
+  termId             BigInt
+  term               AttributeTerm    @relation(fields: [termId], references: [id])
+
+  @@index([productAttributeId, termId])
+}
+
+model ProductVariant {
+  id                    BigInt                 @id @default(autoincrement())
+  productId             BigInt
+  product               Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributeValues       Json
+  sku                   String?
+  barcode               String?
+  regularPrice          Decimal?               @db.Decimal(12, 2)
+  salePrice             Decimal?               @db.Decimal(12, 2)
+  salePriceStartAt      DateTime?
+  salePriceEndAt        DateTime?
+  manageStock           Boolean                @default(true)
+  stockQty              Int?
+  reservedStock         Int                    @default(0)
+  allowBackorder        Boolean                @default(false)
+  lowStockThreshold     Int?
+  imageUrl              String?
+  weight                Decimal?               @db.Decimal(10, 3)
+  length                Decimal?               @db.Decimal(10, 3)
+  width                 Decimal?               @db.Decimal(10, 3)
+  height                Decimal?               @db.Decimal(10, 3)
+  status                String                 @default("active")
+  wishlistItems         WishlistItem[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  flashSaleItems        FlashSaleItem[]
+  customerSubscriptions CustomerSubscription[]
+  inventoryLogs         InventoryLog[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([productId, status])
+}
+
+model ProductLink {
+  id              BigInt  @id @default(autoincrement())
+  productId       BigInt
+  product         Product @relation("Upsells", fields: [productId], references: [id], onDelete: Cascade)
+  linkedProductId BigInt
+  linkedProduct   Product @relation("CrossSells", fields: [linkedProductId], references: [id])
+  type            String
+  sortOrder       Int     @default(0)
+
+  @@index([productId, type])
+}
+
+model InventoryLog {
+  id          BigInt          @id @default(autoincrement())
+  productId   BigInt?
+  product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId   BigInt?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  warehouse   String?
+  changeQty   Int
+  reason      String
+  referenceId String?
+  note        String?
+  qtyBefore   Int
+  qtyAfter    Int
+  createdAt   DateTime        @default(now())
+
+  @@index([productId, createdAt])
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+model CustomerGroup {
+  id              BigInt     @id @default(autoincrement())
+  storeId         BigInt
+  store           Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String
+  discountPercent Decimal    @default(0) @db.Decimal(5, 2)
+  minimumSpend    Decimal?   @db.Decimal(12, 2)
+  isSystem        Boolean    @default(false)
+  customers       Customer[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Customer {
+  id                    BigInt                 @id @default(autoincrement())
+  storeId               BigInt
+  store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email                 String
+  passwordHash          String?
+  firstName             String
+  lastName              String
+  phone                 String?
+  avatarUrl             String?
+  isGuest               Boolean                @default(false)
+  status                String                 @default("active")
+  acceptMarketing       Boolean                @default(false)
+  groupId               BigInt?
+  group                 CustomerGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  storeCredit           Decimal                @default(0) @db.Decimal(12, 2)
+  loyaltyPoints         Int                    @default(0)
+  totalSpent            Decimal                @default(0) @db.Decimal(14, 2)
+  orderCount            Int                    @default(0)
+  twoFactorSecret       String?
+  lastLoginAt           DateTime?
+  lastLoginIp           String?
+  addresses             CustomerAddress[]
+  orders                Order[]
+  reviews               Review[]
+  wishlistItems         WishlistItem[]
+  compareItems          CompareItem[]
+  digitalDownloads      DigitalDownload[]
+  giftCardsOwned        GiftCardRedemption[]
+  referrals             AffiliateReferral[]    @relation("CustomerReferrals")
+  referredByAffiliateId BigInt?
+  referredByAffiliate   Affiliate?             @relation("AffiliateReferredCustomers", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  subscriptions         CustomerSubscription[]
+  carts                 Cart[]
+  purchasedGiftCards    GiftCard[]
+  returnRequests        ReturnRequest[]
+  affiliateProfile      Affiliate?             @relation("CustomerAffiliateProfile")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([storeId, email])
+  @@index([storeId, groupId])
+  @@index([storeId, status])
+}
+
+model CustomerAddress {
+  id          BigInt   @id @default(autoincrement())
+  customerId  BigInt
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type        String
+  label       String?
+  firstName   String
+  lastName    String
+  company     String?
+  address1    String
+  address2    String?
+  city        String
+  state       String?
+  postcode    String?
+  countryCode String
+  phone       String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, type])
+}
+
+model Review {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId    BigInt
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId   BigInt
+  customer     Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId      BigInt?
+  order        Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  rating       Int
+  title        String?
+  body         String?   @db.Text
+  status       String    @default("approved")
+  verified     Boolean   @default(false)
+  replyAdminId BigInt?
+  replyBody    String?   @db.Text
+  replyAt      DateTime?
+  mediaIds     Json?
+  helpfulCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([productId, status])
+  @@index([customerId])
+}
+
+model WishlistItem {
+  id         BigInt          @id @default(autoincrement())
+  customerId BigInt
+  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId  BigInt
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  BigInt?
+  variant    ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  createdAt  DateTime        @default(now())
+
+  @@unique([customerId, productId, variantId])
+}
+
+model CompareItem {
+  id         BigInt   @id @default(autoincrement())
+  customerId BigInt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId  BigInt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, productId])
+}
+
+// ============================================================
+// ORDERS
+// ============================================================
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  ON_HOLD
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  FAILED
+}
+
+model Cart {
+  id               BigInt         @id @default(autoincrement())
+  storeId          BigInt
+  store            Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId       BigInt?
+  customer         Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  token            String         @unique
+  items            CartItem[]
+  appliedCouponId  BigInt?
+  appliedCoupon    Coupon?        @relation(fields: [appliedCouponId], references: [id], onDelete: SetNull)
+  couponDiscount   Decimal        @default(0) @db.Decimal(12, 2)
+  giftCardCode     String?
+  giftCardDiscount Decimal        @default(0) @db.Decimal(12, 2)
+  currencyCode     String         @default("USD")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  abandoned        AbandonedCart?
+  expiresAt        DateTime?
+
+  @@index([customerId])
+  @@index([storeId, createdAt])
+}
+
+model CartItem {
+  id        BigInt          @id @default(autoincrement())
+  cartId    BigInt
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId BigInt
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId BigInt?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  quantity  Int
+  unitPrice Decimal         @db.Decimal(12, 2)
+  lineTotal Decimal         @db.Decimal(12, 2)
+  lineTax   Decimal         @default(0) @db.Decimal(12, 2)
+  meta      Json?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([cartId, productId])
+}
+
+model Order {
+  id                     BigInt               @id @default(autoincrement())
+  storeId                BigInt
+  store                  Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  number                 String               @unique
+  customerId             BigInt?
+  customer               Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerNote           String?              @db.Text
+  billingFirstName       String
+  billingLastName        String
+  billingCompany         String?
+  billingAddress1        String
+  billingAddress2        String?
+  billingCity            String
+  billingState           String?
+  billingPostcode        String?
+  billingCountryCode     String
+  billingEmail           String
+  billingPhone           String?
+  shippingSameAsBilling  Boolean              @default(true)
+  shippingFirstName      String?
+  shippingLastName       String?
+  shippingCompany        String?
+  shippingAddress1       String?
+  shippingAddress2       String?
+  shippingCity           String?
+  shippingState          String?
+  shippingPostcode       String?
+  shippingCountryCode    String?
+  shippingPhone          String?
+  itemsSubtotal          Decimal              @default(0) @db.Decimal(14, 2)
+  discountTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  shippingTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  taxTotal               Decimal              @default(0) @db.Decimal(14, 2)
+  feeTotal               Decimal              @default(0) @db.Decimal(14, 2)
+  grandTotal             Decimal              @db.Decimal(14, 2)
+  currencyCode           String
+  exchangeRateToStore    Decimal              @default(1) @db.Decimal(12, 6)
+  paymentGatewayCode     String
+  transactionId          String?
+  paymentStatus          String               @default("unpaid")
+  paidAt                 DateTime?
+  shippingZoneId         BigInt?
+  shippingZone           ShippingZone?        @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  shippingMethodCode     String
+  shippingMethodName     String
+  trackingNumber         String?
+  trackingUrl            String?
+  estimatedDelivery      DateTime?
+  status                 OrderStatus          @default(PENDING)
+  statusHistory          OrderStatusLog[]
+  isGuest                Boolean              @default(false)
+  orderKey               String               @unique
+  couponUsed             String?
+  couponDiscountAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  giftCardUsed           String?
+  giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
+  supplierOrderId        String?
+  supplierFulfilledAt    DateTime?
+  items                  OrderItem[]
+  shipments              Shipment[]
+  refunds                Refund[]
+  returns                ReturnRequest[]
+  reviews                Review[]
+  invoice                Invoice?
+  giftCards              GiftCard[]
+  giftCardRedemptions    GiftCardRedemption[]
+  affiliateReferrals     AffiliateReferral[]
+  ipAddress              String?
+  userAgent              String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+  @@index([customerId])
+  @@index([paymentStatus])
+}
+
+model OrderStatusLog {
+  id             BigInt      @id @default(autoincrement())
+  orderId        BigInt
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status         OrderStatus
+  note           String?
+  notifyCustomer Boolean     @default(false)
+  adminId        BigInt?
+  admin          AdminUser?  @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+}
+
+model OrderItem {
+  id               BigInt            @id @default(autoincrement())
+  orderId          BigInt
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        BigInt?
+  product          Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId        BigInt?
+  variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  productName      String
+  productSku       String?
+  variantValues    Json?
+  imageUrl         String?
+  quantity         Int
+  unitPrice        Decimal           @db.Decimal(12, 2)
+  lineSubtotal     Decimal           @db.Decimal(14, 2)
+  lineTax          Decimal           @default(0) @db.Decimal(12, 2)
+  lineDiscount     Decimal           @default(0) @db.Decimal(12, 2)
+  lineTotal        Decimal           @db.Decimal(14, 2)
+  qtyShipped       Int               @default(0)
+  qtyRefunded      Int               @default(0)
+  downloadGranted  Boolean           @default(false)
+  meta             Json?
+  shipmentItems    ShipmentItem[]
+  refundItems      RefundItem[]
+  returnItems      ReturnItem[]
+  digitalDownloads DigitalDownload[]
+  createdAt        DateTime          @default(now())
+}
+
+model Shipment {
+  id             BigInt         @id @default(autoincrement())
+  orderId        BigInt
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  providerCode   String
+  providerName   String
+  trackingNumber String?
+  trackingUrl    String?
+  labelUrl       String?
+  items          ShipmentItem[]
+  notes          String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+}
+
+model ShipmentItem {
+  id          BigInt    @id @default(autoincrement())
+  shipmentId  BigInt
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItemId BigInt
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity    Int
+}
+
+model Invoice {
+  id        BigInt   @id @default(autoincrement())
+  orderId   BigInt   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  number    String   @unique
+  pdfUrl    String?
+  data      Json?
+  createdAt DateTime @default(now())
+}
+
+model Refund {
+  id                   BigInt       @id @default(autoincrement())
+  storeId              BigInt
+  store                Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId              BigInt
+  order                Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  adminId              BigInt?
+  admin                AdminUser?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  reason               String
+  items                RefundItem[]
+  amount               Decimal      @db.Decimal(14, 2)
+  restockItems         Boolean      @default(true)
+  gatewayRefunded      Boolean      @default(false)
+  gatewayTransactionId String?
+  noteToCustomer       String?      @db.Text
+  status               String       @default("completed")
+  createdAt            DateTime     @default(now())
+}
+
+model RefundItem {
+  id          BigInt    @id @default(autoincrement())
+  refundId    BigInt
+  refund      Refund    @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItemId BigInt
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity    Int
+  amount      Decimal   @db.Decimal(12, 2)
+}
+
+model ReturnRequest {
+  id               BigInt       @id @default(autoincrement())
+  storeId          BigInt
+  store            Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId          BigInt
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId       BigInt?
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  type             String       @default("return")
+  reason           String
+  customerNote     String?      @db.Text
+  items            ReturnItem[]
+  requestedAmount  Decimal      @db.Decimal(14, 2)
+  status           String       @default("requested")
+  resolution       String?
+  resolutionAmount Decimal?     @db.Decimal(14, 2)
+  adminNotes       String?      @db.Text
+  trackingNumber   String?
+  returnLabelUrl   String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([storeId, status])
+}
+
+model ReturnItem {
+  id               BigInt        @id @default(autoincrement())
+  returnRequestId  BigInt
+  returnRequest    ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId      BigInt
+  orderItem        OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity         Int
+  condition        String?
+  customerPhotos   Json?
+  resolutionAmount Decimal?      @db.Decimal(12, 2)
+}
+
+model AbandonedCart {
+  id                BigInt    @id @default(autoincrement())
+  storeId           BigInt
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  cartId            BigInt    @unique
+  cart              Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  customerEmail     String?
+  firstName         String?
+  recoveryToken     String    @unique
+  recoveryUrl       String
+  reminderSentAt    DateTime?
+  reminderSentCount Int       @default(0)
+  recoveredAt       DateTime?
+  totalAmount       Decimal   @db.Decimal(14, 2)
+  createdAt         DateTime  @default(now())
+
+  @@index([storeId, createdAt])
+}
+
+// ============================================================
+// MARKETING
+// ============================================================
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_CART
+  FIXED_PRODUCT
+  BOGO
+  FREE_SHIPPING
+}
+
+model Coupon {
+  id                BigInt       @id @default(autoincrement())
+  storeId           BigInt
+  store             Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code              String
+  description       String?
+  type              DiscountType
+  amount            Decimal      @db.Decimal(12, 2)
+  freeShipping      Boolean      @default(false)
+  minSubtotal       Decimal?     @db.Decimal(12, 2)
+  maxSubtotal       Decimal?     @db.Decimal(12, 2)
+  productIds        Json?
+  excludeProductIds Json?
+  categoryIds       Json?
+  excludeSales      Boolean      @default(false)
+  individualOnly    Boolean      @default(false)
+  customerGroupIds  Json?
+  customerEmails    Json?
+  newCustomersOnly  Boolean      @default(false)
+  totalUsageLimit   Int?
+  perCustomerLimit  Int?
+  usageCount        Int          @default(0)
+  startsAt          DateTime?
+  expiresAt         DateTime?
+  isActive          Boolean      @default(true)
+  autoApply         Boolean      @default(false)
+  rewardType        String?
+  rewardValue       Json?
+  appliedCarts      Cart[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, isActive])
+}
+
+model FlashSale {
+  id              BigInt          @id @default(autoincrement())
+  storeId         BigInt
+  store           Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String
+  description     String?
+  startsAt        DateTime
+  endsAt          DateTime
+  discountPercent Decimal?        @db.Decimal(5, 2)
+  discountFixed   Decimal?        @db.Decimal(12, 2)
+  rules           Json?
+  bannerImageUrl  String?
+  bannerTitle     String?
+  bannerSubtitle  String?
+  bannerCtaText   String?
+  bannerCtaUrl    String?
+  position        Int             @default(0)
+  isActive        Boolean         @default(true)
+  items           FlashSaleItem[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model FlashSaleItem {
+  id          BigInt          @id @default(autoincrement())
+  flashSaleId BigInt
+  flashSale   FlashSale       @relation(fields: [flashSaleId], references: [id], onDelete: Cascade)
+  productId   BigInt
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId   BigInt?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  salePrice   Decimal?        @db.Decimal(12, 2)
+  discountPct Decimal?        @db.Decimal(5, 2)
+  stockLimit  Int?
+  soldCount   Int             @default(0)
+  sortOrder   Int             @default(0)
+
+  @@unique([flashSaleId, productId, variantId])
+}
+
+model Banner {
+  id              BigInt    @id @default(autoincrement())
+  storeId         BigInt
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type            String
+  name            String
+  title           String?
+  subtitle        String?
+  description     String?   @db.Text
+  imageUrl        String?
+  mobileImageUrl  String?
+  videoUrl        String?
+  ctaText         String?
+  ctaUrl          String?
+  ctaOpenNewTab   Boolean   @default(false)
+  bannerStyle     Json?
+  placement       String?
+  scheduleStart   DateTime?
+  scheduleEnd     DateTime?
+  visibilityRules Json?
+  status          String    @default("active")
+  sortOrder       Int       @default(0)
+  clicks          Int       @default(0)
+  impressions     Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model GiftCard {
+  id             BigInt               @id @default(autoincrement())
+  storeId        BigInt
+  store          Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code           String
+  name           String?
+  initialBalance Decimal              @db.Decimal(12, 2)
+  remaining      Decimal              @db.Decimal(12, 2)
+  isVirtual      Boolean              @default(true)
+  recipientEmail String?
+  recipientName  String?
+  senderName     String?
+  message        String?              @db.Text
+  imageUrl       String?
+  orderId        BigInt?
+  order          Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId     BigInt?
+  customer       Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  expiresAt      DateTime?
+  isActive       Boolean              @default(true)
+  redemptions    GiftCardRedemption[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([storeId, code])
+}
+
+model GiftCardRedemption {
+  id         BigInt    @id @default(autoincrement())
+  giftCardId BigInt
+  giftCard   GiftCard  @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  orderId    BigInt
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId BigInt?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  amount     Decimal   @db.Decimal(12, 2)
+  createdAt  DateTime  @default(now())
+}
+
+model Affiliate {
+  id                BigInt              @id @default(autoincrement())
+  storeId           BigInt
+  store             Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId        BigInt              @unique
+  customer          Customer            @relation("CustomerAffiliateProfile", fields: [customerId], references: [id], onDelete: Cascade)
+  referredCustomers Customer[]          @relation("AffiliateReferredCustomers")
+  referralCode      String              @unique
+  referralUrl       String
+  commissionType    String              @default("percent")
+  commissionRate    Decimal             @db.Decimal(12, 2)
+  paypalEmail       String?
+  bankDetails       Json?
+  balance           Decimal             @default(0) @db.Decimal(14, 2)
+  totalEarned       Decimal             @default(0) @db.Decimal(14, 2)
+  totalPaid         Decimal             @default(0) @db.Decimal(14, 2)
+  status            String              @default("active")
+  referrals         AffiliateReferral[]
+  payouts           AffiliatePayout[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([storeId, referralCode])
+}
+
+model AffiliateReferral {
+  id                 BigInt    @id @default(autoincrement())
+  affiliateId        BigInt
+  affiliate          Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  referredCustomerId BigInt?
+  referredCustomer   Customer? @relation("CustomerReferrals", fields: [referredCustomerId], references: [id], onDelete: SetNull)
+  orderId            BigInt?
+  order              Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  commission         Decimal   @default(0) @db.Decimal(12, 2)
+  status             String    @default("pending")
+  convertedAt        DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([affiliateId])
+}
+
+model AffiliatePayout {
+  id          BigInt    @id @default(autoincrement())
+  affiliateId BigInt
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  amount      Decimal   @db.Decimal(14, 2)
+  method      String
+  status      String    @default("pending")
+  reference   String?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// ============================================================
+// CMS & MEDIA
+// ============================================================
+
+model CmsPage {
+  id               BigInt   @id @default(autoincrement())
+  storeId          BigInt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  title            String
+  slug             String
+  content          String?  @db.Text
+  type             String   @default("page")
+  systemKey        String?
+  isPublished      Boolean  @default(true)
+  showInHeaderMenu Boolean  @default(false)
+  showInFooterMenu Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  template         String?
+  sections         Json?
+  seoTitle         String?
+  metaDesc         String?
+  canonicalUrl     String?
+  ogImageUrl       String?
+  translations     Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([storeId, slug])
+  @@index([storeId, systemKey])
+}
+
+model BlogCategory {
+  id          BigInt     @id @default(autoincrement())
+  storeId     BigInt
+  store       Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  isActive    Boolean    @default(true)
+  posts       BlogPost[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model BlogPost {
+  id               BigInt        @id @default(autoincrement())
+  storeId          BigInt
+  store            Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  title            String
+  slug             String
+  categoryId       BigInt?
+  category         BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authorId         BigInt?
+  author           AdminUser?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  excerpt          String?       @db.VarChar(500)
+  content          String?       @db.Text
+  featuredImageUrl String?
+  tags             Json?
+  status           String        @default("published")
+  visibility       String        @default("public")
+  password         String?
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  allowComments    Boolean       @default(true)
+  seoTitle         String?
+  metaDesc         String?
+  canonicalUrl     String?
+  ogImageUrl       String?
+  translations     Json?
+  viewCount        Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([storeId, slug])
+  @@index([storeId, status])
+}
+
+model Faq {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category     String?
+  question     String   @db.VarChar(500)
+  answer       String   @db.Text
+  sortOrder    Int      @default(0)
+  isPublished  Boolean  @default(true)
+  translations Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([storeId, category])
+}
+
+model Menu {
+  id        BigInt     @id @default(autoincrement())
+  storeId   BigInt
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  location  String
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([storeId, location])
+}
+
+model MenuItem {
+  id           BigInt     @id @default(autoincrement())
+  menuId       BigInt
+  menu         Menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  parentId     BigInt?
+  parent       MenuItem?  @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     MenuItem[] @relation("MenuTree")
+  type         String
+  targetId     BigInt?
+  title        String
+  url          String?
+  customUrl    String?
+  openInNewTab Boolean    @default(false)
+  megaMenu     Boolean    @default(false)
+  megaConfig   Json?
+  icon         String?
+  badge        String?
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  translations Json?
+  createdAt    DateTime   @default(now())
+
+  @@index([menuId, parentId, sortOrder])
+}
+
+model MediaFolder {
+  id        BigInt        @id @default(autoincrement())
+  storeId   BigInt
+  store     Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  parentId  BigInt?
+  parent    MediaFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MediaFolder[] @relation("FolderTree")
+  name      String
+  sortOrder Int           @default(0)
+  files     MediaFile[]
+  createdAt DateTime      @default(now())
+
+  @@unique([storeId, parentId, name])
+}
+
+model MediaFile {
+  id              BigInt            @id @default(autoincrement())
+  storeId         BigInt
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  folderId        BigInt?
+  folder          MediaFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  filename        String
+  originalName    String
+  mimeType        String
+  sizeBytes       BigInt
+  url             String
+  thumbUrl        String?
+  width           Int?
+  height          Int?
+  altText         String?
+  caption         String?
+  kind            String
+  metadata        Json?
+  uploadedByType  String
+  uploadedById    BigInt
+  productsDigital Product[]         @relation("ProductDigitalFile")
+  productImages   ProductImage[]
+  downloads       DigitalDownload[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([storeId, folderId])
+  @@index([storeId, kind])
+}
+
+// ============================================================
+// STOREFRONT CUSTOMIZATION: THEMES + PAGE BUILDER
+// ============================================================
+
+model ThemeConfig {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  slug         String
+  name         String
+  description  String?
+  thumbnail    String?
+  isActive     Boolean  @default(false)
+  config       Json
+  presetStyles Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+model HomepageSection {
+  id         BigInt   @id @default(autoincrement())
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type       String
+  enabled    Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  config     Json
+  visibility Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([storeId, sortOrder])
+}
+
+model PageBuilderLayout {
+  id         BigInt   @id @default(autoincrement())
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  entityType String
+  entityId   BigInt?
+  slug       String?
+  name       String
+  sections   Json
+  isActive   Boolean  @default(true)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([storeId, entityType, entityId])
+}
+
+// ============================================================
+// NOTIFICATIONS & EMAIL TEMPLATES
+// ============================================================
+
+model EmailTemplate {
+  id               BigInt   @id @default(autoincrement())
+  storeId          BigInt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  systemKey        String
+  subject          String
+  preheader        String?
+  bodyHtml         String?  @db.Text
+  bodyText         String?  @db.Text
+  cc               Json?
+  bcc              Json?
+  enabled          Boolean  @default(true)
+  useDefault       Boolean  @default(true)
+  updatedByAdminId BigInt?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([storeId, systemKey])
+}
+
+model Notification {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  recipientType String
+  recipientId   BigInt?
+  eventKey      String
+  title         String
+  body          String?   @db.Text
+  data          Json?
+  readAt        DateTime?
+  link          String?
+  channel       String
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([storeId, recipientType, recipientId])
+  @@index([readAt])
+}
+
+// ============================================================
+// DROPSHIPPING & SUPPLIERS (Optional Module)
+// ============================================================
+model Supplier {
+  id                   BigInt    @id @default(autoincrement())
+  storeId              BigInt
+  store                Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name                 String
+  slug                 String
+  contactEmail         String
+  contactPhone         String?
+  contactPerson        String?
+  address              String?
+  countryCode          String?
+  apiConfig            Json?
+  fulfillmentEmail     String?
+  orderAutoForward     Boolean   @default(false)
+  markupStrategy       String?
+  markupPercentDefault Decimal?  @db.Decimal(5, 2)
+  status               String    @default("active")
+  products             Product[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+// ============================================================
+// SUBSCRIPTIONS (Optional Module)
+// ============================================================
+model SubscriptionProduct {
+  id                    BigInt                 @id @default(autoincrement())
+  storeId               BigInt
+  store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId             BigInt                 @unique
+  product               Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  interval              String
+  intervalCount         Int                    @default(1)
+  trialDays             Int                    @default(0)
+  signupFee             Decimal                @default(0) @db.Decimal(12, 2)
+  maxCycles             Int?
+  cancelAnytime         Boolean                @default(true)
+  prorateOnChange       Boolean                @default(true)
+  customerSubscriptions CustomerSubscription[]
+  createdAt             DateTime               @default(now())
+}
+
+model CustomerSubscription {
+  id                    BigInt              @id @default(autoincrement())
+  storeId               BigInt
+  store                 Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId            BigInt
+  customer              Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subscriptionProductId BigInt
+  subscriptionProduct   SubscriptionProduct @relation(fields: [subscriptionProductId], references: [id])
+  productId             BigInt
+  product               Product             @relation(fields: [productId], references: [id])
+  variantId             BigInt?
+  variant               ProductVariant?     @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  quantity              Int
+  recurringPrice        Decimal             @db.Decimal(12, 2)
+  signupFeePaid         Decimal             @default(0) @db.Decimal(12, 2)
+  totalPaid             Decimal             @default(0) @db.Decimal(14, 2)
+  status                String              @default("active")
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  trialEndsAt           DateTime?
+  cancelledAt           DateTime?
+  endsAt                DateTime?
+  nextChargeAt          DateTime?
+  paymentMethodToken    String?
+  gatewayCustomerId     String?
+  failedPaymentAttempts Int                 @default(0)
+  dunningRetriesLeft    Int                 @default(3)
+  relatedOrders         Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([storeId, customerId])
+  @@index([status])
+  @@index([nextChargeAt])
+}
+
+// ============================================================
+// DIGITAL DOWNLOADS (granted after payment)
+// ============================================================
+model DigitalDownload {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId    BigInt
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderItemId   BigInt
+  orderItem     OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  fileId        BigInt
+  file          MediaFile @relation(fields: [fileId], references: [id])
+  downloadKey   String    @unique
+  downloadsLeft Int?
+  expiresAt     DateTime?
+  lastDownload  DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// ============================================================
+// INTEGRATIONS
+// ============================================================
+
+model ApiIntegration {
+  id         BigInt    @id @default(autoincrement())
+  storeId    BigInt
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name       String
+  provider   String
+  enabled    Boolean   @default(false)
+  apiKey     String?
+  apiSecret  String?
+  settings   Json?
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([storeId, provider])
+}
+
+model Webhook {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  secret    String
+  events    Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([storeId, enabled])
+}
+
+// ============================================================
+// CURRENCY & LANGUAGE LOOKUPS
+// ============================================================
+
+model Currency {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code      String
+  symbol    String
+  name      String
+  rate      Decimal  @db.Decimal(12, 6)
+  position  String   @default("before")
+  decimals  Int      @default(2)
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, code])
+}
+
+model Language {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  nativeName   String
+  flagEmoji    String?
+  isDefault    Boolean  @default(false)
+  enabled      Boolean  @default(true)
+  direction    String   @default("ltr")
+  sortOrder    Int      @default(0)
+  translations Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, code])
+}
+
+model CurrencyRateLog {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code      String
+  oldRate   Decimal  @db.Decimal(12, 6)
+  newRate   Decimal  @db.Decimal(12, 6)
+  createdAt DateTime @default(now())
 }

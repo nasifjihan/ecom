@@ -13,7 +13,16 @@
     "e2e": "turbo run e2e",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\" --ignore-unknown",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\" --ignore-unknown"
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\" --ignore-unknown",
+    "prisma:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema apps/api/prisma/schema.prisma",
+    "prisma:reset": "prisma migrate reset --force --schema apps/api/prisma/schema.prisma",
+    "prisma:seed": "pnpm --filter @ecom/api exec prisma:seed",
+    "prisma:studio": "prisma studio --port 5555 --schema apps/api/prisma/schema.prisma",
+    "db:up": "docker compose up -d postgres redis minio mailpit",
+    "db:down": "docker compose down",
+    "db:ps": "docker compose ps"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.2",
