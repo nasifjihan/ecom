@@ -63,10 +63,10 @@ const rawBaseQuery = fetchBaseQuery({
  * RTK Query expects `{ data }` for success / `{ error }` for failure.
  * The actual RTK data will be `envelope.data` (the typed payload).
  */
-export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
-  args,
-  api,
-  extraOptions,
+export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = (async (
+  args: string | FetchArgs,
+  api: any,
+  extraOptions: any,
 ) => {
   const res = await rawBaseQuery(args, api, extraOptions);
   if (res.error) return { error: res.error };
@@ -79,8 +79,8 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
       },
     };
   }
-  return { data: envelope.data, meta: envelope.meta };
-};
+  return { data: envelope.data, meta: envelope.meta as any };
+}) as BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>;
 
 export const api = createApi({
   reducerPath: "ecomApi",
@@ -104,4 +104,4 @@ export const api = createApi({
   endpoints: () => ({}),
 });
 
-export const { useLazyQuery } = api;
+export const useLazyQuery = (api as any).useLazyQuery;

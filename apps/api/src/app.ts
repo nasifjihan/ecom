@@ -51,6 +51,7 @@ import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
+import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -119,6 +120,8 @@ export function buildApp(): Express {
   app.use("/api/admin/marketing/reviews", marketingReviewsRouter);
   app.use("/api/super/dashboard", superDashboardRouter);
   app.use("/api/admin/dashboard", storeDashboardRouter);
+  app.use("/api/admin/shipping", adminShippingRouter);
+  app.use("/api/storefront/shipping", storefrontShippingRouter);
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads"), { maxAge: "1y", immutable: true }));
 
   // =============== 404 catch-all ===============

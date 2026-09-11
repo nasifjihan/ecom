@@ -30,6 +30,7 @@
     "@ecom/shared-types": "workspace:^",
     "@ecom/utils": "workspace:*",
     "@ecom/zod-schemas": "workspace:*",
+    "@ecom/export-utils": "workspace:*",
     "@paralleldrive/cuid2": "^2.3.1",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",

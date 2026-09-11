@@ -16,8 +16,21 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": "./",
     "paths": {
-      "@/*": ["./src/*", "./app/*", "./components/*", "./lib/*"],
-      "@ecom/*": ["../../packages/*/src/*"]
+      "@/*": ["./src/*", "./src/app/*", "./src/components/*", "./src/lib/*"],
+      "@ecom/ui": ["../../packages/ui/src/index.ts"],
+      "@ecom/ui/*": ["../../packages/ui/src/*"],
+      "@ecom/utils": ["../../packages/utils/src/index.ts"],
+      "@ecom/utils/*": ["../../packages/utils/src/*"],
+      "@ecom/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@ecom/shared-types/*": ["../../packages/shared-types/src/*"],
+      "@ecom/zod-schemas": ["../../packages/zod-schemas/src/index.ts"],
+      "@ecom/zod-schemas/*": ["../../packages/zod-schemas/src/*"],
+      "@ecom/api-client": ["../../packages/api-client/src/index.ts"],
+      "@ecom/api-client/*": ["../../packages/api-client/src/*"],
+      "@ecom/export-utils": ["../../packages/export-utils/src/index.ts"],
+      "@ecom/export-utils/*": ["../../packages/export-utils/src/*"],
+      "@ecom/storefront-base": ["../../apps/storefront-base/src/index.ts"],
+      "@ecom/storefront-base/*": ["../../apps/storefront-base/src/*"]
     }
   },
   "include": [

@@ -274,7 +274,7 @@ async function seedFashionBDStore() {
     }
   }
 
-  // Default shipping zone + COD/Flat rate
+  // Default shipping zone + 8 carriers x 2 levels (standard/express) for Dhaka Metro
   const zoneEx = await prisma.shippingZone.findFirst({
     where: { storeId: store.id, name: "Dhaka Metro" },
   });
@@ -289,16 +289,28 @@ async function seedFashionBDStore() {
       },
     });
     zoneId = zone.id;
-    await prisma.shippingMethod.create({
-      data: {
-        zoneId: zone.id,
-        code: "flat_rate",
-        name: "Flat Rate (Dhaka)",
-        baseCost: "120.00",
-        perItemCost: "20.00",
-      },
+
+    await prisma.shippingMethod.createMany({
+      data: [
+        { zoneId: zone.id, code: "pathao_std", name: "Pathao Standard", baseCost: "120.00", freeFromSubtotal: "10000.00", costRules: JSON.stringify({ perKgExtra: 50, minimumCost: 120 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: zone.id, code: "pathao_exp", name: "Pathao Express (Same Day)", baseCost: "220.00", costRules: JSON.stringify({ perKgExtra: 80, minimumCost: 220 }), deliveryEstimateMinDays: 0, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "redx_std", name: "RedX Standard", baseCost: "150.00", freeFromSubtotal: "12000.00", costRules: JSON.stringify({ perKgExtra: 60, minimumCost: 150 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: zone.id, code: "redx_exp", name: "RedX Express (Next Day)", baseCost: "250.00", costRules: JSON.stringify({ perKgExtra: 90, minimumCost: 250 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "paperfly_std", name: "Paperfly Standard", baseCost: "130.00", freeFromSubtotal: "11000.00", costRules: JSON.stringify({ perKgExtra: 55, minimumCost: 130 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 3 },
+        { zoneId: zone.id, code: "paperfly_exp", name: "Paperfly Express (Next Day)", baseCost: "230.00", costRules: JSON.stringify({ perKgExtra: 85, minimumCost: 230 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "sundarban_std", name: "Sundarban Courier Standard", baseCost: "140.00", freeFromSubtotal: "12500.00", costRules: JSON.stringify({ perKgExtra: 50, minimumCost: 140 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: zone.id, code: "sundarban_exp", name: "Sundarban Courier Express (Next Day)", baseCost: "240.00", costRules: JSON.stringify({ perKgExtra: 80, minimumCost: 240 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "ecourier_std", name: "eCourier Standard", baseCost: "110.00", freeFromSubtotal: "9500.00", costRules: JSON.stringify({ perKgExtra: 45, minimumCost: 110 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: zone.id, code: "ecourier_exp", name: "eCourier Express (Same Day)", baseCost: "200.00", costRules: JSON.stringify({ perKgExtra: 70, minimumCost: 200 }), deliveryEstimateMinDays: 0, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "sa_std", name: "SA Paribahan Standard", baseCost: "145.00", freeFromSubtotal: "11500.00", costRules: JSON.stringify({ perKgExtra: 50, minimumCost: 145 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 3 },
+        { zoneId: zone.id, code: "sa_exp", name: "SA Paribahan Express (Next Day)", baseCost: "250.00", costRules: JSON.stringify({ perKgExtra: 80, minimumCost: 250 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "steadfast_std", name: "Steadfast Standard", baseCost: "115.00", freeFromSubtotal: "10000.00", costRules: JSON.stringify({ perKgExtra: 45, minimumCost: 115 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: zone.id, code: "steadfast_exp", name: "Steadfast Express (Same Day)", baseCost: "210.00", costRules: JSON.stringify({ perKgExtra: 70, minimumCost: 210 }), deliveryEstimateMinDays: 0, deliveryEstimateMaxDays: 1 },
+        { zoneId: zone.id, code: "flat_rate", name: "Generic Flat Rate Standard", baseCost: "120.00", freeFromSubtotal: "10000.00", costRules: JSON.stringify({ perKgExtra: 40, minimumCost: 120 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: zone.id, code: "flat_rate_express", name: "Generic Flat Rate Express", baseCost: "200.00", costRules: JSON.stringify({ perKgExtra: 60, minimumCost: 200 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+      ],
     });
-    console.log(`  ✅ Shipping Zone "Dhaka Metro" + Flat Rate added`);
+    console.log(`  ✅ Shipping Zone "Dhaka Metro" + 16 methods (8 carriers x std/exp) added`);
   }
 
   // Standard Tax Class + 15% BD VAT
@@ -318,6 +330,25 @@ async function seedFashionBDStore() {
       },
     });
     console.log("  ✅ Tax Class Standard (15% BD VAT) added");
+  }
+
+  // Reduced Rate Tax Class + Export Exempt 0%
+  const reducedTax = await prisma.taxClass.findFirst({
+    where: { storeId: store.id, name: "Reduced Rate" },
+  });
+  if (!reducedTax) {
+    const tc = await prisma.taxClass.create({
+      data: { storeId: store.id, name: "Reduced Rate" },
+    });
+    await prisma.taxRate.create({
+      data: {
+        taxClassId: tc.id,
+        countryCode: "*",
+        rate: "0.00",
+        name: "Export Exempt",
+      },
+    });
+    console.log("  ✅ Tax Class Reduced Rate (0% Export Exempt) added");
   }
 
   // ===== CATALOG BASELINE: Categories + Brands + Attributes + Terms =====
@@ -450,14 +481,50 @@ async function seedFashionBDStore() {
         storeId: store.id,
         name: "Rest of Bangladesh",
         countries: ["BD"],
-        states: [],
+        states: ["Chittagong", "Sylhet", "Rajshahi", "Rangpur", "Barisal", "Khulna", "Mymensingh", "Comilla", "Narayanganj", "Gazipur"],
         postcodes: [],
       },
     });
-    await prisma.shippingMethod.create({
-      data: { zoneId: restZone.id, code: "flat_rate_rob", name: "Flat Rate (Outside Dhaka)", baseCost: "180.00", perItemCost: "30.00" },
+    await prisma.shippingMethod.createMany({
+      data: [
+        { zoneId: restZone.id, code: "pathao_rob_std", name: "Pathao Standard (RHOB)", baseCost: "180.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 60, minimumCost: 180 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "pathao_rob_exp", name: "Pathao Express (RHOB)", baseCost: "220.00", costRules: JSON.stringify({ perKgExtra: 90, minimumCost: 220 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "redx_rob_std", name: "RedX Standard (RHOB)", baseCost: "200.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 70, minimumCost: 200 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "redx_rob_exp", name: "RedX Express (RHOB)", baseCost: "240.00", costRules: JSON.stringify({ perKgExtra: 100, minimumCost: 240 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "paperfly_rob_std", name: "Paperfly Standard (RHOB)", baseCost: "190.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 65, minimumCost: 190 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "paperfly_rob_exp", name: "Paperfly Express (RHOB)", baseCost: "230.00", costRules: JSON.stringify({ perKgExtra: 95, minimumCost: 230 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "sundarban_rob_std", name: "Sundarban Courier Standard (RHOB)", baseCost: "170.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 55, minimumCost: 170 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "sundarban_rob_exp", name: "Sundarban Courier Express (RHOB)", baseCost: "210.00", costRules: JSON.stringify({ perKgExtra: 85, minimumCost: 210 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "ecourier_rob_std", name: "eCourier Standard (RHOB)", baseCost: "175.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 55, minimumCost: 175 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "ecourier_rob_exp", name: "eCourier Express (RHOB)", baseCost: "215.00", costRules: JSON.stringify({ perKgExtra: 85, minimumCost: 215 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "sa_rob_std", name: "SA Paribahan Standard (RHOB)", baseCost: "160.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 50, minimumCost: 160 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "sa_rob_exp", name: "SA Paribahan Express (RHOB)", baseCost: "200.00", costRules: JSON.stringify({ perKgExtra: 80, minimumCost: 200 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "steadfast_rob_std", name: "Steadfast Standard (RHOB)", baseCost: "185.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 60, minimumCost: 185 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "steadfast_rob_exp", name: "Steadfast Express (RHOB)", baseCost: "225.00", costRules: JSON.stringify({ perKgExtra: 90, minimumCost: 225 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+        { zoneId: restZone.id, code: "flat_rate_rob", name: "Generic Flat Rate Standard (RHOB)", baseCost: "180.00", freeFromSubtotal: "15000.00", costRules: JSON.stringify({ perKgExtra: 50, minimumCost: 180 }), deliveryEstimateMinDays: 2, deliveryEstimateMaxDays: 3 },
+        { zoneId: restZone.id, code: "flat_rate_rob_express", name: "Generic Flat Rate Express (RHOB)", baseCost: "220.00", costRules: JSON.stringify({ perKgExtra: 80, minimumCost: 220 }), deliveryEstimateMinDays: 1, deliveryEstimateMaxDays: 2 },
+      ],
     });
-    console.log(`  ✅ Shipping Zone "Rest of Bangladesh" + Flat Rate added`);
+    console.log(`  ✅ Shipping Zone "Rest of Bangladesh" + 16 methods (8 carriers x std/exp) added`);
+  }
+
+  // 1b) International / Outside Bangladesh Shipping Zone
+  let intlZone = await prisma.shippingZone.findFirst({ where: { storeId: store.id, name: "International / Outside Bangladesh" } });
+  if (!intlZone) {
+    intlZone = await prisma.shippingZone.create({
+      data: {
+        storeId: store.id,
+        name: "International / Outside Bangladesh",
+        countries: ["US", "GB", "CA", "AU", "SG", "MY", "IN", "PK", "SAE", "AE"],
+      },
+    });
+    await prisma.shippingMethod.createMany({
+      data: [
+        { zoneId: intlZone.id, code: "dhl_intl", name: "DHL Express International", baseCost: "3500.00", costRules: JSON.stringify({ perKgExtra: 2500, minimumCost: 3500 }), deliveryEstimateMinDays: 5, deliveryEstimateMaxDays: 10 },
+        { zoneId: intlZone.id, code: "air_freight_intl", name: "Standard Air Freight International", baseCost: "1800.00", costRules: JSON.stringify({ perKgExtra: 1200, minimumCost: 1800 }), deliveryEstimateMinDays: 10, deliveryEstimateMaxDays: 21 },
+      ],
+    });
+    console.log(`  ✅ Shipping Zone "International / Outside Bangladesh" + 2 methods added`);
   }
 
   // 2) Fashion BD Customer Fatema — if already exists, use her id to link cart
