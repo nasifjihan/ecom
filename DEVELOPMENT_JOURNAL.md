@@ -618,5 +618,222 @@ Score: **9 ✅ / 1 ⏭️ documented / 0 ❌ failures**
 
 ##### Nginx/reverse proxy still untouched for this batch — deployment configuration remains a Phase 5 Terraform task.
 
+---
 
+## ✅ BATCH #6 — Catalog Module + MinIO S3/Local Storage Abstraction
+**Committed state**: 21 new files + 5 existing edits (seed, app.ts, dto refinements, root package.json prisma shortcut, .env trailing quote fix from Batch5)
+**Pre-commit gate**: tsc --noEmit apps/api EXIT 0 ✅ | prisma generate EXIT 0 ✅ | 12/12 HTTP smoke PASS ✅ | ESLint (blocked flat config, documented Batch 5+)
+
+### 6.1 Storage Layer — 4 new files `apps/api/src/services/storage/`
+| File | Purpose |
+|---|---|
+| `types.ts` | `StoredFile` interface (key, url, size, etag, bucket, contentType, createdAt); `StorageProvider` abstract 4 methods: put / getSignedUrlDownload / delete (batch) / list |
+| `S3Provider.ts` | `@aws-sdk/client-s3@^3` + `@aws-sdk/s3-request-presigner` MinIO-compatible. Config from env: `S3_ENDPOINT / S3_REGION / S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY / S3_FORCE_PATH_STYLE=true` (critical — MinIO uses path-style URLs not virtual-host bucket). DeleteObjects batched 1000 keys/request; ListObjectsV2 paginated via ContinuationToken; PutObject accepts Buffer/Readable stream + ContentLength. |
+| `LocalDiskProvider.ts` | Fallback when `S3_ENDPOINT` env not set. Writes to `apps/api/uploads/` (recursive mkdir). Key = relative URL path (`/uploads/<storeId>/…`). ETag = md5(file).hex; bucket=`"local-disk"`; list() recursive depth-4 directory walk; delete() fs.unlink ignores ENOENT. |
+| `index.ts` | Singleton factory `getStorageProvider()` — evaluates env.S3_ENDPOINT truthy once at import. Caches instance. |
+**Notes**: API NEVER proxies bytes for private downloads. Uses `getSignedUrlDownload(key, 3600s)` → returns temp S3 URL to client → client fetches directly from MinIO (saves API egress + memory). LocalDisk returns same `/uploads/<key>` URL (no signature — dev only). Media route (#6.5) does NOT stream through Multer→controller→S3: future: `multer-s3-transform` v3 adapter or direct browser pre-signed PUT (decide Batch8).
+
+### 6.2 Catalog DTO & Repository — 2 files `apps/api/src/modules/catalog/`
+**`catalog.dto.ts` (215 lines, 18 schemas, 4 refinements)**
+- All routes: `PaginationSchema coerce.integer min(1) max(100) default(20) default(1)` inherited via `@ecom/zod-schemas`.
+- Param DTOs use `z.coerce.bigint().positive()` → Express `/:id` string auto→BigInt 422 for `"abc-not-bigint"`.
+- **XSS refine (Category.Brand.Product text fields)**: Regex `/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i` on:
+  - CreateCategoryDto: `description`, `seoTitle`, `metaDesc`
+  - CreateBrandDto: same 3 fields
+  - CreateProductDto: `shortDescription`, `description`, `seoTitle`, `metaDesc`
+- **Cross-field refinements (DRY `priceStockRefine(v,ctx)`)** applied to BOTH BaseCreateProductDto AND BaseProductVariantDto:
+  1. `salePrice <= regularPrice` if both set
+  2. `salePriceStartAt < salePriceEndAt` if both dates
+  3. `manageStock === true → stockQty required` (non-null + non-NaN int)
+- **Range search refinement**: ProductSearchQueryDto.superRefine → `minPrice <= maxPrice` (field error under minPrice path).
+- **ZodEffects workaround for .partial()/.deepPartial()**: BaseProductVariantSchema / BaseCreateProductSchema are plain `z.object`. *Then* we export `CreateProductVariantDto = Base.superRefine(priceStockRefine)`. The `UpdateProductVariantDto` and `UpdateProductDto` are created from the **non-refined base** via `.partial()` / `.deepPartial()` so TS never sees `ZodEffects has no method partial`. (Fixed during smoke: scenario 12 went from Prisma 500 DB-down to Zod 422 correctly.)
+
+**`catalog.repository.ts` (6 classes, all `extends BaseRepository<ModelName>` → auto `storeId` scope)**
+1. **ProductRepository** → findBySlug(composite unique) 404; findFullWithVariantsAndMediaAndCategories (11-level include: categories.pivot, brand, variants(include imageUrl), media(include mediaFile), taxClass, supplier, digitalFile); listWithJoins builds where clause dynamically from ProductSearchQueryDto (search name/sku/barcode ILIKE %q%, categoryIds[] via ProductCategory pivot INNER JOIN, brandIds, status in, price BETWEEN min/max); bulkUpdateStatus archivedAt set = NOW().
+2. **ProductVariantRepository** → listForProduct; skuExists(storeId+sku composite UNIQUE check, optional excludeVariantId for edit case); findBySku.
+3. **CategoryRepository** → **NOT recursive SQL**. `findTree(ctx): Category[]` → 1 flat query all rows then Map-based buildTree in-memory (O(n)). ParentId pointer. Max depth 6 hard-cap + `findAncestorsChain(id)` iterative walk up with `Set<BigInt>` cycle detection (never trust data admin inserted). `reorderChildren(parentId, orderedChildIds[])` runs inside Prisma transaction: each id gets sortOrder = array index.
+4. **BrandRepository** → findBySlug; listActive where isActive=true.
+5. **AttributeRepository** → listFullWithOptions include terms orderBy sortOrder; bulkUpsertOptions sortOrder fix; removeTerm relation-scoped.
+6. **ProductImageRepository** → setGalleryOrder(productId, mediaIds[]): tx deleteMany productId, createMany sortOrder=index; upsertProductGalleryUrls from CreateProductDto.imageUrls; setPrimary placeholder.
+
+### 6.3 Catalog Service + Controller
+**`catalog.service.ts: CatalogService extends BaseService`** (6 private repo props + storage = getStorageProvider()):
+- `createProduct(ctx, dto)` **transaction**:
+  1. `generateUniqueSlug(baseSlug, (s)=>repo.findBySlug(s,ctx))` retry up to 50 → appends `-2`, `-3`… suffix (readable SEO over random hex). Composite UNIQUE `(storeId, slug)` last-resort guard.
+  2. prisma.product.create base row
+  3. dto.categoryIds[0] = PRIMARY category (inserted first with sortOrder 0; rest 1..n) → ProductCategory pivot insertMany.
+  4. For each variant: check skuExists composite; any conflict throw ConflictError(`SKU already taken: ${v.sku}`) BEFORE db insert → better message than driver constraint.
+  5. imageUrls → ProductImage createMany order preserved.
+- `updateProduct(ctx,id,dto)`: categoryLinks delete→reinsert; variants upsert delta; slug regenerate if changed; imageUrls rebuild order.
+- `softArchiveProduct(ctx, ids[])`: Repository bulk status=archived, archivedAt=now. Hard delete blocked at route level (OrderItems.productId FK integrity).
+- `categories CUD`: Slug unique `(storeId, parentId, slug)` same 50-retry. `deleteCategory(id, ctx)` guard: CategoryRepository children.count(id, ctx) > 0 → BadRequestError("Cannot delete category with children — reassign children first"). `listCategoryTree(ctx)` wrapped in Redis cache via `CACHE_KEYS.categories(String(storeId))` TTL 15m; invalidate on ANY category write. `reorderChildren(parentId, orderedIds[])` → repo.tx.
+- Seed idempotency pattern for attributes: inside seedFashionBDStore, helper `upsertAttrWithTerms(slug,name,type,terms[])` → each term findFirst by slug → create only missing (re-run never dupes).
+- `uploadMedia(ctx, fileBuffer, originalName, dto)`:
+  1. key = `${ctx.storeId}/media/products/${Date.now()}-${cryptoRandomString(6,'alphanumLower')}-${sanitizeFilename(original)}`
+  2. `storageProvider.put(key, buffer, file.mimetype)` → StoredFile
+  3. prisma.mediaFile.create row (storeId-scoped, uploadedByType=ADMIN, uploadedById=ctx.admin.id)
+  4. dto.productId → link via ProductImage insert.
+
+**`catalog.controller.ts (22 handlers)`**: All `ctrl(async (req, ctx) => ...) → envelope` pattern. List of endpoints: Products (8: list/create/getById/getBySlug/patch/archiveBulk/unpublishBulk/softDelete); Variants (4: listProduct/create/update/softDeleteDisabled); Categories (6: tree/list/create/get/update/delete/reorderChildren); Brands (6: paginatedList/create/get/update/delete/listActive); Attributes (7: listFullNested/create/get/update/addTerm/removeTerm/delete); Media (2: upload + reorderGallery).
+
+### 6.4 Catalog Routes & app.ts Wiring
+**`catalog.routes.ts` — 5 exported Routers, ALL paths RELATIVE (no /api/ prefix — avoids Batch 5 double-mount bug)**
+Critical **4-step guard chain EXPLICIT order on every admin route** (Zod never fires before AUTH — scenario 2,4,10 401 correctly; scenarios with token bypass auth→RBAC → Zod):
+```
+authMiddleware('adminOrSuper') → rbacMiddleware('products.*') → validate({body|params|query}:Dto) → handler
+```
+RBAC perms per router: products.* / categories.* / brands.* / attributes.* / media.create.
+Routers:
+- adminProductsRouter (15 handlers)
+- adminCategoriesRouter (7 handlers incl GET /tree and POST /:id/reorder)
+- adminBrandsRouter (6 handlers incl GET /active/list)
+- adminAttributesRouter (8 handlers incl POST /:id/terms, DELETE /terms/:termId)
+- productUploadRouter (multerFallback next() since @types/multer optional; handler uses `(req as any).file` — documented 1x `any`)
+
+**`app.ts` mounts (lines 94-99)**, placed AFTER adminRolesRouter, BEFORE 404 catch-all:
+```ts
+app.use("/api/admin/products", adminProductsRouter);
+app.use("/api/admin/categories", adminCategoriesRouter);
+app.use("/api/admin/brands", adminBrandsRouter);
+app.use("/api/admin/attributes", adminAttributesRouter);
+app.use("/api/admin/media", productUploadRouter);
+app.use("/uploads", express.static(uploadsDir, { maxAge: "1y", immutable: true })); // LocalDisk URLs
+```
+
+### 6.5 Seed Fashion BD Baseline Extension
+`seed.ts:323-443` appended inside seedFashionBDStore function call (idempotent findFirst guards):
+- Categories: Women → Dresses; Men → Shirts (2 rows, parentId chain)
+- Brands: Richman, Cats Eye (2 rows)
+- Attributes: Size (6 terms: S/M/L/XL/XXL/Free Size), Color (4 terms: Black/White/Red/Blue) → 2 attrs, 10 terms total
+- Helper `upsertAttrWithTerms` nested inside seed scope only, for…of iteration + sortOrder index increment
+**TS bugs fixed mid-Batch at seed**: (1) TS1128 — stray closing brace after earlier TaxClass block; (2) TS1003 — size terms[0] had period `.` delimiter instead of comma `,` between array elements; (3) TS2322 — color items explicit `swatchUrl:null` not assignable to `String?` → removed nulls let default undefined; (4) TS18048 — switched let-i loop to for-of to avoid possibly-undefined index access.
+
+### 6.6 Validation Results — 12 Scenarios Smoke (fast-path w/o Postgres)
+Scenarios split: 8 with SUPER audience HS256 Bearer → hit validate() zod → expect 422; 3 without token → expect 401; 1 unknown route → 404.
+SUPER audience chosen specifically because `11-auth.ts:44-46` short-circuits with `req.ctx.admin.permissions=["*"]` — **ZERO prisma DB lookups** so smoke runs instantly even with Postgres container OFF (current state).
+| # | Scenario | Expected | Got | Code | Notes |
+|---|---|---|---|---|---|
+| 1 | POST /categories body:{} | 422 | 422 | Validation failed | required name missing |
+| 2 | POST /categories body:{name:"Women"} **NO TOKEN** | 401 | 401 | Authentication required | correct — auth fires before zod |
+| 3 | POST /brands body:{} | 422 | 422 | Validation failed | required name |
+| 4 | GET /brands NO TOKEN | 401 | 401 | Authentication required | RBAC never runs |
+| 5 | POST /attributes body:{} | 422 | 422 | Validation failed | required name |
+| 6 | POST /products body:{} | 422 | 422 | Validation failed | required name |
+| 7 | PATCH /products/abc-not-bigint body:{name:"x"} | 422 | 422 | Validation failed | coerce.bigint "abc" → invalid |
+| 8 | POST /categories body:{name:"Hacked", desc:"<script>alert(1)</script>…"} | 422 | 422 | Validation failed | XSS refine triggers, never hits prisma |
+| 9 | GET /products?perPage=500 | 422 | 422 | Validation failed | perPage max(100) refine from PaginationSchema |
+| 10 | POST /media/upload NO TOKEN | 401 | 401 | Authentication required | media.create RBAC never runs |
+| 11 | GET /attributes/does/not/exist | 404 | 404 | GET /api/admin/attributes/does/not/exist not found | Express catch-all |
+| 12 | GET /products?minPrice=1000&maxPrice=500 | 422 | 422 | Validation failed | ProductSearchQueryDto superRefine min>max fires (stopped hitting prisma repo.count 500 after dto fix!) |
+**Result: 12/12 ✅** (exit 0).
+
+### 6.7 Errors & Fixes Table — Batch #6
+| Severity | Error | Root Cause | Fix |
+|---|---|---|---|
+| HIGH | Smoke 8/12 (401s where 422s expected) | Catalog routes guard chain auth→RBAC→validate→handler; no Bearer → step1 401 exits | Rewrote .tmp_b6_smoke.mjs to load dotenv root, sign HS256 SUPER audience token EXACTLY as config/jwt.ts (issuer=ecom-platform, aud=super, alg=HS256, jti=smoke-jti-b6, sub=1 type=PLATFORM_ADMIN role=SUPER). Attach Authorization header to 8 scenarios expecting 422. 3 scenarios keep no-token → 401. |
+| MEDIUM | Smoke scenario 8 → 500 prisma.category.findFirst DB down instead of 422 XSS | CreateCategoryDto description field had NO XSS refine added during sub-agent build | Added noXss refine inline to Category.Brand.Product ALL long text fields; moved to module-level `const XSS_RE` + `noXss(v)` boolean helper; also added seoTitle/metaDesc XSS since those render in <head/> |
+| MEDIUM | Smoke scenario 12 → 500 Prisma repo.count DB down instead of 422 min>max | ProductSearchQueryDto had NO superRefine (sub-agent missed it) | Added .superRefine() minPrice<=maxPrice to ProductSearchQueryDto; also DRY extracted priceStockRefine reused for Product + Variant cross-field rules |
+| MEDIUM | tsc 25 errors cascading dto: "Property 'partial' does not exist on ZodEffects<…>" | ZodEffects .superRefine applied to object then .partial/.deepPartial called — those are ZodObject methods, not ZodEffects | Split CreateProductDto into BaseCreateProductSchema (plain z.object, no refine) + CreateProductDto = Base.superRefine(rules). UpdateProductDto calls Base.deepPartial() (not the refined one). Same pattern for ProductVariant DTOs. |
+| LOW | TS1003 seed.ts:428 Identifier expected | Typo array elements separated by period `.` not comma between size terms[0]/[1] | Replace `.` → `,` |
+| LOW | TS1128 seed.ts:446 Declaration or statement expected | Misaligned paste from earlier block — extra unpaired `}` brace at end of TaxClass section | Remove 1 stray brace; if/for blocks balanced |
+| LOW | TS2322 swatchUrl null AttributeTerm | Prisma String? accepts undefined only; explicit null literal passed | Removed null swatchUrl keys entirely from seed arrays; default undefined ok |
+
+### 6.8 Lessons Learned (Batch #6)
+1. **Route guard ordering is DOCTRINE**: When 4-step chain `auth→RBAC→validate→handler` is enforced, integration smoke w/o DB requires a valid token to hit Zod. The SUPER audience (zero prisma) is the *only* way to test Zod paths without Postgres container — document this in every future batch smoke plan.
+2. **Slug suffix readable > random hex**: Composite unique slugs `(storeId, slug)` retry with `-2/-3/…-50` not random hex suffix. Public URLs drive SEO, readability wins over minor collision entropy.
+3. **CategoryTree = Map-based in-memory, NOT recursive SQL**: PostgreSQL recursive CTE (WITH RECURSIVE) works but is non-portable, harder to cache whole, and tricky to enforce max depth consistently. Flat SELECT * WHERE storeId=? → Map build in code (O(n)) is portable, simple to Redis-cache as a single stringified JSON key. Added cycle-detect and depth cap as defensive belts.
+4. **S3 MinIO forcePathStyle=true is NON-NEGOTIABLE**: Default S3Client behavior virtual-hosts `bucket.endpoint/key` → MinIO local `http://bucket.minio:9000/key` fails DNS unless you edit hosts. `forcePathStyle` → `http://minio:9000/bucket/key` works 100% local container URLs.
+5. **ZodEffects anti-pattern — never refine-then-partial**: Any schema that needs `.partial()` or `.deepPartial()` later MUST have the refine applied *after* splitting the base schema, not on the export itself; TypeScript doesn't inherit ZodObject methods across ZodEffects wrapper (spent 30m fixing the tsc cascade; pattern now codified for future modules).
+6. **PaginationSchema perPage max(100) guard from shared package → DDoS mitigation**: Scenario 9 (perPage:500) correctly 422s — prevents a bad actor from requesting 10,000 rows and OOM-ing the API node with 62-model deep include chains.
+
+---
+
+## 🚧 RED BANNER: SCHEMA LOCK — Prisma init migration STILL PENDING (4th batch reminder)
+User has NOT yet run the initial migration to lock `schema.prisma` to the database. This means the 62 models + 6 enums are still in edit-safe state only; no `_prisma_migrations` table exists. To release, run the following **AFTER** `docker compose up -d` confirms Postgres healthy (port 5432):
+```bash
+# 1. Confirm containers:
+docker compose ps   # postgres: Up (healthy)
+# 2. Lock schema:
+pnpm prisma:migrate --name init
+# 3. Verify tables created (62+6+migration+...)
+pnpm prisma:studio  # browser http://localhost:5555 → see all tables
+# 4. Seed Fashion BD baseline (Stores, Domains, Super, 3 Admins, 3 Roles, 2 Cats, 2 Brands, 2 Attrs, 10 Terms)
+pnpm prisma:seed
+```
+
+---
+
+## 📋 BATCH #7 PLAN — Orders Module + Payment Gateway Abstractions
+Estimated: ~14 new files in apps/api, 2 edits (app.ts route mounts, seed extend with order test data). Scope excludes storefront cart.js UI (Batch8). No schema changes (all Order/OrderItem/Payment/Refund/InventoryReservation models already exist in schema.prisma Batch4).
+### 7.1 Scope & Models Involved (12 models used from schema.prisma):
+Order, OrderItem, OrderAddress, OrderStatusHistory, OrderNote, Payment, PaymentLog, Refund, InventoryReservation, Cart, CartItem, Coupon.
+### 7.2 DTOs (`orders.dto.ts` — 15+ schemas)
+- CreateOrderFromCartDto (cartId, shippingAddressId, billingAddressId, couponCode?, shippingMethodId, paymentMethod=COD|STRIPE|BKASH|NAGAD|ROCKET|SSL|BANK), orderNotes?, agreeToTerms:literal(true).
+- UpdateOrderStatusDto (newStatus ∈ OrderStatus, note?, notifyCustomer:bool, sendEmail:bool) — status-change guards below.
+- OrderSearchQueryDto (extends Pagination: customerId, status[], dateFrom/dateTo, paymentStatus, channel, search by orderNumber/customerEmail/phone, minTotal/maxTotal).
+- CreateRefundDto (orderItemIds[], amounts[], reason, refundMethod=ORIGINAL|STORE_CREDIT|CASH, sendNotification).
+- PaymentInitiateDto (orderId, method, redirectUrl, ipnUrl), PaymentConfirmDto (gatewayTxnId, method, rawPayload).
+- OrderIdParamDto (coerce.bigint / orderNumber string variant).
+### 7.3 OrderRepository + InventoryReservationRepository (2)
+- `OrderRepository: BaseRepository<Order>` → findByOrderNumber(composite UNIQUE storeId+orderNumber), listWithJoins include items+product+variant+customer+addresses+payments+statusHistory DESC, listOrderNotes.
+- `InventoryReservationRepository`: BaseRepository<InventoryReservation> → `reserveStock(orderId, [{variantId,qty}], ttlSec=900)` transaction: SELECT … FOR UPDATE (row lock) on ProductVariant WHERE id IN variants, qty >= requested; INSERT reservation rows; decrement ProductVariant.stockQty, increment reservedQty. If any variant short → ROLLBACK + throw OutOfStockError with variant IDs. `releaseReservation(orderId)` → rollback stock + delete reservation rows; `confirmReservation(orderId, paymentCapturedAt)` → delete reservation rows (stock already decremented at reserve — no double decrement).
+### 7.4 OrderService (1 file) — Core cart→order conversion
+- `createOrderFromCart(ctx, dto)` — ATOMIC $transaction:
+  1. Load cart + cartItems include product+variant (soft-check still in stock)
+  2. Validate coupon (if present): active, within date range, minCartAmount, usage limits, product/category applicability → discount calc (fixed/percent, maxDiscountCap)
+  3. Shipping calculator: dto.shippingMethodId → ShippingZone match billing/shipping zip → flat rate/weight-based/value-based + Dhaka Metro flat rate pattern
+  4. Taxes: TaxClass per product line-item × qty (BD 15% VAT pattern; zero-rated products with TaxClass.isZeroRated)
+  5. Totals aggregation: subtotal + shipping + taxTotal - discount = grandTotal
+  6. INSERT Order + OrderItems (snapshot unitPrice, variant Sku, name, imageUrl at order-time — NEVER reference to mutable product prices later) + OrderAddresses (shipping/billing snapshots) + first OrderStatusHistory status = Draft
+  7. **InventoryReservationRepository.reserveStock(orderId, items[], 15min ttl)** → row-lock variant stock
+  8. Invalidate cached category tree / product list? (no — product stock cache decide later)
+  9. Return order object + nextStep:"INITIATE_PAYMENT" OR nextStep:"COD_AWAITING_CONFIRM"
+- `transitionOrderStatus(ctx, orderId, newStatus, dto)` — **LIFECYCLE GUARD MATRIX** throws ConflictError on invalid jumps:
+  - Valid Draft → PendingPayment → AwaitingFulfillment → (Shipped → OutForDelivery → Delivered) OR Cancelled
+  - From Delivered: ONLY → Returned (within return window) → Refunded
+  - CANNOT SKIP: Delivered → PendingPayment
+  - ROLLBACK on Cancelled/Returned: InventoryReservationRepository.releaseReservation(orderId) + restock ProductVariant by qty
+- `listOrders(ctx, filters)` / `getOrderDetail(ctx, id)`
+- `createRefund(ctx, dto)` — tx: create Refund row + RefundItems + payment partial/full refund gateway call (abstracted) + if STORE_CREDIT: CustomerCreditLedger insert; order status transition to PartialRefund/Refunded; if full refund → release stock.
+### 7.5 Payment Gateway Abstraction (6 files):
+```
+apps/api/src/services/payments/
+├── types.ts                 PaymentProvider {initiate, confirm, refund, getStatus, parseIpn}
+├── PaymentProvider.ts       Abstract base class with envelope logging + DB PaymentLog create on each call
+├── StripeProvider.ts        Stripe official stripe-node v15+; PaymentIntent, refund, webhook parse with STRIPE_WEBHOOK_SECRET verify
+├── BkashProvider.ts         Token-based auth (grant token refresh cached); createPayment, executePayment, refund, queryPayment (BD bKash PG spec — sandbox/live from env BKASH_MODE)
+├── NagadProvider.ts         Nagad PG API_URL mode sandbox/live, merchantId + public/private key pair JWT sign payload
+├── RocketProvider.ts        Rocket merchant SMS-pin flow stubbed endpoints
+├── SSLCommerzProvider.ts    StoreId/password easycheck/transValidator initiate
+├── CashOnDeliveryProvider.ts No network — mark Payment.status=UNPAID, gatewayTxnId=`COD-${orderNumber}`
+├── BankTransferProvider.ts  Manual — attach upload slip MediaFile? mark PENDING_VERIFICATION
+└── index.ts                 Factory getPaymentProvider(methodName: string) → PaymentProvider instance by DTO.method enum.
+```
+All 7 providers implement identical methods → checkout controller never branches by method name (OCP). Each gateway call writes a PaymentLog row (incoming payload sanitized masked card/phone/masked NID + rawBody hash for audit). Payment IPN webhook endpoints public, no auth, signature-only verification (per gateway spec).
+### 7.6 Controllers & Routes (4 routers):
+**4-step guard chain per route still strictly auth→RBAC→validate→handler**
+- `adminOrdersRouter: /api/admin/orders` (RBAC `orders.*`): list/create/status-transition/detail/refund-create/export-CSV-Excel-PDF/notes
+- `adminPaymentsRouter: /api/admin/payments` (RBAC `payments.*`): list/confirm-offline/retry-capture/void-refund-logs export
+- `checkoutRouter: /api/storefront/checkout` — public-ish? No, customer audience: authMiddleware('customer') + validate: create-order-from-cart, initiate-payment, list-my-orders, order-detail, cancel-my-order (only if status=Draft/PendingPayment)
+- `paymentIpnRouter: /api/payments/ipn/:provider` — NO AUTH, signature-verify only; each provider has different validation flow (Stripe sig header, bKash hash in body, etc.) → factory parseIpn + PaymentLog row then update order payment status.
+app.ts adds 4 new app.use mounts after admin/media.
+### 7.7 Seed Test Data Extension (no schema changes):
+Inside seedFashionBDStore after Catalog baseline:
+- 1 Cart row customer=fatema@fashionbd.xyz + 5 cartItems SKUs from catalog seed (Size M × Color Black Richman Shirt etc, qty 2)
+- 1 Draft order converted from that cart via direct service call to smoke flow
+- 2 Shipping zones (Dhaka Metro flat 60 BDT, Rest of BD 120 BDT)
+### 7.8 Validation Expected (Batch 7 close)
+- tsc --noEmit 0 ✅
+- prisma generate no-op ✅
+- 16 HTTP smoke scenarios: order empty dto 422, invalid status jump → 409 Conflict, out-of-stock cart→order→400, no coupon valid+invalid 400, payment initiate 200 with redirect URL, IPN unknown provider 404, IPN bad signature 401, admin orders list NO TOKEN 401, cancel-my-own order as customer 200, cancel-fulfilled 409, refund 201, CSV export attachment header present…
+- ESLint still blocked (unless user requested ESLint9 migration in this batch — include below in confirmation prompt).
+
+### 🚨 VALIDATION REQUEST (NON-NEGOTIABLE per your process mandate)
+Please reply with ONE of the following:
+1. **Exact keyword:** `proceed with Batch #7` → I execute 7.1–7.8 above exactly as written.
+2. Change request: e.g. `redo Batch 7.6 remove paymentIpnRouter routes to separate Batch` → incorporate + repost Batch7 plan for re-approval.
+3. Priority shift: `First run pnpm prisma:migrate --name init + prisma:seed to unlock schema then proceed` → document the exact commands then run migration-seed + THEN Batch7 code.
+4. Include ESLint 9 flat-config migration in Batch7 scope Y/N (currently N, tsc strict is pass-gate).
+
+Waiting for your explicit message before any Batch #7 code starts.
 

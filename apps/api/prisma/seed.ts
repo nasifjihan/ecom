@@ -317,8 +317,129 @@ async function seedFashionBDStore() {
         name: "VAT",
       },
     });
-    console.log(`  ✅ Tax Class Standard (15% BD VAT) added`);
+    console.log("  ✅ Tax Class Standard (15% BD VAT) added");
   }
+
+  // ===== CATALOG BASELINE: Categories + Brands + Attributes + Terms =====
+  const fashionId = store.id;
+
+  // 2 Root Categories: Women -> Dresses; Men -> Shirts
+  const womenCatEx = await prisma.category.findFirst({
+    where: { storeId: fashionId, slug: "women" },
+  });
+  let womenCatId = womenCatEx?.id;
+  if (!womenCatEx) {
+    const women = await prisma.category.create({
+      data: {
+        storeId: fashionId,
+        name: "Women",
+        slug: "women",
+        description: "Women's Fashion Collection Bangladesh",
+        displayMode: "products",
+        sortOrder: 0,
+        isActive: true,
+        menuIncluded: true,
+      },
+    });
+    womenCatId = women.id;
+    const dresses = await prisma.category.create({
+      data: {
+        storeId: fashionId,
+        parentId: womenCatId,
+        name: "Dresses",
+        slug: "dresses",
+        description: "Dresses — 3-piece, sari, kurti, lehenga",
+        displayMode: "products",
+        sortOrder: 0,
+        isActive: true,
+      },
+    });
+    console.log(`  ✅ Category tree: Women (id=${womenCatId}) → Dresses (id=${dresses.id})`);
+  }
+  const menCatEx = await prisma.category.findFirst({
+    where: { storeId: fashionId, slug: "men" },
+  });
+  let menCatId = menCatEx?.id;
+  if (!menCatEx) {
+    const men = await prisma.category.create({
+      data: {
+      storeId: fashionId,
+      name: "Men",
+      slug: "men",
+      description: "Men's Fashion Collection BD",
+      displayMode: "products",
+      sortOrder: 1,
+      isActive: true,
+      menuIncluded: true,
+      },
+    });
+    menCatId = men.id;
+    const shirts = await prisma.category.create({
+      data: {
+      storeId: fashionId,
+        parentId: menCatId,
+        name: "Shirts",
+        slug: "shirts",
+        description: "Formal / casual shirts",
+        displayMode: "products",
+        sortOrder: 0,
+        isActive: true,
+      },
+    });
+    console.log(`  ✅ Category tree: Men (id=${menCatId}) → Shirts (id=${shirts.id})`);
+  }
+
+  // 2 Brands: Richman, Cats Eye
+  const brands = [
+    { slug: "richman", name: "Richman", websiteUrl: "https://richmanbd.com", sortOrder: 0, description: "Premium men's fashion brand Bangladesh" },
+    { slug: "cats-eye", name: "Cats Eye", websiteUrl: "https://catseye.com.bd", sortOrder: 1, description: "Luxury retail fashion — suits, sarees, leather goods" },
+  ] as const;
+  for (const b of brands) {
+    const ex = await prisma.brand.findFirst({ where: { storeId: fashionId, slug: b.slug } });
+    if (!ex) {
+      await prisma.brand.create({ data: { storeId: fashionId, ...b, isActive: true, seoTitle: `${b.name} — Buy Online Bangladesh`, metaDesc: `Shop ${b.name} products at Fashion BD. Authentic, fast delivery.` } });
+      console.log(`  ✅ Brand added: ${b.name}`);
+    }
+  }
+
+  // 2 Attributes + Terms: Size (S/M/L/XL/XXL/Free) Color (Black/White/Red/Blue)
+  async function upsertAttrWithTerms(slug: string, name: string, type: string, terms: Array<{ slug: string; name: string; value?: string; swatchUrl?: string }>) {
+    let attr = await prisma.attribute.findFirst({ where: { storeId: fashionId, slug } });
+    if (!attr) {
+      attr = await prisma.attribute.create({
+        data: {
+          storeId: fashionId, slug, name, type, isFilterable: true, isActive: true, sortOrder: slug === "size" ? 0 : 1 },
+      });
+      console.log(`  ✅ Attribute created: ${name} (slug=${slug})`);
+    }
+    let sortIdx = 0;
+    for (const t of terms) {
+      const ex2 = await prisma.attributeTerm.findFirst({ where: { attributeId: attr!.id, slug: t.slug } });
+      if (!ex2) {
+        await prisma.attributeTerm.create({
+          data: { attributeId: attr!.id, name: t.name, slug: t.slug, value: t.value ?? t.name, sortOrder: sortIdx, swatchUrl: t.swatchUrl ?? undefined },
+        });
+      }
+      sortIdx++;
+    }
+    return attr;
+  }
+  await upsertAttrWithTerms("size", "Size", "select", [
+    { slug: "s", name: "S (Small)" },
+    { slug: "m", name: "M (Medium)" },
+    { slug: "l", name: "L (Large)" },
+    { slug: "xl", name: "XL" },
+    { slug: "xxl", name: "XXL" },
+    { slug: "free", name: "Free Size" },
+  ]);
+  await upsertAttrWithTerms("color", "Color", "color", [
+    { slug: "black", name: "Black" },
+    { slug: "white", name: "White" },
+    { slug: "red", name: "Red" },
+    { slug: "blue", name: "Blue" },
+  ]);
+
+  console.log("  ✅ Catalog baseline (2 cats, 2 brands, 2 attributes + 10 terms) added.");
 
   console.log("  ✅ Store + Settings baseline seeded.");
   return store;

@@ -5,6 +5,7 @@
  * BEFORE globalErrorHandler (which MUST be last).
  */
 import express, { type Request, type Response, type Express } from "express";
+import { fileURLToPath } from "node:url";
 import {
   requestIdMiddleware,
   loggerMiddleware,
@@ -33,6 +34,14 @@ import {
   superAdminUsersRouter,
   superRolesRouter,
 } from "./modules/admin-users";
+import {
+  adminProductsRouter,
+  adminCategoriesRouter,
+  adminBrandsRouter,
+  adminAttributesRouter,
+  productUploadRouter,
+} from "./modules/catalog";
+import path from "node:path";
 
 let _app: Express | null = null;
 
@@ -83,6 +92,12 @@ export function buildApp(): Express {
   app.use("/api/store", storeSelfRouter);
   app.use("/api/admin/users", adminUsersRouter);
   app.use("/api/admin/roles", adminRolesRouter);
+  app.use("/api/admin/products", adminProductsRouter);
+  app.use("/api/admin/categories", adminCategoriesRouter);
+  app.use("/api/admin/brands", adminBrandsRouter);
+  app.use("/api/admin/attributes", adminAttributesRouter);
+  app.use("/api/admin/media", productUploadRouter);
+  app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads"), { maxAge: "1y", immutable: true }));
 
   // =============== 404 catch-all ===============
   app.all(
