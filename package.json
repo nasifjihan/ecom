@@ -1,0 +1,36 @@
+{
+  "name": "ecom-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "description": "Multi-store configurable e-commerce commerce engine — build once, sell many times.",
+  "scripts": {
+    "dev": "turbo run dev --parallel --no-daemon",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\" --ignore-unknown",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\" --ignore-unknown"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@typescript-eslint/eslint-plugin": "^8.5.0",
+    "@typescript-eslint/parser": "^8.5.0",
+    "eslint": "^9.10.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.6",
+    "turbo": "^2.1.2",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1",
+    "@vitest/coverage-v8": "^2.1.1",
+    "@playwright/test": "^1.47.2"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}

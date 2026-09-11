@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+build/
+coverage/
+pnpm-lock.yaml
+.env
+.env.*
+!.env.example
+*.min.js
+prisma/migrations/**/*.sql
+CHANGELOG.md

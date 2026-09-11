@@ -1,0 +1,74 @@
+# ====== DEPENDENCIES ======
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+.pnpm-store/
+
+# ====== BUILD / CACHE ======
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.turbo/
+tsconfig.tsbuildinfo
+tsconfig.*.tsbuildinfo
+*.tsbuildinfo
+
+# ====== TESTING ======
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.lcov
+lcov-report/
+
+# ====== ENV / SECRETS ======
+.env
+.env.*
+!.env.example
+!.env.test
+*.local
+secrets/
+
+# ====== DATABASE ======
+*.db
+*.sqlite
+*.sqlite3
+prisma/*.db
+prisma/migrations/_tmp_*
+
+# ====== LOGS ======
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ====== DOCKER / VOLUMES (don't commit actual DB data) ======
+docker/volumes/
+.docker/data/
+minio-data/
+postgres-data/
+redis-data/
+
+# ====== IDE / EDITORS ======
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ====== MISC ======
+*.pid
+*.seed
+*.pid.lock
