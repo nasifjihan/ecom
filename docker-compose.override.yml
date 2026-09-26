@@ -1,0 +1,6 @@
+# Local-only: a native Postgres on this machine already owns localhost:5432,
+# so also expose the container on 5433 and point .env there.
+services:
+  postgres:
+    ports:
+      - "5433:5432"
