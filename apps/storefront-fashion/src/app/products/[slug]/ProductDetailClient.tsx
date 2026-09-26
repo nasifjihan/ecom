@@ -36,7 +36,11 @@ import {
   SelectItem,
   ProductGrid,
   ProductCardData,
+  Skeleton,
   useCart,
+  useGetProductBySlugQuery,
+  useGetProductsQuery,
+  type ProductDetail,
   cn,
   formatMoney,
   toast,
@@ -46,121 +50,119 @@ import "swiper/css/thumbs";
 import "swiper/css/free-mode";
 import "swiper/css/navigation";
 
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=pdp-${seed}&`);
+const COLOR_SWATCHES: Record<string, string> = {
+  navy: "#1e3a8a", black: "#0f172a", white: "#ffffff", gray: "#64748b", grey: "#64748b", red: "#dc2626",
+  blue: "#2563eb", green: "#16a34a", rose: "#f43f5e", pink: "#ec4899", sky: "#38bdf8", beige: "#e7d7b8",
+  maroon: "#7f1d1d", tan: "#d2b48c", brown: "#78350f", yellow: "#facc15",
+};
 
-const COLORS = [
-  { name: "Navy", value: "#1e3a8a", id: "navy" },
-  { name: "Black", value: "#0f172a", id: "black" },
-  { name: "White", value: "#ffffff", id: "white" },
-  { name: "Gray", value: "#64748b", id: "gray" },
-];
+function swatch(color: string): string {
+  return COLOR_SWATCHES[color.toLowerCase()] ?? "#cbd5e1";
+}
 
-const SIZES = ["S", "M", "L", "XL", "XXL"];
-
-const MOCK_PRODUCT = (slug: string): ProductCardData & any => ({
-  id: "p-richman-navy",
-  slug: slug || "richman-navy-cotton-shirt",
-  title: "Richman Navy Cotton Shirt — Premium Long Sleeve",
-  images: [
-    PLACEHOLDER_IMG("shirt-navy-front"),
-    PLACEHOLDER_IMG("shirt-navy-side"),
-    PLACEHOLDER_IMG("shirt-navy-back"),
-    PLACEHOLDER_IMG("shirt-navy-detail"),
-    PLACEHOLDER_IMG("shirt-navy-model"),
-  ],
-  price: 3290,
-  compareAtPrice: 3990,
-  rating: 4.5,
-  reviewCount: 238,
-  isOnSale: true,
-  discountPercent: 18,
-  isNew: false,
-  sku: "RCM-NS-00781",
-  stockStatus: "IN_STOCK",
-  shortDescription:
-    "Crafted from 100% premium combed cotton for all-day comfort. Richman's signature navy shirt features a tailored slim fit, spread collar, and mother-of-pearl buttons — perfect for office, weddings and day-to-day.",
-  description: `The Richman Navy Cotton Shirt is a wardrobe essential designed for the modern Bangladeshi gentleman.
-
-## Premium Craftsmanship
-- **Fabric:** 100% long-staple combed cotton (120 GSM)
-- **Weave:** Oxford — breathable yet durable
-- **Fit:** Tailored slim — true-to-size, size chart below
-- **Collar:** Cutaway spread collar with removable stays
-- **Cuffs:** Adjustable two-button barrel cuffs
-- **Buttons:** Mother-of-pearl effect resin buttons
-- **Stitching:** 18 SPI reinforced seams for longevity
-
-## Why You'll Love It
-✓ Soft against skin, no scratchy tags
-✓ Breathable — perfect for Dhaka summers
-✓ Retains shape & color after 30+ washes (tested)
-✓ Versatile — tuck in for office, roll sleeves for casual
-✓ Proudly made in Bangladesh with imported fabric
-
-## Package Contents
-- 1 × Richman Navy Cotton Shirt
-- 1 × Richman branded storage bag
-- 1 × Size & care guide booklet`,
-  specifications: [
-    { name: "Brand", value: "Richman" },
-    { name: "SKU", value: "RCM-NS-00781" },
-    { name: "Fabric", value: "100% Premium Combed Cotton" },
-    { name: "Weave", value: "Oxford, 120 GSM" },
-    { name: "Fit Type", value: "Tailored Slim Fit" },
-    { name: "Collar Style", value: "Cutaway Spread" },
-    { name: "Sleeve Length", value: "Long Sleeve" },
-    { name: "Pattern", value: "Solid" },
-    { name: "Care", value: "Machine wash cold, hang dry, low iron" },
-    { name: "Origin", value: "Made in Bangladesh" },
-    { name: "Warranty", value: "15 days against manufacturing defects" },
-  ],
-  reviews: [
-    { id: 1, name: "Rahim Ahmed", rating: 5, date: "12 Aug 2026", verified: true, title: "Exceptional quality at this price!", body: "The fabric feels premium — way better than my other 3k+ shirts. True to size, color matches the photo perfectly. Already ordered the white one too." },
-    { id: 2, name: "Fatima K.", rating: 4, date: "03 Aug 2026", verified: true, title: "Great shirt, fast delivery", body: "Bought for my brother as Eid gift — arrived in 3 days. Fit is perfect for M size. Only 4 stars because they forgot the branded bag. Customer support sent one free though!" },
-    { id: 3, name: "Tanvir H.", rating: 5, date: "28 Jul 2026", verified: true, title: "Best office shirt I own", body: "I wear this to the office 2-3 times a week. Doesn't wrinkle as much as my Ecstasy ones. The navy is a really nice deep shade." },
-    { id: 4, name: "Nusrat Jahan", rating: 4, date: "15 Jul 2026", verified: true, title: "Good quality overall", body: "Liked the fabric, sizing runs slightly slim — I'm normally L but XL fits me better. Returned and swapped with no hassle!" },
-    { id: 5, name: "Sabbir R.", rating: 5, date: "02 Jul 2026", verified: true, title: "Highly recommended", body: "This is my 3rd Richman shirt from Fashion BD. Consistently good quality. COD was quick." },
-  ],
-});
-
-const RELATED: ProductCardData[] = [
-  { id: "r1", slug: "related-white-shirt", title: "Richman White Premium Cotton Shirt", image: PLACEHOLDER_IMG("rel-shirt-white"), price: 3290, compareAtPrice: 3990, rating: 4.4, reviewCount: 156, isOnSale: true, discountPercent: 18 },
-  { id: "r2", slug: "related-black-panjabi", title: "Aarong Black Embroidery Panjabi", image: PLACEHOLDER_IMG("rel-panjabi-black"), price: 4290, compareAtPrice: 4990, rating: 4.7, reviewCount: 82 },
-  { id: "r3", slug: "related-jeans-blue", title: "Levi's 511 Slim Fit Blue Jeans", image: PLACEHOLDER_IMG("rel-jeans-blue"), price: 5490, rating: 4.6, reviewCount: 310, isNew: true },
-  { id: "r4", slug: "related-formal-shoes", title: "Bata Classic Black Formal Leather Shoes", image: PLACEHOLDER_IMG("rel-shoes-black"), price: 4590, compareAtPrice: 5290, rating: 4.5, reviewCount: 168, isOnSale: true, discountPercent: 13 },
-];
+function formatReviewDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 type Props = {
   slug: string;
 };
 
 export default function ProductDetailClient({ slug }: Props) {
+  const { data: product, isLoading, isError } = useGetProductBySlugQuery(slug);
+  const { data: related } = useGetProductsQuery(
+    { categoryId: product?.categoryId, excludeId: product?.id, perPage: 4, sort: "popular" },
+    { skip: !product?.categoryId },
+  );
+
+  if (isLoading) {
+    return (
+      <div className="container py-10 grid lg:grid-cols-2 gap-8">
+        <Skeleton className="aspect-[4/5] w-full rounded-2xl" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-3/4" />
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
+  }
+  if (isError || !product) {
+    return (
+      <div className="container py-24 text-center">
+        <h1 className="text-2xl font-bold mb-2">Product not found</h1>
+        <p className="text-muted-foreground mb-6">This product may have been removed or is no longer available.</p>
+        <Button asChild>
+          <Link href="/products">Browse all products</Link>
+        </Button>
+      </div>
+    );
+  }
+  return <ProductDetailView product={product} related={related?.items ?? []} />;
+}
+
+function ProductDetailView({ product, related }: { product: ProductDetail; related: ProductCardData[] }) {
   const { addItem } = useCart();
-  const product = React.useMemo(() => MOCK_PRODUCT(slug), [slug]);
 
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
-  const [selectedSize, setSelectedSize] = React.useState<string>("M");
-  const [selectedColor, setSelectedColor] = React.useState<string>("navy");
   const [qty, setQty] = React.useState(1);
   const [wishlisted, setWishlisted] = React.useState(false);
   const [reviewSort, setReviewSort] = React.useState<"latest" | "top">("latest");
 
-  const discountPct = product.discountPercent ?? 18;
+  // Option axes (e.g. size, color) derived from the variants' attribute values.
+  const optionAxes = React.useMemo(() => {
+    const axes = new Map<string, string[]>();
+    for (const v of product.variants) {
+      for (const [k, val] of Object.entries(v.attributes)) {
+        const list = axes.get(k) ?? [];
+        if (!list.includes(val)) list.push(val);
+        axes.set(k, list);
+      }
+    }
+    return [...axes.entries()];
+  }, [product.variants]);
+
+  const [selected, setSelected] = React.useState<Record<string, string>>(() => {
+    const first = product.variants.find((v) => v.inStock) ?? product.variants[0];
+    return first ? { ...first.attributes } : {};
+  });
+
+  const selectedVariant = React.useMemo(
+    () =>
+      product.variants.find((v) => optionAxes.every(([axis]) => v.attributes[axis] === selected[axis])) ?? null,
+    [product.variants, optionAxes, selected],
+  );
+
+  const hasVariants = product.variants.length > 0;
+  const price = selectedVariant?.price ?? product.price;
+  const compareAtPrice = selectedVariant ? selectedVariant.compareAtPrice ?? null : product.compareAtPrice ?? null;
+  const stockLeft = hasVariants ? selectedVariant?.stockQty ?? null : product.stockQty;
+  const inStock = hasVariants ? Boolean(selectedVariant?.inStock) : !product.isOutOfStock;
+  const images = product.images.length ? product.images : [product.image].filter(Boolean);
+  const discountPct = compareAtPrice ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : 0;
+  const maxQty = stockLeft ?? 99;
 
   const handleAddToCart = () => {
-    const color = COLORS.find((c) => c.id === selectedColor);
+    if (hasVariants && !selectedVariant) {
+      toast.error("Choose an option", { description: "Please pick a size/colour that is available" });
+      return;
+    }
+    if (!inStock) {
+      toast.error("Out of stock");
+      return;
+    }
     addItem({
       productId: product.id,
-      variantId: `${product.id}-${selectedColor}-${selectedSize}`,
+      variantId: selectedVariant?.id,
       title: product.title,
       slug: product.slug,
-      image: product.images[0],
-      price: product.price,
+      image: selectedVariant?.image ?? images[0] ?? "",
+      price,
       qty,
-      variantLabel: `${color?.name ?? ""} • Size ${selectedSize}`,
+      weightKG: product.weightKG,
+      variantLabel: selectedVariant?.label,
     });
     toast.success("Added to cart", {
       description: `${product.title.slice(0, 40)} × ${qty}`,
@@ -170,14 +172,14 @@ export default function ProductDetailClient({ slug }: Props) {
 
   const sortedReviews = React.useMemo(() => {
     const r = [...product.reviews];
-    if (reviewSort === "top") r.sort((a: any, b: any) => b.rating - a.rating);
+    if (reviewSort === "top") r.sort((a, b) => b.rating - a.rating);
     return r;
   }, [product.reviews, reviewSort]);
 
-  const averageRating = product.rating ?? 4.5;
+  const averageRating = product.rating ?? 0;
   const ratingCounts = React.useMemo(() => {
     const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
-    product.reviews.forEach((r: any) => {
+    product.reviews.forEach((r) => {
       counts[r.rating] = (counts[r.rating] ?? 0) + 1;
     });
     return counts;
@@ -193,17 +195,21 @@ export default function ProductDetailClient({ slug }: Props) {
             </Link>
           </li>
           <li className="flex items-center"><ChevronRight className="h-3 w-3 mx-1" /></li>
-          <li><Link href="/categories/men" className="hover:text-foreground hover:underline">Men</Link></li>
-          <li className="flex items-center"><ChevronRight className="h-3 w-3 mx-1" /></li>
-          <li><Link href="/categories/men-shirts" className="hover:text-foreground hover:underline">Shirts</Link></li>
-          <li className="flex items-center"><ChevronRight className="h-3 w-3 mx-1" /></li>
+          {product.breadcrumbs.map((c) => (
+            <React.Fragment key={c.id}>
+              <li><Link href={`/products?category=${c.slug}`} className="hover:text-foreground hover:underline">{c.name}</Link></li>
+              <li className="flex items-center"><ChevronRight className="h-3 w-3 mx-1" /></li>
+            </React.Fragment>
+          ))}
           <li className="text-foreground font-medium line-clamp-1 max-w-[40vw]">{product.title}</li>
         </ol>
       </nav>
 
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 mb-16">
         <div className="space-y-3">
-          <div className="grid grid-cols-[80px_1fr] gap-3">
+          {/* minmax(0,1fr) + fixed thumb height: Swiper measures its parent, so an auto-sized
+              grid track lets it grow without bound (33M px pages). */}
+          <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3">
             <Swiper
               modules={[FreeMode, Navigation, Thumbs]}
               direction="vertical"
@@ -212,10 +218,9 @@ export default function ProductDetailClient({ slug }: Props) {
               freeMode={true}
               watchSlidesProgress={true}
               onSwiper={setThumbsSwiper}
-              className="!h-full !w-[80px]"
-              style={{ height: "100%", minHeight: 400 }}
+              className="!w-[80px] h-[400px] md:h-[520px]"
             >
-              {product.images.map((img: string, i: number) => (
+              {images.map((img: string, i: number) => (
                 <SwiperSlide key={i} className="!h-[80px] !w-[80px] !flex-shrink-0">
                   <div className="h-full w-full rounded-lg overflow-hidden border-2 cursor-pointer hover:border-primary transition-colors">
                     <img src={img} alt={`${product.title} view ${i + 1}`} className="h-full w-full object-cover" />
@@ -224,16 +229,16 @@ export default function ProductDetailClient({ slug }: Props) {
               ))}
             </Swiper>
 
-            <div className="relative">
+            <div className="relative min-w-0">
               <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-slate-50">
-                {product.images.map((img: string, i: number) => (
+                {images.map((img: string, i: number) => (
                   <SwiperSlide key={i}>
                     <img src={img} alt={`${product.title} — view ${i + 1}`} className="h-full w-full object-cover" />
                   </SwiperSlide>
                 ))}
               </Swiper>
 
-              {product.isOnSale && discountPct > 0 && (
+              {discountPct > 0 && (
                 <div className="absolute top-4 left-4 flex flex-col gap-1">
                   <Badge variant="destructive" className="text-xs px-2.5 py-1">-{discountPct}% OFF</Badge>
                   {product.isNew && <Badge variant="success" className="text-xs px-2.5 py-1">NEW</Badge>}
@@ -278,10 +283,16 @@ export default function ProductDetailClient({ slug }: Props) {
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
-            <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">Richman • Men's Shirt</Badge>
-            <Badge variant="success" className="gap-1">
-              <CheckCircle2 className="h-3 w-3" /> In Stock
+            <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
+              {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ") || "Fashion BD"}
             </Badge>
+            {inStock ? (
+              <Badge variant="success" className="gap-1">
+                <CheckCircle2 className="h-3 w-3" /> In Stock
+              </Badge>
+            ) : (
+              <Badge variant="destructive">Out of Stock</Badge>
+            )}
           </div>
 
           <h1 className="text-2xl md:text-3xl font-bold leading-tight tracking-tight mb-3">{product.title}</h1>
@@ -297,65 +308,69 @@ export default function ProductDetailClient({ slug }: Props) {
               <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({product.reviewCount} reviews)</a>
             </div>
             <span className="text-slate-300">|</span>
-            <span className="text-sm text-muted-foreground">SKU: <span className="font-mono text-foreground">{product.sku}</span></span>
+            <span className="text-sm text-muted-foreground">SKU: <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
           </div>
 
           <div className="flex items-baseline gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-secondary/5 border">
-            <span className="text-3xl md:text-4xl font-black text-primary">{formatMoney(product.price)}</span>
-            {product.compareAtPrice && (
+            <span className="text-3xl md:text-4xl font-black text-primary">{formatMoney(price)}</span>
+            {compareAtPrice && (
               <>
-                <span className="text-lg text-muted-foreground line-through">{formatMoney(product.compareAtPrice)}</span>
-                <Badge variant="destructive" className="text-xs px-2 py-0.5">Save ৳{product.compareAtPrice - product.price}</Badge>
+                <span className="text-lg text-muted-foreground line-through">{formatMoney(compareAtPrice)}</span>
+                <Badge variant="destructive" className="text-xs px-2 py-0.5">Save ৳{compareAtPrice - price}</Badge>
               </>
             )}
             <div className="ml-auto text-right">
               <div className="text-xs text-muted-foreground">or 4 installments</div>
-              <div className="text-sm font-semibold">৳{Math.round(product.price / 4)}/month • bKash Nagad</div>
+              <div className="text-sm font-semibold">৳{Math.round(price / 4)}/month • bKash Nagad</div>
             </div>
           </div>
 
-          <p className="text-muted-foreground leading-relaxed mb-6">{product.shortDescription}</p>
+          {product.shortDescription && <p className="text-muted-foreground leading-relaxed mb-6">{product.shortDescription}</p>}
 
           <div className="space-y-5">
-            <div>
-              <Label className="text-sm font-semibold mb-2.5 block">Color: <span className="font-normal text-muted-foreground capitalize">{COLORS.find((c) => c.id === selectedColor)?.name}</span></Label>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedColor(c.id)}
-                    className={cn(
-                      "h-9 w-9 rounded-full flex items-center justify-center relative transition-all",
-                      selectedColor === c.id && "ring-2 ring-primary ring-offset-2 scale-110",
-                    )}
-                    aria-label={`Color ${c.name}`}
-                  >
-                    <span className={cn("h-7 w-7 rounded-full border shadow-inner", c.id === "white" && "border-slate-300")} style={{ backgroundColor: c.value }} />
-                  </button>
-                ))}
+            {optionAxes.map(([axis, values]) => (
+              <div key={axis}>
+                <Label className="text-sm font-semibold mb-2.5 block capitalize">
+                  {axis}: <span className="font-normal text-muted-foreground">{selected[axis] ?? "—"}</span>
+                </Label>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {values.map((val) => {
+                    const candidate = { ...selected, [axis]: val };
+                    const match = product.variants.find((v) =>
+                      optionAxes.every(([a]) => v.attributes[a] === candidate[a]),
+                    );
+                    const disabled = !match || !match.inStock;
+                    const isSelected = selected[axis] === val;
+                    return axis.toLowerCase() === "color" ? (
+                      <button
+                        key={val}
+                        onClick={() => setSelected(candidate)}
+                        className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center relative transition-all",
+                          isSelected && "ring-2 ring-primary ring-offset-2 scale-110",
+                          disabled && "opacity-40",
+                        )}
+                        aria-label={`Color ${val}`}
+                        title={val}
+                      >
+                        <span className="h-7 w-7 rounded-full border shadow-inner" style={{ backgroundColor: swatch(val) }} />
+                      </button>
+                    ) : (
+                      <Button
+                        key={val}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelected(candidate)}
+                        className={cn("h-10 min-w-[3rem] px-4", isSelected ? "bg-primary text-white" : "bg-transparent", disabled && "opacity-40 line-through")}
+                      >
+                        {val}
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <Label className="text-sm font-semibold">Size: <span className="font-normal text-muted-foreground">{selectedSize}</span></Label>
-                <a href="#size-guide" className="text-xs text-primary hover:underline">Size guide</a>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SIZES.map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    variant={selectedSize === s ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedSize(s)}
-                    className={cn("h-10 min-w-[3rem] px-4", selectedSize === s ? "bg-primary text-white" : "bg-transparent")}
-                  >
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            ))}
 
             <div className="grid grid-cols-[120px_1fr] gap-3 items-end">
               <div>
@@ -370,7 +385,7 @@ export default function ProductDetailClient({ slug }: Props) {
                   </button>
                   <span className="h-11 min-w-[3rem] flex items-center justify-center font-semibold border-x px-2">{qty}</span>
                   <button
-                    onClick={() => setQty((q) => q + 1)}
+                    onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
                     className="h-11 w-10 flex items-center justify-center hover:bg-accent transition-colors"
                     aria-label="Increase quantity"
                   >
@@ -379,14 +394,18 @@ export default function ProductDetailClient({ slug }: Props) {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                Only <span className="font-semibold text-foreground">42 pieces</span> left in stock
+                {!inStock ? (
+                  <span className="text-destructive font-medium">Currently out of stock</span>
+                ) : stockLeft !== null && stockLeft <= 10 ? (
+                  <>Only <span className="font-semibold text-foreground">{stockLeft} pieces</span> left in stock</>
+                ) : null}
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3 pt-2">
-              <Button size="lg" className="flex-1 min-w-[220px] h-12 text-base shadow-soft" onClick={handleAddToCart}>
+              <Button size="lg" className="flex-1 min-w-[220px] h-12 text-base shadow-soft" onClick={handleAddToCart} disabled={!inStock}>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart — {formatMoney(product.price * qty)}
+                {inStock ? `Add to Cart — ${formatMoney(price * qty)}` : "Out of Stock"}
               </Button>
               <Button
                 size="lg"
@@ -431,12 +450,12 @@ export default function ProductDetailClient({ slug }: Props) {
             </div>
 
             <TabsContent value="description" className="mt-0 p-6 md:p-8 prose prose-slate max-w-none prose-headings:font-bold prose-p:text-foreground/80 prose-li:text-foreground/80 prose-strong:text-foreground">
-              <pre className="!bg-transparent !p-0 !m-0 whitespace-pre-wrap font-sans text-[15px] leading-7">{product.description}</pre>
+              <pre className="!bg-transparent !p-0 !m-0 whitespace-pre-wrap font-sans text-[15px] leading-7">{product.description ?? product.shortDescription ?? "No description yet."}</pre>
             </TabsContent>
 
             <TabsContent value="specifications" className="mt-0">
               <div className="divide-y">
-                {product.specifications.map((row: any) => (
+                {product.specifications.map((row) => (
                   <div key={row.name} className="grid grid-cols-[160px_1fr] md:grid-cols-[220px_1fr]">
                     <div className="px-6 md:px-8 py-3.5 bg-muted/50 text-sm font-medium text-muted-foreground">{row.name}</div>
                     <div className="px-6 md:px-8 py-3.5 text-sm">{row.value}</div>
@@ -455,12 +474,12 @@ export default function ProductDetailClient({ slug }: Props) {
                         <Star key={i} className={cn("h-5 w-5", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
                       ))}
                     </div>
-                    <div className="text-sm text-muted-foreground">Based on {product.reviewCount} verified reviews</div>
+                    <div className="text-sm text-muted-foreground">Based on {product.reviewCount} review{product.reviewCount === 1 ? "" : "s"}</div>
                   </div>
                   <div className="mt-6 space-y-2">
                     {[5, 4, 3, 2, 1].map((star) => {
                       const count = ratingCounts[star] ?? 0;
-                      const pct = product.reviewCount ? (count / product.reviewCount) * 100 : 0;
+                      const pct = product.reviews.length ? (count / product.reviews.length) * 100 : 0;
                       return (
                         <div key={star} className="flex items-center gap-3">
                           <div className="flex items-center gap-1 w-14 text-xs text-muted-foreground">{star} <Star className="h-3 w-3 text-amber-400 fill-amber-400" /></div>
@@ -502,7 +521,7 @@ export default function ProductDetailClient({ slug }: Props) {
                       <textarea className="flex min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y" placeholder="Share your thoughts... (minimum 20 characters)" />
                     </div>
                     <div className="flex justify-end">
-                      <Button onClick={() => toast.success("Review submitted! It will appear after approval.")}>
+                      <Button onClick={() => toast.info("Reviews open to verified buyers once customer accounts ship.")}>
                         <Send className="h-4 w-4 mr-2" /> Submit Review
                       </Button>
                     </div>
@@ -519,7 +538,10 @@ export default function ProductDetailClient({ slug }: Props) {
               </div>
 
               <div className="space-y-4">
-                {sortedReviews.map((r: any) => (
+                {sortedReviews.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No reviews yet. Be the first to review this product.</p>
+                )}
+                {sortedReviews.map((r) => (
                   <motion.div
                     key={r.id}
                     initial={{ opacity: 0, y: 4 }}
@@ -537,7 +559,7 @@ export default function ProductDetailClient({ slug }: Props) {
                             <span className="font-semibold">{r.name}</span>
                             {r.verified && <Badge variant="success" className="h-5 text-[10px] px-1.5"><CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Verified</Badge>}
                           </div>
-                          <div className="text-xs text-muted-foreground">{r.date}</div>
+                          <div className="text-xs text-muted-foreground">{formatReviewDate(r.date)}</div>
                         </div>
                       </div>
                       <div className="flex items-center">
@@ -552,26 +574,25 @@ export default function ProductDetailClient({ slug }: Props) {
                 ))}
               </div>
 
-              <div className="mt-8 text-center">
-                <Button variant="outline">Load More Reviews</Button>
-              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
+      {related.length > 0 && (
       <section className="mb-16">
         <div className="flex items-end justify-between mb-6 gap-3">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight">You May Also Like</h2>
-            <p className="text-muted-foreground mt-1">Frequently bought together</p>
+            <p className="text-muted-foreground mt-1">More from {product.category?.name ?? "this category"}</p>
           </div>
           <Button variant="ghost" asChild>
             <Link href="/products">View all <ChevronRight className="h-4 w-4 ml-1" /></Link>
           </Button>
         </div>
-        <ProductGrid products={RELATED} />
+        <ProductGrid products={related} />
       </section>
+      )}
     </div>
   );
 }

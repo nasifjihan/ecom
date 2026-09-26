@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   SlidersHorizontal,
@@ -39,41 +39,13 @@ import {
   SheetHeader,
   SheetTitle,
   useCart,
+  useGetProductsQuery,
+  useGetCategoriesTreeQuery,
+  useGetBrandsQuery,
+  type ProductSummary,
 } from "@ecom/storefront-base";
 import { cn, formatMoney } from "@ecom/utils";
 import { toast } from "sonner";
-
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=plp-${seed}&`);
-
-const MOCK_TITLES = [
-  "Richman Navy Cotton Shirt",
-  "Elegance Floral Maxi Dress Summer",
-  "Leatherite Casual Sneakers White",
-  "Luxury Premium Leather Handbag Tan",
-  "Trendy Kids Casual T-Shirt Set",
-  "Classic Genuine Leather Wallet Brown",
-  "Casio Gold Stainless Steel Watch",
-  "Summer Vibes EDT Perfume 100ml",
-  "Aarong Premium Cotton Panjabi White",
-  "Levi's Slim Fit Denim Jeans Blue",
-  "Winter Cozy Knit Sweater Gray",
-  "Bata Office Formal Leather Shoes Black",
-  "Noir Little Black Dress Party",
-  "Adidas Sports Running Shoes Navy",
-  "Gucci Inspired Aviator Sunglasses",
-  "Victoria's Secret Tote Bag Canvas",
-  "Tommy Hilfiger Polo Shirt Red",
-  "Nike Air Sports Hoodie Black",
-  "Fossil Chronograph Silver Watch",
-  "Calvin Klein Underwear Pack of 3",
-  "H&M Oversized Cardigan Beige",
-  "Zara Floral Summer Blouse Pink",
-  "Puma Gym Training Shorts Gray",
-  "Ray-Ban Wayfarer Sunglasses Tortoise",
-];
 
 const SORT_OPTIONS = [
   { value: "popular", label: "Most Popular" },
@@ -83,132 +55,75 @@ const SORT_OPTIONS = [
   { value: "rating", label: "Top Rated" },
 ] as const;
 
-const CATEGORY_TREE = [
-  {
-    id: "c1", slug: "women", name: "Women", productCount: 1240, children: [
-      { id: "w1", slug: "women-dresses", name: "Dresses", productCount: 320 },
-      { id: "w2", slug: "women-tops", name: "Tops & Shirts", productCount: 280 },
-      { id: "w3", slug: "women-saree", name: "Saree & Salwar", productCount: 410 },
-      { id: "w4", slug: "women-shoes", name: "Shoes & Sandals", productCount: 230 },
-    ],
-  },
-  {
-    id: "c2", slug: "men", name: "Men", productCount: 980, children: [
-      { id: "m1", slug: "men-shirts", name: "Shirts", productCount: 310 },
-      { id: "m2", slug: "men-panjabi", name: "Panjabi & Kabli", productCount: 180 },
-      { id: "m3", slug: "men-pants", name: "Pants & Jeans", productCount: 260 },
-      { id: "m4", slug: "men-shoes", name: "Shoes", productCount: 230 },
-    ],
-  },
-  {
-    id: "c3", slug: "kids", name: "Kids", productCount: 450, children: [
-      { id: "k1", slug: "kids-boys", name: "Boys (2-14)", productCount: 220 },
-      { id: "k2", slug: "kids-girls", name: "Girls (2-14)", productCount: 230 },
-    ],
-  },
-  {
-    id: "c4", slug: "accessories", name: "Accessories", productCount: 620, children: [
-      { id: "a1", slug: "bags", name: "Bags & Purses", productCount: 190 },
-      { id: "a2", slug: "watches", name: "Watches", productCount: 150 },
-      { id: "a3", slug: "perfumes", name: "Perfumes", productCount: 120 },
-      { id: "a4", slug: "sunglasses", name: "Sunglasses", productCount: 80 },
-    ],
-  },
-];
+const PRICE_MAX = 20000;
 
-const BRANDS = [
-  { id: "b1", slug: "richman", name: "Richman", count: 210 },
-  { id: "b2", slug: "aarong", name: "Aarong", count: 180 },
-  { id: "b3", slug: "levis", name: "Levi's", count: 95 },
-  { id: "b4", slug: "bata", name: "Bata", count: 280 },
-  { id: "b5", slug: "nike", name: "Nike", count: 140 },
-  { id: "b6", slug: "casio", name: "Casio", count: 85 },
-  { id: "b7", slug: "tommy", name: "Tommy Hilfiger", count: 70 },
-  { id: "b8", slug: "adidas", name: "Adidas", count: 115 },
-];
-
-function buildMockProducts(count = 36): ProductCardData[] {
-  return Array.from({ length: count }).map((_, i) => {
-    const basePrice = 800 + Math.floor(Math.random() * 9000);
-    const onSale = Math.random() > 0.5;
-    const compareAt = onSale ? Math.round(basePrice * (1.1 + Math.random() * 0.5)) : null;
-    const discountPercent = compareAt ? Math.round(((compareAt - basePrice) / compareAt) * 100) : 0;
-    return {
-      id: `prod-${i + 1}`,
-      slug: `product-${i + 1}-${MOCK_TITLES[i % MOCK_TITLES.length]!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-      title: MOCK_TITLES[i % MOCK_TITLES.length]!,
-      image: PLACEHOLDER_IMG(`prod-${i + 1}`),
-      price: basePrice,
-      compareAtPrice: compareAt,
-      isOnSale: onSale,
-      discountPercent: onSale ? discountPercent : undefined,
-      rating: 3.5 + Math.random() * 1.5,
-      reviewCount: 20 + Math.floor(Math.random() * 400),
-      isNew: i < 6,
-    };
-  });
+function useDebounced<T>(value: T, ms = 350): T {
+  const [v, setV] = React.useState(value);
+  React.useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }
-
-const ALL_MOCK = buildMockProducts(48);
 
 export default function ProductsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { addItem } = useCart();
 
-  const [priceRange, setPriceRange] = React.useState<number[]>([0, 20000]);
+  const [priceRange, setPriceRange] = React.useState<number[]>([0, PRICE_MAX]);
   const [selectedCats, setSelectedCats] = React.useState<Set<string>>(new Set());
   const [selectedBrands, setSelectedBrands] = React.useState<Set<string>>(new Set());
   const [minRating, setMinRating] = React.useState<number>(0);
-  const [sort, setSort] = React.useState<(typeof SORT_OPTIONS)[number]["value"]>("popular");
+  const [sort, setSort] = React.useState<(typeof SORT_OPTIONS)[number]["value"]>(() => {
+    const fromUrl = searchParams.get("sort");
+    return SORT_OPTIONS.find((o) => o.value === fromUrl)?.value ?? "popular";
+  });
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [search, setSearch] = React.useState(searchParams.get("search") ?? "");
   const [page, setPage] = React.useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
 
   const perPage = 16;
+  const categorySlug = searchParams.get("category") ?? undefined;
+  const debouncedSearch = useDebounced(search.trim());
+  const debouncedPrice = useDebounced(priceRange);
 
-  const filtered = React.useMemo(() => {
-    let items = [...ALL_MOCK];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      items = items.filter((p) => p.title.toLowerCase().includes(q));
-    }
-    items = items.filter((p) => p.price >= priceRange[0]! && p.price <= priceRange[1]!);
-    if (selectedBrands.size > 0) {
-      items = items.filter((_, i) => selectedBrands.has(`b${(i % BRANDS.length) + 1}`));
-    }
-    if (selectedCats.size > 0) {
-      items = items.filter((_, i) => selectedCats.has(`c${(i % CATEGORY_TREE.length) + 1}`));
-    }
-    if (minRating > 0) {
-      items = items.filter((p) => (p.rating ?? 0) >= minRating);
-    }
-    switch (sort) {
-      case "newest": items.reverse(); break;
-      case "price_asc": items.sort((a, b) => a.price - b.price); break;
-      case "price_desc": items.sort((a, b) => b.price - a.price); break;
-      case "rating": items.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)); break;
-      default: break;
-    }
-    return items;
-  }, [search, priceRange, selectedBrands, selectedCats, minRating, sort]);
+  const { data: categoryTree = [] } = useGetCategoriesTreeQuery();
+  const { data: brands = [] } = useGetBrandsQuery();
+  const { data, isFetching, isError } = useGetProductsQuery({
+    page,
+    perPage,
+    sort,
+    search: debouncedSearch || undefined,
+    categoryId: selectedCats.size ? [...selectedCats].join(",") : undefined,
+    categorySlug: selectedCats.size ? undefined : categorySlug,
+    brandId: selectedBrands.size ? [...selectedBrands].join(",") : undefined,
+    minPrice: debouncedPrice[0]! > 0 ? debouncedPrice[0] : undefined,
+    maxPrice: debouncedPrice[1]! < PRICE_MAX ? debouncedPrice[1] : undefined,
+    rating: minRating || undefined,
+  });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const paged = filtered.slice((page - 1) * perPage, page * perPage);
+  const paged: ProductCardData[] = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const loading = isFetching && !data;
 
   React.useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(t);
-  }, [search, priceRange, selectedBrands, selectedCats, minRating, sort, page]);
+    setPage(1);
+  }, [debouncedSearch, debouncedPrice, selectedCats, selectedBrands, minRating, sort]);
 
   const handleAddToCart = React.useCallback(
     (p: ProductCardData) => {
-      addItem({ productId: p.id, variantId: undefined, title: p.title, slug: p.slug, image: p.image, price: p.price });
+      if ((p as ProductSummary).hasVariants) {
+        toast.info("Choose a size first", { description: p.title.slice(0, 40) });
+        router.push(`/products/${p.slug}`);
+        return;
+      }
+      addItem({ productId: p.id, variantId: undefined, title: p.title, slug: p.slug, image: p.image, price: p.price, weightKG: (p as ProductSummary).weightKG });
       toast.success("Added to cart", { description: p.title.slice(0, 40) });
     },
-    [addItem],
+    [addItem, router],
   );
 
   const toggle = (set: Set<string>, id: string): Set<string> => {
@@ -218,13 +133,13 @@ export default function ProductsPage() {
   };
 
   const activeFiltersCount =
-    (priceRange[0] !== 0 || priceRange[1] !== 20000 ? 1 : 0) +
+    (priceRange[0] !== 0 || priceRange[1] !== PRICE_MAX ? 1 : 0) +
     selectedCats.size +
     selectedBrands.size +
     (minRating > 0 ? 1 : 0);
 
   const clearAll = () => {
-    setPriceRange([0, 20000]);
+    setPriceRange([0, PRICE_MAX]);
     setSelectedCats(new Set());
     setSelectedBrands(new Set());
     setMinRating(0);
@@ -250,7 +165,7 @@ export default function ProductsPage() {
             {formatMoney(priceRange[0]!)} – {formatMoney(priceRange[1]!)}
           </span>
         </div>
-        <Slider value={priceRange} onValueChange={setPriceRange} min={0} max={20000} step={100} />
+        <Slider value={priceRange} onValueChange={setPriceRange} min={0} max={PRICE_MAX} step={100} />
       </div>
 
       <Separator />
@@ -259,7 +174,7 @@ export default function ProductsPage() {
         <h4 className="font-medium text-sm mb-3">Categories</h4>
         <ScrollArea className="max-h-56 pr-2 -mr-2">
           <div className="space-y-3">
-            {CATEGORY_TREE.map((cat) => (
+            {categoryTree.map((cat) => (
               <div key={cat.id}>
                 <label className="flex items-start gap-2 cursor-pointer">
                   <Checkbox
@@ -301,7 +216,7 @@ export default function ProductsPage() {
         <h4 className="font-medium text-sm mb-3">Brands</h4>
         <ScrollArea className="max-h-56 pr-2 -mr-2">
           <div className="space-y-2">
-            {BRANDS.map((b) => (
+            {brands.map((b) => (
               <label key={b.id} className="flex items-center justify-between gap-2 cursor-pointer text-sm">
                 <span className="flex items-center gap-2">
                   <Checkbox
@@ -310,7 +225,7 @@ export default function ProductsPage() {
                   />
                   <span className={cn(selectedBrands.has(b.id) && "text-primary font-medium")}>{b.name}</span>
                 </span>
-                <span className="text-xs text-muted-foreground">{b.count}</span>
+                <span className="text-xs text-muted-foreground">{b.productCount}</span>
               </label>
             ))}
           </div>
@@ -351,7 +266,7 @@ export default function ProductsPage() {
     <div className="container py-6 md:py-10">
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">All Products</h1>
-        <p className="text-muted-foreground">Browse our full catalog of {ALL_MOCK.length}+ fashion items</p>
+        <p className="text-muted-foreground">{total > 0 ? `Browse ${total} fashion item${total === 1 ? "" : "s"}` : "Browse our catalog"}</p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 md:gap-8">
@@ -402,7 +317,7 @@ export default function ProductsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 p-3 border rounded-xl bg-card">
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-muted-foreground">
-                  {loading ? <Skeleton className="h-4 w-28 inline-block" /> : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, filtered.length)} of ${filtered.length} results`}
+                  {loading ? <Skeleton className="h-4 w-28 inline-block" /> : total === 0 ? "No results" : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, total)} of ${total} results`}
                 </span>
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="md:hidden">
@@ -412,7 +327,7 @@ export default function ProductsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-[180px]">
-                  <Select value={sort} onValueChange={(v) => { setSort(v as any); setPage(1); }}>
+                  <Select value={sort} onValueChange={(v) => setSort(v as any)}>
                     {SORT_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
@@ -439,8 +354,8 @@ export default function ProductsPage() {
 
             {activeFiltersCount > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                {priceRange[0] !== 0 || priceRange[1] !== 20000 ? (
-                  <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setPriceRange([0, 20000])}>
+                {priceRange[0] !== 0 || priceRange[1] !== PRICE_MAX ? (
+                  <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setPriceRange([0, PRICE_MAX])}>
                     ৳{priceRange[0]}–{priceRange[1]} <X className="h-3 w-3" />
                   </Badge>
                 ) : null}
@@ -453,7 +368,7 @@ export default function ProductsPage() {
                   const find = (arr: any[]): any =>
                     arr.find((x: any) => x.id === c) ??
                     arr.reduce((acc, x) => acc || (x.children && find(x.children)), null);
-                  const match = find(CATEGORY_TREE);
+                  const match = find(categoryTree);
                   return (
                     <Badge key={c} variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setSelectedCats((s) => toggle(s, c))}>
                       {match?.name ?? c} <X className="h-3 w-3" />
@@ -461,7 +376,7 @@ export default function ProductsPage() {
                   );
                 })}
                 {Array.from(selectedBrands).map((b) => {
-                  const match = BRANDS.find((x) => x.id === b);
+                  const match = brands.find((x) => x.id === b);
                   return (
                     <Badge key={b} variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setSelectedBrands((s) => toggle(s, b))}>
                       {match?.name ?? b} <X className="h-3 w-3" />
@@ -473,7 +388,7 @@ export default function ProductsPage() {
           </div>
 
           {loading ? (
-            <ProductGrid skeletonCount={perPage} />
+            <ProductGrid loading skeletonCount={perPage} />
           ) : paged.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -483,9 +398,11 @@ export default function ProductsPage() {
               <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-4">
                 <Search className="h-10 w-10 text-muted-foreground" />
               </div>
-              <h3 className="font-semibold text-xl mb-1">No products found</h3>
+              <h3 className="font-semibold text-xl mb-1">{isError ? "Could not load products" : "No products found"}</h3>
               <p className="text-muted-foreground mb-6 max-w-sm">
-                Try adjusting your filters, clearing some, or searching for something else.
+                {isError
+                  ? "The store is not reachable right now. Please try again in a moment."
+                  : "Try adjusting your filters, clearing some, or searching for something else."}
               </p>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={clearAll}>Clear all filters</Button>
@@ -515,9 +432,9 @@ export default function ProductsPage() {
                       </div>
                       <span className="text-muted-foreground text-xs">({p.reviewCount})</span>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                      Premium quality material. Comfortable fit. Perfect for daily wear and special occasions.
-                    </p>
+                    {(p as ProductSummary).shortDescription && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{(p as ProductSummary).shortDescription}</p>
+                    )}
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex items-baseline gap-2">
                         <span className="font-bold text-lg">{formatMoney(p.price)}</span>
@@ -541,7 +458,7 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {!loading && filtered.length > perPage && (
+          {!loading && total > perPage && (
             <div className="mt-10">
               <Pagination>
                 <PaginationItem>

@@ -12,6 +12,23 @@ declare global {
   }
 }
 
+/**
+ * Domain rows may be stored with a port ("localhost:3000" in local dev, see seed.ts)
+ * or without one (production hostnames), so try "host:port" first, then the bare host.
+ */
+function hostCandidates(origin?: string): string[] {
+  if (!origin) return [];
+  let hostPort: string;
+  try {
+    hostPort = new URL(origin).host;
+  } catch {
+    hostPort = origin.replace(/^https?:\/\//, "").split("/")[0] ?? "";
+  }
+  hostPort = hostPort.replace(/^www\./, "").toLowerCase();
+  const bare = hostPort.split(":")[0] ?? "";
+  return [...new Set([hostPort, bare].filter(Boolean))];
+}
+
 function extractHost(origin?: string): string | null {
   if (!origin) return null;
   try {
@@ -41,8 +58,14 @@ async function resolveStoreByOrigin(host: string) {
         },
       },
     });
+    // Ids are stringified so the result survives the JSON round-trip through Redis
+    // (JSON.stringify throws on BigInt, which used to make every lookup return null).
     const result = row
-      ? { id: row.storeId, hostname: host, store: row.store }
+      ? {
+          id: String(row.storeId),
+          hostname: host,
+          store: { ...row.store, id: String(row.store.id), planId: row.store.planId === null ? null : String(row.store.planId) },
+        }
       : null;
     if (result) await cacheSet(cacheKey, result, CACHE_KEYS.TTL_LONG);
     else await cacheSet(cacheKey, null, 30);
@@ -84,15 +107,18 @@ export default async function tenantMiddleware(
   const host = extractHost(req.headers.origin || req.headers.host);
   let resolved: any = null;
   if (!forcedStoreId && host) {
-    try {
-      resolved = await Promise.race([
-        resolveStoreByOrigin(host),
-        new Promise<null>((_, rej) =>
-          setTimeout(() => rej(new Error("tenant_resolve_timeout")), 1200),
-        ),
-      ]);
-    } catch {
-      resolved = null;
+    for (const candidate of hostCandidates(req.headers.origin || req.headers.host)) {
+      try {
+        resolved = await Promise.race([
+          resolveStoreByOrigin(candidate),
+          new Promise<null>((_, rej) =>
+            setTimeout(() => rej(new Error("tenant_resolve_timeout")), 1200),
+          ),
+        ]);
+      } catch {
+        resolved = null;
+      }
+      if (resolved?.id) break;
     }
     if (resolved?.id) forcedStoreId = BigInt(resolved.id);
   }

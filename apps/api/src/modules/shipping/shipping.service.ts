@@ -51,7 +51,9 @@ export class ShippingService {
     if (zones.length === 0 && q.countryCode !== "BD") {
       return { zonesMatched: 0, options: [], cheapest: null, fastest: null, reason: `No shipping zones configured for ${q.countryCode} — International delivery not available.` };
     }
-    const allMethods = zones.flatMap((z: any) => z.methods || []);
+    // First matching zone wins (WooCommerce semantics), so an address that fits both
+    // "Dhaka Metro" and "Rest of Bangladesh" is not offered every carrier twice.
+    const allMethods = zones.length ? (zones[0] as any).methods || [] : [];
     const options = this.buildOptions(allMethods, q);
     return this.optionsWrap(options);
   }

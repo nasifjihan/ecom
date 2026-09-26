@@ -30,21 +30,11 @@ import {
   Skeleton,
   Label,
   useCart,
+  useGetProductsQuery,
   cn,
   formatMoney,
   toast,
 } from "@ecom/storefront-base";
-
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=cart-${seed}&`);
-
-const CROSS_SELL = [
-  { id: "xs1", slug: "cross-pkt-tissue", title: "Premium Cotton Pocket Tissue (Pack of 10)", image: PLACEHOLDER_IMG("tissue-pack"), price: 420 },
-  { id: "xs2", slug: "cross-garment-bag", title: "Travel Garment Storage Bag", image: PLACEHOLDER_IMG("garment-bag"), price: 890 },
-  { id: "xs3", slug: "cross-steam-iron", title: "Portable Handheld Garment Steamer", image: PLACEHOLDER_IMG("steamer"), price: 3290 },
-];
 
 function formatBDT(n: number) {
   return formatMoney(n, "BDT");
@@ -52,48 +42,15 @@ function formatBDT(n: number) {
 
 export default function CartPage() {
   const { items, subtotal, itemCount, updateQty, removeItem, clearCart } = useCart();
-  const [couponCode, setCouponCode] = React.useState("");
-  const [couponApplied, setCouponApplied] = React.useState<null | { code: string; amount: number; type: "percent" | "fixed" }>(null);
-  const [applyingCoupon, setApplyingCoupon] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => setMounted(true), []);
 
-  const shippingEstimate = subtotal >= 1000 ? 0 : subtotal > 0 ? 120 : 0;
-  const vatRate = 0.05;
-  const vatAmount = subtotal > 0 ? Math.round(subtotal * vatRate * 100) / 100 : 0;
-  const discountAmount = couponApplied?.amount ?? 0;
-
-  const grandTotal = Math.max(0, subtotal + shippingEstimate + vatAmount - discountAmount);
-
-  const applyCoupon = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!couponCode.trim()) return;
-    setApplyingCoupon(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setApplyingCoupon(false);
-    const code = couponCode.trim().toUpperCase();
-    if (code === "EID20") {
-      const discount = Math.round(subtotal * 0.2 * 100) / 100;
-      setCouponApplied({ code, amount: Math.min(discount, 2000), type: "percent" });
-      toast.success("Coupon applied!", { description: `৳${discount} OFF with EID20` });
-    } else if (code === "BD100") {
-      setCouponApplied({ code, amount: 100, type: "fixed" });
-      toast.success("Coupon applied!", { description: "৳100 OFF with BD100" });
-    } else {
-      setCouponApplied(null);
-      toast.error("Invalid coupon code", { description: "Try EID20 or BD100" });
-    }
-  };
-
-  const removeCoupon = () => {
-    setCouponApplied(null);
-    setCouponCode("");
-    toast.info("Coupon removed");
-  };
-
-  const progressTowardFreeShipping = Math.min(100, Math.max(0, (subtotal / 1000) * 100));
-  const shippingDelta = Math.max(0, 1000 - subtotal);
+  const { data: suggestions } = useGetProductsQuery({ featured: true, perPage: 8, sort: "popular" });
+  const crossSell = React.useMemo(() => {
+    const inCart = new Set(items.map((i) => i.productId));
+    return (suggestions?.items ?? []).filter((p) => !inCart.has(p.id)).slice(0, 3);
+  }, [suggestions, items]);
 
   return (
     <div className="container py-6 md:py-10">
@@ -110,35 +67,6 @@ export default function CartPage() {
         </p>
       </div>
 
-      {mounted && subtotal > 0 && shippingDelta > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-amber-50/60 to-orange-50 border border-amber-200"
-        >
-          <div className="flex items-start gap-3">
-            <Gift className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-amber-800 font-medium mb-1.5">
-                Add <span className="font-bold">{formatBDT(shippingDelta)}</span> more for <span className="font-bold">FREE Delivery</span>! 🎉
-              </p>
-              <div className="h-2 w-full bg-amber-100 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressTowardFreeShipping}%` }}
-                  transition={{ duration: 0.5 }}
-                  className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
-                />
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="flex-shrink-0 bg-white" asChild>
-              <Link href="/products">
-                Shop more <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </div>
-        </motion.div>
-      )}
 
       <div className="grid lg:grid-cols-[1fr_380px] gap-6 lg:gap-8">
         <section>
@@ -187,7 +115,7 @@ export default function CartPage() {
               <div className="w-full text-left">
                 <h3 className="font-semibold mb-4">Customers also viewed</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {CROSS_SELL.map((p) => (
+                  {crossSell.map((p) => (
                     <Link
                       key={p.id}
                       href={`/products/${p.slug}`}
@@ -307,7 +235,7 @@ export default function CartPage() {
                   <Gift className="h-4 w-4 text-secondary" /> You May Also Like
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
-                  {CROSS_SELL.map((p) => (
+                  {crossSell.map((p) => (
                     <Link
                       key={p.id}
                       href={`/products/${p.slug}`}
@@ -343,89 +271,21 @@ export default function CartPage() {
                   <span className="font-medium">{formatBDT(subtotal)}</span>
                 </div>
 
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    Shipping
-                    {shippingEstimate === 0 && subtotal > 0 && (
-                      <Badge variant="success" className="text-[10px] px-1.5">FREE</Badge>
-                    )}
-                  </span>
-                  <span className={cn("font-medium", shippingEstimate === 0 && subtotal > 0 && "text-green-600")}>
-                    {subtotal === 0 ? "—" : shippingEstimate === 0 ? "৳0.00" : formatBDT(shippingEstimate)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-start">
-                  <span className="text-muted-foreground flex flex-col">
-                    <span>VAT (5%)</span>
-                    <span className="text-[11px] text-muted-foreground/80">Incl. in final price</span>
-                  </span>
-                  <span className="font-medium">{subtotal === 0 ? "—" : formatBDT(vatAmount)}</span>
-                </div>
-
-                {couponApplied && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-between pt-2 border-t"
-                  >
-                    <span className="text-green-600 font-medium flex items-center gap-2">
-                      <Tag className="h-3.5 w-3.5" />
-                      Coupon "{couponApplied.code}"
-                      <button onClick={removeCoupon} className="text-destructive/70 hover:text-destructive ml-1">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                    <span className="text-green-600 font-medium">-{formatBDT(discountAmount)}</span>
-                  </motion.div>
-                )}
+                <p className="text-xs text-muted-foreground pt-2 border-t">
+                  Delivery charge, VAT and promo codes are calculated at checkout from your address.
+                </p>
               </div>
-
-              <Separator />
-
-              <form onSubmit={applyCoupon} className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Tag className="h-3.5 w-3.5" /> Promo Code
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="EID20 or BD100"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    className="uppercase tracking-wider"
-                    disabled={!!couponApplied}
-                  />
-                  <Button
-                    type="submit"
-                    variant={couponApplied ? "outline" : "default"}
-                    disabled={applyingCoupon || !!couponApplied}
-                    className="min-w-[80px]"
-                  >
-                    {applyingCoupon ? "..." : couponApplied ? "Applied ✓" : "Apply"}
-                  </Button>
-                </div>
-                {!couponApplied && (
-                  <p className="text-[11px] text-muted-foreground">
-                    💡 Try <code className="px-1.5 py-0.5 rounded bg-muted text-primary font-semibold">EID20</code> for 20% OFF, or <code className="px-1.5 py-0.5 rounded bg-muted text-primary font-semibold">BD100</code> for ৳100 OFF.
-                  </p>
-                )}
-              </form>
 
               <Separator />
 
               <div className="bg-muted/30 rounded-xl p-4 flex flex-col gap-2">
                 <div className="flex justify-between items-baseline">
-                  <span className="font-semibold text-sm">Grand Total</span>
+                  <span className="font-semibold text-sm">Subtotal</span>
                   <div className="text-right">
-                    <div className="text-2xl font-black text-primary">{formatBDT(grandTotal)}</div>
-                    <div className="text-[11px] text-muted-foreground">Incl. all taxes & fees</div>
+                    <div className="text-2xl font-black text-primary">{formatBDT(subtotal)}</div>
+                    <div className="text-[11px] text-muted-foreground">Before delivery and VAT</div>
                   </div>
                 </div>
-                {discountAmount > 0 && (
-                  <div className="text-xs text-green-600 font-semibold flex items-center gap-1">
-                    <Gift className="h-3.5 w-3.5" /> You're saving {formatBDT(discountAmount + (subtotal >= 1000 ? 120 : 0))}!
-                  </div>
-                )}
               </div>
 
               <div className="space-y-2.5">
@@ -451,8 +311,8 @@ export default function CartPage() {
               <div className="grid grid-cols-3 gap-2 pt-2">
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Truck className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">Free Ship</span>
-                  <span className="text-[9px] text-muted-foreground">৳1000+</span>
+                  <span className="text-[10px] font-semibold">Nationwide</span>
+                  <span className="text-[9px] text-muted-foreground">Delivery</span>
                 </div>
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Shield className="h-5 w-5 text-primary mb-1" />

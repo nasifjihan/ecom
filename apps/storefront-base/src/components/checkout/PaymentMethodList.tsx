@@ -98,7 +98,6 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     icon: <Banknote className="h-5 w-5" />,
     color: "text-green-700",
     hasExtraFields: false,
-    extraFee: 20,
   },
   {
     id: PaymentMethod.BANK_TRANSFER,
@@ -551,7 +550,7 @@ export function PaymentMethodList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{gw.brandName}</span>
-                    {gw.extraFee && gw.extraFee > 0 && (
+                    {gw.extraFee != null && gw.extraFee > 0 && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                         +{formatMoney(gw.extraFee, currency)}
                       </Badge>

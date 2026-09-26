@@ -1,41 +1,28 @@
 import type { Metadata } from "next";
+import type { ProductDetail } from "@ecom/storefront-base";
+import { serverApi } from "@/lib/server-api";
 import ProductDetailClient from "./ProductDetailClient";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=pdp-seo-${seed}&`);
+async function getProduct(slug: string): Promise<ProductDetail | null> {
+  return serverApi<ProductDetail>(`/storefront/products/${encodeURIComponent(slug)}`);
+}
 
-const SAMPLE_PRODUCTS = [
-  {
-    slug: "richman-navy-cotton-shirt",
-    title: "Richman Navy Cotton Shirt — Premium Long Sleeve",
-    description:
-      "Buy Richman Navy Premium Cotton Shirt in Bangladesh. 100% combed cotton, tailored slim fit, mother-of-pearl buttons — perfect for office, weddings, and Eid.",
-    price: 3290,
-    brand: "Richman",
-    sku: "RCM-NS-00781",
-    rating: 4.5,
-    reviewCount: 238,
-    image: PLACEHOLDER_IMG("shirt-navy-front"),
-    category: "Men's Shirts",
-  },
-  {
-    slug: "iphone-17-pro",
-    title: "iPhone 17 Pro — 256GB Titan Black",
-    description:
-      "Apple iPhone 17 Pro 256GB Titan Black. A19 Pro chip, 48MP camera, USB-C. Official warranty, EMI available.",
-    price: 139990,
-    brand: "Apple",
-    sku: "IP17P-256-BLK",
-    rating: 4.9,
-    reviewCount: 1256,
-    image: PLACEHOLDER_IMG("iphone-17-pro"),
-    category: "Smartphones",
-  },
-];
+function toSeo(p: ProductDetail) {
+  return {
+    slug: p.slug,
+    title: p.seo?.title ?? p.title,
+    description: p.seo?.description ?? p.shortDescription ?? `Buy ${p.title} online at Fashion BD. Cash on Delivery available.`,
+    price: p.price,
+    brand: p.brand?.name ?? "Fashion BD",
+    sku: p.sku ?? p.slug,
+    rating: p.rating ?? 0,
+    reviewCount: p.reviewCount ?? 0,
+    image: p.seo?.ogImage ?? p.image,
+    category: p.category?.name ?? "Fashion",
+  };
+}
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -47,22 +34,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const canonical = `/products/${slug}`;
   const fullCanonical = `${SITE_BASE}/products/${slug}`;
 
-  const sample = SAMPLE_PRODUCTS.find((p) => p.slug === slug) ?? {
-    slug,
-    title: slug
-      .split("-")
-      .map((w) => (w ? w[0]?.toUpperCase() + w.slice(1) : ""))
-      .filter(Boolean)
-      .join(" "),
-    description: `Shop the latest ${slug.replace(/-/g, " ")} online at Fashion BD. Best price in Bangladesh, free delivery over ৳1000, 7-day returns, COD available.`,
-    price: 2490,
-    brand: "Fashion BD",
-    sku: `SKU-${slug.toUpperCase().slice(0, 12)}`,
-    rating: 4.5,
-    reviewCount: 42,
-    image: PLACEHOLDER_IMG(slug),
-    category: "Fashion",
-  };
+  const product = await getProduct(slug);
+  if (!product) {
+    return { title: "Product not found | Fashion BD", robots: { index: false, follow: true } };
+  }
+  const sample = toSeo(product);
 
   const formattedPrice = new Intl.NumberFormat("en-BD", {
     style: "currency",
@@ -93,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     metadataBase: new URL(SITE_BASE),
     openGraph: {
-      type: "product",
+      type: "website",
       url: canonical,
       title: `${sample.title} | Fashion BD`,
       description: metaDescription,
@@ -134,22 +110,9 @@ export default async function ProductDetailPage({ params }: Props) {
   const resolvedParams = await params;
   const slug = typeof resolvedParams.slug === "string" ? resolvedParams.slug : String(resolvedParams.slug);
 
-  const sample = SAMPLE_PRODUCTS.find((p) => p.slug === slug) ?? {
-    slug,
-    title: slug
-      .split("-")
-      .map((w) => (w ? w[0]?.toUpperCase() + w.slice(1) : ""))
-      .filter(Boolean)
-      .join(" "),
-    description: `Shop the latest ${slug.replace(/-/g, " ")} online at Fashion BD.`,
-    price: 2490,
-    brand: "Fashion BD",
-    sku: `SKU-${slug.toUpperCase().slice(0, 12)}`,
-    rating: 4.5,
-    reviewCount: 42,
-    image: PLACEHOLDER_IMG(slug),
-    category: "Fashion",
-  };
+  const product = await getProduct(slug);
+  if (!product) return <ProductDetailClient slug={slug} />;
+  const sample = toSeo(product);
 
   const fullUrl = `${SITE_BASE}/products/${slug}`;
 
@@ -172,16 +135,20 @@ export default async function ProductDetailPage({ params }: Props) {
       url: fullUrl,
       priceCurrency: "BDT",
       price: Number(sample.price).toFixed(2),
-      availability: "https://schema.org/InStock",
+      availability: product.isOutOfStock ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
       itemCondition: "https://schema.org/NewCondition",
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: Number(sample.rating.toFixed(1)),
-      reviewCount: Math.max(1, Math.round(sample.reviewCount)),
-      bestRating: 5,
-      worstRating: 1,
-    },
+    ...(sample.reviewCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: Number(sample.rating.toFixed(1)),
+            reviewCount: sample.reviewCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
   };
 
   const breadcrumbSchema = {
@@ -204,7 +171,7 @@ export default async function ProductDetailPage({ params }: Props) {
         "@type": "ListItem",
         position: 3,
         name: sample.category,
-        item: `${SITE_BASE}/categories/${sample.category.toLowerCase().replace(/\s+/g, "-")}`,
+        item: `${SITE_BASE}/products?category=${product.category?.slug ?? ""}`,
       },
       {
         "@type": "ListItem",

@@ -15,6 +15,70 @@ export type ShippingRate = {
   estimatedLabel?: string;
 };
 
+/** Raw shape of GET /storefront/shipping/rates (see ShippingService.computeShippingOptions). */
+type ShippingRatesResponse = {
+  options: {
+    id: string;
+    code: string;
+    name: string;
+    provider?: string | null;
+    description?: string | null;
+    finalRateBDT: number;
+    savingsBDT: number;
+    freeReason?: string | null;
+    transit: { minDays: number | null; maxDays: number | null };
+  }[];
+  reason?: string | null;
+};
+
+/** Raw shape of GET /storefront/shipping/taxes (see TaxRateRepository.resolveForAddress). */
+type TaxesResponse = {
+  totalTax: number;
+  breakdown: { name: string; ratePct: number; base: number; amount: number }[];
+};
+
+export type PaymentMethodOption = {
+  code: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  feeFixed: number;
+  feePercent: number;
+};
+
+export type OrderDetail = {
+  orderId: string;
+  orderRef: string;
+  orderKey: string;
+  status: string;
+  paymentStatus: string;
+  paymentGateway: string;
+  createdAt: string;
+  email: string;
+  phone?: string | null;
+  shippingMethodName: string;
+  shipping: OrderAddressSummary;
+  billing: OrderAddressSummary;
+  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
+  itemsSubtotal: number;
+  discountTotal: number;
+  couponUsed?: string | null;
+  shippingTotal: number;
+  taxTotal: number;
+  feeTotal: number;
+  grandTotal: number;
+  currency: string;
+};
+
+export type OrderAddressSummary = {
+  name: string;
+  address: string;
+  city?: string | null;
+  division?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+};
+
 export type TaxBreakdown = {
   name: string;
   rate: number;
@@ -30,6 +94,8 @@ export type CouponApplyResult = {
   message?: string;
   newCartTotal?: number;
   newSubtotal?: number;
+  /** Shipping amount waived by a free-shipping coupon (0 otherwise). */
+  shippingDiscount?: number;
   errorMessage?: string;
 };
 
@@ -68,6 +134,7 @@ export type PlaceOrderBody = {
   shippingAddress: AddressPayload;
   billingAddress?: AddressPayload;
   billingSameAsShipping?: boolean;
+  /** `ShippingRate.methodId` of the chosen rate. */
   shippingMethodId?: string;
   shippingProviderId?: string;
   shippingCost?: number;
@@ -89,6 +156,8 @@ export type OrderResult = {
   orderId: string;
   orderRef: string;
   orderNumber?: string;
+  /** Secret key for the guest order lookup on the thank-you page. */
+  orderKey: string;
   status: string;
   paymentStatus?: string;
   grandTotal: number;
@@ -129,6 +198,24 @@ export const checkoutApi = api.injectEndpoints({
           method: "GET",
         };
       },
+      transformResponse: (res: ShippingRatesResponse): ShippingRate[] =>
+        (res?.options ?? []).map((o) => {
+          const min = o.transit?.minDays ?? undefined;
+          const max = o.transit?.maxDays ?? undefined;
+          return {
+            providerId: o.provider ?? o.code,
+            providerName: o.provider ?? o.name,
+            methodId: String(o.id),
+            methodName: o.name,
+            cost: o.finalRateBDT,
+            currency: "BDT",
+            minDeliveryDays: min,
+            maxDeliveryDays: max,
+            description: o.freeReason ? "Free delivery on this order" : o.description ?? undefined,
+            estimatedLabel:
+              min !== undefined && max !== undefined ? (min === max ? `${max} day${max === 1 ? "" : "s"}` : `${min}-${max} days`) : undefined,
+          };
+        }),
       providesTags: ["Order"],
     }),
 
@@ -145,16 +232,23 @@ export const checkoutApi = api.injectEndpoints({
       query: (args) => {
         const params = new URLSearchParams();
         if (args.countryCode) params.set("countryCode", args.countryCode);
-        if (args.division) params.set("division", args.division);
-        if (args.district) params.set("district", args.district);
         if (args.subtotal) params.set("subtotal", String(args.subtotal));
-        if (args.shipping) params.set("shipping", String(args.shipping));
+        if (args.division) params.set("state", args.division);
+        if (args.district) params.set("city", args.district);
+        if (args.shipping) params.set("shippingTotal", String(args.shipping));
         const qs = params.toString();
         return {
           url: qs ? `/storefront/shipping/taxes?${qs}` : `/storefront/shipping/taxes`,
           method: "GET",
         };
       },
+      transformResponse: (res: TaxesResponse) => ({
+        total: res?.totalTax ?? 0,
+        currency: "BDT",
+        lines: (res?.breakdown ?? [])
+          .filter((b) => b.amount > 0)
+          .map((b) => ({ name: b.name, rate: b.ratePct / 100, amount: b.amount })),
+      }),
       providesTags: ["Order"],
     }),
 
@@ -167,6 +261,7 @@ export const checkoutApi = api.injectEndpoints({
         cartItemsIds?: string[];
         shippingTotal?: number;
         countryCode?: string;
+        email?: string;
       }
     >({
       query: (body) => ({
@@ -185,6 +280,15 @@ export const checkoutApi = api.injectEndpoints({
       }),
       invalidatesTags: ["Order"],
     }),
+
+    getPaymentMethods: builder.query<PaymentMethodOption[], void>({
+      query: () => ({ url: `/storefront/checkout/payment-methods`, method: "GET" }),
+    }),
+
+    getOrderByKey: builder.query<OrderDetail, string>({
+      query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}`, method: "GET" }),
+      providesTags: (_res, _err, key) => [{ type: "Order" as const, id: key }],
+    }),
   }),
   overrideExisting: true,
 });
@@ -196,7 +300,27 @@ export const {
   useLazyGetTaxesQuery,
   useApplyCouponMutation,
   usePlaceOrderMutation,
+  useGetPaymentMethodsQuery,
+  useGetOrderByKeyQuery,
 } = checkoutApi;
+
+/**
+ * Human-readable message from an RTK Query error. Non-2xx responses carry the API
+ * envelope in `data` ({ message, errors }); envelope-level failures carry the errors
+ * map or the message itself (see @ecom/api-client baseQuery).
+ */
+export function apiErrorMessage(err: unknown, fallback = "Something went wrong. Please try again."): string {
+  const e = err as { data?: unknown; error?: string; message?: string } | undefined;
+  const data = e?.data as { message?: unknown; errors?: unknown } | string | undefined;
+  if (typeof data === "string" && data) return data;
+  if (data && typeof data === "object") {
+    const errors = (data.errors ?? (data.message === undefined ? data : undefined)) as Record<string, unknown> | undefined;
+    const first = errors && typeof errors === "object" ? Object.entries(errors)[0] : undefined;
+    if (first) return `${first[0]}: ${Array.isArray(first[1]) ? first[1].join(", ") : String(first[1])}`;
+    if (typeof data.message === "string" && data.message) return data.message;
+  }
+  return e?.error ?? e?.message ?? fallback;
+}
 
 export function mapCouponTypeToDisplay(
   t?: CouponType | string,

@@ -2,12 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
   Home,
-  Download,
   Truck,
   MapPin,
   CreditCard,
@@ -35,51 +34,14 @@ import {
   cn,
   formatMoney,
   toast,
-  useCart,
   CheckoutStepper,
+  useGetOrderByKeyQuery,
+  useGetProductsQuery,
+  type OrderAddressSummary,
 } from "@ecom/storefront-base";
 
 const CURRENCY = "BDT";
 const formatBDT = (n: number) => formatMoney(n, CURRENCY);
-
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=ty-${seed}&`);
-
-const CROSS_SELL: ProductCardData[] = [
-  {
-    id: "cs1",
-    slug: "cs-leather-belt",
-    title: "Premium Full-Grain Leather Belt — Black",
-    image: PLACEHOLDER_IMG("leather-belt"),
-    price: 1890,
-    rating: 4.6,
-    reviewCount: 189,
-  },
-  {
-    id: "cs2",
-    slug: "cs-cotton-socks",
-    title: "Organic Cotton Everyday Socks (Pack of 5)",
-    image: PLACEHOLDER_IMG("socks-pack"),
-    price: 990,
-    compareAtPrice: 1290,
-    rating: 4.4,
-    reviewCount: 320,
-    isOnSale: true,
-    discountPercent: 23,
-  },
-  {
-    id: "cs3",
-    slug: "cs-perfume",
-    title: "Signature Eau de Parfum — Royal Oud 100ml",
-    image: PLACEHOLDER_IMG("perfume-oud"),
-    price: 3890,
-    rating: 4.8,
-    reviewCount: 92,
-    isNew: true,
-  },
-];
 
 const PAYMENT_GATEWAY_LABELS: Record<string, string> = {
   [PaymentMethod.STRIPE]: "Credit / Debit Card (Stripe)",
@@ -91,10 +53,15 @@ const PAYMENT_GATEWAY_LABELS: Record<string, string> = {
   [PaymentMethod.BANK_TRANSFER]: "Bank Transfer",
 };
 
+const PAYMENT_STATUS_LABELS: Record<string, { label: string; variant: "default" | "success" | "secondary" | "destructive" }> = {
+  paid: { label: "Paid", variant: "success" },
+  unpaid: { label: "Awaiting Payment", variant: "secondary" },
+  failed: { label: "Payment Failed", variant: "destructive" },
+  refunded: { label: "Refunded", variant: "default" },
+};
+
 export default function ThankYouPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { items } = useCart();
   const [copied, setCopied] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
@@ -102,91 +69,24 @@ export default function ThankYouPage() {
     setMounted(true);
   }, []);
 
-  const orderRef = searchParams.get("orderRef") ?? "ORD-2026-8A7K2M9P";
-  const status = searchParams.get("status") ?? "CONFIRMED";
-  const paymentStatus = searchParams.get("paymentStatus") ?? "PENDING_COD";
-  const paymentGateway = (searchParams.get("gateway") as PaymentMethod) ?? PaymentMethod.COD;
-  const totalParam = Number(searchParams.get("total")) || 5230;
-
-  const paymentStatusLabel: Record<string, { label: string; variant: "default" | "success" | "secondary" | "destructive" }> = {
-    PAID: { label: "Paid", variant: "success" },
-    PENDING_COD: { label: "Pending — Cash On Delivery", variant: "secondary" },
-    PENDING_BANK_TRANSFER: { label: "Pending — Bank Transfer", variant: "secondary" },
-    PENDING_PAYMENT: { label: "Awaiting Payment", variant: "default" },
-    FAILED: { label: "Payment Failed", variant: "destructive" },
-  };
-  const pStatus = paymentStatusLabel[paymentStatus] ?? paymentStatusLabel.PENDING_PAYMENT;
+  const orderKey = searchParams.get("key") ?? "";
+  const { data: order, isLoading, isError } = useGetOrderByKeyQuery(orderKey, { skip: !orderKey });
+  const { data: suggestions } = useGetProductsQuery({ featured: true, perPage: 3, sort: "popular" });
+  const crossSell: ProductCardData[] = suggestions?.items ?? [];
 
   const expectedDelivery = React.useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 3);
-    const end = new Date();
-    end.setDate(end.getDate() + 6);
+    const d = order ? new Date(order.createdAt) : new Date();
+    const start = new Date(d);
+    start.setDate(start.getDate() + 2);
+    const end = new Date(d);
+    end.setDate(end.getDate() + 5);
     return {
-      start: d.toLocaleDateString("en-BD", { day: "numeric", month: "short" }),
+      start: start.toLocaleDateString("en-BD", { day: "numeric", month: "short" }),
       end: end.toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" }),
     };
-  }, []);
+  }, [order]);
 
-  const orderItems = React.useMemo(() => {
-    if (items.length > 0) return items;
-    return [
-      {
-        productId: "sample1",
-        title: "Richman Navy Cotton Shirt — Premium Long Sleeve",
-        image: PLACEHOLDER_IMG("shirt-navy-front"),
-        price: 3290,
-        qty: 1,
-        variantLabel: "Navy • Size M",
-      },
-      {
-        productId: "sample2",
-        title: "Premium Cotton Pocket Tissue (Pack of 10)",
-        image: PLACEHOLDER_IMG("tissue-pack"),
-        price: 420,
-        qty: 2,
-        variantLabel: "Original Pack",
-      },
-    ];
-  }, [items]);
-
-  const subtotal = orderItems.reduce((s, it) => s + it.price * it.qty, 0);
-  const shipping = Math.max(0, 120 - (subtotal >= 1000 ? 120 : 0));
-  const tax = Math.round((subtotal + shipping) * 0.15 * 100) / 100;
-  const grandTotal = Math.round((subtotal + shipping + tax) * 100) / 100;
-
-  const copyRef = async () => {
-    try {
-      await navigator.clipboard.writeText(orderRef);
-      setCopied(true);
-      toast.success("Copied!", { description: `Order #${orderRef} copied to clipboard` });
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Could not copy");
-    }
-  };
-
-  const mockCustomer = {
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "+8801700-000000",
-    shipping: {
-      name: "John Doe",
-      address: "House #42, Road #11, Banani",
-      city: "Dhaka — Dhanmondi",
-      postcode: "1205",
-      country: "Bangladesh",
-    },
-    billing: {
-      name: "John Doe",
-      address: "House #42, Road #11, Banani",
-      city: "Dhaka — Dhanmondi",
-      postcode: "1205",
-      country: "Bangladesh",
-    },
-  };
-
-  if (!mounted) {
+  if (!mounted || (orderKey && isLoading)) {
     return (
       <div className="container py-10">
         <div className="animate-pulse max-w-4xl mx-auto">
@@ -199,6 +99,54 @@ export default function ThankYouPage() {
       </div>
     );
   }
+
+  if (!orderKey || isError || !order) {
+    return (
+      <div className="container py-24 text-center max-w-xl">
+        <h1 className="text-2xl font-bold mb-2">We couldn't find that order</h1>
+        <p className="text-muted-foreground mb-6">The order link is incomplete or has expired. If you just placed an order, check your email or contact support with your phone number.</p>
+        <Button asChild>
+          <Link href="/">
+            <Home className="h-4 w-4 mr-2" /> Back to Home
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const orderRef = order.orderRef;
+  const status = order.status;
+  const paymentGateway = order.paymentGateway;
+  const pStatus =
+    order.paymentGateway === PaymentMethod.COD && order.paymentStatus === "unpaid"
+      ? { label: "Pay on Delivery", variant: "secondary" as const }
+      : PAYMENT_STATUS_LABELS[order.paymentStatus] ?? { label: order.paymentStatus, variant: "default" as const };
+  const orderItems = order.items;
+
+  const copyRef = async () => {
+    try {
+      await navigator.clipboard.writeText(orderRef);
+      setCopied(true);
+      toast.success("Copied!", { description: `Order #${orderRef} copied to clipboard` });
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
+
+  const addressLines = (a: OrderAddressSummary) => ({
+    name: a.name,
+    address: a.address,
+    city: [a.city, a.division].filter(Boolean).join(", "),
+    postcode: a.postcode ?? "",
+    country: a.country === "BD" ? "Bangladesh" : a.country ?? "",
+  });
+  const customer = {
+    email: order.email,
+    phone: order.phone ?? "",
+    shipping: addressLines(order.shipping),
+    billing: addressLines(order.billing),
+  };
 
   return (
     <div className="container py-6 md:py-10 max-w-6xl">
@@ -237,7 +185,7 @@ export default function ThankYouPage() {
           Your Order Has Been Received!
         </h1>
         <p className="text-muted-foreground mb-6 text-base md:text-lg">
-          Thank you for shopping with Fashion BD. We've sent a confirmation email with your order details.
+          Thank you for shopping with Fashion BD. Keep your order reference handy; we'll contact you on {customer.phone || "your phone"} before delivery.
         </p>
 
         <div className="inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/5 via-background to-secondary/5 border-2 border-primary/10 shadow-sm">
@@ -284,15 +232,15 @@ export default function ThankYouPage() {
             <CardContent className="space-y-4">
               <div className="space-y-3">
                 {orderItems.map((it) => {
-                  const lineTotal = Math.round(it.price * it.qty * 100) / 100;
+                  const lineTotal = it.lineTotal;
                   return (
                     <div
-                      key={`${it.productId}`}
+                      key={it.id}
                       className="flex gap-4 p-3 rounded-xl hover:bg-muted/30 transition-colors"
                     >
                       <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-slate-100 border flex-shrink-0">
                         <img
-                          src={(it as any).image}
+                          src={it.image}
                           alt={it.title}
                           className="h-full w-full object-cover"
                           loading="lazy"
@@ -305,9 +253,7 @@ export default function ThankYouPage() {
                         <p className="font-medium text-sm leading-tight line-clamp-2 mb-1">
                           {it.title}
                         </p>
-                        {(it as any).variantLabel && (
-                          <p className="text-xs text-muted-foreground">{(it as any).variantLabel}</p>
-                        )}
+                        {it.variantLabel && <p className="text-xs text-muted-foreground">{it.variantLabel}</p>}
                       </div>
                       <div className="text-right py-0.5 flex-shrink-0">
                         <p className="font-bold">{formatBDT(lineTotal)}</p>
@@ -323,24 +269,34 @@ export default function ThankYouPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">{formatBDT(subtotal)}</span>
+                  <span className="font-medium">{formatBDT(order.itemsSubtotal)}</span>
                 </div>
+                {order.discountTotal > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Coupon{order.couponUsed ? ` "${order.couponUsed}"` : ""}</span>
+                    <span className="font-medium">-{formatBDT(order.discountTotal)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span className={cn("font-medium", shipping === 0 && "text-green-600")}>
-                    {shipping === 0 ? "FREE" : formatBDT(shipping)}
+                  <span className="text-muted-foreground">Shipping ({order.shippingMethodName})</span>
+                  <span className={cn("font-medium", order.shippingTotal === 0 && "text-green-600")}>
+                    {order.shippingTotal === 0 ? "FREE" : formatBDT(order.shippingTotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">VAT (15%)</span>
-                  <span className="font-medium">{formatBDT(tax)}</span>
+                  <span className="text-muted-foreground">VAT</span>
+                  <span className="font-medium">{formatBDT(order.taxTotal)}</span>
                 </div>
+                {order.feeTotal > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment fee</span>
+                    <span className="font-medium">{formatBDT(order.feeTotal)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between items-baseline pt-1">
                   <span className="font-semibold">Grand Total</span>
-                  <span className="text-2xl font-black text-primary">
-                    {formatBDT(totalParam || grandTotal)}
-                  </span>
+                  <span className="text-2xl font-black text-primary">{formatBDT(order.grandTotal)}</span>
                 </div>
               </div>
             </CardContent>
@@ -355,14 +311,14 @@ export default function ThankYouPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
-                <div className="font-semibold">{mockCustomer.shipping.name}</div>
-                <div className="text-muted-foreground">{mockCustomer.shipping.address}</div>
+                <div className="font-semibold">{customer.shipping.name}</div>
+                <div className="text-muted-foreground">{customer.shipping.address}</div>
                 <div className="text-muted-foreground">
-                  {mockCustomer.shipping.city}, {mockCustomer.shipping.postcode}
+                  {customer.shipping.city}, {customer.shipping.postcode}
                 </div>
-                <div className="text-muted-foreground">{mockCustomer.shipping.country}</div>
+                <div className="text-muted-foreground">{customer.shipping.country}</div>
                 <div className="pt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Phone className="h-3 w-3" /> {mockCustomer.phone}
+                  <Phone className="h-3 w-3" /> {customer.phone}
                 </div>
               </CardContent>
             </Card>
@@ -374,12 +330,12 @@ export default function ThankYouPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
-                <div className="font-semibold">{mockCustomer.billing.name}</div>
-                <div className="text-muted-foreground">{mockCustomer.billing.address}</div>
+                <div className="font-semibold">{customer.billing.name}</div>
+                <div className="text-muted-foreground">{customer.billing.address}</div>
                 <div className="text-muted-foreground">
-                  {mockCustomer.billing.city}, {mockCustomer.billing.postcode}
+                  {customer.billing.city}, {customer.billing.postcode}
                 </div>
-                <div className="text-muted-foreground">{mockCustomer.billing.country}</div>
+                <div className="text-muted-foreground">{customer.billing.country}</div>
                 <Separator className="my-3" />
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Payment Method:</span>
@@ -424,16 +380,6 @@ export default function ThankYouPage() {
                   <Home className="h-4 w-4 mr-2" /> Continue Shopping
                 </Link>
               </Button>
-              <Button variant="outline" className="w-full h-11" onClick={() => toast.success("Generating invoice...")}>
-                <Download className="h-4 w-4 mr-2" /> Download Invoice PDF
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-11"
-                onClick={() => toast.info("Track order feature coming soon!")}
-              >
-                <Truck className="h-4 w-4 mr-2" /> Track Order
-              </Button>
             </CardContent>
           </Card>
 
@@ -441,34 +387,28 @@ export default function ThankYouPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Mail className="h-4 w-4 text-primary" />
-                Confirmation Sent To
+                Order Email
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40">
                 <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium break-all">{mockCustomer.email}</span>
+                <span className="text-sm font-medium break-all">{customer.email}</span>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Didn't receive it? Check your spam/junk folder or{" "}
-                <a href="/contact" className="text-primary hover:underline font-medium">
-                  contact support
-                </a>
-                .
-              </p>
             </CardContent>
           </Card>
         </div>
       </div>
 
+      {crossSell.length > 0 && (
       <section className="mb-10">
         <div className="flex items-end justify-between mb-6 gap-3">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
               <ShoppingBag className="h-6 w-6 text-primary" />
-              Customers Also Bought
+              You Might Also Like
             </h2>
-            <p className="text-muted-foreground mt-1">Frequently purchased together with your order</p>
+            <p className="text-muted-foreground mt-1">Popular picks from our store</p>
           </div>
           <Button variant="ghost" asChild>
             <Link href="/products">
@@ -477,11 +417,12 @@ export default function ThankYouPage() {
           </Button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-          {CROSS_SELL.map((p) => (
+          {crossSell.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>
       </section>
+      )}
 
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-5">

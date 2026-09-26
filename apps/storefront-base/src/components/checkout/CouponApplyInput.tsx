@@ -114,7 +114,7 @@ export function CouponApplyInput({
             <FormItem className="flex-1">
               <FormControl>
                 <Input
-                  placeholder="Enter code (e.g. EID20OFF)"
+                  placeholder="Enter coupon code"
                   value={couponCode}
                   onChange={(e) => onCouponCodeChange(e.target.value)}
                   disabled={applying}

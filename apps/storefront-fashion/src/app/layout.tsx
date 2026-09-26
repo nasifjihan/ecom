@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Navbar, Footer, CartDrawer, useCart } from "@ecom/storefront-base";
+import { Footer } from "@ecom/storefront-base";
+import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -96,41 +97,6 @@ export const viewport: Viewport = {
   maximumScale: 5,
   themeColor: "#7c3aed",
 };
-
-function NavbarWithCartState() {
-  "use client";
-  const { itemCount, openCart } = useCart();
-  return (
-    <Navbar
-      logo={{ name: "Fashion BD" }}
-      cartCount={itemCount}
-      wishlistCount={0}
-      onCartClick={openCart}
-      onWishlistClick={() => (window.location.href = "/wishlist")}
-      menuLinks={[
-        { label: "Home", href: "/" },
-        { label: "Products", href: "/products" },
-        {
-          label: "Categories",
-          href: "/categories",
-          children: [
-            { label: "Women", href: "/categories/women" },
-            { label: "Men", href: "/categories/men" },
-            { label: "Kids", href: "/categories/kids" },
-            { label: "Accessories", href: "/categories/accessories" },
-          ],
-        },
-        { label: "Brands", href: "/brands" },
-        { label: "Sale", href: "/products?sort=price_asc" },
-      ]}
-    />
-  );
-}
-
-function CartDrawerSlot() {
-  "use client";
-  return <CartDrawer storeName="Fashion BD" />;
-}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
