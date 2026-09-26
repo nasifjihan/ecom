@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -81,7 +81,6 @@ import {
   useCreateRefundMutation,
   useUpdateOrderShippingTrackingMutation,
   VALID_STATUS_TRANSITIONS,
-  STATUS_STYLES,
   PAYMENT_METHOD_META,
   type Order,
   type OrderStatus,
@@ -92,7 +91,7 @@ import {
 import { cn } from "@/components/ui";
 
 const STATUS_STYLES_LOCAL: Record<OrderStatus, string> = {
-  PENDING_PAYMENT:
+  PENDING:
     "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
   PROCESSING:
     "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
@@ -110,20 +109,21 @@ const STATUS_STYLES_LOCAL: Record<OrderStatus, string> = {
     "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
   DELIVERED:
     "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20",
-  RETURNED:
-    "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+  OUT_FOR_DELIVERY:
+    "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20",
 };
 
 const TIMELINE_STATUSES: OrderStatus[] = [
-  "PENDING_PAYMENT",
+  "PENDING",
   "PROCESSING",
   "SHIPPED",
+  "OUT_FOR_DELIVERY",
   "DELIVERED",
   "COMPLETED",
 ];
 
 const TIMELINE_LABELS: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: "Received",
+  PENDING: "Received",
   PROCESSING: "Processing",
   SHIPPED: "Shipped",
   DELIVERED: "Delivered",
@@ -132,7 +132,7 @@ const TIMELINE_LABELS: Record<OrderStatus, string> = {
   CANCELLED: "Cancelled",
   REFUNDED: "Refunded",
   FAILED: "Failed",
-  RETURNED: "Returned",
+  OUT_FOR_DELIVERY: "Out for Delivery",
 };
 
 const CARRIERS = ["Pathao", "RedX", "eCourier", "Paperfly", "SA Paribahan", "Sundarban", "Other"];
@@ -142,122 +142,6 @@ function getInitials(name: string) {
   if (parts.length === 0) return "??";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function mockOrder(id: string | number): Order & { notes: OrderNote[]; refunds: any[]; timeline: any[]; auditLog: any[] } {
-  const lines: OrderLine[] = [
-    {
-      id: 1, productVariantId: 101,
-      productName: "Premium Cotton Panjabi - Navy Blue",
-      sku: "PBN-NAVY-001",
-      imageUrl: "",
-      quantity: 2,
-      unitPrice: 2490,
-      lineTotal: 4980,
-    },
-    {
-      id: 2, productVariantId: 102,
-      productName: "Linen Shirt - White (Size L)",
-      sku: "LS-WHT-L",
-      imageUrl: "",
-      quantity: 1,
-      unitPrice: 1890,
-      lineTotal: 1890,
-    },
-    {
-      id: 3, productVariantId: 103,
-      productName: "Leather Wallet - Brown",
-      sku: "LW-BRN-001",
-      imageUrl: "",
-      quantity: 1,
-      unitPrice: 1290,
-      lineTotal: 1290,
-    },
-  ];
-  const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const shipping = 120;
-  const vat = Math.round(subtotal * 0.15);
-  const discount = 200;
-  return {
-    id,
-    orderNumber: `#ORD-${10000 + Number(id)}`,
-    customerId: 1,
-    customerName: "Farhana Rahman",
-    customerEmail: "farhana.rahman@example.com",
-    customerPhone: "+880 1712 345 678",
-    status: "PROCESSING",
-    paymentMethod: "BKASH",
-    paymentStatus: "PAID",
-    transactionId: "bKash_2X8A7F9K",
-    paidAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    shippingMethod: "Pathao Express",
-    shippingZone: "DHAKA_METRO",
-    trackingNo: "PATH" + Math.round(Math.random() * 1e9),
-    carrier: "Pathao",
-    shippedAt: undefined,
-    deliveredAt: undefined,
-    subtotal,
-    shippingCost: shipping,
-    vatAmount: vat,
-    discountAmount: discount,
-    couponCode: "WELCOME10",
-    grandTotal: subtotal + shipping + vat - discount,
-    billingAddress: {
-      firstName: "Farhana", lastName: "Rahman",
-      company: "",
-      address1: "House 15, Road 7, Block A",
-      address2: "Banani",
-      country: "Bangladesh",
-      division: "Dhaka",
-      district: "Dhaka",
-      postcode: "1213",
-      phone: "+880 1712 345 678",
-      email: "farhana.rahman@example.com",
-    },
-    shippingAddress: {
-      firstName: "Farhana", lastName: "Rahman",
-      company: "",
-      address1: "House 15, Road 7, Block A",
-      address2: "Banani",
-      country: "Bangladesh",
-      division: "Dhaka",
-      district: "Dhaka",
-      postcode: "1213",
-      phone: "+880 1712 345 678",
-      email: "farhana.rahman@example.com",
-    },
-    lines,
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    assignedToUserId: 1,
-    itemsCount: lines.reduce((s, l) => s + l.quantity, 0),
-    notes: [
-      {
-        id: 1,
-        content: "Customer requested delivery after 5 PM if possible.",
-        type: "INTERNAL",
-        userId: 1, userName: "Admin User",
-        createdAt: new Date(Date.now() - 3600000 * 20).toISOString(),
-      },
-      {
-        id: 2,
-        content: "Thank you for your order! It is being prepared for shipment.",
-        type: "CUSTOMER",
-        userId: 1, userName: "Admin User",
-        createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-      },
-    ],
-    refunds: [],
-    timeline: [
-      { status: "PENDING_PAYMENT", timestamp: new Date(Date.now() - 3600000 * 24).toISOString() },
-      { status: "PROCESSING", timestamp: new Date(Date.now() - 3600000 * 12).toISOString() },
-    ],
-    auditLog: [
-      { id: 1, action: "Created", userName: "System", createdAt: new Date(Date.now() - 3600000 * 24).toISOString() },
-      { id: 2, action: "Status changed", field: "status", oldValue: "PENDING_PAYMENT", newValue: "PROCESSING", userName: "Admin User", createdAt: new Date(Date.now() - 3600000 * 12).toISOString() },
-      { id: 3, action: "Payment received", field: "paymentStatus", oldValue: "UNPAID", newValue: "PAID", userName: "System", createdAt: new Date(Date.now() - 3600000 * 12).toISOString() },
-    ],
-  };
 }
 
 function formatDate(iso: string) {
@@ -274,7 +158,8 @@ export default function OrderDetailPage() {
   const orderId = params.id ?? "1";
 
   const { data: orderRaw, isLoading } = useGetOrderQuery(orderId);
-  const order = (orderRaw as any) ?? mockOrder(orderId);
+  // Placeholder keeps the hooks below safe until the order loads (or turns out not to exist).
+  const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
 
   const [updateStatus] = useUpdateOrderStatusMutation();
   const [triggerInvoicePdf] = useLazyGenerateOrderInvoicePdfQuery();
@@ -292,6 +177,12 @@ export default function OrderDetailPage() {
   const [carrier, setCarrier] = useState(order.carrier ?? "");
   const [trackingNo, setTrackingNo] = useState(order.trackingNo ?? "");
   const [shipDate, setShipDate] = useState("");
+
+  useEffect(() => {
+    if (!orderRaw) return;
+    setCarrier(orderRaw.carrier ?? "");
+    setTrackingNo(orderRaw.trackingNo ?? "");
+  }, [orderRaw]);
 
   const allowedTransitions = VALID_STATUS_TRANSITIONS[order.status as OrderStatus] ?? [];
 
@@ -376,6 +267,18 @@ export default function OrderDetailPage() {
           <Skeleton className="h-96 rounded-xl" />
           <Skeleton className="h-96 rounded-xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (!orderRaw) {
+    return (
+      <div className="py-24 text-center">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Order not found</h1>
+        <p className="mt-2 text-sm text-slate-500">It may have been deleted, or it belongs to another store.</p>
+        <Link href="/orders" className="mt-6 inline-block text-sm font-medium text-indigo-600 hover:underline">
+          Back to orders
+        </Link>
       </div>
     );
   }
@@ -632,7 +535,7 @@ export default function OrderDetailPage() {
                     </div>
                   );
                 })}
-                {["ON_HOLD", "CANCELLED", "RETURNED", "REFUNDED", "FAILED"].includes(order.status) && (
+                {["ON_HOLD", "CANCELLED", "REFUNDED", "FAILED"].includes(order.status) && (
                   <div className="relative mt-2">
                     <div className={cn(
                       "absolute -left-6 top-0.5 h-5 w-5 rounded-full border-2",

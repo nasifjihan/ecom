@@ -415,8 +415,9 @@ export class OrdersService extends BaseService {
   }
 
   async getOrderById(id: bigint) {
-    const bid = BigInt(id);
-    return this.orders.findById(this.ctx, bid);
+    const order = await this.orders.findDetailById(BigInt(id), this.ctx);
+    if (!order) throw new NotFoundError("order", id);
+    return order;
   }
 
   async getOrderByNumber(number: string) {

@@ -17,7 +17,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import {
-  Form,
+  FormProvider,
   FormControl,
   FormField,
   FormItem,
@@ -231,7 +231,7 @@ export default function LoginPage() {
                 </p>
               </motion.div>
 
-              <Form {...form}>
+              <FormProvider {...form}>
                 <form
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="mt-8 space-y-6"
@@ -384,7 +384,7 @@ export default function LoginPage() {
                     </Button>
                   </motion.div>
                 </form>
-              </Form>
+              </FormProvider>
 
               <motion.p
                 initial={{ opacity: 0 }}

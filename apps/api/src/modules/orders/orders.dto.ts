@@ -43,9 +43,13 @@ const IPN_PROVIDERS = [
   "cod",
 ] as const;
 
+/** Query-string arrays: accepts ?status=A,B, ?status=A&status=B or a real array. */
+const csvArray = <T extends z.ZodTypeAny>(item: T) =>
+  z.preprocess((v) => (typeof v === "string" ? v.split(",").filter(Boolean) : v), z.array(item));
+
 const BaseOrderSearchQueryDto = PaginationSchema.extend({
-  status: z.array(z.enum(ORDER_STATUSES)).optional(),
-  paymentStatus: z.array(z.string()).optional(),
+  status: csvArray(z.enum(ORDER_STATUSES)).optional(),
+  paymentStatus: csvArray(z.string()).optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
   minTotal: z.coerce.number().nonnegative().optional(),
@@ -287,8 +291,8 @@ export const IpnProviderParamDto = z.object({
 export type IpnProviderParamDto = z.infer<typeof IpnProviderParamDto>;
 
 const BaseExportOrdersDto = PaginationSchema.extend({
-  status: z.array(z.enum(ORDER_STATUSES)).optional(),
-  paymentStatus: z.array(z.string()).optional(),
+  status: csvArray(z.enum(ORDER_STATUSES)).optional(),
+  paymentStatus: csvArray(z.string()).optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
   minTotal: z.coerce.number().nonnegative().optional(),

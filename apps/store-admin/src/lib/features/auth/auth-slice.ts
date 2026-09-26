@@ -52,6 +52,13 @@ const authSlice = createSlice({
         }
       }
     },
+    setAccessToken: (state, action: PayloadAction<string>) => {
+      state.accessToken = action.payload;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("accessToken", action.payload);
+        document.cookie = `accessToken=${action.payload}; path=/; SameSite=Lax`;
+      }
+    },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -70,5 +77,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, logout } = authSlice.actions;
+export const { setCredentials, setAccessToken, logout } = authSlice.actions;
 export default authSlice.reducer;

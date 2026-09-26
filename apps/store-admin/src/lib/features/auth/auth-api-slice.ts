@@ -42,25 +42,56 @@ export interface MeResponse {
   permissions: string[];
 }
 
+/** AdminUser row as returned by /auth/admin/login and /auth/me/admin. */
+interface ApiAdminUser {
+  id: string;
+  storeId: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  role?: { name: string; permissions?: { permission: string }[] } | null;
+}
+
+const toAuthUser = (u: ApiAdminUser) => ({
+  id: u.id,
+  name: u.name,
+  email: u.email,
+  role: u.role?.name,
+  avatar: u.avatarUrl ?? null,
+});
+
 export const authApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginCredentials>({
-      query: (credentials) => ({
-        url: "/auth/login",
+      query: ({ email, password }) => ({
+        url: "/auth/admin/login",
         method: "POST",
-        body: credentials,
+        body: { email, password },
+      }),
+      // The refresh token is set as an httpOnly cookie by the API, not returned in the body.
+      transformResponse: (res: { accessToken: string; user: ApiAdminUser; permissions: string[] }) => ({
+        user: toAuthUser(res.user),
+        accessToken: res.accessToken,
+        refreshToken: "",
+        storeId: res.user.storeId,
+        permissions: res.permissions,
       }),
       invalidatesTags: ["Me"],
     }),
-    refresh: builder.mutation<{ accessToken: string }, { refreshToken: string }>({
-      query: (body) => ({
-        url: "/auth/refresh",
+    refresh: builder.mutation<{ accessToken: string }, void>({
+      query: () => ({
+        url: "/auth/admin/refresh",
         method: "POST",
-        body,
+        body: {},
       }),
     }),
     me: builder.query<MeResponse, void>({
-      query: () => "/auth/me",
+      query: () => "/auth/me/admin",
+      transformResponse: (u: ApiAdminUser) => ({
+        user: toAuthUser(u),
+        storeId: u.storeId,
+        permissions: u.role?.permissions?.map((p) => p.permission) ?? [],
+      }),
       providesTags: ["Me"],
     }),
     logout: builder.mutation<void, void>({

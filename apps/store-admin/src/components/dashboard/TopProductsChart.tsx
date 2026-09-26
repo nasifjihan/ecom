@@ -27,14 +27,6 @@ export interface TopProduct {
   revenue: number;
 }
 
-const MOCK_PRODUCTS: TopProduct[] = [
-  { id: 1, name: "Premium Cotton Panjabi", sales: 142, revenue: 85200 },
-  { id: 2, name: "Silk Saree - Royal Blue", sales: 98, revenue: 78400 },
-  { id: 3, name: "Kids' T-Shirt Pack", sales: 187, revenue: 56100 },
-  { id: 4, name: "Denim Jeans Slim Fit", sales: 76, revenue: 45600 },
-  { id: 5, name: "Winter Cardigan", sales: 63, revenue: 37800 },
-];
-
 const BAR_COLORS = [
   "#6366f1",
   "#8b5cf6",
@@ -54,7 +46,7 @@ export default function TopProductsChart({
   loading = false,
   limit = 5,
 }: TopProductsChartProps) {
-  const products = data ?? MOCK_PRODUCTS;
+  const products = data ?? [];
   const chartData = useMemo(
     () =>
       products.slice(0, limit).map((p) => ({

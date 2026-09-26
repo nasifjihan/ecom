@@ -9,6 +9,24 @@ export class OrderRepository extends BaseRepository<"order"> {
     super("order");
   }
 
+  /** Admin order detail: lines, full status history, refunds and the linked customer. */
+  async findDetailById(id: bigint, ctx: RequestContext): Promise<unknown | null> {
+    const where: Record<string, unknown> = { id };
+    if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    return (this.q as any).findFirst({
+      where,
+      include: {
+        items: { orderBy: { id: "asc" } },
+        statusHistory: {
+          orderBy: { createdAt: "desc" },
+          include: { admin: { select: { id: true, name: true } } },
+        },
+        refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
+        customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      },
+    });
+  }
+
   async findByNumber(number: string, ctx: RequestContext): Promise<unknown | null> {
     const where: Record<string, unknown> = { number };
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
@@ -127,37 +145,30 @@ export class OrderRepository extends BaseRepository<"order"> {
     byStatus: { status: string; count: number; total: number }[];
     byPaymentStatus: { paymentStatus: string; count: number }[];
   }> {
-    const storeClause = ctx.storeId !== undefined ? `"storeId" = ${Number(ctx.storeId)}` : "1=1";
-    const statusIn = filters.status && filters.status.length > 0
-      ? `AND status IN (${filters.status.map((s) => `'${s}'`).join(",")})`
-      : "";
-    const psIn = filters.paymentStatus && filters.paymentStatus.length > 0
-      ? `AND "paymentStatus" IN (${filters.paymentStatus.map((s) => `'${s}'`).join(",")})`
-      : "";
-    const dateFrom = filters.dateFrom
-      ? `AND "createdAt" >= '${filters.dateFrom.toISOString()}'`
-      : "";
-    const dateTo = filters.dateTo
-      ? `AND "createdAt" <= '${filters.dateTo.toISOString()}'`
-      : "";
+    // Built with Prisma filters (not string-built SQL) so query-string values are always bound parameters.
+    const where: Record<string, unknown> = {};
+    if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    if (filters.status?.length) where.status = { in: filters.status };
+    if (filters.paymentStatus?.length) where.paymentStatus = { in: filters.paymentStatus };
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {
+        ...(filters.dateFrom ? { gte: filters.dateFrom } : {}),
+        ...(filters.dateTo ? { lte: filters.dateTo } : {}),
+      };
+    }
 
-    const byStatusRaw = await prisma.$queryRawUnsafe(`
-      SELECT status, COUNT(*)::int as count, COALESCE(SUM("grandTotal"),0)::float as total
-      FROM "Order"
-      WHERE ${storeClause} ${statusIn} ${psIn} ${dateFrom} ${dateTo}
-      GROUP BY status
-    `) as unknown as { status: string; count: number; total: number }[];
-
-    const byPaymentStatusRaw = await prisma.$queryRawUnsafe(`
-      SELECT "paymentStatus", COUNT(*)::int as count
-      FROM "Order"
-      WHERE ${storeClause} ${statusIn} ${psIn} ${dateFrom} ${dateTo}
-      GROUP BY "paymentStatus"
-    `) as unknown as { paymentStatus: string; count: number }[];
+    const [byStatusRows, byPaymentRows] = await Promise.all([
+      prisma.order.groupBy({ by: ["status"], where: where as any, _count: { _all: true }, _sum: { grandTotal: true } }),
+      prisma.order.groupBy({ by: ["paymentStatus"], where: where as any, _count: { _all: true } }),
+    ]);
 
     return {
-      byStatus: byStatusRaw,
-      byPaymentStatus: byPaymentStatusRaw,
+      byStatus: byStatusRows.map((r) => ({
+        status: String(r.status),
+        count: r._count._all,
+        total: Number(r._sum.grandTotal ?? 0),
+      })),
+      byPaymentStatus: byPaymentRows.map((r) => ({ paymentStatus: r.paymentStatus, count: r._count._all })),
     };
   }
 

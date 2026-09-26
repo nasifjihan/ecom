@@ -2,15 +2,12 @@
 
 import { api } from "@ecom/api-client";
 
-export interface DashboardStats {
-  totalRevenue: number;
-  ordersCount: number;
-  customersCount: number;
-  conversionRate: number;
-  revenueDelta?: number;
-  ordersDelta?: number;
-  customersDelta?: number;
-  conversionDelta?: number;
+export interface DashboardTotals {
+  /** Paid orders only, within the window. */
+  revenue: number;
+  orders: number;
+  customers: number;
+  averageOrderValue: number;
 }
 
 export interface RevenueChartPoint {
@@ -34,51 +31,21 @@ export interface RecentOrder {
   total: number;
 }
 
-export interface DashboardQueries {
-  from?: string;
-  to?: string;
-  days?: number;
-  limit?: number;
+export interface DashboardOverview {
+  totals: DashboardTotals;
+  revenueChart: RevenueChartPoint[];
+  topProducts: TopProduct[];
+  recentOrders: RecentOrder[];
 }
 
 export const dashboardApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
-    getDashboardStats: builder.query<DashboardStats, DashboardQueries>({
-      query: ({ from, to }) => {
-        const params = new URLSearchParams();
-        if (from) params.set("from", from);
-        if (to) params.set("to", to);
-        return {
-          url: `/admin/dashboard/stats?${params.toString()}`,
-          method: "GET",
-        };
-      },
-    }),
-    getRevenueChart: builder.query<RevenueChartPoint[], { days?: number }>({
-      query: ({ days = 30 }) => ({
-        url: `/admin/dashboard/revenue-chart?days=${days}`,
-        method: "GET",
-      }),
-    }),
-    getTopProducts: builder.query<TopProduct[], { limit?: number }>({
-      query: ({ limit = 5 }) => ({
-        url: `/admin/dashboard/top-products?limit=${limit}`,
-        method: "GET",
-      }),
-    }),
-    getRecentOrders: builder.query<RecentOrder[], { limit?: number }>({
-      query: ({ limit = 10 }) => ({
-        url: `/admin/dashboard/recent-orders?limit=${limit}`,
-        method: "GET",
-      }),
+    getDashboardOverview: builder.query<DashboardOverview, { days?: number }>({
+      query: ({ days = 30 }) => `/admin/dashboard/overview?days=${days}`,
+      providesTags: ["Order", "Product", "Customer"],
     }),
   }),
   overrideExisting: false,
 });
 
-export const {
-  useGetDashboardStatsQuery,
-  useGetRevenueChartQuery,
-  useGetTopProductsQuery,
-  useGetRecentOrdersQuery,
-} = dashboardApiSlice;
+export const { useGetDashboardOverviewQuery } = dashboardApiSlice;

@@ -33,6 +33,10 @@ export class DashboardService extends BaseService {
     return this.storeRepo.getStoreStats(r);
   }
 
+  async getStoreOverview(days: number) {
+    return this.storeRepo.getStoreOverview(days);
+  }
+
   async exportStoreDashboard(
     dto: StoreDashboardExportDto,
   ): Promise<{ buffer: Uint8Array; contentType: string; contentDisposition: string }> {

@@ -31,6 +31,12 @@ export type ApiEnvelope<T> = {
 };
 
 type GetTokenFn = () => string | null | undefined;
+type RefreshOpts = {
+  /** POSTed with the httpOnly refresh cookie when a request returns 401, e.g. "/auth/admin/refresh". */
+  path: string;
+  /** Called with the new access token, or null when the refresh failed (session is over). */
+  onRefreshed: (accessToken: string | null) => void;
+};
 
 /**
  * Defaults to process.env — overridable in each Next app via configureBase() at boot.
@@ -41,9 +47,17 @@ let getToken: GetTokenFn = () => {
   return window.localStorage.getItem("accessToken");
 };
 
-export function configureApiClient(opts: { baseUrl: string; getToken?: GetTokenFn }): void {
+let refreshOpts: RefreshOpts | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
+
+export function configureApiClient(opts: {
+  baseUrl: string;
+  getToken?: GetTokenFn;
+  refresh?: RefreshOpts;
+}): void {
   apiBaseUrl = opts.baseUrl;
   if (opts.getToken) getToken = opts.getToken;
+  if (opts.refresh) refreshOpts = opts.refresh;
 }
 
 const rawBaseQuery = fetchBaseQuery({
@@ -68,7 +82,23 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
   api: any,
   extraOptions: any,
 ) => {
-  const res = await rawBaseQuery(args, api, extraOptions);
+  let res = await rawBaseQuery(args, api, extraOptions);
+
+  // Access tokens are short-lived: on 401, refresh once via the httpOnly cookie and retry.
+  const url = typeof args === "string" ? args : args.url;
+  if (res.error?.status === 401 && refreshOpts && url !== refreshOpts.path) {
+    const opts = refreshOpts;
+    refreshInFlight ??= (async () => {
+      const r = await rawBaseQuery({ url: opts.path, method: "POST", body: {} }, api, extraOptions);
+      const token = (r.data as ApiEnvelope<{ accessToken?: string }> | undefined)?.data?.accessToken ?? null;
+      opts.onRefreshed(token);
+      return token;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+    if (await refreshInFlight) res = await rawBaseQuery(args, api, extraOptions);
+  }
+
   if (res.error) return { error: res.error };
   const envelope = res.data as ApiEnvelope<unknown>;
   if (!envelope?.success) {
@@ -81,6 +111,26 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
   }
   return { data: envelope.data, meta: envelope.meta as any };
 }) as BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>;
+
+/** Pagination as list endpoints report it in `envelope.meta`. */
+export type ApiPageMeta = { page: number; perPage: number; total: number; totalPages: number };
+
+export type Paginated<T> = { items: T[]; total: number; page: number; limit: number; totalPages: number };
+
+/**
+ * List endpoints return `data: T[]` with pagination in `meta`. Use in `transformResponse(items, meta)`
+ * to get the `{ items, total, page, limit, totalPages }` shape the admin tables expect.
+ */
+export function toPaginated<T>(items: T[], meta: unknown): Paginated<T> {
+  const m = (meta ?? {}) as Partial<ApiPageMeta>;
+  return {
+    items,
+    total: m.total ?? items.length,
+    page: m.page ?? 1,
+    limit: m.perPage ?? items.length,
+    totalPages: m.totalPages ?? 1,
+  };
+}
 
 export const api = createApi({
   reducerPath: "ecomApi",

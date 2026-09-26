@@ -1303,3 +1303,29 @@ The idempotent "BATCH #10 BASELINE" block adds 7 categories under Women, Men and
 - The 14 pre-existing storefront type errors are listed above.
 - Batch 10 needs no schema change, so the init migration still covers it (`prisma migrate deploy` + seed on a fresh DB).
 
+
+## ✅ BATCH #11 (part 1) — Store admin on the real API: login, dashboard, orders (2026-09-26)
+
+### 11.1 Admin app fixes found running it locally
+- Every admin/super-admin page returned 500: `globals.css` used `@layer base` without `@tailwind` directives. Added them.
+- Login form nested `<form>` inside `<form>` (shadcn `Form` here renders a `<form>`), so Sign in did a native GET with the password in the URL. Login now wraps fields in `FormProvider`.
+- `DropdownMenu` was always open and `DropdownMenuItem` dropped its children, so every menu in admin was a permanently open, empty box. It now toggles from the trigger and closes on outside click, Escape or picking an item.
+
+### 11.2 Auth
+- Admin uses `/auth/admin/login`, `/auth/admin/refresh`, `/auth/me/admin` (responses mapped to the existing `LoginResponse` / `MeResponse` shapes).
+- `@ecom/api-client` gained an opt-in refresh: on 401 it POSTs `refresh.path` once (httpOnly cookie), stores the new token and retries; if refresh fails the admin logs out to `/login?redirect=`.
+- Local dev needs `COOKIE_DOMAIN=localhost` in `.env` (the example's `.local-ecom.dev` makes the browser drop the refresh cookie on localhost).
+
+### 11.3 Dashboard
+- New `GET /api/admin/dashboard/overview?days=30`: paid revenue, order count, customer count, average order value, daily paid-revenue series, top 5 products by units, 10 latest orders. Admin dashboard uses it; all mock data removed. The "Conversion rate" card became "Avg. order value" (no session tracking exists).
+
+### 11.4 Orders
+- `GET /admin/orders/:id` now includes items, full status history (with admin name), refunds and customer (it returned the bare row before).
+- Order list filters accept `?status=A,B` (was array-only, so any single status 422'd).
+- `aggregateStats` built SQL by string interpolation from query params (`paymentStatus` was injectable). Rewritten with Prisma `groupBy`.
+- Admin `OrderStatus` now mirrors the API enum (PENDING … OUT_FOR_DELIVERY; no PENDING_PAYMENT/RETURNED) and `VALID_STATUS_TRANSITIONS` matches `OrdersService`.
+- List uses real rows plus per-status tab counts; detail shows real lines, addresses, totals, timeline and status-change history; status changes POST `/:id/status`. Bulk status/cancel apply per order and report how many were refused. Mock orders removed.
+- `toPaginated(items, meta)` in `@ecom/api-client` maps list `meta` to the admin `{ items, total, page, limit, totalPages }` shape.
+
+### 11.5 Still not wired (API has no endpoint yet)
+Order invoice PDF, order email, order notes, shipping tracking update, refunds UI mapping. Products/catalog, customers, marketing, inventory and settings pages are next.

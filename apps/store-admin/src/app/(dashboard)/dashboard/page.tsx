@@ -11,41 +11,44 @@ import StatCard, { StatCardSkeleton } from "@/components/dashboard/StatCard";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import TopProductsChart from "@/components/dashboard/TopProductsChart";
 import RecentOrdersTable from "@/components/dashboard/RecentOrdersTable";
-import { useGetDashboardStatsQuery } from "@/lib/features/dashboard/dashboard-api-slice";
+import { useGetDashboardOverviewQuery } from "@/lib/features/dashboard/dashboard-api-slice";
+
+const DAYS = 30;
 
 export default function DashboardHomePage() {
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStatsQuery({});
+  const { data, isLoading: statsLoading } = useGetDashboardOverviewQuery({ days: DAYS });
+  const totals = data?.totals;
+  const revenueChart = data?.revenueChart.map((p) => ({
+    date: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    revenue: p.revenue,
+  }));
 
   const statConfigs = [
     {
       icon: TrendingUp,
-      label: "Total Revenue",
-      value: stats ? `৳ ${stats.totalRevenue.toLocaleString()}` : "৳ 0",
-      delta: stats?.revenueDelta ?? 12.5,
+      label: `Paid Revenue (${DAYS}d)`,
+      value: `৳ ${(totals?.revenue ?? 0).toLocaleString()}`,
       iconColor: "text-emerald-600 dark:text-emerald-400",
       iconBgColor: "bg-emerald-50 dark:bg-emerald-500/10",
     },
     {
       icon: ShoppingCart,
-      label: "Orders",
-      value: stats ? stats.ordersCount.toLocaleString() : "0",
-      delta: stats?.ordersDelta ?? 8.2,
+      label: `Orders (${DAYS}d)`,
+      value: (totals?.orders ?? 0).toLocaleString(),
       iconColor: "text-indigo-600 dark:text-indigo-400",
       iconBgColor: "bg-indigo-50 dark:bg-indigo-500/10",
     },
     {
       icon: User2,
       label: "Customers",
-      value: stats ? stats.customersCount.toLocaleString() : "0",
-      delta: stats?.customersDelta ?? 5.3,
+      value: (totals?.customers ?? 0).toLocaleString(),
       iconColor: "text-purple-600 dark:text-purple-400",
       iconBgColor: "bg-purple-50 dark:bg-purple-500/10",
     },
     {
       icon: LayoutGrid,
-      label: "Conversion Rate",
-      value: stats ? `${stats.conversionRate.toFixed(1)}%` : "0%",
-      delta: stats?.conversionDelta ?? -1.8,
+      label: "Avg. Order Value",
+      value: `৳ ${(totals?.averageOrderValue ?? 0).toLocaleString()}`,
       iconColor: "text-amber-600 dark:text-amber-400",
       iconBgColor: "bg-amber-50 dark:bg-amber-500/10",
     },
@@ -76,14 +79,14 @@ export default function DashboardHomePage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueChart loading={statsLoading} days={30} />
+          <RevenueChart data={revenueChart} loading={statsLoading} days={DAYS} />
         </div>
         <div className="lg:col-span-1">
-          <TopProductsChart loading={statsLoading} limit={5} />
+          <TopProductsChart data={data?.topProducts} loading={statsLoading} limit={5} />
         </div>
       </div>
 
-      <RecentOrdersTable loading={statsLoading} limit={10} />
+      <RecentOrdersTable data={data?.recentOrders} loading={statsLoading} limit={10} />
     </div>
   );
 }

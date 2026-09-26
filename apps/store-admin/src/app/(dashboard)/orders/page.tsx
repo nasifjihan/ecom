@@ -85,25 +85,26 @@ import {
   type OrderStatus,
   type PaymentMethod,
   type ShippingZone,
+  PAYMENT_METHOD_META,
 } from "@/lib/features/operations/operations-api-slice";
 import { cn } from "@/components/ui";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
-  { key: "PENDING_PAYMENT", label: "Pending Payment" },
+  { key: "PENDING", label: "Pending" },
   { key: "PROCESSING", label: "Processing" },
   { key: "ON_HOLD", label: "On Hold" },
+  { key: "SHIPPED", label: "Shipped" },
+  { key: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+  { key: "DELIVERED", label: "Delivered" },
   { key: "COMPLETED", label: "Completed" },
   { key: "CANCELLED", label: "Cancelled" },
   { key: "REFUNDED", label: "Refunded" },
   { key: "FAILED", label: "Failed" },
-  { key: "SHIPPED", label: "Shipped" },
-  { key: "DELIVERED", label: "Delivered" },
-  { key: "RETURNED", label: "Returned" },
 ];
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
-  PENDING_PAYMENT:
+  PENDING:
     "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
   PROCESSING:
     "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
@@ -121,21 +122,8 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
     "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
   DELIVERED:
     "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20",
-  RETURNED:
-    "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
-};
-
-const PAYMENT_METHOD_META: Record<
-  PaymentMethod,
-  { label: string; color: string }
-> = {
-  STRIPE: { label: "Stripe", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400" },
-  BKASH: { label: "bKash", color: "bg-pink-100 text-pink-700 dark:bg-pink-500/10 dark:text-pink-400" },
-  NAGAD: { label: "Nagad", color: "bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400" },
-  ROCKET: { label: "Rocket", color: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400" },
-  SSLCOMMERZ: { label: "SSLCommerz", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400" },
-  COD: { label: "COD", color: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" },
-  BANK_TRANSFER: { label: "Bank Transfer", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" },
+  OUT_FOR_DELIVERY:
+    "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20",
 };
 
 const DATE_PRESETS = ["Today", "Yesterday", "7 days", "30 days", "Custom"];
@@ -180,73 +168,6 @@ function formatCurrency(n: number) {
   return `৳ ${n.toLocaleString()}`;
 }
 
-function generateMockOrders(count: number): Order[] {
-  const statuses: OrderStatus[] = [
-    "PENDING_PAYMENT",
-    "PROCESSING",
-    "ON_HOLD",
-    "COMPLETED",
-    "CANCELLED",
-    "REFUNDED",
-    "FAILED",
-    "SHIPPED",
-    "DELIVERED",
-    "RETURNED",
-  ];
-  const paymentMethods: PaymentMethod[] = [
-    "STRIPE",
-    "BKASH",
-    "NAGAD",
-    "ROCKET",
-    "SSLCOMMERZ",
-    "COD",
-    "BANK_TRANSFER",
-  ];
-  const names = [
-    "Farhana Rahman",
-    "MD. Karim Hossain",
-    "Nusrat Jahan",
-    "Sakib Ahmed",
-    "Tasnim Akter",
-    "Rafiqul Islam",
-    "Ayesha Siddika",
-    "Hasan Mahmud",
-    "Fatema Khatun",
-    "Jahidul Hasan",
-    "Samia Sultana",
-    "Imran Khan",
-  ];
-  const orders: Order[] = [];
-  for (let i = 0; i < count; i++) {
-    const name = names[i % names.length];
-    const status = statuses[i % statuses.length];
-    const pm = paymentMethods[i % paymentMethods.length];
-    const total = 500 + (i * 317) % 50000;
-    orders.push({
-      id: 1000 + i,
-      orderNumber: `#ORD-${10234 - i}`,
-      customerName: name,
-      customerEmail: `${name.toLowerCase().replace(/\s+/g, ".")}@example.com`,
-      customerPhone: `+880 17${String(10000000 + i).slice(-8)}`,
-      status,
-      paymentMethod: pm,
-      shippingMethod: i % 3 === 0 ? "Pathao Express" : i % 3 === 1 ? "RedX Delivery" : "eCourier Standard",
-      shippingZone: i % 3 === 0 ? "DHAKA_METRO" : i % 3 === 1 ? "REST_BD" : "INTERNATIONAL",
-      subtotal: Math.round(total * 0.85),
-      shippingCost: i % 5 === 0 ? 120 : 60,
-      vatAmount: Math.round(total * 0.15),
-      discountAmount: i % 4 === 0 ? 200 : 0,
-      couponCode: i % 4 === 0 ? "WELCOME10" : undefined,
-      grandTotal: total,
-      createdAt: new Date(Date.now() - i * 3600000 * 6).toISOString(),
-      updatedAt: new Date(Date.now() - i * 3600000 * 6).toISOString(),
-      lines: [],
-      itemsCount: 1 + (i % 4),
-    });
-  }
-  return orders;
-}
-
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
@@ -277,19 +198,8 @@ export default function OrdersPage() {
   const [bulkUpdateStatus] = useBulkUpdateOrderStatusMutation();
   const [triggerInvoicePdf] = useLazyGenerateOrderInvoicePdfQuery();
 
-  const orders = data?.items ?? generateMockOrders(20);
-  const statusCounts: Record<string, number> = data?.statusCounts ?? {
-    PENDING_PAYMENT: 4,
-    PROCESSING: 6,
-    ON_HOLD: 2,
-    COMPLETED: 12,
-    CANCELLED: 3,
-    REFUNDED: 1,
-    FAILED: 1,
-    SHIPPED: 5,
-    DELIVERED: 8,
-    RETURNED: 2,
-  };
+  const orders = data?.items ?? [];
+  const statusCounts: Record<string, number> = data?.statusCounts ?? {};
 
   const selectedCount = Object.keys(rowSelection).length;
   const selectedIds = orders
@@ -436,7 +346,7 @@ export default function OrdersPage() {
         header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => {
           const o = row.original;
-          const canCancel = ["PENDING_PAYMENT", "PROCESSING", "ON_HOLD"].includes(o.status);
+          const canCancel = ["PENDING", "PROCESSING", "ON_HOLD"].includes(o.status);
           return (
             <div className="flex items-center gap-1 justify-end">
               <Link href={`/orders/${o.id}`}>
@@ -540,8 +450,9 @@ export default function OrdersPage() {
   async function handleBulkStatusChange(status: OrderStatus) {
     if (selectedIds.length === 0) return;
     try {
-      await bulkUpdateStatus({ ids: selectedIds, status }).unwrap();
-      toast.success(`Updated ${selectedIds.length} order(s) to ${status}`);
+      const r = await bulkUpdateStatus({ ids: selectedIds, status }).unwrap();
+      if (r.failed) toast.warning(`Updated ${r.updated}, ${r.failed} not allowed to move to ${status}`);
+      else toast.success(`Updated ${r.updated} order(s) to ${status}`);
     } catch (e) {
       toast.error("Failed to update status");
     }
@@ -559,14 +470,15 @@ export default function OrdersPage() {
   }
 
   function handleBulkEmail() {
-    toast.success(`Email notification queued for ${selectedCount || "all"} order(s)`);
+    toast.info("Order emails are not available yet (no email queue on the API).");
   }
 
   async function handleBulkCancel() {
     if (selectedIds.length === 0) return;
     try {
-      await bulkUpdateStatus({ ids: selectedIds, status: "CANCELLED" }).unwrap();
-      toast.success(`Cancelled ${selectedIds.length} order(s)`);
+      const r = await bulkUpdateStatus({ ids: selectedIds, status: "CANCELLED" }).unwrap();
+      if (r.failed) toast.warning(`Cancelled ${r.updated}, ${r.failed} could not be cancelled`);
+      else toast.success(`Cancelled ${r.updated} order(s)`);
     } catch (e) {
       toast.error("Failed to cancel orders");
     }
@@ -576,18 +488,19 @@ export default function OrdersPage() {
   async function handleConfirmCancel() {
     if (!cancelDialogOrder) return;
     try {
-      await bulkUpdateStatus({
+      const r = await bulkUpdateStatus({
         ids: [cancelDialogOrder.id],
         status: "CANCELLED",
       }).unwrap();
-      toast.success(`Order ${cancelDialogOrder.orderNumber} cancelled`);
+      if (r.failed) toast.error(`Order ${cancelDialogOrder.orderNumber} can no longer be cancelled`);
+      else toast.success(`Order ${cancelDialogOrder.orderNumber} cancelled`);
     } catch (e) {
       toast.error("Failed to cancel order");
     }
     setCancelDialogOrder(null);
   }
 
-  const totalPages = data?.totalPages ?? 5;
+  const totalPages = data?.totalPages ?? 1;
 
   return (
     <div className="space-y-6 pb-12">
@@ -612,7 +525,7 @@ export default function OrdersPage() {
           <TabsList className="h-auto flex-wrap !gap-1 mb-4 p-1">
             {ORDER_STATUSES.map((s) => {
               const count = s.key === "ALL"
-                ? orders.length
+                ? Object.values(statusCounts).reduce((n, c) => n + c, 0)
                 : (statusCounts[s.key] ?? 0);
               const isActive = activeTab === s.key;
               return (

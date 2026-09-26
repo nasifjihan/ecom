@@ -50,89 +50,6 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
 };
 
-const MOCK_ORDERS: RecentOrder[] = [
-  {
-    id: 1,
-    orderNumber: "#ORD-10234",
-    customerName: "Farhana Rahman",
-    date: "2024-09-12",
-    status: "delivered",
-    total: 4850,
-  },
-  {
-    id: 2,
-    orderNumber: "#ORD-10233",
-    customerName: "MD. Karim Hossain",
-    date: "2024-09-12",
-    status: "processing",
-    total: 2390,
-  },
-  {
-    id: 3,
-    orderNumber: "#ORD-10232",
-    customerName: "Nusrat Jahan",
-    date: "2024-09-11",
-    status: "shipped",
-    total: 7200,
-  },
-  {
-    id: 4,
-    orderNumber: "#ORD-10231",
-    customerName: "Sakib Ahmed",
-    date: "2024-09-11",
-    status: "pending",
-    total: 1550,
-  },
-  {
-    id: 5,
-    orderNumber: "#ORD-10230",
-    customerName: "Tasnim Akter",
-    date: "2024-09-10",
-    status: "cancelled",
-    total: 3100,
-  },
-  {
-    id: 6,
-    orderNumber: "#ORD-10229",
-    customerName: "Rafiqul Islam",
-    date: "2024-09-10",
-    status: "delivered",
-    total: 5680,
-  },
-  {
-    id: 7,
-    orderNumber: "#ORD-10228",
-    customerName: "Ayesha Siddika",
-    date: "2024-09-09",
-    status: "delivered",
-    total: 8950,
-  },
-  {
-    id: 8,
-    orderNumber: "#ORD-10227",
-    customerName: "Hasan Mahmud",
-    date: "2024-09-09",
-    status: "processing",
-    total: 2780,
-  },
-  {
-    id: 9,
-    orderNumber: "#ORD-10226",
-    customerName: "Fatema Khatun",
-    date: "2024-09-08",
-    status: "shipped",
-    total: 4320,
-  },
-  {
-    id: 10,
-    orderNumber: "#ORD-10225",
-    customerName: "Jahidul Hasan",
-    date: "2024-09-08",
-    status: "delivered",
-    total: 6100,
-  },
-];
-
 interface RecentOrdersTableProps {
   data?: RecentOrder[];
   loading?: boolean;
@@ -144,7 +61,7 @@ export default function RecentOrdersTable({
   loading = false,
   limit = 10,
 }: RecentOrdersTableProps) {
-  const orders = data ?? MOCK_ORDERS;
+  const orders = data ?? [];
 
   const columns = useMemo<ColumnDef<RecentOrder>[]>(
     () => [

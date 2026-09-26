@@ -502,23 +502,60 @@ export type DropdownMenuProps = {
   className?: string;
 };
 
+const DropdownMenuContext = React.createContext<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+} | null>(null);
+
+/** Minimal dropdown: the trigger toggles it; an outside click, Escape or picking an item closes it. */
 export function DropdownMenu({ children, className }: DropdownMenuProps) {
-  return <div className={cn("relative", className)}>{children}</div>;
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <DropdownMenuContext.Provider value={{ open, setOpen }}>
+      <div ref={ref} className={cn("relative inline-block", className)}>
+        {children}
+      </div>
+    </DropdownMenuContext.Provider>
+  );
 }
 
 export function DropdownMenuTrigger({
   children,
   className,
-  asChild,
 }: {
   children: React.ReactNode;
   className?: string;
   asChild?: boolean;
 }) {
-  if (asChild) {
-    return <div className={className}>{children}</div>;
-  }
-  return <div className={className}>{children}</div>;
+  const ctx = React.useContext(DropdownMenuContext);
+  return (
+    <div
+      className={className}
+      aria-haspopup="menu"
+      aria-expanded={ctx?.open ?? false}
+      onClick={() => ctx?.setOpen(!ctx.open)}
+    >
+      {children}
+    </div>
+  );
 }
 
 export const DropdownMenuContent = React.forwardRef<
@@ -530,6 +567,8 @@ export const DropdownMenuContent = React.forwardRef<
     sideOffset?: number;
   } & React.HTMLAttributes<HTMLDivElement>
 >(({ children, className, align = "end" }, ref) => {
+  const ctx = React.useContext(DropdownMenuContext);
+  if (ctx && !ctx.open) return null;
   const alignClass =
     align === "start"
       ? "left-0"
@@ -539,8 +578,9 @@ export const DropdownMenuContent = React.forwardRef<
   return (
     <div
       ref={ref}
+      role="menu"
       className={cn(
-        `absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md ${alignClass}`,
+        `absolute top-full z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md ${alignClass}`,
         className,
       )}
     >
@@ -550,22 +590,28 @@ export const DropdownMenuContent = React.forwardRef<
 });
 DropdownMenuContent.displayName = "DropdownMenuContent";
 
+const itemClass =
+  "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+
 export const DropdownMenuItem = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
     inset?: boolean;
     asChild?: boolean;
   }
->(({ className, inset, asChild, children, ...props }, ref) => {
+>(({ className, inset, asChild, children, onClick, ...props }, ref) => {
+  const ctx = React.useContext(DropdownMenuContext);
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e);
+    ctx?.setOpen(false);
+  };
   if (asChild) {
     return (
       <div
         ref={ref as any}
-        className={cn(
-          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-          inset && "pl-8",
-          className,
-        )}
+        role="menuitem"
+        className={cn(itemClass, inset && "pl-8", className)}
+        onClick={handleClick as any}
         {...(props as any)}
       >
         {children}
@@ -575,13 +621,14 @@ export const DropdownMenuItem = React.forwardRef<
   return (
     <button
       ref={ref}
-      className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        inset && "pl-8",
-        className,
-      )}
+      type="button"
+      role="menuitem"
+      className={cn(itemClass, inset && "pl-8", className)}
+      onClick={handleClick}
       {...props}
-    />
+    >
+      {children}
+    </button>
   );
 });
 DropdownMenuItem.displayName = "DropdownMenuItem";

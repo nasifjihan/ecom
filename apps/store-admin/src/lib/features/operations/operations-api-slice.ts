@@ -1,18 +1,19 @@
 "use client";
 
-import { api } from "@ecom/api-client";
+import { api, toPaginated } from "@ecom/api-client";
 
+/** Mirrors the API OrderStatus enum (prisma/schema.prisma). */
 export type OrderStatus =
-  | "PENDING_PAYMENT"
+  | "PENDING"
   | "PROCESSING"
   | "ON_HOLD"
+  | "SHIPPED"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
   | "COMPLETED"
   | "CANCELLED"
   | "REFUNDED"
-  | "FAILED"
-  | "SHIPPED"
-  | "DELIVERED"
-  | "RETURNED";
+  | "FAILED";
 
 export type PaymentMethod =
   | "STRIPE"
@@ -300,31 +301,143 @@ export interface StockSummary {
   stockTurnoverRatio?: number;
 }
 
-export interface CustomerStatusCounts {
-  PENDING_PAYMENT?: number;
-  PROCESSING?: number;
-  ON_HOLD?: number;
-  COMPLETED?: number;
-  CANCELLED?: number;
-  REFUNDED?: number;
-  FAILED?: number;
-  SHIPPED?: number;
-  DELIVERED?: number;
-  RETURNED?: number;
+export type CustomerStatusCounts = Partial<Record<OrderStatus, number>>;
+
+export const PAYMENT_METHOD_META: Record<
+  PaymentMethod,
+  { label: string; color: string }
+> = {
+  STRIPE: { label: "Stripe", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400" },
+  BKASH: { label: "bKash", color: "bg-pink-100 text-pink-700 dark:bg-pink-500/10 dark:text-pink-400" },
+  NAGAD: { label: "Nagad", color: "bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400" },
+  ROCKET: { label: "Rocket", color: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400" },
+  SSLCOMMERZ: { label: "SSLCommerz", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400" },
+  COD: { label: "COD", color: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" },
+  BANK_TRANSFER: { label: "Bank Transfer", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" },
+};
+
+/** Same rules the API enforces in OrdersService (STATUS_TRANSITIONS). */
+export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: ["PROCESSING", "ON_HOLD", "CANCELLED"],
+  PROCESSING: ["ON_HOLD", "SHIPPED", "CANCELLED"],
+  ON_HOLD: ["PROCESSING", "CANCELLED"],
+  SHIPPED: ["OUT_FOR_DELIVERY", "CANCELLED"],
+  OUT_FOR_DELIVERY: ["DELIVERED", "CANCELLED"],
+  DELIVERED: ["COMPLETED", "REFUNDED", "FAILED"],
+  COMPLETED: ["REFUNDED", "FAILED"],
+  CANCELLED: [],
+  REFUNDED: [],
+  FAILED: ["PENDING"],
+};
+
+/** Order row as the API returns it (Prisma Order + includes, decimals as strings). */
+interface ApiOrder {
+  id: string;
+  number: string;
+  customerId: string | null;
+  customer?: { firstName: string; lastName: string; email: string; phone: string | null } | null;
+  status: OrderStatus;
+  paymentGatewayCode: string;
+  paymentStatus: string;
+  transactionId: string | null;
+  paidAt: string | null;
+  shippingMethodName: string | null;
+  trackingNumber: string | null;
+  itemsSubtotal: string;
+  discountTotal: string;
+  shippingTotal: string;
+  taxTotal: string;
+  grandTotal: string;
+  couponUsed: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  [k: string]: unknown;
+  items?: {
+    id: string;
+    variantId: string | null;
+    productId: string | null;
+    productName: string;
+    productSku: string | null;
+    imageUrl: string | null;
+    quantity: number;
+    unitPrice: string;
+    lineTotal: string;
+    variantValues: Record<string, string> | null;
+  }[];
+  statusHistory?: {
+    id: string;
+    status: OrderStatus;
+    note: string | null;
+    createdAt: string;
+    admin?: { name: string } | null;
+  }[];
+  refunds?: { id: string; amount: string; reason: string | null; createdAt: string; status?: string }[];
 }
 
-export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  PENDING_PAYMENT: ["PROCESSING", "ON_HOLD", "CANCELLED", "FAILED"],
-  PROCESSING: ["ON_HOLD", "SHIPPED", "CANCELLED", "COMPLETED"],
-  ON_HOLD: ["PENDING_PAYMENT", "PROCESSING", "CANCELLED"],
-  COMPLETED: ["RETURNED", "REFUNDED"],
-  CANCELLED: ["REFUNDED"],
-  REFUNDED: [],
-  FAILED: ["PENDING_PAYMENT", "CANCELLED"],
-  SHIPPED: ["DELIVERED", "RETURNED"],
-  DELIVERED: ["COMPLETED", "RETURNED", "REFUNDED"],
-  RETURNED: ["REFUNDED", "COMPLETED"],
+const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
+  const f = (k: string) => (o[`${prefix}${k}`] as string | null) ?? undefined;
+  return {
+    firstName: f("FirstName"),
+    lastName: f("LastName"),
+    company: f("Company"),
+    address1: f("Address1"),
+    address2: f("Address2"),
+    country: f("CountryCode"),
+    division: f("State"),
+    district: f("City"),
+    postcode: f("Postcode"),
+    phone: f("Phone"),
+    email: prefix === "billing" ? f("Email") : undefined,
+  };
 };
+
+export function fromApiOrder(o: ApiOrder): Order {
+  const name =
+    [o.billingFirstName, o.billingLastName].filter(Boolean).join(" ") ||
+    [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ") ||
+    "Guest";
+  const lines: OrderLine[] = (o.items ?? []).map((i) => ({
+    id: i.id,
+    productVariantId: i.variantId ?? i.productId ?? "",
+    productName: i.variantValues
+      ? `${i.productName} (${Object.values(i.variantValues).join(" / ")})`
+      : i.productName,
+    sku: i.productSku ?? "",
+    imageUrl: i.imageUrl ?? undefined,
+    quantity: i.quantity,
+    unitPrice: Number(i.unitPrice),
+    lineTotal: Number(i.lineTotal),
+  }));
+  return {
+    id: o.id,
+    orderNumber: o.number,
+    customerId: o.customerId ?? undefined,
+    customerName: name,
+    customerEmail: (o.billingEmail as string | null) ?? o.customer?.email ?? undefined,
+    customerPhone: (o.billingPhone as string | null) ?? o.customer?.phone ?? undefined,
+    status: o.status,
+    paymentMethod: o.paymentGatewayCode.toUpperCase() as PaymentMethod,
+    paymentStatus: o.paymentStatus.toUpperCase() as Order["paymentStatus"],
+    transactionId: o.transactionId ?? undefined,
+    paidAt: o.paidAt ?? undefined,
+    shippingMethod: o.shippingMethodName ?? undefined,
+    trackingNo: o.trackingNumber ?? undefined,
+    deliveredAt: o.completedAt ?? undefined,
+    subtotal: Number(o.itemsSubtotal),
+    shippingCost: Number(o.shippingTotal),
+    vatAmount: Number(o.taxTotal),
+    discountAmount: Number(o.discountTotal),
+    couponCode: o.couponUsed ?? undefined,
+    grandTotal: Number(o.grandTotal),
+    billingAddress: address(o, "billing"),
+    shippingAddress: address(o, "shipping"),
+    lines,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    itemsCount: lines.reduce((n, l) => n + l.quantity, 0),
+  };
+}
 
 export const operationsApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
@@ -332,23 +445,28 @@ export const operationsApiSlice = api.injectEndpoints({
       PaginatedResponse<Order> & { statusCounts: CustomerStatusCounts },
       OrderListFilters
     >({
-      query: (filters) => {
+      // Rows and the per-status tab counts come from two endpoints; fetch both.
+      queryFn: async (filters, _api, _extra, baseQuery) => {
         const params = new URLSearchParams();
         if (filters.status) params.set("status", filters.status);
         if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
         if (filters.dateTo) params.set("dateTo", filters.dateTo);
-        if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
         if (filters.minTotal !== undefined) params.set("minTotal", String(filters.minTotal));
         if (filters.maxTotal !== undefined) params.set("maxTotal", String(filters.maxTotal));
-        if (filters.coupon !== undefined) params.set("coupon", String(filters.coupon));
-        if (filters.shippingZone) params.set("shippingZone", filters.shippingZone);
         if (filters.search) params.set("search", filters.search);
-        if (filters.page) params.set("page", String(filters.page));
-        if (filters.limit) params.set("limit", String(filters.limit));
-        return {
-          url: `/admin/orders?${params.toString()}`,
-          method: "GET",
-        };
+        params.set("page", String(filters.page ?? 1));
+        params.set("perPage", String(filters.limit ?? 20));
+        const [list, stats] = await Promise.all([
+          baseQuery(`/admin/orders?${params.toString()}`),
+          baseQuery("/admin/orders/dashboard/stats"),
+        ]);
+        if (list.error) return { error: list.error };
+        const page = toPaginated((list.data as ApiOrder[]).map(fromApiOrder), list.meta);
+        const statusCounts: CustomerStatusCounts = {};
+        for (const r of (stats.data as { byStatus?: { status: OrderStatus; count: number }[] } | undefined)?.byStatus ?? []) {
+          statusCounts[r.status] = r.count;
+        }
+        return { data: { ...page, statusCounts } };
       },
       providesTags: (result) =>
         result
@@ -372,17 +490,50 @@ export const operationsApiSlice = api.injectEndpoints({
         url: `/admin/orders/${id}`,
         method: "GET",
       }),
+      transformResponse: (o: ApiOrder) => {
+        const history = [...(o.statusHistory ?? [])].reverse(); // oldest first
+        return {
+          ...fromApiOrder(o),
+          timeline: history.map((h) => ({ status: h.status, timestamp: h.createdAt, note: h.note ?? undefined })),
+          notes: (o.statusHistory ?? [])
+            .filter((h) => h.note)
+            .map((h) => ({
+              id: h.id,
+              content: h.note as string,
+              type: "INTERNAL" as const,
+              userName: h.admin?.name ?? "System",
+              createdAt: h.createdAt,
+            })),
+          refunds: (o.refunds ?? []).map((r) => ({
+            id: r.id,
+            orderId: o.id,
+            lines: [],
+            reason: r.reason ?? undefined,
+            amount: Number(r.amount),
+            createdAt: r.createdAt,
+          })),
+          auditLog: history.slice(1).map((h, i) => ({
+            id: h.id,
+            action: "Status changed",
+            field: "status",
+            oldValue: history[i]?.status,
+            newValue: h.status,
+            userName: h.admin?.name ?? "System",
+            createdAt: h.createdAt,
+          })),
+        };
+      },
       providesTags: (_r, _e, id) => [{ type: "Order", id }],
     }),
 
     updateOrderStatus: builder.mutation<
-      Order,
-      { id: string | number; status: OrderStatus }
+      unknown,
+      { id: string | number; status: OrderStatus; note?: string }
     >({
-      query: ({ id, status }) => ({
+      query: ({ id, status, note }) => ({
         url: `/admin/orders/${id}/status`,
-        method: "PATCH",
-        body: { status },
+        method: "POST",
+        body: { newStatus: status, note },
       }),
       invalidatesTags: (_r, _e, { id }) => [
         { type: "Order", id },
@@ -390,15 +541,20 @@ export const operationsApiSlice = api.injectEndpoints({
       ],
     }),
 
+    // No bulk endpoint on the API: apply the transition order by order and report how many succeeded.
     bulkUpdateOrderStatus: builder.mutation<
-      { updated: number },
+      { updated: number; failed: number },
       { ids: (string | number)[]; status: OrderStatus }
     >({
-      query: (body) => ({
-        url: `/admin/orders/bulk-status`,
-        method: "POST",
-        body,
-      }),
+      queryFn: async ({ ids, status }, _api, _extra, baseQuery) => {
+        const results = await Promise.all(
+          ids.map((id) =>
+            baseQuery({ url: `/admin/orders/${id}/status`, method: "POST", body: { newStatus: status } }),
+          ),
+        );
+        const failed = results.filter((r) => r.error).length;
+        return { data: { updated: ids.length - failed, failed } };
+      },
       invalidatesTags: [{ type: "Order", id: "LIST" }],
     }),
 

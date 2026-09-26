@@ -374,4 +374,104 @@ export class StoreDashboardRepo {
       averageOrderValue,
     };
   }
+
+  /**
+   * Everything the store-admin dashboard home renders, in one call.
+   * Revenue counts paid orders only (COD orders count once marked paid); order and
+   * customer counts include every order in the window.
+   */
+  async getStoreOverview(days: number): Promise<{
+    totals: { revenue: number; orders: number; customers: number; averageOrderValue: number };
+    revenueChart: { date: string; revenue: number }[];
+    topProducts: { id: string; name: string; sales: number; revenue: number }[];
+    recentOrders: {
+      id: string;
+      orderNumber: string;
+      customerName: string;
+      date: string;
+      status: string;
+      paymentStatus: string;
+      total: number;
+    }[];
+  }> {
+    const since = this.daysAgo(days - 1);
+    const storeId = this.ctx.storeId !== undefined ? BigInt(this.ctx.storeId) : null;
+
+    const [paid, orders, customers, daily, top, recent] = await Promise.all([
+      prisma.order.aggregate({
+        where: { ...this.storeWhere(), paymentStatus: { in: ["PAID", "paid"] }, createdAt: { gte: since } } as any,
+        _sum: { grandTotal: true },
+        _count: { _all: true },
+      }),
+      prisma.order.count({ where: { ...this.storeWhere(), createdAt: { gte: since } } as any }),
+      prisma.customer.count({ where: this.storeWhere() as any }),
+      prisma.order.findMany({
+        where: { ...this.storeWhere(), paymentStatus: { in: ["PAID", "paid"] }, createdAt: { gte: since } } as any,
+        select: { createdAt: true, grandTotal: true },
+      }),
+      prisma.$queryRaw<{ id: bigint; name: string; sales: number; revenue: number }[]>`
+        SELECT p.id, p.name, COALESCE(SUM(oi.quantity), 0)::int AS sales,
+               COALESCE(SUM(oi."lineSubtotal"), 0)::float AS revenue
+        FROM "OrderItem" oi
+        JOIN "Order" o ON o.id = oi."orderId"
+        JOIN "Product" p ON p.id = oi."productId"
+        WHERE o.status NOT IN ('CANCELLED', 'FAILED')
+          AND o."createdAt" >= ${since}
+          AND (${storeId}::bigint IS NULL OR o."storeId" = ${storeId}::bigint)
+        GROUP BY p.id, p.name
+        ORDER BY sales DESC, revenue DESC
+        LIMIT 5`,
+      prisma.order.findMany({
+        where: this.storeWhere() as any,
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          number: true,
+          billingFirstName: true,
+          billingLastName: true,
+          createdAt: true,
+          status: true,
+          paymentStatus: true,
+          grandTotal: true,
+        },
+      }),
+    ]);
+
+    // Bucket by the server's local calendar day, the same clock daysAgo() uses.
+    const dayKey = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const byDay = new Map<string, number>();
+    for (const o of daily) {
+      const key = dayKey(o.createdAt);
+      byDay.set(key, (byDay.get(key) ?? 0) + Number(o.grandTotal));
+    }
+    const revenueChart = Array.from({ length: days }, (_, i) => {
+      const d = new Date(since);
+      d.setDate(d.getDate() + i);
+      return { date: dayKey(d), revenue: Math.round((byDay.get(dayKey(d)) ?? 0) * 100) / 100 };
+    });
+
+    const revenue = Number(paid._sum.grandTotal ?? 0);
+    const paidCount = paid._count._all;
+    return {
+      totals: {
+        revenue,
+        orders,
+        customers,
+        averageOrderValue: paidCount > 0 ? Math.round((revenue / paidCount) * 100) / 100 : 0,
+      },
+      revenueChart,
+      topProducts: top.map((t) => ({ id: String(t.id), name: t.name, sales: Number(t.sales), revenue: Number(t.revenue) })),
+      recentOrders: recent.map((o) => ({
+        id: String(o.id),
+        orderNumber: o.number,
+        customerName: [o.billingFirstName, o.billingLastName].filter(Boolean).join(" ") || "Guest",
+        date: o.createdAt.toISOString(),
+        status: String(o.status),
+        paymentStatus: String(o.paymentStatus),
+        total: Number(o.grandTotal),
+      })),
+    };
+  }
 }

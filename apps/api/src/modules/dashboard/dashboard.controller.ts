@@ -19,6 +19,10 @@ const BaseRangeQuery = z.object({
   }
 });
 
+const OverviewQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+
 class DashboardController extends BaseController {
   private getService(ctx: RequestContext): DashboardService {
     return new DashboardService(ctx);
@@ -37,6 +41,13 @@ class DashboardController extends BaseController {
     const q = req.query as any;
     const range = q.from && q.to ? ({ from: new Date(String(q.from)), to: new Date(String(q.to)) } as DashboardRangeQueryDtoType) : undefined;
     const result = await svc.getStoreStats(range);
+    envelope(res, { status: 200, data: result });
+  });
+
+  storeOverview = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const svc = this.getService(req.ctx);
+    const { days } = req.query as unknown as z.infer<typeof OverviewQuery>;
+    const result = await svc.getStoreOverview(days);
     envelope(res, { status: 200, data: result });
   });
 
@@ -96,6 +107,14 @@ storeDashboardRouter.get(
   authMiddleware("adminOrSuper"),
   rbacMiddleware("dashboard.*"),
   dashboardController.storeSummary,
+);
+
+storeDashboardRouter.get(
+  "/overview",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("dashboard.*"),
+  validate({ query: OverviewQuery }),
+  dashboardController.storeOverview,
 );
 
 storeDashboardRouter.get(

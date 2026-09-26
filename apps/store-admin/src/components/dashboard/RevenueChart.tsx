@@ -31,21 +31,12 @@ interface RevenueChartProps {
   days?: number;
 }
 
-const MOCK_DATA: RevenueChartPoint[] = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (29 - i));
-  return {
-    date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    revenue: Math.floor(Math.random() * 80000) + 20000,
-  };
-});
-
 export default function RevenueChart({
   data,
   loading = false,
   days = 30,
 }: RevenueChartProps) {
-  const chartData = data ?? MOCK_DATA;
+  const chartData = data ?? [];
 
   if (loading) {
     return (
