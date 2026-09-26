@@ -1248,5 +1248,12 @@ cd apps/api && pnpm prisma:migrate --name init && pnpm prisma:seed
 ```
 No Prisma schema modifications required for Batch #9. All 62 models intact. Safe to migrate anytime now. Validation framework 422 before 401 confirmed via SUPER token headers bypass for all admin/shipping routes.
 
+## ✅ INIT MIGRATION CREATED (2026-09-26) — resolves the red banner above
+- `apps/api/prisma/migrations/20260926040537_init/` generated with `prisma migrate dev --name init` against the Docker Compose Postgres 17. No schema changes were needed; `prisma migrate diff` (migrations → schema) reports no difference.
+- Verified on a fresh volume (`docker compose down -v && up -d postgres`): `prisma migrate deploy` applies cleanly and `prisma/seed.ts` completes (and re-runs idempotently).
+- Seed fix: the 5 demo shirts were only created inside the Fatema-cart branch, but Fatema is never seeded, so a fresh DB had zero products and the 30-review loop crashed (`productId: undefined`). Products are now always seeded; the cart stays conditional.
+- API fixes surfaced by the live DB: super login wrote a malformed store-less `AuditLog` row whenever a PlatformAdmin id matched an AdminUser id (it now just logs), and `res.json` threw "Do not know how to serialize a BigInt" on any Prisma row (a global `json replacer` now emits BigInt as string).
+- From now on, schema changes go in new migrations (`pnpm prisma:migrate --name <change>`); never edit the init SQL.
+
 ## 📋 BATCH #10 PLAN (starts next)
 

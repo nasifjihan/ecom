@@ -527,6 +527,55 @@ async function seedFashionBDStore() {
     console.log(`  ✅ Shipping Zone "International / Outside Bangladesh" + 2 methods added`);
   }
 
+  // Look up shirts category + Richman brand for product fallback seed reference
+  const shirtsCat = await prisma.category.findFirst({ where: { storeId: store.id, slug: "shirts" } });
+  const richman = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "richman" } });
+  const catsEye = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "cats-eye" } });
+  // Fake product rows (5) — always seeded so reviews/flash sale have products — SIMPLE products, taxClass=Standard (from 304-321)
+  const standardTaxClass = await prisma.taxClass.findFirst({ where: { storeId: store.id, name: "Standard" } });
+  const productSeedList = [
+    { slug: "richman-formal-cotton-shirt-navy", name: "Richman Formal Cotton Shirt — Navy", brandId: richman?.id, price: "3290.00" },
+    { slug: "richman-slim-fit-shirt-white", name: "Richman Slim Fit Oxford Shirt — White", brandId: richman?.id, price: "2890.00" },
+    { slug: "cats-eye-casual-denim-shirt", name: "Cats Eye Casual Denim Shirt — Indigo", brandId: catsEye?.id, price: "3690.00" },
+    { slug: "cats-eye-premium-linen-shirt", name: "Cats Eye Premium Linen Shirt — Beige", brandId: catsEye?.id, price: "4490.00" },
+    { slug: "richman-party-wear-satin-shirt", name: "Richman Party Wear Satin Shirt — Black", brandId: richman?.id, price: "3990.00" },
+  ] as const;
+  const insertedPIds: bigint[] = [];
+  for (const p of productSeedList) {
+    const pEx = await prisma.product.findFirst({ where: { storeId: store.id, slug: p.slug } });
+    if (!pEx) {
+      const newP = await prisma.product.create({
+        data: {
+          storeId: store.id,
+          type: "SIMPLE",
+          name: p.name,
+          slug: p.slug,
+          brandId: p.brandId ?? undefined,
+          taxClassId: standardTaxClass?.id ?? undefined,
+          regularPrice: p.price,
+          description: `${p.name} — 100% cotton/denim/linen. Authentic ${(p.brandId === richman?.id ? "Richman" : "Cats Eye")}.`,
+          status: "published",
+          manageStock: true,
+          stockQty: 50,
+          categoryIds: undefined as any,
+        } as any,
+      });
+      insertedPIds.push(newP.id);
+      // Link to Shirts category via ProductCategory pivot if we have both
+      if (shirtsCat) {
+        try {
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "ProductCategory" ("productId", "categoryId", "sortOrder") VALUES ($1::bigint, $2::bigint, 0) ON CONFLICT DO NOTHING`,
+            Number(newP.id),
+            Number(shirtsCat.id),
+          );
+        } catch {}
+      }
+    } else {
+      insertedPIds.push(pEx.id);
+    }
+  }
+
   // 2) Fashion BD Customer Fatema — if already exists, use her id to link cart
   const fatemaEx = await prisma.customer.findFirst({ where: { storeId: store.id, email: "fatema@fashionbd.xyz" } });
   if (fatemaEx) {
@@ -541,54 +590,6 @@ async function seedFashionBDStore() {
           currencyCode: "BDT",
         },
       });
-      // Look up shirts category + Richman brand for product fallback seed reference
-      const shirtsCat = await prisma.category.findFirst({ where: { storeId: store.id, slug: "shirts" } });
-      const richman = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "richman" } });
-      const catsEye = await prisma.brand.findFirst({ where: { storeId: store.id, slug: "cats-eye" } });
-      // Fake product rows (5) if none exist yet for the demo cart — SIMPLE products, taxClass=Standard (from 304-321)
-      const stdTax = await prisma.taxClass.findFirst({ where: { storeId: store.id, name: "Standard" } });
-      const productSeedList = [
-        { slug: "richman-formal-cotton-shirt-navy", name: "Richman Formal Cotton Shirt — Navy", brandId: richman?.id, price: "3290.00" },
-        { slug: "richman-slim-fit-shirt-white", name: "Richman Slim Fit Oxford Shirt — White", brandId: richman?.id, price: "2890.00" },
-        { slug: "cats-eye-casual-denim-shirt", name: "Cats Eye Casual Denim Shirt — Indigo", brandId: catsEye?.id, price: "3690.00" },
-        { slug: "cats-eye-premium-linen-shirt", name: "Cats Eye Premium Linen Shirt — Beige", brandId: catsEye?.id, price: "4490.00" },
-        { slug: "richman-party-wear-satin-shirt", name: "Richman Party Wear Satin Shirt — Black", brandId: richman?.id, price: "3990.00" },
-      ] as const;
-      const insertedPIds: bigint[] = [];
-      for (const p of productSeedList) {
-        const pEx = await prisma.product.findFirst({ where: { storeId: store.id, slug: p.slug } });
-        if (!pEx) {
-          const newP = await prisma.product.create({
-            data: {
-              storeId: store.id,
-              type: "SIMPLE",
-              name: p.name,
-              slug: p.slug,
-              brandId: p.brandId ?? undefined,
-              taxClassId: stdTax?.id ?? undefined,
-              regularPrice: p.price,
-              description: `${p.name} — 100% cotton/denim/linen. Authentic ${(p.brandId === richman?.id ? "Richman" : "Cats Eye")}.`,
-              status: "published",
-              manageStock: true,
-              stockQty: 50,
-              categoryIds: undefined as any,
-            } as any,
-          });
-          insertedPIds.push(newP.id);
-          // Link to Shirts category via ProductCategory pivot if we have both
-          if (shirtsCat) {
-            try {
-              await prisma.$executeRawUnsafe(
-                `INSERT INTO "ProductCategory" ("productId", "categoryId", "sortOrder") VALUES ($1::bigint, $2::bigint, 0) ON CONFLICT DO NOTHING`,
-                Number(newP.id),
-                Number(shirtsCat.id),
-              );
-            } catch {}
-          }
-        } else {
-          insertedPIds.push(pEx.id);
-        }
-      }
       // 5 CartItem rows for Fatema cart
       const qtyMap = [2, 1, 1, 2, 1];
       let lineIdx = 0;
@@ -786,7 +787,6 @@ async function seedFashionBDStore() {
     }
   }
 
-  const shirtsCat = await prisma.category.findFirst({ where: { storeId: demoStoreId, slug: "shirts" } });
   const richmanBrand = await prisma.brand.findFirst({ where: { storeId: demoStoreId, slug: "richman" } });
 
   const flashSaleSlug = "richman-20pc-2026";
