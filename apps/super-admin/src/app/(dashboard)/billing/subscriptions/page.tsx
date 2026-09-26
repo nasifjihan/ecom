@@ -134,7 +134,7 @@ export default function SubscriptionsPage() {
         <CardContent className="pt-0">
           <div className={cn("overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", isFetching && !isLoading && "opacity-70")}>
             <Table>
-              <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Store</TableHead>
                   <TableHead>Plan</TableHead>

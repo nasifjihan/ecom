@@ -14,7 +14,13 @@ export class StoreRepository extends BaseRepository<"store"> {
     const store = await (this.q as any).findFirst({
       where: { id: BigInt(id) },
       include: {
-        billingSub: true,
+        plan: true,
+        billingSub: { include: { plan: true } },
+        admins: {
+          select: { id: true, name: true, email: true, status: true, lastLoginAt: true, createdAt: true, role: { select: { name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
+        _count: { select: { orders: true, products: true, customers: true } },
         domains: true,
         generalSettings: true,
         brandSettings: true,
