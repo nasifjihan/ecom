@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { ordersController } from "./orders.controller";
+import type { Request, Response } from "express";
+import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
+import { EmailService } from "../notifications";
 import {
   OrderSearchQueryDto,
   CreateOrderFromCartDto,
@@ -56,6 +59,19 @@ adminOrdersRouter.post(
   rbacMiddleware("orders.*"),
   validate({ params: OrderIdParamDto, body: TransitionStatusDto }),
   ordersController.transitionStatus,
+);
+
+/** Sends the order confirmation email to the customer again (the order page's "Send email" button). */
+adminOrdersRouter.post(
+  "/:id/send-email",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.*"),
+  validate({ params: OrderIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const sent = await EmailService.forContext(req.ctx).orderPlaced(BigInt((req.params as { id: string }).id), "customer");
+    if (!sent) throw new NotFoundError("order");
+    envelope(res, { status: 200, message: "Order email sent", data: { success: true } });
+  }),
 );
 
 adminOrdersRouter.post(

@@ -19,6 +19,7 @@ import {
   BaseController,
 } from "../../core";
 import bcrypt from "bcryptjs";
+import { assertNotRevoked } from "./password-reset";
 import type { RequestContext } from "../../core/base.repository";
 import type { TokenAudience, TokenPayload } from "../../config/jwt";
 import { UserType, AdminRole } from "@ecom/shared-types";
@@ -106,7 +107,8 @@ export class AuthService extends BaseService {
     if (!ok) {
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
-    if (row.status !== "active") {
+    // Seeded customers are "ACTIVE", ones created in the app "active".
+    if (row.status.toLowerCase() !== "active") {
       throw new UnauthorizedError("Account suspended", "AUTH_ACCOUNT_SUSPENDED");
     }
     const lastLoginIp = this.ctx.ip ?? "";
@@ -196,7 +198,9 @@ export class AuthService extends BaseService {
   }
 
   async validateRefresh(tok: string, audience: TokenAudience) {
-    return jwtCfg.verifyRefreshToken(tok, audience);
+    const payload = jwtCfg.verifyRefreshToken(tok, audience);
+    await assertNotRevoked(audience, payload.sub, payload.iat);
+    return payload;
   }
 
   async logout(_id: bigint, _audience: TokenAudience) {

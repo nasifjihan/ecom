@@ -6,6 +6,7 @@ import { OrderRepository, CartRepository, RefundRepository, CouponRepository, In
 import type { CreateOrderFromCartDto, TransitionStatusDto, CreateRefundDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
 import { newId, slugify } from "@ecom/utils";
 import { Prisma } from "@prisma/client";
+import { emitOrderStatusChanged } from "../notifications";
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["PROCESSING", "ON_HOLD", "CANCELLED"],
@@ -405,6 +406,15 @@ export class OrdersService extends BaseService {
       });
 
       return t.order.findFirst({ where: { id: oid } });
+    });
+
+    emitOrderStatusChanged({
+      storeId: String((order as { storeId: bigint }).storeId),
+      orderId: String(oid),
+      status: newStatus,
+      // Only a note written by the shop goes in the customer's email.
+      note: this.ctx.admin ? (dto.note ?? null) : null,
+      notify: dto.notifyCustomer !== false,
     });
 
     return result;

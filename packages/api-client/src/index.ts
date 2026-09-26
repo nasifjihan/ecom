@@ -160,6 +160,8 @@ export const api = createApi({
     "Menu",
     "Theme",
     "Homepage",
+    "EmailTemplate",
+    "EmailLog",
   ],
   endpoints: () => ({}),
 });

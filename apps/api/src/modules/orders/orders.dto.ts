@@ -160,7 +160,8 @@ export const TransitionStatusDto = z
       .refine(noXss, "No JavaScript injection allowed")
       .optional()
       .nullable(),
-    notifyCustomer: z.boolean().default(false),
+    /** Emails the customer about the change (when that email is switched on in Settings > Emails). */
+    notifyCustomer: z.boolean().default(true),
     sendEmail: z.boolean().default(false),
     reasonCode: z.string().optional().nullable(),
   })

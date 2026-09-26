@@ -199,6 +199,12 @@ export const accountApi = api.injectEndpoints({
     customerRegister: builder.mutation<AuthResult, RegisterInput>({
       query: (body) => ({ url: "/auth/customer/register", method: "POST", body: clean(body) }),
     }),
+    forgotPassword: builder.mutation<{ sent: boolean }, { email: string }>({
+      query: (body) => ({ url: "/auth/customer/forgot-password", method: "POST", body }),
+    }),
+    resetPassword: builder.mutation<{ email: string }, { token: string; password: string }>({
+      query: (body) => ({ url: "/auth/customer/reset-password", method: "POST", body }),
+    }),
     customerLogout: builder.mutation<void, void>({
       query: () => ({ url: "/auth/logout", method: "POST", body: {} }),
     }),
@@ -254,6 +260,8 @@ export const {
   useCustomerLoginMutation,
   useCustomerRegisterMutation,
   useCustomerLogoutMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
   useChangeMyPasswordMutation,

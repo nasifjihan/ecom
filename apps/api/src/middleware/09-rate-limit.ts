@@ -55,7 +55,7 @@ const authLimiter = rateLimit({
     next(new RateLimitError()),
 });
 
-const STRICT_PATHS = /\/api\/(auth|super|admin)\/(login|register|password-reset|forgot|otp|verify)/i;
+const STRICT_PATHS = /\/api\/(auth|super|admin)\/((customer|admin|super)\/)?(login|register|password-reset|forgot|reset-password|otp|verify)/i;
 const PUBLIC_PATHS = /\/api\/(store|pub|v1)\/(products|categories|brands|collections|pages|blogs|search|currencies|shipping|payment-methods|settings|countries|states)/i;
 
 export default function rateLimitMiddleware(

@@ -52,8 +52,9 @@ services:
         "yes",
         "--maxmemory",
         "256mb",
+        # Only keys with an expiry (cache, rate limits) are evicted, so queued emails are never dropped.
         "--maxmemory-policy",
-        "allkeys-lru",
+        "volatile-lru",
       ]
     ports:
       - "6379:6379"

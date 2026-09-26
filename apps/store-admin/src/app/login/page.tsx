@@ -47,7 +47,7 @@ export default function LoginPage() {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      email: searchParams.get("email") ?? "",
       password: "",
       rememberMe: false,
     },
@@ -61,6 +61,8 @@ export default function LoginPage() {
       router.replace("/dashboard");
     }
   }, [router]);
+
+  const typedEmail = form.watch("email").trim();
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
@@ -335,7 +337,7 @@ export default function LoginPage() {
                       )}
                     />
                     <Link
-                      href="/forgot-password"
+                      href={`/forgot-password${typedEmail ? `?email=${encodeURIComponent(typedEmail)}` : ""}`}
                       className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
                     >
                       Forgot password?

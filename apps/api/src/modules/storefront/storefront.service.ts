@@ -24,6 +24,7 @@ import type {
   CartLineDto,
   StorefrontAddressDto,
 } from "./storefront.dto";
+import { emitOrderPlaced } from "../notifications";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -697,6 +698,8 @@ export class StorefrontService {
         },
       });
     });
+
+    emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id) });
 
     let redirectPaymentURL: string | undefined;
     if (!OFFLINE_GATEWAYS.has(dto.paymentGateway)) {

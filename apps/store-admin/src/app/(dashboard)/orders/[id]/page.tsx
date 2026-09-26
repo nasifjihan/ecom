@@ -207,8 +207,8 @@ export default function OrderDetailPage() {
   }
 
   async function handleSendEmail() {
-    try { await sendEmail(order.id).unwrap(); toast.success("Invoice email sent"); }
-    catch { toast.error("Failed to send email"); }
+    try { await sendEmail(order.id).unwrap(); toast.success("Order confirmation sent to the customer"); }
+    catch { toast.error("Couldn't send the email. Check Settings > Emails > Sent emails."); }
   }
 
   async function handleAddNote() {
