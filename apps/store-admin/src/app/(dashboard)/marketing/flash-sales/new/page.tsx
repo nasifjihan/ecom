@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { useForm, FormProvider } from "react-hook-form";
+import { useForm, FormProvider, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatMoney } from "@ecom/utils";
@@ -37,8 +37,8 @@ import {
   FormControl,
   FormDescription,
   FormMessage,
-  Controller,
   Textarea,
+  Badge,
 } from "@/components/ui";
 import {
   useCreateFlashSaleMutation,

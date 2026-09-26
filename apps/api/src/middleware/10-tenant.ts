@@ -84,6 +84,7 @@ export default async function tenantMiddleware(
     req.ctx = {
       storeId: undefined,
       requestId: req.requestId,
+      ip: req.ip,
       locale: String(req.headers["accept-language"] || req.cookies?.locale || "en").split(",")[0] || "en",
       currency: (req.cookies?.currency as string) || "BDT",
     };

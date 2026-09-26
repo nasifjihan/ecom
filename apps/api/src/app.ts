@@ -26,8 +26,6 @@ import {
   superStoresRouter,
   superDomainsRouter,
   storeSelfRouter,
-  superPlansRouter,
-  superSubscriptionsRouter,
 } from "./modules/stores";
 import {
   adminUsersRouter,
@@ -52,9 +50,10 @@ import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
+import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
-import { storefrontCatalogRouter, storefrontCheckoutRouter } from "./modules/storefront";
+import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -105,10 +104,9 @@ export function buildApp(): Express {
 
   // =============== MODULE ROUTES (Batch #5 wired) ===============
   app.use("/api/auth", authRoutes);
+  app.use("/api/super", superPlatformRouter);                      // overview, plans, subscriptions, reports, audit logs
   app.use("/api/super/stores", superStoresRouter);
   app.use("/api/super/domains", superDomainsRouter);
-  app.use("/api/super/plans", superPlansRouter);
-  app.use("/api/super/subscriptions", superSubscriptionsRouter);
   app.use("/api/super/admin-users", superAdminUsersRouter);
   app.use("/api/super/roles", superRolesRouter);
   app.use("/api/store", storeSelfRouter);
@@ -125,6 +123,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
   app.use("/api/admin/customers", adminCustomersRouter);
+  app.use("/api/storefront/account", storefrontAccountRouter);
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);

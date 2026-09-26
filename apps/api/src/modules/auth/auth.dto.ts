@@ -11,12 +11,12 @@ export const AdminLoginDto = z.object({
 });
 
 export const CustomerLoginDto = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
 });
 
 export const CustomerRegisterDto = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z
     .string()
     .min(8)

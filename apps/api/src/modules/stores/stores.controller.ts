@@ -7,14 +7,14 @@ import type {
   UpdateStoreDto as UpdateStoreDtoType,
   CreateDomainDto as CreateDomainDtoType,
   UpdateDomainDto as UpdateDomainDtoType,
-  PaginationDto as PaginationDtoType,
+  StoreListQueryDto as StoreListQueryDtoType,
   StoreDomainQueryDto as StoreDomainQueryDtoType,
 } from "./stores.dto";
 
 class StoresController extends BaseController {
   listStores = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = new StoresService(req.ctx);
-    const query = req.query as unknown as PaginationDtoType;
+    const query = req.query as unknown as StoreListQueryDtoType;
     const result = await svc.listStores(query);
     envelope(res, { status: 200, data: result.data, meta: result.meta });
   });

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -107,7 +108,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-background antialiased flex flex-col">
         <Providers>
           <NavbarWithCartState />
-          <main className="flex-1">{children}</main>
+          {/* Pages that read useSearchParams need a Suspense boundary to prerender. */}
+          <main className="flex-1">
+            <Suspense>{children}</Suspense>
+          </main>
           <Footer storeName="Fashion BD" />
           <CartDrawerSlot />
         </Providers>

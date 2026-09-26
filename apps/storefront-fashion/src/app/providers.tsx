@@ -5,12 +5,13 @@ import { Provider as ReduxProvider } from "react-redux";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { CartProvider as StorefrontCartProvider } from "@ecom/storefront-base";
-import { getOrCreateStore } from "@/lib/store";
+import { getOrCreateStore, type AppStore } from "@/lib/store";
 import { configureApiClient } from "@ecom/api-client";
+import { restoreSession, storeRefreshedToken } from "@/lib/account";
 
 let apiConfigured = false;
 
-function ensureApiConfigured() {
+function ensureApiConfigured(store: AppStore) {
   if (apiConfigured) return;
   const baseUrl =
     (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_BASE_URL : undefined) ??
@@ -25,7 +26,13 @@ function ensureApiConfigured() {
         return undefined;
       }
     },
+    // Customer access tokens are short-lived; renew them from the refresh cookie.
+    refresh: {
+      path: "/auth/customer/refresh",
+      onRefreshed: (token) => storeRefreshedToken(token, store.dispatch),
+    },
   });
+  restoreSession(store.dispatch);
   apiConfigured = true;
 }
 
@@ -34,12 +41,12 @@ const CartProvider = StorefrontCartProvider as unknown as React.ComponentType<an
 export function Providers({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = React.useState(false);
 
-  React.useEffect(() => {
-    ensureApiConfigured();
-    setMounted(true);
-  }, []);
-
   const store = React.useMemo(() => getOrCreateStore(), []);
+
+  React.useEffect(() => {
+    ensureApiConfigured(store);
+    setMounted(true);
+  }, [store]);
 
   return (
     <ReduxProvider store={store}>

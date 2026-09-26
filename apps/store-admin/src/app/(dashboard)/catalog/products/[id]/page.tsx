@@ -295,7 +295,7 @@ export default function EditProductPage() {
       const removed = g.filter((x) => x.id !== id);
       const hadFeatured = g.find((x) => x.id === id)?.isFeatured;
       if (hadFeatured && removed.length > 0) {
-        removed[0].isFeatured = true;
+        removed[0]!.isFeatured = true;
       }
       return removed;
     });
@@ -1064,7 +1064,7 @@ export default function EditProductPage() {
                                   categories.map((c) => {
                                     const depth = (c as any).depth || 0;
                                     const indent = "— ".repeat(depth);
-                                    const selected = field.value?.some((x) => String(x) === String(c.id));
+                                    const selected = field.value?.some((x: unknown) => String(x) === String(c.id));
                                     return (
                                       <div
                                         key={String(c.id)}
