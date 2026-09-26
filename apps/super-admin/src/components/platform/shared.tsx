@@ -95,9 +95,11 @@ export function CreateStoreDialog({
   const [planId, setPlanId] = useState("");
   const [status, setStatus] = useState<StoreStatus>("trial");
   const [trialDays, setTrialDays] = useState("14");
+  const [owner, setOwner] = useState({ name: "", email: "", password: "" });
 
   useEffect(() => {
     if (!open) {
+      setOwner({ name: "", email: "", password: "" });
       setName("");
       setSlug("");
       setSlugTouched(false);
@@ -116,6 +118,7 @@ export function CreateStoreDialog({
         planId: planId || undefined,
         status,
         trialDays: status === "trial" ? Number(trialDays) || 0 : undefined,
+        owner: owner.email.trim() ? { name: owner.name.trim(), email: owner.email.trim(), password: owner.password } : undefined,
       }).unwrap();
       toast.success(`Store created: ${store.name}`, {
         description: "Add a storefront domain so customers can reach it.",
@@ -133,7 +136,7 @@ export function CreateStoreDialog({
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>New store</DialogTitle>
-            <DialogDescription>Creates the tenant with default settings. Add its owner and domains afterwards.</DialogDescription>
+            <DialogDescription>Creates the tenant with its default staff roles. Add the owner now or later, then its domains.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="store-name">Store name</Label>
@@ -188,6 +191,7 @@ export function CreateStoreDialog({
               <Input id="trial-days" type="number" min={0} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
             </div>
           )}
+          <OwnerFields value={owner} onChange={setOwner} optional />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -199,6 +203,33 @@ export function CreateStoreDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export type OwnerFieldsValue = { name: string; email: string; password: string };
+
+/** Owner login fields. When `optional`, they are only required once an email is typed. */
+export function OwnerFields({ value, onChange, optional }: { value: OwnerFieldsValue; onChange: (v: OwnerFieldsValue) => void; optional?: boolean }) {
+  const required = !optional || value.email.trim() !== "";
+  const set = (k: keyof OwnerFieldsValue) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...value, [k]: e.target.value });
+  return (
+    <fieldset className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+      <legend className="px-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Owner login{optional ? " (optional)" : ""}</legend>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="owner-name">Name</Label>
+          <Input id="owner-name" value={value.name} required={required} minLength={2} onChange={set("name")} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="owner-email">Email</Label>
+          <Input id="owner-email" type="email" value={value.email} required={!optional} onChange={set("email")} />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="owner-password">Password</Label>
+        <Input id="owner-password" type="password" autoComplete="new-password" value={value.password} required={required} minLength={8} onChange={set("password")} />
+      </div>
+    </fieldset>
   );
 }
 

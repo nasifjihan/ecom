@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { authMiddleware, validate } from "../../middleware";
 import { envelope, ctrl, type RequestContext } from "../../core";
 import { PlatformService } from "./platform.service";
+import { StoresService } from "../stores/stores.service";
+import { StoreOwnerDto } from "../stores/stores.dto";
 import {
   CreatePlanDto,
   UpdatePlanDto,
@@ -93,5 +95,22 @@ superPlatformRouter.get(
   ctrl(async (req: Req, res: Response) => {
     const { items, meta } = await svc(req).auditLogs(req.query as never);
     envelope(res, { data: items, meta });
+  }),
+);
+
+superPlatformRouter.post(
+  "/stores/:id/owner",
+  validate({ params: IdParamDto, body: StoreOwnerDto }),
+  ctrl(async (req: Req, res: Response) => {
+    const owner = await new StoresService(req.ctx).createOwner(id(req), req.body);
+    envelope(res, { status: 201, message: "CREATED", data: owner });
+  }),
+);
+
+superPlatformRouter.post(
+  "/stores/:id/impersonate",
+  validate({ params: IdParamDto }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).impersonateOwner(id(req)) });
   }),
 );

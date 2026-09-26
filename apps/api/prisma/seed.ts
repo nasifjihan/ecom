@@ -1,5 +1,6 @@
 import { PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
 
 const prisma = new PrismaClient();
 
@@ -1076,84 +1077,7 @@ async function seedFashionBDStore() {
 async function seedDefaultRolesAndPerms(storeId: bigint) {
   console.log("🔐 Seeding 10 default roles + permissions...");
 
-  const ROLE_PERMS: Record<string, string[]> = {
-    owner: ["*"],
-    product_manager: [
-      "products.*",
-      "categories.*",
-      "brands.*",
-      "attributes.*",
-      "collections.*",
-      "inventory.read",
-      "inventory.update",
-      "media.*",
-      "suppliers.*",
-    ],
-    order_manager: [
-      "orders.read",
-      "orders.update",
-      "orders.statusChange",
-      "shipments.*",
-      "invoices.read",
-      "invoices.create",
-      "refunds.*",
-      "returns.*",
-      "abandoned_carts.read",
-      "abandoned_carts.update",
-    ],
-    customer_support: [
-      "customers.read",
-      "customers.update",
-      "customers.notes",
-      "orders.read",
-      "reviews.*",
-      "tickets.*",
-      "returns.read",
-      "returns.update",
-    ],
-    marketing: [
-      "coupons.*",
-      "flash_sales.*",
-      "banners.*",
-      "gift_cards.*",
-      "affiliates.read",
-      "affiliates.update",
-      "abandoned_carts.read",
-      "email_templates.read",
-      "email_templates.update",
-      "notifications.send",
-    ],
-    content: [
-      "pages.*",
-      "blog.*",
-      "faqs.*",
-      "menus.*",
-      "themes.read",
-      "themes.update",
-      "homepage_sections.*",
-      "page_builder.*",
-    ],
-    finance: [
-      "orders.read",
-      "invoices.*",
-      "refunds.read",
-      "reports.*",
-      "payment_gateways.read",
-      "payouts.*",
-      "billing.read",
-      "billing.update",
-    ],
-    shipper: [
-      "orders.read",
-      "orders.statusChange",
-      "shipments.create",
-      "shipments.update",
-      "shipments.print",
-      "orders.export",
-    ],
-    reports: ["reports.*", "orders.read", "customers.read", "products.read"],
-    viewer: ["dashboard.read", "orders.read", "products.read", "customers.read"],
-  };
+  const ROLE_PERMS = STORE_ROLE_PERMISSIONS;
 
   for (const [slug, perms] of Object.entries(ROLE_PERMS)) {
     const ex = await prisma.role.findFirst({ where: { storeId, slug } });
