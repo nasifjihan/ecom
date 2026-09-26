@@ -43,6 +43,12 @@ export const PaginationDto = z.object({
 });
 export type PaginationDto = z.infer<typeof PaginationDto>;
 
+export const StoreListQueryDto = PaginationDto.extend({
+  status: z.enum(["active", "trial", "suspended", "cancelled"]).optional(),
+  planId: z.coerce.bigint().optional(),
+});
+export type StoreListQueryDto = z.infer<typeof StoreListQueryDto>;
+
 export const StoreIdParamDto = z.object({
   id: z.coerce.bigint(),
 });

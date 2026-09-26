@@ -4,21 +4,13 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export const SUPER_AUDIENCE = "super";
 
-export type SuperAdminRole =
-  | "PLATFORM_SUPER_ADMIN"
-  | "PLATFORM_SUPPORT"
-  | "PLATFORM_FINANCE"
-  | "PLATFORM_OPERATIONS"
-  | "PLATFORM_VIEWER";
-
 export interface SuperAuthUser {
   id: string | number;
   name: string;
   email: string;
-  role: SuperAdminRole;
-  avatar?: string | null;
-  phone?: string | null;
-  twoFactorEnabled?: boolean;
+  /** PlatformAdmin.role, e.g. "super_owner". */
+  role: string;
+  lastLoginAt?: string | null;
 }
 
 interface SuperAuthState {

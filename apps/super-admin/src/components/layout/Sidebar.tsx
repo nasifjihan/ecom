@@ -8,18 +8,11 @@ import {
   BarChart3,
   Building2,
   Globe2,
-  UserPlus,
   CreditCard,
   Receipt,
-  CalendarClock,
-  Wallet,
   ShieldCheck,
-  KeyRound,
   PieChart,
   FileSearch,
-  Activity,
-  Settings2,
-  AlertTriangle,
   ChevronRight,
   Shield,
 } from "lucide-react";
@@ -53,38 +46,16 @@ const superNavSections: NavSection[] = [
   {
     title: "Stores",
     items: [
-      { href: "/stores", label: "All Stores", icon: Building2, badge: "142" },
+      { href: "/stores", label: "All Stores", icon: Building2 },
       { href: "/stores/domains", label: "Domains", icon: Globe2 },
-      { href: "/stores/signups", label: "Store Signups", icon: UserPlus },
+      { href: "/admins", label: "Store Admins", icon: ShieldCheck },
     ],
   },
   {
     title: "Billing",
     items: [
       { href: "/billing/plans", label: "Plans", icon: CreditCard },
-      {
-        href: "/billing/subscriptions",
-        label: "Subscriptions & Invoices",
-        icon: Receipt,
-      },
-      { href: "/billing/cycles", label: "Billing Cycles", icon: CalendarClock },
-      { href: "/billing/payouts", label: "Payouts", icon: Wallet },
-    ],
-  },
-  {
-    title: "Users",
-    items: [
-      {
-        href: "/admins",
-        label: "Platform Admins",
-        icon: ShieldCheck,
-        badge: "8",
-      },
-      {
-        href: "/admins/roles",
-        label: "Roles & Permissions",
-        icon: KeyRound,
-      },
+      { href: "/billing/subscriptions", label: "Subscriptions", icon: Receipt },
     ],
   },
   {
@@ -92,25 +63,11 @@ const superNavSections: NavSection[] = [
     items: [
       { href: "/reports", label: "Platform Reports", icon: PieChart },
       { href: "/reports/audit", label: "Audit Logs", icon: FileSearch },
-      { href: "/reports/health", label: "System Health", icon: Activity },
-    ],
-  },
-  {
-    title: "Settings",
-    items: [
-      {
-        href: "/settings/platform",
-        label: "Platform Settings",
-        icon: Settings2,
-      },
-      {
-        href: "/settings/maintenance",
-        label: "Maintenance",
-        icon: AlertTriangle,
-      },
     ],
   },
 ];
+
+const allNavHrefs = superNavSections.flatMap((s) => s.items.map((i) => i.href));
 
 function NavLink({
   item,
@@ -176,12 +133,13 @@ export default function SuperSidebar({
   const pathname = usePathname();
   const { data: meData } = useMeSuperQuery();
   const adminName = meData?.user?.name ?? "Platform Super Admin";
-  const adminRole = meData?.user?.role ?? "PLATFORM_SUPER_ADMIN";
+  const adminRole = meData?.user?.role ?? "super_owner";
 
-  const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
+  // The longest nav href that prefixes the path wins, so /stores/domains doesn't also light up /stores.
+  const activeHref = allNavHrefs
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === activeHref;
 
   return (
     <motion.aside

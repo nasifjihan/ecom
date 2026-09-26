@@ -679,6 +679,46 @@ export function DropdownMenuPortal({ children }: { children: React.ReactNode }) 
   return <>{children}</>;
 }
 
+export function DropdownMenuSub({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+export function DropdownMenuSubTrigger() {
+  return null;
+}
+
+export function DropdownMenuSubContent() {
+  return null;
+}
+
+export function DropdownMenuRadioGroup({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
+
+export function DropdownMenuCheckboxItem() {
+  return null;
+}
+
+export function DropdownMenuRadioItem() {
+  return null;
+}
+
+export function DropdownMenuShortcut({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      {...props}
+    />
+  );
+}
+
 type OverlayCtx = { open: boolean; onOpenChange: (open: boolean) => void };
 
 const DialogContext = React.createContext<OverlayCtx | null>(null);
@@ -1070,9 +1110,11 @@ export function SheetPortal({ children }: { children: React.ReactNode }) {
 export function SheetContent({
   className,
   children,
+  side = "right",
 }: {
   className?: string;
   children: React.ReactNode;
+  side?: "left" | "right" | "top" | "bottom";
 }) {
   const ctx = React.useContext(SheetContext);
   useEscapeToClose(ctx);

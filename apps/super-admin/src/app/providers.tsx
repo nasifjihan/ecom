@@ -14,7 +14,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   if (!storeRef.current) {
     const store = makeStore();
     storeRef.current = store;
-    // Configured before the first render so the first queries already send the super token.
     configureApiClient({
       baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api",
       getToken: () => {

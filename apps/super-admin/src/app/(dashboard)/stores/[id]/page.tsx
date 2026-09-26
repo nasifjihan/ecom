@@ -7,86 +7,63 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Building2,
-  DollarSign,
-  Users,
-  CreditCard,
   BarChart3,
-  Globe2,
-  FileText,
-  ShieldCheck,
-  PauseCircle,
-  Send,
-  Download,
-  Plus,
-  Mail,
-  Phone,
-  MapPin,
+  Building2,
   CheckCircle2,
-  XCircle,
-  Clock,
-  Calendar,
+  CreditCard,
+  DollarSign,
+  ExternalLink,
+  FileText,
+  Globe2,
   Package,
-  HardDrive,
-  UserCog,
-  UserPlus,
-  TrendingUp,
+  PauseCircle,
   ShoppingCart,
-  Eye,
+  Users,
+  UserCog,
 } from "lucide-react";
 import {
+  Avatar,
+  Badge,
+  Button,
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
-  Button,
-  Badge,
-  Avatar,
+  Skeleton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
   Tabs,
+  TabsContent,
   TabsList,
   TabsTrigger,
-  TabsContent,
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-  Input,
-  Select,
-  SelectItem,
-  Progress,
-  Skeleton,
-  Separator,
-  Alert,
-  AlertDescription,
+  cn,
 } from "@/components/ui";
-import { cn } from "@/components/ui";
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  Legend,
 } from "recharts";
-
-const metricsData = Array.from({ length: 30 }, (_, i) => ({
-  day: `${i + 1}`,
-  revenue: Math.floor(Math.random() * 2000) + 500,
-  orders: Math.floor(Math.random() * 80) + 10,
-  visits: Math.floor(Math.random() * 5000) + 1000,
-}));
-
-const planColors: Record<string, string> = {
-  Free: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
-  Starter: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Pro: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  Enterprise: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-};
+import {
+  apiErrorMessage,
+  formatDate,
+  formatMoney,
+  useGetStoreOverviewQuery,
+  useSetStoreStatusMutation,
+} from "@/lib/features/platform/platform-api-slice";
+import { EmptyRow, PlanBadge, StoreStatusBadge, initials } from "@/components/platform/shared";
+import { ChangePlanDialog } from "@/components/platform/change-plan-dialog";
+import { DomainsTable } from "@/components/platform/domains-table";
+import { AuditLogTable } from "@/components/platform/audit-log-table";
+import { SubscriptionCard } from "@/components/platform/subscription-card";
 
 function StatBlock({
   label,
@@ -104,23 +81,18 @@ function StatBlock({
   sub?: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div
-        className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-xl",
-          iconBg,
-        )}
-      >
-        <Icon className={cn("h-5 w-5", iconColor)} />
-      </div>
-      <div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-        <p className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-          {value}
-        </p>
-        {sub && <p className="text-[11px] text-emerald-600">{sub}</p>}
-      </div>
-    </div>
+    <Card>
+      <CardContent className="p-5 flex items-center gap-3">
+        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", iconBg)}>
+          <Icon className={cn("h-5 w-5", iconColor)} />
+        </div>
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{value}</p>
+          {sub && <p className="text-[11px] text-slate-500">{sub}</p>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -129,26 +101,50 @@ export default function SuperStoreDetailPage() {
   const router = useRouter();
   const storeId = params.id as string;
   const [tab, setTab] = useState("overview");
+  const [changingPlan, setChangingPlan] = useState(false);
+  const { data, isLoading, isError } = useGetStoreOverviewQuery(storeId);
+  const [setStoreStatus, { isLoading: statusBusy }] = useSetStoreStatusMutation();
 
-  const mockStore = {
-    id: storeId,
-    logo: "FB",
-    name: "Fashion BD Premium",
-    domain: "fashionbd.com",
-    domainVerified: true,
-    ownerName: "Rahim Ahmed",
-    ownerEmail: "rahim@fashionbd.com",
-    ownerPhone: "+880 1700 000000",
-    country: "Bangladesh",
-    plan: "Pro" as any,
-    status: "active",
-    mrr: 249,
-    billingCycle: "Monthly",
-    nextBillingDate: "Oct 15, 2026",
-    daysUntilBilling: 12,
-    createdDate: "Mar 14, 2025",
-    invoicesCount: 18,
-    usersCount: 5,
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-16 w-80" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-72 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <Card>
+        <CardContent className="p-10 text-center space-y-3">
+          <Building2 className="h-12 w-12 mx-auto opacity-40" />
+          <p className="font-semibold text-slate-900 dark:text-white">Store not found</p>
+          <Button variant="outline" onClick={() => router.push("/stores")}>
+            Back to all stores
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { store, owner, admins, stats, quotas, daily, auditLogs } = data;
+  const storefront = store.domains.find((d) => d.type === "storefront" && d.primary) ?? store.domains.find((d) => d.type === "storefront");
+
+  const toggleStatus = async () => {
+    const action = store.status === "suspended" ? "activate" : "suspend";
+    if (action === "suspend" && !window.confirm(`Suspend ${store.name}? Its storefront and admin stop working until it is activated again.`)) return;
+    try {
+      await setStoreStatus({ id: store.id, action }).unwrap();
+      toast.success(action === "suspend" ? `Suspended ${store.name}` : `Activated ${store.name}`);
+    } catch (err) {
+      toast.error("Couldn't change the store status", { description: apiErrorMessage(err) });
+    }
   };
 
   return (
@@ -160,132 +156,70 @@ export default function SuperStoreDetailPage() {
         className="flex items-start justify-between flex-wrap gap-4"
       >
         <div className="space-y-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/stores")}
-            className="-ml-2"
-          >
+          <Button variant="ghost" size="sm" onClick={() => router.push("/stores")} className="-ml-2">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
             Back to All Stores
           </Button>
           <div className="flex items-center gap-4">
             <Avatar className="h-14 w-14 border-2 border-slate-200 dark:border-slate-700">
-              <div className="h-full w-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-                {mockStore.logo}
+              <div className="h-full w-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-rose-500 to-red-600 text-white">
+                {initials(store.name)}
               </div>
             </Avatar>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {mockStore.name}
-                </h1>
-                <Badge
-                  variant="secondary"
-                  className={cn("border-0", planColors[mockStore.plan])}
-                >
-                  {mockStore.plan} Plan
-                </Badge>
-                <Badge variant="success" className="border-0">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Active
-                </Badge>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{store.name}</h1>
+                <PlanBadge name={store.plan?.name} />
+                <StoreStatusBadge status={store.status} />
               </div>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Globe2 className="h-3.5 w-3.5" />
-                  <a
-                    href={`https://${mockStore.domain}`}
-                    target="_blank"
-                    className="hover:underline"
-                    rel="noreferrer"
-                  >
-                    {mockStore.domain}
-                  </a>
-                  {mockStore.domainVerified && (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  )}
-                </span>
-                <Separator
-                  orientation="vertical"
-                  className="h-3 hidden sm:block"
-                />
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  ID: {mockStore.id}
-                </span>
-                <Separator
-                  orientation="vertical"
-                  className="h-3 hidden sm:block"
-                />
-                <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {mockStore.country}
-                </span>
-              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {store.slug} · {store.primaryDomain || "no domain yet"} · created {formatDate(store.createdAt)}
+                {store.status === "trial" && store.trialEndsAt ? ` · trial ends ${formatDate(store.trialEndsAt)}` : ""}
+              </p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast.success("Export data queued")}
-          >
-            <Download className="h-4 w-4 mr-1.5" />
-            Export Data
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              toast.success("Warning email sent to owner")
-            }
-          >
-            <Send className="h-4 w-4 mr-1.5" />
-            Send Warning
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => toast.warning("Suspend store: confirm in production")}
-          >
-            <PauseCircle className="h-4 w-4 mr-1.5" />
-            Suspend Store
+          {storefront && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={`${storefront.sslEnabled && !storefront.hostname.startsWith("localhost") ? "https" : "http"}://${storefront.hostname}`} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1.5" />
+                Open storefront
+              </a>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setChangingPlan(true)}>
+            <CreditCard className="h-4 w-4 mr-1.5" />
+            Change plan
           </Button>
           <Button
             size="sm"
-            className="bg-rose-600 hover:bg-rose-500 text-white"
-            onClick={() =>
-              toast.success("Impersonating owner: Redirecting to store admin...", {
-                description: "Logging in as Rahim Ahmed with SUPER privilege token.",
-              })
-            }
+            disabled={statusBusy}
+            onClick={toggleStatus}
+            className={store.status === "suspended" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}
           >
-            <ShieldCheck className="h-4 w-4 mr-1.5" />
-            Login as Owner
+            {store.status === "suspended" ? <CheckCircle2 className="h-4 w-4 mr-1.5" /> : <PauseCircle className="h-4 w-4 mr-1.5" />}
+            {store.status === "suspended" ? "Activate store" : "Suspend store"}
           </Button>
         </div>
       </motion.div>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="w-full justify-start overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-transparent h-auto p-0 space-x-1 mb-0 rounded-none">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="bg-transparent p-0 h-auto border-b border-slate-200 dark:border-slate-800 w-full justify-start rounded-none">
           {[
-            { id: "overview", label: "Overview", icon: Building2 },
+            { id: "overview", label: "Overview", icon: BarChart3 },
             { id: "billing", label: "Billing", icon: CreditCard },
-            { id: "users", label: "Users", icon: Users },
-            { id: "plan", label: "Plan & Features", icon: Package },
-            { id: "metrics", label: "Metrics", icon: BarChart3 },
-            { id: "domains", label: "Domains", icon: Globe2 },
+            { id: "users", label: `Admins (${admins.length})`, icon: Users },
+            { id: "domains", label: `Domains (${store.domains.length})`, icon: Globe2 },
             { id: "audit", label: "Audit Log", icon: FileText },
           ].map((t) => (
             <TabsTrigger
               key={t.id}
               value={t.id}
-              onClick={() => setTab(t.id)}
               className={cn(
-                "flex items-center gap-2 px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent",
+                "flex items-center gap-2 px-4 py-3 rounded-none border-b-2 border-transparent shadow-none bg-transparent",
                 tab === t.id
-                  ? "!border-rose-500 !text-rose-600 dark:!text-rose-400"
+                  ? "!border-rose-500 !text-rose-600 dark:!text-rose-400 !bg-transparent !shadow-none"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
               )}
             >
@@ -298,182 +232,169 @@ export default function SuperStoreDetailPage() {
         <TabsContent value="overview" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatBlock
-              label="MRR (Monthly)"
-              value={`$${mockStore.mrr}`}
+              label="MRR"
+              value={formatMoney(data.mrr)}
               icon={DollarSign}
               iconBg="bg-emerald-500/10"
               iconColor="text-emerald-600"
-              sub="+$19 vs last month"
+              sub={store.status === "active" ? `${store.plan?.name ?? "No"} plan` : `Not billed while ${store.status}`}
             />
             <StatBlock
-              label="Billing Cycle"
-              value={mockStore.billingCycle}
-              icon={Calendar}
+              label="GMV (all time)"
+              value={formatMoney(stats.revenue, "BDT")}
+              icon={ShoppingCart}
               iconBg="bg-blue-500/10"
               iconColor="text-blue-600"
-              sub={`Next: ${mockStore.nextBillingDate}`}
+              sub={`${formatMoney(stats.revenue30d, "BDT")} in the last 30 days`}
             />
             <StatBlock
-              label="Store Users"
-              value={mockStore.usersCount.toString()}
-              icon={Users}
-              iconBg="bg-purple-500/10"
-              iconColor="text-purple-600"
-            />
-            <StatBlock
-              label="Invoices Paid"
-              value={mockStore.invoicesCount.toString()}
+              label="Orders"
+              value={stats.orders.toLocaleString()}
               icon={FileText}
               iconBg="bg-amber-500/10"
               iconColor="text-amber-600"
+              sub={`${stats.orders30d} in the last 30 days`}
+            />
+            <StatBlock
+              label="Customers"
+              value={stats.customers.toLocaleString()}
+              icon={Users}
+              iconBg="bg-purple-500/10"
+              iconColor="text-purple-600"
+              sub={`${stats.products} products`}
             />
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Usage Quotas</CardTitle>
-                <CardDescription>
-                  {mockStore.plan} Plan limits and current usage
-                </CardDescription>
+                <CardTitle className="text-lg">Last 30 Days</CardTitle>
+                <CardDescription>Daily GMV and orders placed. Cancelled and failed orders don&apos;t count towards GMV.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5 pt-2">
-                {[
-                  { label: "Products", used: 184, limit: 500, icon: Package, color: "bg-emerald-500" },
-                  { label: "Storage", used: 4.2, limit: 20, unit: "GB", icon: HardDrive, color: "bg-blue-500" },
-                  { label: "Staff Users", used: 5, limit: 10, icon: UserCog, color: "bg-purple-500" },
-                  { label: "API Calls", used: 28472, limit: 100000, icon: Eye, color: "bg-amber-500" },
-                  { label: "Bandwidth", used: 86, limit: 500, unit: "GB", icon: Globe2, color: "bg-rose-500" },
-                ].map((q) => {
-                  const pct = Math.min(
-                    100,
-                    (q.used / q.limit) * 100,
-                  );
-                  return (
-                    <div key={q.label}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <q.icon className="h-4 w-4 text-slate-500" />
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            {q.label}
-                          </span>
-                        </div>
-                        <span className="text-xs text-slate-500 tabular-nums">
-                          {q.used.toLocaleString()}
-                          {q.unit ?? ""} / {q.limit.toLocaleString()}
-                          {q.unit ?? ""}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full transition-all", q.color)}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+              <CardContent className="h-72 pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={daily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gmvGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.45} />
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200/50 dark:text-slate-800" />
+                    <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} interval={4} />
+                    <YAxis yAxisId="gmv" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => (v >= 1000 ? `৳${v / 1000}k` : `৳${v}`)} />
+                    <YAxis yAxisId="orders" orientation="right" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <RechartsTooltip
+                      formatter={(value: number, name: string) => (name === "revenue" ? [formatMoney(value, "BDT"), "GMV"] : [value, "Orders"])}
+                      contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0" }}
+                    />
+                    <Area yAxisId="gmv" type="monotone" dataKey="revenue" stroke="#f43f5e" fill="url(#gmvGrad)" />
+                    <Area yAxisId="orders" type="monotone" dataKey="orders" stroke="#3b82f6" fill="transparent" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Owner Details</CardTitle>
-                <CardDescription>Primary store contact</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-2">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <div className="h-full w-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
-                      RA
-                    </div>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {mockStore.ownerName}
-                    </p>
-                    <p className="text-xs text-slate-500">Store Owner</p>
-                  </div>
-                </div>
-                <Separator />
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <Mail className="h-4 w-4 text-slate-400" />
-                    {mockStore.ownerEmail}
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <Phone className="h-4 w-4 text-slate-400" />
-                    {mockStore.ownerPhone}
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <MapPin className="h-4 w-4 text-slate-400" />
-                    {mockStore.country}
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" className="w-full mt-2">
-                  <UserPlus className="h-4 w-4 mr-1.5" />
-                  Contact Owner
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Owner</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {owner ? (
+                    <>
+                      <p className="font-semibold text-slate-900 dark:text-white">{owner.name}</p>
+                      <p className="text-slate-600 dark:text-slate-300">{owner.email}</p>
+                      {owner.phone && <p className="text-slate-600 dark:text-slate-300">{owner.phone}</p>}
+                      <p className="text-xs text-slate-500">
+                        Last login {owner.lastLoginAt ? formatDate(owner.lastLoginAt) : "never"}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-slate-500">This store has no admin users yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Plan Usage</CardTitle>
+                  <CardDescription>{store.plan ? `${store.plan.name} plan limits` : "No plan assigned"}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-2">
+                  {quotas.map((q) => {
+                    const pct = q.limit ? Math.min(100, (q.used / q.limit) * 100) : 0;
+                    const Icon = q.key === "products" ? Package : UserCog;
+                    return (
+                      <div key={q.key}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-slate-500" />
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{q.label}</span>
+                          </div>
+                          <span className="text-xs text-slate-500 tabular-nums">
+                            {q.used.toLocaleString()} / {q.limit ? q.limit.toLocaleString() : "unlimited"}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full", pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500")}
+                            style={{ width: `${q.limit ? pct : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="billing" className="mt-6 space-y-6">
+        <TabsContent value="billing" className="mt-6">
+          <SubscriptionCard storeId={store.id} storeName={store.name} storeStatus={store.status} plan={store.plan} billingSub={store.billingSub} mrr={data.mrr} onChangePlan={() => setChangingPlan(true)} />
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Invoices & Transactions</CardTitle>
-              <CardDescription>
-                Complete billing history for this store
-              </CardDescription>
+              <CardTitle className="text-lg">Store Admins</CardTitle>
+              <CardDescription>Staff accounts that can sign in to this store&apos;s admin.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
                 <Table>
                   <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
                     <TableRow>
-                      <TableHead>Invoice #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Amount</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>Last Login</TableHead>
+                      <TableHead>Added</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Array.from({ length: 6 }, (_, i) => {
-                      const paid = i < 5;
-                      return (
-                        <TableRow key={i}>
-                          <TableCell className="font-mono text-xs">
-                            INV-{(2000 - i).toString()}
-                          </TableCell>
-                          <TableCell>Sep {15 - i * 30}, 2026</TableCell>
-                          <TableCell>Monthly Subscription</TableCell>
-                          <TableCell className="font-semibold tabular-nums">
-                            $249.00
+                    {admins.length === 0 ? (
+                      <EmptyRow colSpan={6} icon={Users} title="No admins yet" />
+                    ) : (
+                      admins.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-medium">{a.name}</TableCell>
+                          <TableCell className="text-sm text-slate-600 dark:text-slate-300">{a.email}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{a.role?.name ?? "—"}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={paid ? "success" : "destructive"}
-                              className="border-0"
-                            >
-                              {paid ? "Paid" : "Failed"}
+                            <Badge variant={a.status === "active" ? "success" : "secondary"} className="border-0 capitalize">
+                              {a.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-slate-500">
-                            Visa ••{paid ? "4242" : "0000"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
-                              <Download className="h-3.5 w-3.5 mr-1" />
-                              PDF
-                            </Button>
-                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">{a.lastLoginAt ? formatDate(a.lastLoginAt) : "Never"}</TableCell>
+                          <TableCell className="text-xs text-slate-500">{formatDate(a.createdAt)}</TableCell>
                         </TableRow>
-                      );
-                    })}
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -481,394 +402,32 @@ export default function SuperStoreDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="users" className="mt-6 space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Store Admins
-              </h2>
-              <p className="text-sm text-slate-500">
-                Users with access to {mockStore.name} store admin
-              </p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => toast.success("Invite sheet opened (Demo)")}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Invite Store Admin
-            </Button>
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Last Login</TableHead>
-                    <TableHead>2FA</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[
-                    { name: "Rahim Ahmed", email: "rahim@fashionbd.com", role: "Store Owner", last: "2h ago", tfa: true, status: "Active" },
-                    { name: "Karim Hassan", email: "karim@fashionbd.com", role: "Store Manager", last: "1d ago", tfa: true, status: "Active" },
-                    { name: "Fatima Khatun", email: "fatima@fashionbd.com", role: "Catalog Manager", last: "3d ago", tfa: false, status: "Active" },
-                    { name: "Tanvir Rahman", email: "tanvir@fashionbd.com", role: "Support Agent", last: "2w ago", tfa: false, status: "Active" },
-                  ].map((u, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-8 w-8">
-                            <div className="h-full w-full flex items-center justify-center text-xs font-bold bg-gradient-to-br from-rose-500 to-pink-500 text-white">
-                              {u.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .slice(0, 2)
-                                .join("")}
-                            </div>
-                          </Avatar>
-                          <span className="text-sm font-medium text-slate-900 dark:text-white">
-                            {u.name}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-600 dark:text-slate-300">
-                        {u.email}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {u.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-500">
-                        {u.last}
-                      </TableCell>
-                      <TableCell>
-                        {u.tfa ? (
-                          <Badge variant="success" className="border-0 px-1.5 py-0 text-[10px]">
-                            2FA
-                          </Badge>
-                        ) : (
-                          <XCircle className="h-4 w-4 text-slate-400" />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="success" className="border-0">
-                          {u.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="domains" className="mt-6">
+          <DomainsTable storeId={store.id} />
         </TabsContent>
 
-        <TabsContent value="plan" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg">Current Plan & Features</CardTitle>
-                <CardDescription>
-                  {mockStore.plan} plan subscription details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-                  <div>
-                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">
-                      Current Plan
-                    </p>
-                    <p className="text-xl font-bold text-slate-900 dark:text-white">
-                      {mockStore.plan}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      ${mockStore.mrr} / {mockStore.billingCycle.toLowerCase()}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      Downgrade
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500"
-                    >
-                      Upgrade to Enterprise
-                    </Button>
-                  </div>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { label: "Products", value: "500" },
-                    { label: "Staff Users", value: "10" },
-                    { label: "Storage", value: "20 GB" },
-                    { label: "API Calls", value: "100k/mo" },
-                    { label: "Custom Domain", value: "Yes" },
-                    { label: "SSL Certificates", value: "Auto" },
-                    { label: "Priority Support", value: "Email" },
-                    { label: "Analytics", value: "Advanced" },
-                  ].map((f) => (
-                    <div
-                      key={f.label}
-                      className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50"
-                    >
-                      <span className="text-sm text-slate-600 dark:text-slate-300">
-                        {f.label}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {f.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Actions</CardTitle>
-                <CardDescription>Subscription controls</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <Button variant="outline" className="w-full justify-start">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Add-ons
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Switch Billing Cycle
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Apply Credit
-                </Button>
-                <Separator className="my-2" />
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-amber-600 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 border-amber-200 dark:border-amber-900"
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Schedule Cancel at End
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 border-red-200 dark:border-red-900"
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Cancel Immediately
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="metrics" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Last 30 Days Performance</CardTitle>
-              <CardDescription>
-                Revenue, orders & visits trend
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4 mt-2">
-                <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
-                  <p className="text-xs text-slate-500">Revenue (30d)</p>
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                    $28,472
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                  <p className="text-xs text-slate-500">Orders (30d)</p>
-                  <p className="text-xl font-bold text-blue-700 dark:text-blue-400 tabular-nums">
-                    1,284
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/10">
-                  <p className="text-xs text-slate-500">Visits (30d)</p>
-                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400 tabular-nums">
-                    92,347
-                  </p>
-                </div>
-              </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={metricsData}
-                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <RechartsTooltip />
-                    <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revGrad)" name="Revenue" />
-                    <Area type="monotone" dataKey="orders" stroke="#3b82f6" fill="url(#ordGrad)" name="Orders" />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="domains" className="mt-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Custom Domains
-              </h2>
-              <p className="text-sm text-slate-500">
-                Connect custom domains and manage SSL
-              </p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => toast.success("Add domain dialog (Demo)")}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Custom Domain
-            </Button>
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
-                  <TableRow>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Primary</TableHead>
-                    <TableHead>SSL</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Added</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>
-                      <span className="text-sm font-medium text-slate-900 dark:text-white">
-                        fashionbd.com
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">Root Domain</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="success" className="border-0">✓ Primary</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="success" className="border-0">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Auto SSL
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="success" className="border-0">Active</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">Mar 14, 2025</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <span className="text-sm font-medium text-slate-900 dark:text-white">
-                        shop.fashionbd.com
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">Subdomain</Badge>
-                    </TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell>
-                      <Badge variant="success" className="border-0">
-                        Auto SSL
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="success" className="border-0">Active</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">Jun 2, 2025</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription className="ml-2">
-              SSL certificates are automatically provisioned via Caddy. New
-              domains may take a few minutes to verify DNS before HTTPS
-              becomes active.
-            </AlertDescription>
-          </Alert>
-        </TabsContent>
-
-        <TabsContent value="audit" className="mt-6 space-y-6">
+        <TabsContent value="audit" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Store Audit Log</CardTitle>
+              <CardTitle className="text-lg">Audit Log</CardTitle>
               <CardDescription>
-                Recent admin actions on {mockStore.name}
+                Latest 25 admin actions in this store.{" "}
+                <Link href={`/reports/audit?storeId=${store.id}`} className="text-rose-600 hover:underline">
+                  See all
+                </Link>
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
-                  <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>Actor</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>IP Address</TableHead>
-                    <TableHead>Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[
-                    { t: "2h ago", user: "Karim Hassan", action: "product.updated", ip: "103.xx.xx.42", detail: 'Updated product "Premium Denim Jacket"' },
-                    { t: "5h ago", user: "Rahim Ahmed", action: "order.status_changed", ip: "103.xx.xx.42", detail: "Order #FB-38292 → Shipped" },
-                    { t: "1d ago", user: "Fatima Khatun", action: "category.created", ip: "202.xx.xx.17", detail: 'Created category "Winter Collection 2026"' },
-                    { t: "3d ago", user: "Rahim Ahmed", action: "settings.updated", ip: "103.xx.xx.42", detail: "Updated payment gateway settings (SSLCommerz)" },
-                    { t: "1w ago", user: "Tanvir Rahman", action: "customer.replied", ip: "175.xx.xx.88", detail: "Replied to ticket #TC-8847" },
-                  ].map((log, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs text-slate-500 w-28">
-                        {log.t}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium text-slate-900 dark:text-white w-40">
-                        {log.user}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0.5">
-                          {log.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-slate-500 w-28">
-                        {log.ip}
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-600 dark:text-slate-300">
-                        {log.detail}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent>
+              <AuditLogTable logs={auditLogs} />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ChangePlanDialog
+        store={changingPlan ? { id: store.id, name: store.name, status: store.status, plan: store.plan } : null}
+        onOpenChange={(o) => !o && setChangingPlan(false)}
+      />
     </div>
   );
 }

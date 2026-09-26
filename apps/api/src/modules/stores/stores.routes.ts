@@ -1,6 +1,4 @@
-import { Router, type Request, type Response } from "express";
-import { prisma } from "../../config";
-import { ctrl, envelope, paginate, type RequestContext } from "../../core";
+import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { storesController } from "./stores.controller";
 import {
@@ -8,7 +6,7 @@ import {
   UpdateStoreDto,
   CreateDomainDto,
   UpdateDomainDto,
-  PaginationDto,
+  StoreListQueryDto,
   StoreIdParamDto,
   DomainIdParamDto,
   StoreDomainQueryDto,
@@ -21,7 +19,7 @@ superStoresRouter
   .get(
     authMiddleware("super"),
     rbacMiddleware("settings.read"),
-    validate({ query: PaginationDto }),
+    validate({ query: StoreListQueryDto }),
     storesController.listStores,
   )
   .post(
@@ -128,30 +126,4 @@ superPlansRouter.get(
   "/",
   authMiddleware("super"),
   storesController.listPlans,
-);
-
-/** Platform billing subscriptions (one per store), newest first. Read-only until Stripe billing lands. */
-export const superSubscriptionsRouter = Router();
-
-superSubscriptionsRouter.get(
-  "/",
-  authMiddleware("super"),
-  rbacMiddleware("settings.read"),
-  validate({ query: PaginationDto }),
-  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const q = req.query as unknown as { page: number; perPage: number; search?: string };
-    const where = q.search ? { store: { name: { contains: q.search, mode: "insensitive" as const } } } : {};
-    const [rows, total] = await Promise.all([
-      prisma.billingSubscription.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (q.page - 1) * q.perPage,
-        take: q.perPage,
-        include: { store: { select: { id: true, name: true, status: true } }, plan: true },
-      }),
-      prisma.billingSubscription.count({ where }),
-    ]);
-    const page = paginate({ items: rows, total, page: q.page, perPage: q.perPage });
-    envelope(res, { status: 200, data: page.data, meta: page.meta });
-  }),
 );
