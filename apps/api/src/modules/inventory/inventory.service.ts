@@ -18,33 +18,62 @@ export class InventoryService extends BaseService {
     this.inventory = new InventoryRepository();
   }
 
+  /**
+   * Applies stock deltas. A line targets a variant (variantId) or, for a simple product
+   * without variants, the product itself (productId only). Rows are looked up inside the
+   * caller's store, so one store's admin can never touch another store's stock.
+   */
   async adjustStock(lines: StockAdjustmentDto): Promise<unknown[]> {
+    const storeId = this.ctx.storeId;
     const results: unknown[] = [];
     await tx(async (t: any) => {
       for (const line of lines.lines) {
-        const vid = BigInt(line.variantId);
-        const variant = await prisma.productVariant.findFirst({
-          where: { id: vid },
-        });
-        if (!variant) throw new NotFoundError("productVariant", vid);
+        let productId: bigint;
+        let variantId: bigint | null = null;
+        let qtyBefore: number;
 
-        const qtyBefore = Number(variant.stockQty ?? 0);
-        const qtyAfter = qtyBefore + line.delta;
-        if (qtyAfter < 0) {
-          throw new BadRequestError(`Insufficient stock for variant ${vid}: have ${qtyBefore}, need ${-line.delta}`, "INSUFFICIENT_STOCK");
+        if (line.variantId !== undefined) {
+          variantId = BigInt(line.variantId);
+          const variant = await t.productVariant.findFirst({
+            where: { id: variantId, ...(storeId !== undefined ? { product: { storeId } } : {}) },
+          });
+          if (!variant) throw new NotFoundError("productVariant", variantId);
+          productId = variant.productId;
+          qtyBefore = Number(variant.stockQty ?? 0);
+        } else {
+          productId = BigInt(line.productId!);
+          const product = await t.product.findFirst({
+            where: { id: productId, ...(storeId !== undefined ? { storeId } : {}) },
+            include: { _count: { select: { variants: true } } },
+          });
+          if (!product) throw new NotFoundError("product", productId);
+          if (product._count.variants > 0) {
+            throw new BadRequestError("This product has variants; adjust a variant instead", "VARIANT_REQUIRED");
+          }
+          qtyBefore = Number(product.stockQty ?? 0);
         }
 
-        await this.inventory.adjustStockQtyVariantOrProduct(this.ctx, vid, line.delta, qtyAfter, t);
+        const qtyAfter = qtyBefore + line.delta;
+        if (qtyAfter < 0) {
+          throw new BadRequestError(`Insufficient stock: have ${qtyBefore}, need ${-line.delta}`, "INSUFFICIENT_STOCK");
+        }
 
-        const warehouse = line.warehouse ?? "MAIN";
-        const reason = line.reason ?? (line.delta > 0 ? "MANUAL_RESTOCK" : "MANUAL_DEDUCT");
+        if (variantId !== null) {
+          await t.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
+          // Keep the parent's aggregate in step with its variants (used by listings and low-stock reports).
+          const sum = await t.productVariant.aggregate({ where: { productId }, _sum: { stockQty: true } });
+          await t.product.update({ where: { id: productId }, data: { stockQty: sum._sum.stockQty ?? 0 } });
+        } else {
+          await t.product.update({ where: { id: productId }, data: { stockQty: qtyAfter } });
+        }
+
         const log = await t.inventoryLog.create({
           data: {
-            variantId: vid,
-            productId: line.productId ? BigInt(line.productId) : variant.productId,
-            warehouse,
+            variantId,
+            productId,
+            warehouse: line.warehouse ?? "MAIN",
             changeQty: line.delta,
-            reason,
+            reason: line.reason ?? (line.delta > 0 ? "MANUAL_RESTOCK" : "MANUAL_DEDUCT"),
             referenceId: null,
             note: line.note ?? null,
             qtyBefore,
@@ -57,15 +86,93 @@ export class InventoryService extends BaseService {
     return results;
   }
 
+  /**
+   * One row per stock-keeping unit: each variant of a variable product, or the product itself
+   * when it has no variants. Built in memory, which is fine for catalogs of a few thousand SKUs.
+   */
+  async stockList(q: { search?: string; lowStock?: boolean; outOfStock?: boolean; page: number; perPage: number }) {
+    const storeId = this.ctx.storeId;
+    const where: Record<string, unknown> = { ...(storeId !== undefined ? { storeId } : {}), manageStock: true };
+    if (q.search) {
+      where.OR = [
+        { name: { contains: q.search, mode: "insensitive" } },
+        { sku: { contains: q.search, mode: "insensitive" } },
+        { variants: { some: { sku: { contains: q.search, mode: "insensitive" } } } },
+      ];
+    }
+    const products = await prisma.product.findMany({
+      where: where as any,
+      orderBy: { name: "asc" },
+      include: {
+        variants: { orderBy: { id: "asc" } },
+        images: { orderBy: { sortOrder: "asc" }, take: 1 },
+      },
+    });
+    const lastLogs = await prisma.inventoryLog.groupBy({
+      by: ["productId", "variantId"],
+      where: { productId: { in: products.map((p) => p.id) } },
+      _max: { createdAt: true },
+    });
+    const lastAt = new Map(lastLogs.map((l) => [`${l.productId}:${l.variantId ?? ""}`, l._max.createdAt]));
+
+    const rows = products.flatMap((p) => {
+      const image = p.images[0]?.imageUrl ?? null;
+      const make = (v: (typeof p.variants)[number] | null) => {
+        const physical = Number((v ? v.stockQty : p.stockQty) ?? 0);
+        const reserved = Number((v ? v.reservedStock : p.reservedStock) ?? 0);
+        const label = v ? Object.values((v.attributeValues ?? {}) as Record<string, string>).join(" / ") : "";
+        return {
+          id: v ? `v${v.id}` : `p${p.id}`,
+          productId: String(p.id),
+          variantId: v ? String(v.id) : null,
+          productName: label ? `${p.name} (${label})` : p.name,
+          sku: (v ? v.sku : p.sku) ?? "",
+          imageUrl: (v?.imageUrl ?? image) || null,
+          physicalQty: physical,
+          reservedQty: reserved,
+          availableQty: Math.max(0, physical - reserved),
+          lowStockThreshold: (v ? v.lowStockThreshold : null) ?? p.lowStockThreshold ?? 5,
+          // Supplier cost when known, otherwise the selling price (so value is at retail).
+          unitCost: Number(p.supplierCost ?? v?.regularPrice ?? p.regularPrice ?? 0),
+          lastAdjustedAt: lastAt.get(`${p.id}:${v ? v.id : ""}`) ?? null,
+        };
+      };
+      return p.variants.length ? p.variants.map(make) : [make(null)];
+    });
+
+    const summary = {
+      totalSkus: rows.length,
+      totalStockValue: Math.round(rows.reduce((s, r) => s + r.physicalQty * r.unitCost, 0) * 100) / 100,
+      outOfStockCount: rows.filter((r) => r.availableQty === 0).length,
+      lowStockCount: rows.filter((r) => r.availableQty > 0 && r.availableQty <= r.lowStockThreshold).length,
+    };
+    const filtered = rows.filter((r) => {
+      if (q.outOfStock && r.availableQty !== 0) return false;
+      if (q.lowStock && !(r.availableQty > 0 && r.availableQty <= r.lowStockThreshold)) return false;
+      return true;
+    });
+    const total = filtered.length;
+    const start = (q.page - 1) * q.perPage;
+    return {
+      items: filtered.slice(start, start + q.perPage),
+      summary,
+      total,
+      page: q.page,
+      perPage: q.perPage,
+      totalPages: Math.max(1, Math.ceil(total / q.perPage)),
+    };
+  }
+
   async transferStock(dto: StockTransferDto): Promise<{ originLogs: unknown[]; destLogs: unknown[] }> {
     const originLogs: unknown[] = [];
     const destLogs: unknown[] = [];
 
     await tx(async (t: any) => {
       for (const line of dto.lines) {
+        if (line.variantId === undefined) throw new BadRequestError("Transfers need a variantId", "VARIANT_REQUIRED");
         const vid = BigInt(line.variantId);
         const variant = await prisma.productVariant.findFirst({
-          where: { id: vid },
+          where: { id: vid, ...(this.ctx.storeId !== undefined ? { product: { storeId: this.ctx.storeId } } : {}) },
         });
         if (!variant) throw new NotFoundError("productVariant", vid);
 

@@ -13,7 +13,8 @@ export function getStorageProvider(): StorageProvider {
     return cachedProvider;
   }
 
-  if (env.S3_ENDPOINT) {
+  // STORAGE_DRIVER decides; S3_ENDPOINT alone (set in .env.example) must not force S3 when driver=local.
+  if (env.STORAGE_DRIVER === "s3") {
     cachedProvider = new S3Provider();
   } else {
     cachedProvider = new LocalDiskProvider();

@@ -72,3 +72,6 @@ Thumbs.db
 *.pid
 *.seed
 *.pid.lock
+
+# Local media uploads (STORAGE_DRIVER=local)
+apps/api/uploads/

@@ -75,6 +75,7 @@ import {
   useGetInventoryLogsQuery,
   useGetStockTransfersQuery,
   useAdjustStockMutation,
+  useUpdateStockThresholdMutation,
   useCreateTransferMutation,
   type StockItem,
   type InventoryLog,
@@ -106,100 +107,11 @@ function fdd(iso?: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function genStock(count: number): StockItem[] {
-  const warehouses = [{ id: "W1", name: "Dhaka Warehouse" }, { id: "W2", name: "Chittagong Warehouse" }];
-  const products = [
-    "Premium Cotton Panjabi - Navy Blue (M)", "Premium Cotton Panjabi - Navy Blue (L)",
-    "Linen Shirt - White (L)", "Linen Shirt - White (XL)",
-    "Leather Wallet - Brown", "Silk Saree - Maroon",
-    "Gold Plated Earrings", "Premium Leather Handbag",
-    "Denim Jeans - Black (32)", "Casual T-Shirt - Gray (M)",
-  ];
-  const out: StockItem[] = [];
-  for (let i = 0; i < count; i++) {
-    const w = warehouses[i % 2];
-    const p = products[i % products.length];
-    const available = Math.max(0, (i * 7) % 150 - (i % 10 === 0 ? 2 : 0));
-    const reserved = available > 50 ? (i % 5) * 2 : 0;
-    const cost = 200 + ((i * 137) % 8000);
-    out.push({
-      id: 100 + i,
-      productVariantId: 1000 + i,
-      productName: p,
-      sku: `SKU-${(1000 + i).toString().padStart(5, "0")}`,
-      warehouseId: w.id, warehouseName: w.name,
-      availableQty: available,
-      reservedQty: reserved,
-      physicalQty: available + reserved,
-      lowStockThreshold: i % 9 === 0 ? 3 : 5,
-      reorderPoint: 20,
-      unitCost: cost,
-      lastAdjustedAt: new Date(Date.now() - i * 86400000).toISOString(),
-      lastAdjustedBy: i % 3 === 0 ? "Admin User" : "Staff Member",
-    });
-  }
-  return out;
-}
-
-function genLogs(count: number): InventoryLog[] {
-  const types: AdjustmentType[] = ["ADD", "DEDUCT", "SET", "INVENTORY_COUNT", "DAMAGE"];
-  const reasons: AdjustmentReason[] = ["DAMAGED", "EXPIRED", "COUNTED", "RECEIVED", "THEFT", "OTHER"];
-  const users = ["Admin User", "Staff Member A", "Staff Member B"];
-  const out: InventoryLog[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = types[i % types.length];
-    const delta =
-      t === "DEDUCT" || t === "DAMAGE"
-        ? -((i % 20) - 1)
-        : t === "SET"
-        ? 0
-        : (i % 25) + 1;
-    out.push({
-      id: 5000 + i,
-      createdAt: new Date(Date.now() - i * 3600000 * 6).toISOString(),
-      referenceNo: `REF-${(2000 + i).toString()}`,
-      type: t,
-      productVariantId: 1000 + (i % 20),
-      productName: ["Panjabi Navy M", "Shirt White L", "Wallet Brown", "Saree Maroon"][i % 4],
-      sku: `SKU-${(1000 + (i % 20)).toString().padStart(5, "0")}`,
-      qtyChange: delta,
-      reason: reasons[i % reasons.length],
-      note: i % 4 === 0 ? "Periodic count" : undefined,
-      userId: i, userName: users[i % users.length],
-      warehouseId: "W1", warehouseName: "Dhaka Warehouse",
-      newQty: 80 + (i * 3) % 100,
-    });
-  }
-  return out;
-}
-
-function genTransfers(count: number): StockTransfer[] {
-  const statuses: StockTransfer["status"][] = ["DRAFT", "SENT", "RECEIVED", "CANCELLED"];
-  const out: StockTransfer[] = [];
-  for (let i = 0; i < count; i++) {
-    out.push({
-      id: 300 + i,
-      referenceNo: `TRF-${(1500 + i).toString()}`,
-      fromWarehouseId: "W1", fromWarehouseName: "Dhaka Warehouse",
-      toWarehouseId: "W2", toWarehouseName: "Chittagong Warehouse",
-      productVariantId: 1000 + i,
-      productName: ["Panjabi Navy Blue M", "Linen Shirt White L", "Wallet Brown", "Saree Maroon"][i % 4],
-      sku: `SKU-${(1000 + i).toString().padStart(5, "0")}`,
-      quantity: 5 + (i * 3) % 30,
-      status: statuses[i % statuses.length],
-      createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-      receivedAt: i % 4 === 2 ? new Date(Date.now() - i * 86400000 + 3600000 * 48).toISOString() : undefined,
-    });
-  }
-  return out;
-}
-
 export default function InventoryPage() {
   const [tab, setTab] = useState("stock");
   const [stockSearch, setStockSearch] = useState("");
   const [lowStock, setLowStock] = useState(false);
   const [outOfStock, setOutOfStock] = useState(false);
-  const [warehouses, setWarehouses] = useState<string[]>([]);
   const [showAdjustSheet, setShowAdjustSheet] = useState(false);
   const [pageStock, setPageStock] = useState<StockItem | null>(null);
 
@@ -207,84 +119,104 @@ export default function InventoryPage() {
     search: stockSearch || undefined,
     lowStock: lowStock || undefined,
     outOfStock: outOfStock || undefined,
-    warehouseIds: warehouses.length > 0 ? warehouses : undefined,
     page: 1, limit: 50,
   });
   const { data: logsRaw, isLoading: logsLoading } = useGetInventoryLogsQuery({ page: 1, limit: 50 });
   const { data: transfersRaw, isLoading: transfersLoading } = useGetStockTransfersQuery({ page: 1, limit: 50 });
   const [adjustStock] = useAdjustStockMutation();
-  const [createTransfer] = useCreateTransferMutation();
-  void createTransfer;
+  const [updateThreshold] = useUpdateStockThresholdMutation();
 
-  const stock = stockRaw?.items ?? genStock(30);
-  const summary: StockSummary = stockRaw?.summary ?? {
-    totalSkus: stock.length,
-    totalStockValue: stock.reduce((s, x) => s + x.physicalQty * x.unitCost, 0),
-    outOfStockCount: stock.filter((s) => s.availableQty === 0).length,
-    lowStockCount: stock.filter((s) => s.availableQty > 0 && s.availableQty <= s.lowStockThreshold).length,
-    stockTurnoverRatio: 4.7,
-  };
-  const logs = logsRaw?.items ?? genLogs(25);
-  const transfers = transfersRaw?.items ?? genTransfers(12);
+  const stock = stockRaw?.items ?? [];
+  const summary: StockSummary = stockRaw?.summary ?? { totalSkus: 0, totalStockValue: 0, outOfStockCount: 0, lowStockCount: 0 };
+  const logs = logsRaw?.items ?? [];
 
-  const [adjustForm, setAdjustForm] = useState({
-    productVariantId: "", productName: "", warehouseId: "W1", warehouseName: "Dhaka Warehouse",
+  const emptyAdjust = {
+    productId: "", variantId: null as string | null, currentQty: 0, productName: "",
     quantity: 1, type: "ADD" as AdjustmentType, reason: "RECEIVED" as AdjustmentReason,
-    note: "", referenceNo: "", date: "", attachment: "",
-  });
+    note: "",
+  };
+  const [adjustForm, setAdjustForm] = useState(emptyAdjust);
 
   useEffect(() => {
     if (pageStock) {
       setAdjustForm((f) => ({
         ...f,
-        productVariantId: String(pageStock.productVariantId),
+        productId: pageStock.productId,
+        variantId: pageStock.variantId,
+        currentQty: pageStock.physicalQty,
         productName: pageStock.productName,
-        warehouseId: String(pageStock.warehouseId),
-        warehouseName: pageStock.warehouseName,
       }));
       setShowAdjustSheet(true);
     }
   }, [pageStock]);
+
+  // API errors arrive as a message string or { field: [message] }.
+  const errorText = (err: any, fallback: string) => {
+    const d = err?.data;
+    if (typeof d === "string") return d;
+    const first = d && typeof d === "object" ? Object.values(d)[0] : undefined;
+    return Array.isArray(first) ? String(first[0]) : fallback;
+  };
 
   const [editingQty, setEditingQty] = useState<Record<string, number>>({});
   const [editingThresh, setEditingThresh] = useState<Record<string, number>>({});
 
   function setEditQty(id: string | number, v: number) { setEditingQty({ ...editingQty, [String(id)]: v }); }
   function setEditThresh(id: string | number, v: number) { setEditingThresh({ ...editingThresh, [String(id)]: v }); }
-  function saveQty(s: StockItem) {
-    const val = editingQty[String(s.id)] ?? s.availableQty;
-    toast.success(`Saved ${s.sku}: qty updated to ${val}`);
+  // The quick-edit box shows on-hand (physical) stock; saving records a "set to" adjustment.
+  async function saveQty(s: StockItem) {
+    const val = editingQty[String(s.id)];
     const next = { ...editingQty }; delete next[String(s.id)]; setEditingQty(next);
+    if (val === undefined || val === s.physicalQty) return;
+    try {
+      await adjustStock({
+        productId: s.productId, variantId: s.variantId, currentQty: s.physicalQty,
+        productVariantId: s.productVariantId, warehouseId: "MAIN", quantity: val, type: "SET", reason: "COUNTED",
+      }).unwrap();
+      toast.success(`${s.sku}: stock set to ${val}`);
+    } catch (err) {
+      toast.error(errorText(err, "Failed to update stock"));
+    }
   }
-  function saveThresh(s: StockItem) {
-    toast.success(`${s.sku} threshold updated`);
+  async function saveThresh(s: StockItem) {
+    const val = editingThresh[String(s.id)];
     const next = { ...editingThresh }; delete next[String(s.id)]; setEditingThresh(next);
+    if (val === undefined || val === s.lowStockThreshold) return;
+    try {
+      await updateThreshold({ productId: s.productId, variantId: s.variantId, threshold: val }).unwrap();
+      toast.success(`${s.sku} threshold updated`);
+    } catch (err) {
+      toast.error(errorText(err, "Failed to update threshold"));
+    }
   }
 
   async function submitAdjust() {
     try {
       await adjustStock({
-        productVariantId: Number(adjustForm.productVariantId) || 0,
-        warehouseId: adjustForm.warehouseId,
+        productId: adjustForm.productId,
+        variantId: adjustForm.variantId,
+        currentQty: adjustForm.currentQty,
+        productVariantId: adjustForm.variantId ?? adjustForm.productId,
+        warehouseId: "MAIN",
         quantity: adjustForm.quantity,
         type: adjustForm.type,
         reason: adjustForm.reason,
         note: adjustForm.note || undefined,
-        referenceNo: adjustForm.referenceNo || undefined,
-        date: adjustForm.date || undefined,
       }).unwrap();
       toast.success(`Stock ${ADJUSTMENT_TYPE_LABELS[adjustForm.type]}: ${adjustForm.quantity} applied`);
       setShowAdjustSheet(false);
       setPageStock(null);
-      setAdjustForm({ productVariantId: "", productName: "", warehouseId: "W1", warehouseName: "Dhaka Warehouse", quantity: 1, type: "ADD", reason: "RECEIVED", note: "", referenceNo: "", date: "", attachment: "" });
-    } catch { toast.error("Failed to adjust stock"); }
+      setAdjustForm(emptyAdjust);
+    } catch (err) {
+      toast.error(errorText(err, "Failed to adjust stock"));
+    }
   }
 
   const statCards = [
     { icon: Package, label: "Total SKUs", value: summary.totalSkus.toLocaleString(), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-500/10", hint: "Active variants" },
-    { icon: DollarSign, label: "Total Stock Value", value: fc(summary.totalStockValue), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-500/10", hint: "Sum (qty × unit cost)" },
+    { icon: DollarSign, label: "Total Stock Value", value: fc(summary.totalStockValue), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-500/10", hint: "On hand × supplier cost (or price)" },
     { icon: AlertOctagon, label: "Out of Stock", value: summary.outOfStockCount.toString(), color: "text-red-600", bg: "bg-red-50 dark:bg-red-500/10", hint: "Available = 0" },
-    { icon: AlertTriangle, label: "Low Stock", value: summary.lowStockCount.toString(), color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-500/10", hint: `Turnover: ${summary.stockTurnoverRatio?.toFixed(1)}x` },
+    { icon: AlertTriangle, label: "Low Stock", value: summary.lowStockCount.toString(), color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-500/10", hint: "At or below threshold" },
   ];
 
   const stockCols = useMemo<ColumnDef<StockItem>[]>(
@@ -307,10 +239,9 @@ export default function InventoryPage() {
           );
         },
       },
-      { accessorKey: "warehouseName", header: "Warehouse", cell: ({ row }) => <span className="text-sm text-slate-700 dark:text-slate-300">{row.getValue("warehouseName")}</span> },
       {
-        accessorKey: "availableQty",
-        header: "Available",
+        accessorKey: "physicalQty",
+        header: "On Hand",
         cell: ({ row }) => {
           const s = row.original;
           const v = editingQty[String(s.id)];
@@ -324,7 +255,7 @@ export default function InventoryPage() {
                 className={cn("h-8 w-20 text-sm text-right font-semibold",
                   oos ? "text-red-600 dark:text-red-400" : low ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"
                 )}
-                value={edit ? v : s.availableQty}
+                value={edit ? v : s.physicalQty}
                 onChange={(e) => setEditQty(s.id, parseInt(e.target.value) || 0)}
                 onBlur={() => edit && saveQty(s)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveQty(s); }}
@@ -340,11 +271,11 @@ export default function InventoryPage() {
         cell: ({ row }) => <span className="text-sm text-slate-500 dark:text-slate-400 font-mono tabular-nums">{row.getValue("reservedQty")}</span>,
       },
       {
-        id: "physical",
-        header: "Physical",
+        id: "available",
+        header: "Available",
         cell: ({ row }) => {
           const s = row.original;
-          return <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{s.availableQty + s.reservedQty}</span>;
+          return <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{s.availableQty}</span>;
         },
       },
       {
@@ -369,7 +300,6 @@ export default function InventoryPage() {
           );
         },
       },
-      { accessorKey: "reorderPoint", header: "Reorder Pt", cell: ({ row }) => <span className="text-sm text-slate-700 dark:text-slate-300 tabular-nums">{row.getValue("reorderPoint")}</span> },
       {
         accessorKey: "unitCost",
         header: "Unit Cost",
@@ -398,10 +328,7 @@ export default function InventoryPage() {
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400" title="Adjust" onClick={() => setPageStock(s)}>
                 <PlusCircle className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 dark:hover:text-purple-400" title="Transfer" onClick={() => toast.info("Open transfer sheet...")}>
-                <ArrowLeftRight className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 dark:hover:text-amber-400" title="View Log">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 dark:hover:text-amber-400" title="View Log" onClick={() => setTab("logs")}>
                 <History className="h-4 w-4" />
               </Button>
             </div>
@@ -414,14 +341,13 @@ export default function InventoryPage() {
   );
 
   const stockTable = useReactTable({ data: stock, columns: stockCols, getCoreRowModel: getCoreRowModel() });
-  const WAREHOUSES = [{ id: "W1", name: "Dhaka Warehouse" }, { id: "W2", name: "Chittagong Warehouse" }, { id: "W3", name: "Sylhet Warehouse" }];
 
   return (
     <div className="space-y-6 pb-12">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Inventory & Stock</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Manage stock levels, adjustments, transfers, and audit trail across warehouses.
+          Manage stock levels, adjustments and the stock movement log.
         </p>
       </motion.div>
 
@@ -449,7 +375,6 @@ export default function InventoryPage() {
               <TabsList className="w-full lg:w-auto justify-start">
                 <TabsTrigger value="stock">Stock List</TabsTrigger>
                 <TabsTrigger value="adjustments">Stock Adjustments</TabsTrigger>
-                <TabsTrigger value="transfers">Stock Transfers</TabsTrigger>
                 <TabsTrigger value="logs">Inventory Log</TabsTrigger>
               </TabsList>
               {tab === "stock" && (
@@ -466,40 +391,6 @@ export default function InventoryPage() {
                       <AlertOctagon className="h-4 w-4" /> Out of stock
                     </Button>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1.5 h-10"><Boxes className="h-4 w-4" /> Warehouse <ChevronDown className="h-3.5 w-3.5 opacity-60" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel>Filter by warehouse</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {WAREHOUSES.map((w) => (
-                        <DropdownMenuItem key={w.id} onClick={() => {
-                          setWarehouses((prev) => prev.includes(w.id) ? prev.filter((x) => x !== w.id) : [...prev, w.id]);
-                        }}>
-                          <div className="flex items-center gap-2 w-full">
-                            <Checkbox checked={warehouses.includes(w.id)} onCheckedChange={() => {}} /> {w.name}
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1.5 h-10"><DownloadIcon className="h-4 w-4" /> Export <ChevronDown className="h-3.5 w-3.5 opacity-60" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem onClick={() => toast.info("Exporting CSV...")}><FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />Stock CSV</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.info("Exporting XLSX...")}><FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />Stock XLSX</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.info("Exporting PDF...")}><File className="h-4 w-4 mr-2 text-red-600" />Stock PDF</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button variant="outline" size="sm" className="gap-1.5 h-10" onClick={() => toast.info("Stock import dialog...")}>
-                    <Upload className="h-4 w-4" /> Import Stock
-                  </Button>
-                  <Button size="sm" className="gap-1.5 h-10" onClick={() => { setPageStock(null); setShowAdjustSheet(true); }}>
-                    <Plus className="h-4 w-4" /> Adjust Stock
-                  </Button>
                 </div>
               )}
             </div>
@@ -606,69 +497,6 @@ export default function InventoryPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="transfers" className="mt-2">
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
-                          <TableRow className="border-slate-200 dark:border-slate-800">
-                            <TableHead className="text-xs">Reference</TableHead>
-                            <TableHead className="text-xs">From → To</TableHead>
-                            <TableHead className="text-xs">Product</TableHead>
-                            <TableHead className="text-xs">Qty</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                            <TableHead className="text-xs">Created</TableHead>
-                            <TableHead className="text-xs">Received</TableHead>
-                            <TableHead className="text-xs text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {transfersLoading ? Array.from({ length: 10 }).map((_, i) => (
-                            <TableRow key={i}><TableCell colSpan={8} className="p-0"><Skeleton className="h-12 m-2" /></TableCell></TableRow>
-                          )) : transfers.map((t) => (
-                            <TableRow key={t.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                              <TableCell className="text-sm font-mono font-semibold text-indigo-600 dark:text-indigo-400">{t.referenceNo}</TableCell>
-                              <TableCell>
-                                <div className="text-sm">
-                                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300"><Boxes className="h-3 w-3 text-slate-400" />{t.fromWarehouseName}</div>
-                                  <div className="flex items-center gap-1.5 text-slate-500"><ArrowLeftRight className="h-3 w-3 ml-0.5" /> <span className="ml-0.5">{t.toWarehouseName}</span></div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-sm font-medium leading-tight text-slate-900 dark:text-white">{t.productName}</div>
-                                <div className="text-xs text-slate-500 font-mono">{t.sku}</div>
-                              </TableCell>
-                              <TableCell className="text-sm font-semibold tabular-nums">{t.quantity}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={cn(
-                                  "text-xs font-medium",
-                                  t.status === "RECEIVED" ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-transparent"
-                                  : t.status === "SENT" ? "text-indigo-700 bg-indigo-50 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-transparent"
-                                  : t.status === "CANCELLED" ? "text-slate-700 bg-slate-100 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-transparent"
-                                  : "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-transparent"
-                                )}>{t.status}</Badge>
-                              </TableCell>
-                              <TableCell className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{fdd(t.createdAt)}</TableCell>
-                              <TableCell className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{t.receivedAt ? fdd(t.receivedAt) : "—"}</TableCell>
-                              <TableCell className="text-right">
-                                {t.status === "SENT" && (
-                                  <Button size="sm" variant="outline" className="gap-1 h-8 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400"
-                                    onClick={() => toast.success(`Transfer ${t.referenceNo} marked as received`)}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" /> Receive
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
               <TabsContent value="logs" className="mt-2">
                 <Card className="border-slate-200 dark:border-slate-800">
                   <CardHeader className="pb-2">
@@ -713,28 +541,13 @@ export default function InventoryPage() {
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2"><PlusCircle className="h-5 w-5 text-indigo-600" />Adjust Stock</SheetTitle>
-            <SheetDescription>Adjust inventory quantity. Creates an InventoryLog entry and updates ProductVariant availableQty.</SheetDescription>
+            <SheetDescription>Current on-hand stock: {adjustForm.currentQty}. Every change is recorded in the inventory log.</SheetDescription>
           </SheetHeader>
           <Separator />
           <div className="py-5 space-y-4">
             <div>
               <Label className="text-xs mb-1.5 block">Product</Label>
-              {adjustForm.productName ? (
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm font-medium">{adjustForm.productName}</div>
-              ) : (
-                <Input placeholder="Search and select product..." value={adjustForm.productName} onChange={(e) => setAdjustForm({ ...adjustForm, productName: e.target.value })} />
-              )}
-            </div>
-            <div>
-              <Label className="text-xs mb-1.5 block">Warehouse</Label>
-              <Select value={adjustForm.warehouseId} onValueChange={(v) => {
-                const wh = WAREHOUSES.find((x) => x.id === v);
-                setAdjustForm({ ...adjustForm, warehouseId: v, warehouseName: wh?.name ?? "" });
-              }}>
-                {WAREHOUSES.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                ))}
-              </Select>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm font-medium">{adjustForm.productName}</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -762,28 +575,11 @@ export default function InventoryPage() {
               <Label className="text-xs mb-1.5 block">Note (optional)</Label>
               <Textarea rows={2} placeholder="Any extra context..." value={adjustForm.note} onChange={(e) => setAdjustForm({ ...adjustForm, note: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs mb-1.5 block">Reference #</Label>
-                <Input placeholder="e.g. GRN-1234" value={adjustForm.referenceNo} onChange={(e) => setAdjustForm({ ...adjustForm, referenceNo: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">Date</Label>
-                <Input type="date" value={adjustForm.date} onChange={(e) => setAdjustForm({ ...adjustForm, date: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs mb-1.5 block">Attach Count Sheet (optional)</Label>
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-5 text-center text-sm text-slate-500 dark:text-slate-400 hover:border-indigo-400 transition-colors cursor-pointer">
-                <ImageIcon className="h-6 w-6 mx-auto mb-1 text-slate-400" />
-                Click to upload photo
-              </div>
-            </div>
           </div>
           <Separator />
           <SheetFooter>
             <Button variant="outline" onClick={() => { setShowAdjustSheet(false); setPageStock(null); }}>Cancel</Button>
-            <Button onClick={submitAdjust} disabled={adjustForm.quantity <= 0} className="gap-1.5">
+            <Button onClick={submitAdjust} disabled={!adjustForm.productId || (adjustForm.quantity <= 0 && adjustForm.type !== "SET" && adjustForm.type !== "INVENTORY_COUNT")} className="gap-1.5">
               <Save className="h-4 w-4" /> Submit Adjustment
             </Button>
           </SheetFooter>

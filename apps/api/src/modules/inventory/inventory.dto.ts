@@ -13,7 +13,8 @@ export const VariantIdParamDto = z.object({ variantId: z.coerce.bigint().positiv
 export type VariantIdParamDto = z.infer<typeof VariantIdParamDto>;
 
 export const StockAdjustLineDto = z.object({
-  variantId: z.coerce.bigint().positive(),
+  /** Variant to adjust; omit (and send productId) for a simple product without variants. */
+  variantId: z.coerce.bigint().positive().optional(),
   productId: z.coerce.bigint().positive().optional(),
   delta: z.number().int(),
   reason: z.string().max(100).optional().refine(noXss, noXssMessage),
@@ -27,6 +28,9 @@ const BaseStockAdjustmentDto = z.object({
 });
 export const StockAdjustmentDto = BaseStockAdjustmentDto.superRefine((v, ctx) => {
   v.lines.forEach((line, idx) => {
+    if (line.variantId === undefined && line.productId === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "variantId or productId is required", path: ["lines", idx] });
+    }
     if (line.delta === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -62,6 +66,12 @@ export const StockTransferDto = BaseStockTransferDto.superRefine((v, ctx) => {
   });
 });
 export type StockTransferDto = z.infer<typeof StockTransferDto>;
+
+export const StockListQueryDto = PaginationSchema.extend({
+  lowStock: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  outOfStock: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+});
+export type StockListQueryDto = z.infer<typeof StockListQueryDto>;
 
 const BaseMovementQueryDto = PaginationSchema.extend({
   variantId: z.coerce.bigint().optional(),

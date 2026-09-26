@@ -8,6 +8,7 @@ import {
   LowStockReportDto,
   VariantIdParamDto,
   StockAdjustLineDto,
+  StockListQueryDto,
 } from "./inventory.dto";
 
 function multerFallback(_req: Request, _res: Response, next: NextFunction): void {
@@ -32,6 +33,14 @@ adminInventoryRouter.post(
   rbacMiddleware("inventory.*"),
   validate({ body: StockTransferDto }),
   inventoryController.transferStock,
+);
+
+adminInventoryRouter.get(
+  "/stock",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("inventory.*"),
+  validate({ query: StockListQueryDto }),
+  inventoryController.stockList,
 );
 
 adminInventoryRouter.get(

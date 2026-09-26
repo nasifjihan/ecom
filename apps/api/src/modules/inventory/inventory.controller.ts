@@ -32,6 +32,12 @@ class InventoryController extends BaseController {
     envelope(res, { status: 201, data: result, message: "Stock transferred successfully" });
   });
 
+  stockList = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const svc = this.getService(req.ctx);
+    const q = req.query as unknown as { search?: string; lowStock?: boolean; outOfStock?: boolean; page: number; perPage: number };
+    envelope(res, { status: 200, data: await svc.stockList(q) });
+  });
+
   movementReport = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
     const filters = req.query as unknown as MovementQueryDtoType;

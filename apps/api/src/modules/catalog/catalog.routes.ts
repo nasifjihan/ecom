@@ -1,4 +1,9 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import multer from "multer";
+import { z } from "zod";
+import { prisma } from "../../config";
+import { ctrl, envelope, paginate, NotFoundError, TooLargeError, UnsupportedMediaError, type RequestContext } from "../../core";
+import { PaginationSchema } from "@ecom/zod-schemas";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { catalogController } from "./catalog.controller";
 import {
@@ -138,12 +143,87 @@ adminProductsRouter.post(
 
 export const productUploadRouter = Router();
 
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const uploadSingle = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }).single("file");
+
+/** Parses one multipart "file" field into req.file (images only, 10 MB max). */
+function parseImageUpload(req: Request, res: Response, next: NextFunction): void {
+  uploadSingle(req as any, res as any, (err: unknown) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") return next(new TooLargeError("Images must be 10 MB or smaller"));
+    if (err) return next(err);
+    const file = (req as any).file as { mimetype: string } | undefined;
+    if (file && !IMAGE_TYPES.has(file.mimetype)) return next(new UnsupportedMediaError("Only JPEG, PNG, WebP, GIF or AVIF images can be uploaded"));
+    next();
+  });
+}
+
 productUploadRouter.post(
   "/upload",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("media.create"),
-  multerFallback,
+  parseImageUpload,
   catalogController.uploadMedia,
+);
+
+const MediaIdParam = z.object({ id: z.coerce.bigint().positive() });
+const MediaListQuery = PaginationSchema.extend({ mimeType: z.string().max(50).optional() });
+const MediaUpdateDto = z.object({
+  altText: z.string().max(255).optional().nullable(),
+  caption: z.string().max(500).optional().nullable(),
+});
+
+productUploadRouter.get(
+  "/",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("media.*"),
+  validate({ query: MediaListQuery }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const q = req.query as unknown as z.infer<typeof MediaListQuery>;
+    const where: Record<string, unknown> = { storeId: req.ctx.storeId };
+    if (q.search) where.originalName = { contains: q.search, mode: "insensitive" };
+    if (q.mimeType) where.mimeType = { startsWith: q.mimeType };
+    const [items, total] = await Promise.all([
+      prisma.mediaFile.findMany({
+        where: where as any,
+        orderBy: { createdAt: "desc" },
+        skip: (q.page - 1) * q.perPage,
+        take: q.perPage,
+      }),
+      prisma.mediaFile.count({ where: where as any }),
+    ]);
+    const page = paginate({ items, total, page: q.page, perPage: q.perPage });
+    envelope(res, { status: 200, data: page.data, meta: page.meta });
+  }),
+);
+
+productUploadRouter.patch(
+  "/:id",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("media.*"),
+  validate({ params: MediaIdParam, body: MediaUpdateDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { id } = req.params as unknown as z.infer<typeof MediaIdParam>;
+    const found = await prisma.mediaFile.findFirst({ where: { id, storeId: req.ctx.storeId } });
+    if (!found) throw new NotFoundError("media", id);
+    const updated = await prisma.mediaFile.update({ where: { id }, data: req.body as z.infer<typeof MediaUpdateDto> });
+    envelope(res, { status: 200, data: updated });
+  }),
+);
+
+productUploadRouter.delete(
+  "/:id",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("media.*"),
+  validate({ params: MediaIdParam }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { id } = req.params as unknown as z.infer<typeof MediaIdParam>;
+    const found = await prisma.mediaFile.findFirst({ where: { id, storeId: req.ctx.storeId } });
+    if (!found) throw new NotFoundError("media", id);
+    // The file itself stays in storage; product galleries keep their own image URL copies.
+    await prisma.mediaFile.delete({ where: { id } });
+    envelope(res, { status: 200, data: { success: true, id } });
+  }),
 );
 
 export const adminCategoriesRouter = Router();
