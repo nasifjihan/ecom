@@ -78,9 +78,10 @@ export class ShippingZoneRepository {
 
   async matchZonesForAddress(ctx: RequestContext, address: { countryCode: string; division?: string; district?: string; postcode?: string }) {
     const rows: any[] = await this.model.findMany({
-      where: { ...this.scope(ctx.storeId), enabled: true },
+      // ShippingZone has no `enabled` column (only ShippingMethod does).
+      where: this.scope(ctx.storeId),
       include: { methods: { where: { enabled: true }, orderBy: { sortOrder: "asc" } } },
-      orderBy: [{ enabled: "desc" }, { id: "asc" }],
+      orderBy: { id: "asc" },
     });
     return rows.filter((z) => {
       const countries: string[] = Array.isArray(z.countries) ? z.countries : [];

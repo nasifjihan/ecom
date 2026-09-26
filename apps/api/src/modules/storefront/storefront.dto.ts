@@ -1,0 +1,85 @@
+import { z } from "zod";
+
+const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
+const noXss = (v: string | null | undefined): boolean => !v || !XSS_RE.test(v);
+const safeText = (max: number) => z.string().trim().max(max).refine(noXss, "No JavaScript injection allowed");
+
+const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating"] as const;
+
+export const StorefrontProductsQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(60).default(16),
+  sort: z.enum(PRODUCT_SORTS).default("popular"),
+  categoryId: z.string().regex(/^\d+(,\d+)*$/, "categoryId must be one or more comma-separated ids").optional(),
+  categorySlug: z.string().max(120).optional(),
+  brandId: z.string().regex(/^\d+(,\d+)*$/, "brandId must be one or more comma-separated ids").optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  rating: z.coerce.number().min(0).max(5).optional(),
+  search: z.string().trim().max(120).optional(),
+  featured: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  excludeId: z.coerce.bigint().positive().optional(),
+});
+export type StorefrontProductsQueryDto = z.infer<typeof StorefrontProductsQueryDto>;
+
+export const StorefrontSlugParamDto = z.object({
+  slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/i, "Invalid slug"),
+});
+
+export const StorefrontOrderKeyParamDto = z.object({
+  orderKey: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/, "Invalid order key"),
+});
+
+const CartLineDto = z.object({
+  productId: z.coerce.bigint().positive(),
+  variantId: z.coerce.bigint().positive().optional().nullable(),
+  qty: z.coerce.number().int().min(1).max(100),
+});
+export type CartLineDto = z.infer<typeof CartLineDto>;
+
+/** Mirrors `AddressPayload` in storefront-base checkout-api-slice. */
+const StorefrontAddressDto = z.object({
+  firstName: safeText(80).pipe(z.string().min(1)),
+  lastName: safeText(80).pipe(z.string().min(1)),
+  company: safeText(120).optional(),
+  country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, "country must be a 2-letter code"),
+  division: safeText(64).optional().default(""),
+  district: safeText(64).pipe(z.string().min(1)),
+  postcode: safeText(12).optional().default(""),
+  addressLine1: safeText(200).pipe(z.string().min(3)),
+  addressLine2: safeText(200).optional(),
+  phone: z.string().trim().regex(/^\+?[0-9\s-]{7,20}$/, "Enter a valid phone number"),
+  email: z.string().trim().toLowerCase().email().max(254).optional(),
+});
+export type StorefrontAddressDto = z.infer<typeof StorefrontAddressDto>;
+
+export const ApplyCouponDto = z.object({
+  code: z.string().trim().toUpperCase().min(3).max(40).regex(/^[A-Z0-9_-]+$/, "Invalid coupon code"),
+  items: z.array(CartLineDto.extend({ price: z.coerce.number().optional() })).min(1).max(100),
+  email: z.string().trim().toLowerCase().email().optional(),
+  shippingTotal: z.coerce.number().min(0).optional(),
+  countryCode: z.string().optional(),
+});
+export type ApplyCouponDto = z.infer<typeof ApplyCouponDto>;
+
+/**
+ * Mirrors `PlaceOrderBody` in storefront-base checkout-api-slice.
+ * Client-sent money fields (prices, totals, shippingCost) are accepted but IGNORED:
+ * the server re-prices every line from the database.
+ */
+export const PlaceOrderDto = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  phone: z.string().trim().min(7).max(20),
+  isGuest: z.boolean().optional(),
+  subscribeNewsletter: z.boolean().optional(),
+  shippingAddress: StorefrontAddressDto,
+  billingAddress: StorefrontAddressDto.optional(),
+  billingSameAsShipping: z.boolean().optional().default(true),
+  shippingMethodId: z.coerce.bigint().positive(),
+  paymentGateway: z.string().trim().toLowerCase().min(2).max(32),
+  couponCodes: z.array(z.string().trim().toUpperCase().max(40)).max(1).optional().default([]),
+  items: z.array(CartLineDto.passthrough()).min(1).max(100),
+  customerNote: safeText(2000).optional(),
+  termsAgreed: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
+});
+export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;

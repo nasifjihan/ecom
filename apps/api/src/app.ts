@@ -52,6 +52,7 @@ import { adminInventoryRouter } from "./modules/inventory";
 import { marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
+import { storefrontCatalogRouter, storefrontCheckoutRouter } from "./modules/storefront";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -114,6 +115,7 @@ export function buildApp(): Express {
   app.use("/api/admin/media", productUploadRouter);
   app.use("/api/admin/orders", adminOrdersRouter);
   app.use("/api/admin/payments", adminPaymentsRouter);
+  app.use("/api/storefront/checkout", storefrontCheckoutRouter); // Batch #10: POST / , /coupons/apply, GET /orders/:orderKey
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
   app.use("/api/admin/customers", adminCustomersRouter);
@@ -126,6 +128,7 @@ export function buildApp(): Express {
   app.use("/api/admin/dashboard", storeDashboardRouter);
   app.use("/api/admin/shipping", adminShippingRouter);
   app.use("/api/storefront/shipping", storefrontShippingRouter);
+  app.use("/api/storefront", storefrontCatalogRouter);             // Batch #10: public catalog
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads"), { maxAge: "1y", immutable: true }));
 
   // =============== 404 catch-all ===============

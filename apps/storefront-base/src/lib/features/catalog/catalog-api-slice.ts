@@ -20,8 +20,49 @@ export type ProductSummary = {
   description?: string;
   shortDescription?: string;
   attributes?: { name: string; value: string }[];
-  variants?: { id: string; color?: string; size?: string; price?: number; image?: string }[];
+  variants?: ProductVariantOption[];
   tags?: string[];
+  weightKG?: number;
+  /** True when the product has size/colour variants and needs a choice before add-to-cart. */
+  hasVariants?: boolean;
+  isNew?: boolean;
+  isOutOfStock?: boolean;
+  brand?: { id: string; slug: string; name: string };
+};
+
+export type ProductVariantOption = {
+  id: string;
+  attributes: Record<string, string>;
+  color?: string;
+  size?: string;
+  label: string;
+  price: number;
+  compareAtPrice?: number | null;
+  image?: string;
+  sku?: string;
+  inStock: boolean;
+  stockQty: number | null;
+};
+
+export type ProductReview = {
+  id: string;
+  name: string;
+  rating: number;
+  title: string;
+  body: string;
+  verified: boolean;
+  date: string;
+};
+
+/** GET /storefront/products/:slug — summary plus everything the product page renders. */
+export type ProductDetail = ProductSummary & {
+  images: string[];
+  variants: ProductVariantOption[];
+  specifications: { name: string; value: string }[];
+  reviews: ProductReview[];
+  breadcrumbs: { id: string; slug: string; name: string }[];
+  stockQty: number | null;
+  seo?: { title?: string; description?: string; ogImage?: string };
 };
 
 export type CategoryNode = {
@@ -46,8 +87,13 @@ export type ProductsQueryArgs = {
   page?: number;
   perPage?: number;
   sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating";
+  /** One id or a comma-separated list; descendants of each category are included. */
   categoryId?: string;
+  categorySlug?: string;
+  /** One id or a comma-separated list. */
   brandId?: string;
+  featured?: boolean;
+  excludeId?: string;
   minPrice?: number;
   maxPrice?: number;
   rating?: number;
@@ -73,6 +119,9 @@ export const catalogApi = api.injectEndpoints({
         if (args.perPage) params.set("perPage", String(args.perPage));
         if (args.sort) params.set("sort", args.sort);
         if (args.categoryId) params.set("categoryId", args.categoryId);
+        if (args.categorySlug) params.set("categorySlug", args.categorySlug);
+        if (args.featured !== undefined) params.set("featured", String(args.featured));
+        if (args.excludeId) params.set("excludeId", args.excludeId);
         if (args.brandId) params.set("brandId", args.brandId);
         if (args.minPrice) params.set("minPrice", String(args.minPrice));
         if (args.maxPrice) params.set("maxPrice", String(args.maxPrice));
@@ -93,7 +142,7 @@ export const catalogApi = api.injectEndpoints({
           : [{ type: "Product" as const, id: "LIST" }],
     }),
 
-    getProductBySlug: builder.query<ProductSummary, string>({
+    getProductBySlug: builder.query<ProductDetail, string>({
       query: (slug) => ({
         url: `/storefront/products/${slug}`,
         method: "GET",

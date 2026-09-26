@@ -617,6 +617,153 @@ async function seedFashionBDStore() {
 
   console.log("  ✅ Orders baseline (Rest of BD shipping zone + Fatema cart 5 items) added.");
 
+  // ===== BATCH #10 BASELINE: Storefront demo catalog (categories, brands, 12 products, images, variants) =====
+  // Idempotent: every row is looked up by slug first. Gives the storefront real rows to browse and order.
+  const catalogStoreId = store.id;
+  const catalogTax = await prisma.taxClass.findFirst({ where: { storeId: catalogStoreId, name: "Standard" } });
+
+  async function ensureCategory(slug: string, name: string, parentId: bigint | null, sortOrder: number): Promise<bigint> {
+    const ex = await prisma.category.findFirst({ where: { storeId: catalogStoreId, slug } });
+    if (ex) return ex.id;
+    const row = await prisma.category.create({
+      data: {
+        storeId: catalogStoreId, slug, name, parentId, sortOrder, isActive: true, menuIncluded: parentId === null,
+        imageUrl: `https://picsum.photos/seed/cat-${slug}/400/400`,
+      },
+    });
+    return row.id;
+  }
+  const catWomen = await ensureCategory("women", "Women", null, 0);
+  const catMen = await ensureCategory("men", "Men", null, 1);
+  const catAccessories = await ensureCategory("accessories", "Accessories", null, 2);
+  const catMap: Record<string, bigint> = {
+    dresses: await ensureCategory("dresses", "Dresses", catWomen, 0),
+    sarees: await ensureCategory("sarees", "Sarees & Salwar", catWomen, 1),
+    shirts: await ensureCategory("shirts", "Shirts", catMen, 0),
+    panjabi: await ensureCategory("panjabi", "Panjabi", catMen, 1),
+    bags: await ensureCategory("bags", "Bags", catAccessories, 0),
+    watches: await ensureCategory("watches", "Watches", catAccessories, 1),
+  };
+
+  async function ensureBrand(slug: string, name: string, sortOrder: number): Promise<bigint> {
+    const ex = await prisma.brand.findFirst({ where: { storeId: catalogStoreId, slug } });
+    if (ex) return ex.id;
+    const row = await prisma.brand.create({ data: { storeId: catalogStoreId, slug, name, sortOrder, isActive: true } });
+    return row.id;
+  }
+  const brandMap: Record<string, bigint> = {
+    richman: await ensureBrand("richman", "Richman", 0),
+    "cats-eye": await ensureBrand("cats-eye", "Cats Eye", 1),
+    aarong: await ensureBrand("aarong", "Aarong", 2),
+    bata: await ensureBrand("bata", "Bata", 3),
+  };
+
+  type DemoProduct = {
+    slug: string; name: string; brand: string; cat: string; price: string; sale?: string;
+    stock: number; weight: string; featured?: boolean; sizes?: string[]; colors?: string[];
+  };
+  const demoProducts: DemoProduct[] = [
+    { slug: "richman-formal-cotton-shirt-navy", name: "Richman Formal Cotton Shirt — Navy", brand: "richman", cat: "shirts", price: "3290.00", sale: "2790.00", stock: 50, weight: "0.300", featured: true, sizes: ["M", "L", "XL"] },
+    { slug: "richman-slim-fit-shirt-white", name: "Richman Slim Fit Oxford Shirt — White", brand: "richman", cat: "shirts", price: "2890.00", stock: 40, weight: "0.300", sizes: ["M", "L", "XL"] },
+    { slug: "cats-eye-casual-denim-shirt", name: "Cats Eye Casual Denim Shirt — Indigo", brand: "cats-eye", cat: "shirts", price: "3690.00", stock: 30, weight: "0.400" },
+    { slug: "cats-eye-premium-linen-shirt", name: "Cats Eye Premium Linen Shirt — Beige", brand: "cats-eye", cat: "shirts", price: "4490.00", sale: "3990.00", stock: 25, weight: "0.300" },
+    { slug: "richman-party-wear-satin-shirt", name: "Richman Party Wear Satin Shirt — Black", brand: "richman", cat: "shirts", price: "3990.00", stock: 20, weight: "0.300" },
+    { slug: "aarong-cotton-panjabi-white", name: "Aarong Premium Cotton Panjabi — White", brand: "aarong", cat: "panjabi", price: "4290.00", stock: 35, weight: "0.450", featured: true, sizes: ["38", "40", "42", "44"] },
+    { slug: "aarong-embroidered-panjabi-maroon", name: "Aarong Embroidered Panjabi — Maroon", brand: "aarong", cat: "panjabi", price: "5490.00", sale: "4890.00", stock: 15, weight: "0.500" },
+    { slug: "aarong-floral-maxi-dress", name: "Aarong Floral Maxi Dress — Summer Edition", brand: "aarong", cat: "dresses", price: "4890.00", sale: "3990.00", stock: 18, weight: "0.400", featured: true, sizes: ["S", "M", "L"], colors: ["Rose", "Sky"] },
+    { slug: "cats-eye-jamdani-saree", name: "Cats Eye Handloom Jamdani Saree", brand: "cats-eye", cat: "sarees", price: "12500.00", stock: 8, weight: "0.700", featured: true },
+    { slug: "aarong-three-piece-salwar", name: "Aarong Printed Three-Piece Salwar Kameez", brand: "aarong", cat: "sarees", price: "3590.00", stock: 22, weight: "0.600" },
+    { slug: "bata-leather-tote-bag-tan", name: "Bata Genuine Leather Tote Bag — Tan", brand: "bata", cat: "bags", price: "5790.00", sale: "4990.00", stock: 12, weight: "0.900" },
+    { slug: "richman-classic-steel-watch", name: "Richman Classic Stainless Steel Watch", brand: "richman", cat: "watches", price: "8990.00", stock: 0, weight: "0.200" },
+  ];
+
+  let demoCreated = 0;
+  for (const [idx, p] of demoProducts.entries()) {
+    let product = await prisma.product.findFirst({ where: { storeId: catalogStoreId, slug: p.slug } });
+    const hasVariants = Boolean(p.sizes?.length);
+    if (!product) {
+      product = await prisma.product.create({
+        data: {
+          storeId: catalogStoreId,
+          type: hasVariants ? "VARIABLE" : "SIMPLE",
+          name: p.name,
+          slug: p.slug,
+          sku: `FBD-${String(idx + 1).padStart(4, "0")}`,
+          brandId: brandMap[p.brand],
+          taxClassId: catalogTax?.id,
+          regularPrice: p.price,
+          salePrice: p.sale ?? null,
+          shortDescription: `${p.name}. Authentic, delivered anywhere in Bangladesh with Cash on Delivery.`,
+          description: `${p.name}\n\nCarefully made from premium fabric for everyday comfort. Easy returns within 7 days.`,
+          status: "published",
+          featured: p.featured ?? false,
+          manageStock: true,
+          stockQty: p.stock,
+          weight: p.weight,
+          saleCount: 100 - idx * 7,
+        },
+      });
+      demoCreated++;
+    } else if (product.weight === null) {
+      // Older seeds created some of these shirts without weight/sale/featured data.
+      product = await prisma.product.update({
+        where: { id: product.id },
+        data: { weight: p.weight, salePrice: p.sale ?? null, featured: p.featured ?? false, sku: product.sku ?? `FBD-${String(idx + 1).padStart(4, "0")}` },
+      });
+    }
+    const catId = catMap[p.cat]!;
+    await prisma.productCategory.upsert({
+      where: { productId_categoryId: { productId: product.id, categoryId: catId } },
+      update: {},
+      create: { productId: product.id, categoryId: catId, primary: true },
+    });
+    const imageCount = await prisma.productImage.count({ where: { productId: product.id } });
+    if (imageCount === 0) {
+      await prisma.productImage.createMany({
+        data: [0, 1, 2].map((n) => ({
+          productId: product!.id,
+          imageUrl: `https://picsum.photos/seed/${p.slug}-${n}/600/750`,
+          altText: `${p.name} — view ${n + 1}`,
+          sortOrder: n,
+        })),
+      });
+    }
+    if (hasVariants) {
+      const variantCount = await prisma.productVariant.count({ where: { productId: product.id } });
+      if (variantCount === 0) {
+        if (product.type !== "VARIABLE") await prisma.product.update({ where: { id: product.id }, data: { type: "VARIABLE" } });
+        const colors = p.colors ?? [null];
+        const perVariantStock = Math.max(1, Math.floor(p.stock / (p.sizes!.length * colors.length)));
+        for (const color of colors) {
+          for (const size of p.sizes!) {
+            await prisma.productVariant.create({
+              data: {
+                productId: product.id,
+                attributeValues: color ? { size, color } : { size },
+                sku: `${product.sku ?? p.slug}-${color ? `${color.toUpperCase()}-` : ""}${size}`,
+                regularPrice: p.price,
+                salePrice: p.sale ?? null,
+                manageStock: true,
+                stockQty: perVariantStock,
+                weight: p.weight,
+              },
+            });
+          }
+        }
+      }
+    }
+  }
+  // The storefront's division picker uses the current official spellings (Chattogram, Barishal).
+  const robZone = await prisma.shippingZone.findFirst({ where: { storeId: catalogStoreId, name: "Rest of Bangladesh" } });
+  if (robZone) {
+    const states = Array.isArray(robZone.states) ? (robZone.states as string[]) : [];
+    const missing = ["Chattogram", "Barishal"].filter((d) => !states.includes(d));
+    if (missing.length) {
+      await prisma.shippingZone.update({ where: { id: robZone.id }, data: { states: [...states, ...missing] } });
+    }
+  }
+  console.log(`  ✅ Storefront demo catalog ready (${demoProducts.length} products, ${demoCreated} newly created)`);
+
   // ===== BATCH #8 BASELINE: Customer Groups, 20 demo customers, 2 coupons, 1 flash sale, 30 reviews =====
   const demoStoreId = store.id;
 

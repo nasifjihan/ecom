@@ -1,4 +1,6 @@
 import type { MetadataRoute } from "next";
+import type { CategoryNode, Paginated, ProductSummary } from "@ecom/storefront-base";
+import { serverApi } from "@/lib/server-api";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -15,90 +17,6 @@ type SitemapEntry = {
     | "never";
   priority?: number;
 };
-
-const MOCK_PRODUCTS = Array.from({ length: 50 }, (_, i) => {
-  const slugs = [
-    "richman-navy-cotton-shirt",
-    "aarong-black-embroidery-panjabi",
-    "levis-511-slim-fit-blue-jeans",
-    "bata-classic-black-formal-shoes",
-    "ecstasy-women-floral-maxi-dress",
-    "luxuria-premium-leather-belt-black",
-    "stylebuzz-denim-jacket-blue",
-    "fabindia-organic-cotton-saree",
-    "yellow-kids-summer-tshirt",
-    "dorjibari-heritage-silk-shaar",
-    "cats-eye-sunglasses-polarized",
-    "lotto-running-shoes-black",
-    "ape-sneakers-white-premium",
-    "fresh-womens-handbag-leather",
-    "olympus-sport-watch-mens",
-    "tiffany-silver-925-necklace",
-    "navy-peacoat-winter-jacket",
-    "cashmere-wool-scarf-burgundy",
-    "travel-backpack-40l-waterproof",
-    "grooming-kit-men-premium",
-    "wedding-sherwani-gold-embroidery",
-    "kurti-women-cotton-printed",
-    "tshirt-graphic-cotton-unisex",
-    "hoodie-oversized-charcoal",
-    "formal-trouser-slim-fit-navy",
-    "polo-shirt-pique-cotton-white",
-    "sandals-leather-comfort-mens",
-    "heels-platform-women-nude",
-    "crossbody-bag-mini-pink",
-    "silk-tie-striped-formal",
-    "pocket-square-handkerchief-set",
-    "cufflinks-gold-titanium",
-    "sunglasses-aviator-metal",
-    "wrist-bracelet-leather-men",
-    "perfume-royal-oud-100ml",
-    "body-sport-fragrance-mist",
-    "lipstick-matte-red-crimson",
-    "foundation-spf30-medium-shade",
-    "socks-cotton-pack5-everyday",
-    "underwear-boxer-cotton-pack3",
-    "sleepwear-pyjama-set-cotton",
-    "loungewear-hoodie-set-grey",
-    "gym-wear-leggings-sport",
-    "swimwear-men-trunks-blue",
-    "raincoat-waterproof-transparent",
-    "winter-cap-beanie-knitted",
-    "gloves-touchscreen-winter",
-    "scarf-infinity-warm-women",
-    "umbrella-foldable-automatic",
-    "wallet-leather-rfid-blocking",
-  ];
-  const fallback = `fashion-product-${i + 1}-slug`;
-  return {
-    id: `product-${i + 1}`,
-    slug: slugs[i] ?? fallback,
-    title: slugs[i]
-      ? slugs[i]
-          .split("-")
-          .map((w) => w[0]?.toUpperCase() + w.slice(1))
-          .join(" ")
-      : `Fashion Product ${i + 1}`,
-  };
-});
-
-const TOP_CATEGORIES = [
-  { slug: "women", name: "Women" },
-  { slug: "men", name: "Men" },
-  { slug: "kids", name: "Kids" },
-  { slug: "accessories", name: "Accessories" },
-  { slug: "womens-clothing", name: "Women's Clothing" },
-  { slug: "womens-dresses", name: "Dresses" },
-  { slug: "womens-saree", name: "Sarees" },
-  { slug: "womens-kurti", name: "Kurtis" },
-  { slug: "mens-shirts", name: "Shirts" },
-  { slug: "mens-panjabi", name: "Panjabi" },
-  { slug: "mens-trousers", name: "Trousers & Jeans" },
-  { slug: "footwear", name: "Footwear" },
-  { slug: "bags-wallets", name: "Bags & Wallets" },
-  { slug: "watches-jewelry", name: "Watches & Jewelry" },
-  { slug: "beauty-fragrance", name: "Beauty & Fragrances" },
-];
 
 const STATIC_PAGES = [
   { path: "/", priority: 1, changeFrequency: "daily" as const },
@@ -134,22 +52,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  for (const cat of TOP_CATEGORIES) {
+  const tree = (await serverApi<CategoryNode[]>("/storefront/categories/tree", 3600)) ?? [];
+  const walk = (nodes: CategoryNode[]): CategoryNode[] => nodes.flatMap((n) => [n, ...walk(n.children ?? [])]);
+  for (const cat of walk(tree)) {
     entries.push({
-      url: buildUrl(`/categories/${cat.slug}`),
+      url: buildUrl(`/products?category=${cat.slug}`),
       lastModified: nowDate(),
       changeFrequency: "weekly",
       priority: 0.8,
     });
   }
 
-  for (const product of MOCK_PRODUCTS) {
-    entries.push({
-      url: buildUrl(`/products/${product.slug}`),
-      lastModified: nowDate(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    });
+  // Walk the public catalog page by page (60 is the API's perPage cap).
+  for (let page = 1; page <= 50; page++) {
+    const res = await serverApi<Paginated<ProductSummary>>(`/storefront/products?perPage=60&sort=newest&page=${page}`, 3600);
+    if (!res) break;
+    for (const product of res.items) {
+      entries.push({
+        url: buildUrl(`/products/${product.slug}`),
+        lastModified: nowDate(),
+        changeFrequency: "weekly",
+        priority: 0.7,
+      });
+    }
+    if (page >= res.totalPages) break;
   }
 
   return entries as MetadataRoute.Sitemap;

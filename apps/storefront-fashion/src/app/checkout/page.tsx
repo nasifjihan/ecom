@@ -36,7 +36,6 @@ import {
   Skeleton,
   Button,
   useCart,
-  useAppSelector,
   cn,
   formatMoney,
   toast,
@@ -46,6 +45,8 @@ import {
   useGetTaxesQuery,
   useApplyCouponMutation,
   usePlaceOrderMutation,
+  useGetPaymentMethodsQuery,
+  apiErrorMessage,
   ShippingRate,
   CouponApplyInput,
   OrderSummaryCard,
@@ -57,6 +58,7 @@ import {
   mapCouponTypeToDisplay,
   AddressFormData,
 } from "@ecom/storefront-base";
+import { useAppSelector } from "@/lib/store";
 
 const CURRENCY = "BDT";
 
@@ -69,53 +71,6 @@ const TRUST_BADGES = [
   { icon: <RotateCcw className="h-4 w-4" />, label: "Free Returns", desc: "7 days return" },
   { icon: <Headphones className="h-4 w-4" />, label: "24/7 Support", desc: "We're here" },
   { icon: <BadgeCheck className="h-4 w-4" />, label: "100% Protected", desc: "Purchase safe" },
-];
-
-const PLACEHOLDER_IMG = (seed: string) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=ck-${seed}&`);
-
-const MOCK_RATES_FALLBACK: ShippingRate[] = [
-  {
-    providerId: "pathao",
-    providerName: "Pathao",
-    methodId: "pathao_standard",
-    methodName: "Pathao Standard",
-    cost: 120,
-    currency: "BDT",
-    minDeliveryDays: 1,
-    maxDeliveryDays: 3,
-    description: "Reliable nationwide delivery",
-    freeFromSubtotal: 1000,
-    estimatedLabel: "1-3 days",
-  },
-  {
-    providerId: "ecourier",
-    providerName: "eCourier",
-    methodId: "ecourier_express",
-    methodName: "eCourier Express",
-    cost: 200,
-    currency: "BDT",
-    minDeliveryDays: 1,
-    maxDeliveryDays: 2,
-    description: "Fast express delivery inside Dhaka",
-    freeFromSubtotal: 3000,
-    estimatedLabel: "1-2 days",
-  },
-  {
-    providerId: "sundarban",
-    providerName: "Sundarban",
-    methodId: "sundarban_rhob",
-    methodName: "Sundarban RHOB",
-    cost: 180,
-    currency: "BDT",
-    minDeliveryDays: 2,
-    maxDeliveryDays: 5,
-    description: "Cash on Delivery friendly",
-    freeFromSubtotal: 2500,
-    estimatedLabel: "2-5 days",
-  },
 ];
 
 export default function CheckoutPage() {
@@ -177,32 +132,47 @@ export default function CheckoutPage() {
     refetchOnMountOrArgChange: true,
   });
 
-  const rates: ShippingRate[] = React.useMemo(() => {
-    if (rawRates && rawRates.length > 0) return rawRates;
-    if (ratesError || !rawRates) return MOCK_RATES_FALLBACK;
-    return [];
-  }, [rawRates, ratesError]);
+  const rates: ShippingRate[] = React.useMemo(() => rawRates ?? [], [rawRates]);
 
   React.useEffect(() => {
-    if (rates.length > 0 && !selectedShippingRateId) {
+    // Rates change with the address; keep the selection only while it is still offered.
+    if (rates.length === 0) {
+      if (selectedShippingRateId) setSelectedShippingRateId(null);
+      return;
+    }
+    if (!selectedShippingRateId || !rates.some((r) => r.methodId === selectedShippingRateId)) {
       const sorted = [...rates].sort((a, b) => a.cost - b.cost);
       setSelectedShippingRateId(sorted[0]!.methodId);
     }
   }, [rates, selectedShippingRateId]);
 
   const selectedRate = rates.find((r) => r.methodId === selectedShippingRateId);
-  const isShippingFree = selectedRate ? (selectedRate.freeFromSubtotal ?? Infinity) <= subtotal : false;
-  const shippingAmount = selectedRate ? (isShippingFree ? 0 : selectedRate.cost) : 0;
+  const couponDiscount = appliedCoupon?.discountAmount ?? 0;
+  const isShippingFree = selectedRate ? selectedRate.cost === 0 || Boolean(appliedCoupon?.freeShipping) : false;
+  const shippingAmount = selectedRate && !isShippingFree ? selectedRate.cost : 0;
+
+  const { data: enabledGateways } = useGetPaymentMethodsQuery(undefined, { skip: !mounted });
+  const paymentGateways = React.useMemo(
+    () =>
+      enabledGateways
+        ? DEFAULT_PAYMENT_GATEWAYS.flatMap((g) => {
+            const cfg = enabledGateways.find((e) => e.code === g.id);
+            return cfg ? [{ ...g, extraFee: cfg.feeFixed > 0 ? cfg.feeFixed : undefined }] : [];
+          })
+        : DEFAULT_PAYMENT_GATEWAYS,
+    [enabledGateways],
+  );
+  const selectedGatewayConfig = enabledGateways?.find((g) => g.code === selectedPaymentMethod);
 
   const taxQueryArgs = React.useMemo(
     () => ({
       countryCode: shippingAddress.country ?? "BD",
       division: shippingAddress.division,
       district: shippingAddress.district,
-      subtotal,
+      subtotal: Math.max(0, subtotal - couponDiscount),
       shipping: shippingAmount,
     }),
-    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, shippingAmount],
+    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, shippingAmount],
   );
 
   const {
@@ -213,14 +183,14 @@ export default function CheckoutPage() {
     refetchOnMountOrArgChange: true,
   });
 
-  const actualTaxTotal = taxData?.total ?? Math.round((subtotal + shippingAmount) * 0.15 * 100) / 100;
-  const actualTaxLines = taxData?.lines ?? [
-    { name: "VAT 15%", rate: 0.15, amount: Math.round(subtotal * 0.15 * 100) / 100 },
-    { name: "VAT on Shipping", rate: 0.15, amount: Math.round(shippingAmount * 0.15 * 100) / 100 },
-  ];
+  const actualTaxTotal = taxData?.total ?? 0;
+  const actualTaxLines = taxData?.lines ?? [];
 
-  const codExtraFee = selectedPaymentMethod === PaymentMethod.COD ? 20 : 0;
-  const couponDiscount = appliedCoupon?.discountAmount ?? 0;
+  const gatewayFee = selectedGatewayConfig
+    ? Math.round(
+        (selectedGatewayConfig.feeFixed + ((subtotal - couponDiscount) * selectedGatewayConfig.feePercent) / 100) * 100,
+      ) / 100
+    : 0;
   const discountsArr: OrderSummaryLineItem[] = [];
   if (couponDiscount > 0) {
     discountsArr.push({
@@ -233,7 +203,7 @@ export default function CheckoutPage() {
     });
   }
 
-  const grandTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + codExtraFee - couponDiscount);
+  const grandTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount);
 
   const [applyCoupon, { isLoading: applyingCoupon }] = useApplyCouponMutation();
   const [placeOrder, { isLoading: placingOrder }] = usePlaceOrderMutation();
@@ -255,6 +225,7 @@ export default function CheckoutPage() {
         })),
         shippingTotal: shippingAmount,
         countryCode: shippingAddress.country,
+        email: contactEmail || undefined,
       }).unwrap();
 
       if (result.valid) {
@@ -276,11 +247,11 @@ export default function CheckoutPage() {
         setCouponError(result.errorMessage ?? "Invalid or expired coupon code");
         setAppliedCoupon(null);
         toast.error("Invalid coupon", {
-          description: result.errorMessage ?? "Try EID20OFF or BD500",
+          description: result.errorMessage ?? "Check the code and try again",
         });
       }
     } catch (err: any) {
-      const msg = err?.data?.message ?? err?.message ?? "Could not apply coupon. Try again.";
+      const msg = apiErrorMessage(err, "Could not apply coupon. Try again.");
       setCouponError(msg);
       toast.error("Coupon error", { description: msg });
     }
@@ -380,7 +351,6 @@ export default function CheckoutPage() {
             email: contactEmail || billingAddress.email || shippingAddress.email || customerEmail || undefined,
           };
 
-      const paymentGatewayObj = DEFAULT_PAYMENT_GATEWAYS.find((g) => g.id === selectedPaymentMethod);
 
       const result = await placeOrder({
         email: contactEmail || customerEmail || shippingPayload.email || "",
@@ -424,14 +394,10 @@ export default function CheckoutPage() {
       if (result.redirectPaymentURL) {
         window.location.href = result.redirectPaymentURL;
       } else {
-        router.push(`/checkout/thank-you?orderRef=${encodeURIComponent(result.orderRef)}`);
+        router.push(`/checkout/thank-you?key=${encodeURIComponent(result.orderKey)}`);
       }
     } catch (err: any) {
-      const msg =
-        err?.data?.message ??
-        (Array.isArray(err?.data) ? (err.data as string[]).join(", ") : null) ??
-        err?.message ??
-        "Could not place order. Please try again.";
+      const msg = apiErrorMessage(err, "Could not place order. Please try again.");
       toast.error("Order failed", { description: msg });
     }
   };
@@ -798,21 +764,25 @@ export default function CheckoutPage() {
                         <Skeleton key={i} className="h-24 w-full rounded-xl" />
                       ))}
                     </div>
-                  ) : ratesError && rates.length === 0 ? (
+                  ) : rates.length === 0 ? (
                     <div className="p-6 rounded-xl bg-amber-50 border border-amber-200 text-center">
                       <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
                       <p className="font-semibold text-amber-800 mb-1">
-                        Sorry, no carriers available for your location
+                        {ratesError
+                          ? "We couldn't load delivery options"
+                          : "Sorry, no carriers available for your location"}
                       </p>
                       <p className="text-sm text-amber-700/80">
-                        Please contact support or try a different shipping address.
+                        {ratesError
+                          ? "Check the division and district, then try again."
+                          : "Please contact support or try a different shipping address."}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {rates.map((rate) => {
                         const isSelected = selectedShippingRateId === rate.methodId;
-                        const rateIsFree = (rate.freeFromSubtotal ?? Infinity) <= subtotal;
+                        const rateIsFree = rate.cost === 0;
                         const isCheapest = cheapest === rate.methodId;
                         const isFastest = fastest === rate.methodId;
                         return (
@@ -878,11 +848,6 @@ export default function CheckoutPage() {
                                 >
                                   {rateIsFree ? "FREE" : formatBDT(rate.cost)}
                                 </div>
-                                {!rateIsFree && rate.freeFromSubtotal && (
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    FREE over {formatBDT(rate.freeFromSubtotal)}
-                                  </p>
-                                )}
                               </div>
                             </div>
                           </div>
@@ -939,6 +904,7 @@ export default function CheckoutPage() {
                 </CardHeader>
                 <CardContent>
                   <PaymentMethodList
+                    gateways={paymentGateways}
                     selectedMethod={selectedPaymentMethod}
                     onSelect={setSelectedPaymentMethod}
                     formData={paymentFormData}
@@ -972,13 +938,12 @@ export default function CheckoutPage() {
             taxLoading={taxLoading}
             discounts={discountsArr}
             customLines={
-              codExtraFee > 0
+              gatewayFee > 0
                 ? [
                     {
-                      id: "cod",
-                      label: "COD Handling Fee",
-                      amount: codExtraFee,
-                      badge: "Cash On Delivery",
+                      id: "gateway-fee",
+                      label: `${selectedGatewayConfig?.name ?? "Payment"} fee`,
+                      amount: gatewayFee,
                     },
                   ]
                 : []

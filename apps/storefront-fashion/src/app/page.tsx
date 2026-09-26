@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, ShoppingBag, Truck, Shield, CreditCard, Instagram } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, ShoppingBag, Truck, Shield, CreditCard } from "lucide-react";
 import {
   HeroSlider,
   FeaturedCategories,
@@ -11,41 +12,38 @@ import {
   Button,
   ProductCardData,
   useCart,
+  useGetProductsQuery,
+  useGetCategoriesTreeQuery,
+  type ProductSummary,
 } from "@ecom/storefront-base";
 import { toast } from "sonner";
-import { slugify } from "@ecom/utils";
 
-const PLACEHOLDER_IMG = (seed: string, w = 600, h = 750) =>
-  `https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-    `fashion product ${seed} studio photo e-commerce clean white background professional`,
-  )}&image_size=portrait_4_3`.replace("/v1/text_to_image?", `/v1/text_to_image?cache=${seed}&`);
-
-const mockCategoryImg = (seed: string) =>
-  PLACEHOLDER_IMG(`${seed} category`, 400, 400);
-
-const FEATURED_PRODUCTS: ProductCardData[] = [
-  { id: "p1", slug: "richman-navy-cotton-shirt", title: "Richman Navy Cotton Shirt", image: PLACEHOLDER_IMG("shirt-navy-1"), price: 3290, compareAtPrice: 3990, rating: 4.5, reviewCount: 128, isNew: true },
-  { id: "p2", slug: "elegance-floral-maxi-dress", title: "Elegance Floral Maxi Dress — Summer Edition", image: PLACEHOLDER_IMG("dress-floral-1"), price: 4890, compareAtPrice: 5990, rating: 4.7, reviewCount: 89, isOnSale: true, discountPercent: 18 },
-  { id: "p3", slug: "leatherite-casual-sneakers", title: "Leatherite Casual Sneakers White", image: PLACEHOLDER_IMG("sneakers-white-1"), price: 3490, compareAtPrice: null, rating: 4.3, reviewCount: 210 },
-  { id: "p4", slug: "luxury-leather-handbag", title: "Luxury Premium Leather Handbag Tan", image: PLACEHOLDER_IMG("handbag-tan-1"), price: 5790, compareAtPrice: 6990, rating: 4.8, reviewCount: 56, isOnSale: true, discountPercent: 17 },
-  { id: "p5", slug: "trendy-kids-casual-tshirt", title: "Trendy Kids Casual T-Shirt Set", image: PLACEHOLDER_IMG("kids-tee-1"), price: 1490, compareAtPrice: 1890, rating: 4.4, reviewCount: 145 },
-  { id: "p6", slug: "classic-leather-wallet", title: "Classic Genuine Leather Wallet Brown", image: PLACEHOLDER_IMG("wallet-brown-1"), price: 2490, compareAtPrice: null, rating: 4.6, reviewCount: 78 },
-  { id: "p7", slug: "casio-gold-stainless-watch", title: "Casio Gold Stainless Steel Watch", image: PLACEHOLDER_IMG("watch-gold-1"), price: 8990, compareAtPrice: 10990, rating: 4.9, reviewCount: 201, isNew: true },
-  { id: "p8", slug: "summer-vibes-perfume", title: "Summer Vibes EDT Perfume 100ml", image: PLACEHOLDER_IMG("perfume-1"), price: 3790, compareAtPrice: 4490, rating: 4.2, reviewCount: 67 },
-  { id: "p9", slug: "aarong-premium-panjabi", title: "Aarong Premium Cotton Panjabi White", image: PLACEHOLDER_IMG("panjabi-white-1"), price: 4290, compareAtPrice: 4990, rating: 4.6, reviewCount: 92 },
-  { id: "p10", slug: "denim-slim-fit-jeans", title: "Levi's Slim Fit Denim Jeans Blue", image: PLACEHOLDER_IMG("jeans-blue-1"), price: 5490, compareAtPrice: null, rating: 4.5, reviewCount: 310 },
-  { id: "p11", slug: "winter-knit-sweater", title: "Winter Cozy Knit Sweater Gray", image: PLACEHOLDER_IMG("sweater-gray-1"), price: 3990, compareAtPrice: 4790, rating: 4.4, reviewCount: 44, isOnSale: true, discountPercent: 17 },
-  { id: "p12", slug: "office-formal-shoes", title: "Bata Office Formal Leather Shoes Black", image: PLACEHOLDER_IMG("shoes-black-1"), price: 4590, compareAtPrice: 5290, rating: 4.5, reviewCount: 168 },
+const CATEGORY_COLORS = [
+  "from-pink-400 to-rose-500",
+  "from-blue-400 to-indigo-500",
+  "from-emerald-400 to-teal-500",
+  "from-amber-400 to-orange-500",
+  "from-violet-400 to-purple-500",
+  "from-cyan-400 to-sky-500",
+  "from-slate-400 to-slate-600",
+  "from-fuchsia-400 to-pink-500",
 ];
-
-const NEW_ARRIVALS: ProductCardData[] = FEATURED_PRODUCTS.slice(4, 12);
 
 export default function HomePage() {
   const { addItem } = useCart();
+  const router = useRouter();
+  const { data: featured, isLoading: featuredLoading } = useGetProductsQuery({ featured: true, perPage: 8, sort: "popular" });
+  const { data: newest, isLoading: newestLoading } = useGetProductsQuery({ perPage: 8, sort: "newest" });
+  const { data: categoryTree = [] } = useGetCategoriesTreeQuery();
   const [wishlisted, setWishlisted] = React.useState<Set<string>>(new Set());
 
   const handleAddToCart = React.useCallback(
     (p: ProductCardData) => {
+      const summary = p as ProductSummary;
+      if (summary.hasVariants) {
+        router.push(`/products/${p.slug}`);
+        return;
+      }
       addItem({
         productId: p.id,
         variantId: undefined,
@@ -53,6 +51,7 @@ export default function HomePage() {
         slug: p.slug,
         image: p.image,
         price: p.price,
+        weightKG: summary.weightKG,
       });
       toast.success("Added to cart", {
         description: (
@@ -64,7 +63,7 @@ export default function HomePage() {
         },
       });
     },
-    [addItem],
+    [addItem, router],
   );
 
   const toggleWishlist = React.useCallback((p: ProductCardData) => {
@@ -77,16 +76,18 @@ export default function HomePage() {
     toast.info(wishlisted.has(p.id) ? "Removed from wishlist" : "Added to wishlist");
   }, [wishlisted]);
 
-  const sectionCats = [
-    { id: "c1", slug: "women-dresses", name: "Women Dresses", image: mockCategoryImg("women-dresses"), productCount: 420, color: "from-pink-400 to-rose-500" },
-    { id: "c2", slug: "men-shirts", name: "Men Shirts", image: mockCategoryImg("men-shirts"), productCount: 310, color: "from-blue-400 to-indigo-500" },
-    { id: "c3", slug: "kids", name: "Kids", image: mockCategoryImg("kids"), productCount: 180, color: "from-amber-400 to-orange-500" },
-    { id: "c4", slug: "accessories", name: "Accessories", image: mockCategoryImg("accessories"), productCount: 260, color: "from-emerald-400 to-teal-500" },
-    { id: "c5", slug: "shoes", name: "Shoes", image: mockCategoryImg("shoes"), productCount: 340, color: "from-violet-400 to-purple-500" },
-    { id: "c6", slug: "bags", name: "Bags", image: mockCategoryImg("bags"), productCount: 190, color: "from-cyan-400 to-sky-500" },
-    { id: "c7", slug: "watches", name: "Watches", image: mockCategoryImg("watches"), productCount: 150, color: "from-slate-400 to-slate-600" },
-    { id: "c8", slug: "perfumes", name: "Perfumes", image: mockCategoryImg("perfumes"), productCount: 120, color: "from-fuchsia-400 to-pink-500" },
-  ];
+  // Leaf categories read best as shop-by-category tiles; fall back to roots for flat trees.
+  const sectionCats = React.useMemo(() => {
+    const leaves = categoryTree.flatMap((c) => (c.children?.length ? c.children : [c]));
+    return leaves.slice(0, 8).map((c, i) => ({
+      id: c.id,
+      slug: c.slug,
+      name: c.name,
+      image: c.image,
+      productCount: c.productCount,
+      color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+    }));
+  }, [categoryTree]);
 
   const featureItems = [
     { icon: <Truck className="h-6 w-6 text-primary" />, title: "Free Delivery", desc: "On orders above ৳1000 inside Bangladesh" },
@@ -94,12 +95,6 @@ export default function HomePage() {
     { icon: <CreditCard className="h-6 w-6 text-primary" />, title: "Secure Payment", desc: "bKash, Nagad, Rocket, SSL, Visa — all secure" },
     { icon: <ShoppingBag className="h-6 w-6 text-primary" />, title: "Authentic Brands", desc: "100% genuine products from authorized brands" },
   ];
-
-  const instagramPosts = Array.from({ length: 6 }).map((_, i) => ({
-    id: `ig-${i}`,
-    url: mockCategoryImg(`fashion-ig-${i}`),
-    likes: 200 + Math.floor(Math.random() * 900),
-  }));
 
   return (
     <div className="flex flex-col gap-10 md:gap-16 pb-10 md:pb-16">
@@ -124,7 +119,7 @@ export default function HomePage() {
               title: "Beat the Heat in Style",
               subtitle: "Lightweight summer essentials from ৳490 only. Limited time offer — hurry before stock runs out!",
               ctaText: "View Collection",
-              ctaHref: "/categories/women",
+              ctaHref: "/products?category=women",
               bgGradient: "from-amber-400 via-orange-500 to-red-500",
               alignment: "center",
               textColor: "light",
@@ -135,7 +130,7 @@ export default function HomePage() {
               title: "Men's Premium Collection",
               subtitle: "Premium quality shirts, panjabis and formal wear. Quality guaranteed by leading brands.",
               ctaText: "Explore Now",
-              ctaHref: "/categories/men",
+              ctaHref: "/products?category=men",
               bgGradient: "from-slate-800 via-slate-900 to-black",
               alignment: "right",
               textColor: "light",
@@ -167,7 +162,9 @@ export default function HomePage() {
       </section>
 
       <section className="container">
-        <FeaturedCategories categories={sectionCats} heading="Shop by Category" subheading="Find exactly what you need from our curated collections" />
+        {sectionCats.length > 0 && (
+          <FeaturedCategories categories={sectionCats} heading="Shop by Category" subheading="Find exactly what you need from our curated collections" />
+        )}
       </section>
 
       <section className="container">
@@ -189,7 +186,8 @@ export default function HomePage() {
           </Button>
         </motion.div>
         <ProductGrid
-          products={FEATURED_PRODUCTS}
+          products={featured?.items ?? []}
+          loading={featuredLoading}
           onAddToCart={handleAddToCart}
           onToggleWishlist={toggleWishlist}
           wishlistedIds={wishlisted}
@@ -229,7 +227,8 @@ export default function HomePage() {
           </Button>
         </div>
         <ProductGrid
-          products={NEW_ARRIVALS}
+          products={newest?.items ?? []}
+          loading={newestLoading}
           cols={4}
           onAddToCart={handleAddToCart}
           onToggleWishlist={toggleWishlist}
@@ -237,29 +236,6 @@ export default function HomePage() {
         />
       </section>
 
-      <section className="container">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center justify-center gap-2">
-            <Instagram className="h-7 w-7 text-pink-500" /> @FashionBD
-          </h2>
-          <p className="text-muted-foreground mt-1">Tag us with #FashionBD and get featured!</p>
-        </div>
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
-          {instagramPosts.map((p) => (
-            <motion.a
-              key={p.id}
-              href="#"
-              whileHover={{ y: -4, scale: 1.03 }}
-              className="relative block aspect-square overflow-hidden rounded-xl group"
-            >
-              <img src={p.url} alt="Fashion BD Instagram post" className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-sm font-semibold">❤️ {p.likes}</span>
-              </div>
-            </motion.a>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

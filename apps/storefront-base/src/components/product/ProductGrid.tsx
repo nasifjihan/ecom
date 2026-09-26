@@ -6,6 +6,8 @@ import { cn } from "@ecom/utils";
 
 export type ProductGridProps = {
   products?: ProductCardData[];
+  /** Show skeletons while true. When omitted, an empty `products` list shows skeletons. */
+  loading?: boolean;
   skeletonCount?: number;
   onAddToCart?: (product: ProductCardData) => void;
   onToggleWishlist?: (product: ProductCardData) => void;
@@ -18,6 +20,7 @@ export type ProductGridProps = {
 
 export const ProductGrid: React.FC<ProductGridProps> = ({
   products = [],
+  loading,
   skeletonCount = 8,
   onAddToCart,
   onToggleWishlist,
@@ -27,7 +30,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   cols,
   currency,
 }) => {
-  const isLoading = products.length === 0;
+  const isLoading = loading ?? products.length === 0;
   const items = isLoading ? Array.from({ length: skeletonCount }) : products;
 
   const colsClass =

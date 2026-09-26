@@ -1255,5 +1255,51 @@ No Prisma schema modifications required for Batch #9. All 62 models intact. Safe
 - API fixes surfaced by the live DB: super login wrote a malformed store-less `AuditLog` row whenever a PlatformAdmin id matched an AdminUser id (it now just logs), and `res.json` threw "Do not know how to serialize a BigInt" on any Prisma row (a global `json replacer` now emits BigInt as string).
 - From now on, schema changes go in new migrations (`pnpm prisma:migrate --name <change>`); never edit the init SQL.
 
-## 📋 BATCH #10 PLAN (starts next)
+## 📋 BATCH #10 PLAN — Storefront live
+
+Goal: the fashion storefront runs against the real API and database. It needs public catalog endpoints, checkout and coupon routes that match what storefront-base calls, and no mock data. Browse, cart and a COD order must work end to end. No schema changes.
+
+## ✅ BATCH #10 COMPLETE — Storefront live (2026-09-26)
+
+### 10.1 New API module `apps/api/src/modules/storefront/`
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/storefront/products` | Published only. Filters: `categoryId` (csv, includes descendants), `categorySlug`, `brandId` (csv), `minPrice`/`maxPrice` (effective price), `rating`, `search`, `featured`, `excludeId`. Sorts: popular, newest, price_asc, price_desc (by effective sale price), rating. Returns `{items, page, perPage, total, totalPages}`. |
+| GET | `/api/storefront/products/:slug` | Summary plus description, breadcrumbs, specs, approved reviews, variants (attributes, price, stock) and SEO. |
+| GET | `/api/storefront/categories/tree` | Nested tree; `productCount` rolls up to parents. |
+| GET | `/api/storefront/brands` | Active brands with product counts. |
+| POST | `/api/storefront/checkout/coupons/apply` | Re-prices the cart from the DB and checks active, dates, usage limits, min/max subtotal, allowed emails, per-customer and new-customer rules, product/category include/exclude and excludeSales. Supports PERCENTAGE, FIXED_CART, FIXED_PRODUCT and FREE_SHIPPING. |
+| POST | `/api/storefront/checkout` | Places an order. Client prices are ignored and every line is re-priced. The gateway must be enabled, the shipping option comes from `ShippingService`, and tax comes from `resolveTaxes` on (subtotal minus discount) and shipping. One transaction covers a guarded stock decrement, InventoryLog rows, saleCount, coupon usage, and the order with items and a status log. Returns 201 with `orderKey`. |
+| GET | `/api/storefront/checkout/payment-methods` | Enabled gateways with fee config. |
+| GET | `/api/storefront/checkout/orders/:orderKey` | Order detail for the thank-you page. The unguessable key acts as the token. |
+
+The storefront checkout router is mounted before the older `/api/storefront/checkout` cart router, so `/from-cart` and `/carts` still work.
+
+### 10.2 Fixes surfaced by the live DB
+1. **Tenant lookup never resolved.** Domains are stored as `localhost:3000`, but the middleware looked up the bare host, and caching the result threw on BigInt ids. It now tries `host:port` and then `host`, and stringifies ids before caching.
+2. **Shipping rates returned 422.** `matchZonesForAddress` filtered and sorted on `ShippingZone.enabled`, which doesn't exist. The first matching zone now wins, instead of merging every matching zone's methods.
+3. **Every storefront page returned 500.** `layout.tsx` called `useCart` inside a Server Component. The navbar and cart drawer moved into the client component `site-chrome.tsx`, and the navbar's categories come from the live tree.
+4. **The product page was 33 million px tall.** The Swiper grid had no `min-w-0`. Fixed the thumbnail height too.
+5. **Checkout imported a `useAppSelector` that storefront-base doesn't export.** It now imports from `@/lib/store`.
+6. **COD showed a hardcoded "+BDT 20" fee.** The fee badge now comes from `feeFixed` in PaymentGatewayConfig.
+
+### 10.3 Storefront changes (mocks removed)
+Home, product list, product detail, cart, checkout, thank-you and sitemap all use the API. Product list filters and sort sync with `?category=` and `?sort=`. The product page picks a variant (size and colour) with stock-aware add-to-cart. The cart no longer shows fake shipping, VAT or coupons. Checkout uses real rates, enabled gateways, tax and coupons, then goes to `/checkout/thank-you?key=`. `/categories/[slug]` redirects to the filtered list. The product page's server metadata and JSON-LD come from `src/lib/server-api.ts`, which sends an `Origin` header so the tenant resolves.
+
+### 10.4 Seed
+The idempotent "BATCH #10 BASELINE" block adds 7 categories under Women, Men and Accessories, 4 brands and 12 products with images, sale prices, stock and weight. Size and colour variants make the product VARIABLE. One product is out of stock. The seed also adds the "Chattogram" and "Barishal" spellings to the Rest of Bangladesh zone, because the checkout division list uses them.
+
+### 10.5 Verification (Postgres 16 + Redis, fresh schema + seed, seeded twice)
+- curl: catalog filters and sorts; coupons (below minimum, valid, unknown code, per-customer limit); order validation, disabled gateway and wrong shipping method errors; a COD order with correct totals, decremented stock and a bumped coupon usage count.
+- Playwright on `localhost:3000` (fresh `db push` + seed on main): product page (size M, colour Rose) → product list by category → cart → checkout with coupon WELCOME10 → COD → thank-you page with order `20260926000001`. Subtotal BDT 16,490, coupon −1,649, Pathao Standard free, VAT 15% on the discounted subtotal 2,226.15, grand total BDT 17,067.15. The same coupon is rejected ("first orders only") for a returning email.
+- `apps/api`: `tsc` is clean and all vitest tests pass (34 passed, 7 DB tests skipped without RUN_DB_TESTS). `storefront-fashion` `tsc` is down from 21 errors to 14, all pre-existing (`PaymentMethodList.tsx` ×12, seo import path ×2).
+
+### 10.6 Known gaps (next batches)
+- Flash sale prices aren't applied at checkout. BOGO coupons are rejected as unsupported.
+- No account creation at checkout, and orders aren't linked to a customer unless the customer is logged in.
+- The review form on the product page isn't wired (no public review endpoint).
+- No email queue, so no order confirmation email.
+- The admin shipping zone create/update DTOs still reference fields the schema doesn't have (`enabled`, `zoneType`, `provider`, `methodType`).
+- The 14 pre-existing storefront type errors are listed above.
+- Batch 10 needs no schema change, so the init migration still covers it (`prisma migrate deploy` + seed on a fresh DB).
 
