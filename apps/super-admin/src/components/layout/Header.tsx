@@ -8,18 +8,15 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Search,
-  Bell,
   Sun,
   Moon,
   Menu,
   LogOut,
-  Settings2,
-  UserRound,
   Plus,
   ShieldCheck,
   CreditCard,
-  Flag,
-  UserPlus,
+  Building2,
+  Globe2,
   ChevronDown,
 } from "lucide-react";
 import {
@@ -78,9 +75,8 @@ export default function SuperHeader({
 
   const displayUser = meData?.user ?? authUser;
   const displayName = displayUser?.name ?? "Super Admin";
-  const displayEmail = displayUser?.email ?? "super@ecom-platform.io";
-  const displayRole = displayUser?.role ?? "PLATFORM_SUPER_ADMIN";
-  const twoFactorEnabled = displayUser?.twoFactorEnabled ?? false;
+  const displayEmail = displayUser?.email ?? "";
+  const displayRole = displayUser?.role ?? "super_owner";
   const initials = displayName
     .split(" ")
     .map((n) => n[0])
@@ -90,22 +86,22 @@ export default function SuperHeader({
 
   const quickCreateItems = [
     {
+      icon: Building2,
+      label: "New Store",
+      description: "Create a tenant store",
+      href: "/stores?new=1",
+    },
+    {
       icon: CreditCard,
       label: "New Plan",
       description: "Create a billing plan",
-      href: "/billing/plans/new",
+      href: "/billing/plans?new=1",
     },
     {
-      icon: UserPlus,
-      label: "New Admin",
-      description: "Invite platform admin",
-      href: "/admins/new",
-    },
-    {
-      icon: Flag,
-      label: "Feature Flag",
-      description: "Toggle platform feature",
-      href: "/settings/features",
+      icon: Globe2,
+      label: "New Domain",
+      description: "Attach a domain to a store",
+      href: "/stores/domains?new=1",
     },
   ];
 
@@ -130,7 +126,11 @@ export default function SuperHeader({
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <Input
           type="search"
-          placeholder="Search stores, admins, invoices, domains..."
+          placeholder="Search stores by name, domain or owner email..."
+          onKeyDown={(e) => {
+            const q = e.currentTarget.value.trim();
+            if (e.key === "Enter" && q) router.push(`/stores?search=${encodeURIComponent(q)}`);
+          }}
           className="h-9 w-full border-slate-200 bg-slate-50 pl-9 pr-4 text-sm dark:border-slate-700 dark:bg-slate-800 focus:ring-rose-500 focus:border-rose-500"
         />
       </div>
@@ -174,18 +174,6 @@ export default function SuperHeader({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-            3
-          </span>
-        </Button>
 
         <Button
           variant="ghost"
@@ -256,14 +244,6 @@ export default function SuperHeader({
                     <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                       {displayName}
                     </p>
-                    {twoFactorEnabled && (
-                      <Badge
-                        variant="success"
-                        className="px-1.5 py-0 text-[9px] h-4"
-                      >
-                        2FA
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                     {displayEmail}
@@ -278,25 +258,6 @@ export default function SuperHeader({
                 </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link
-                href="/settings/profile"
-                className="flex items-center gap-3 cursor-pointer"
-              >
-                <UserRound className="h-4 w-4" />
-                <span>My Profile</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                href="/settings/platform"
-                className="flex items-center gap-3 cursor-pointer"
-              >
-                <Settings2 className="h-4 w-4" />
-                <span>Platform Settings</span>
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}

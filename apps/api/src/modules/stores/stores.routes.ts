@@ -6,7 +6,7 @@ import {
   UpdateStoreDto,
   CreateDomainDto,
   UpdateDomainDto,
-  PaginationDto,
+  StoreListQueryDto,
   StoreIdParamDto,
   DomainIdParamDto,
   StoreDomainQueryDto,
@@ -19,7 +19,7 @@ superStoresRouter
   .get(
     authMiddleware("super"),
     rbacMiddleware("settings.read"),
-    validate({ query: PaginationDto }),
+    validate({ query: StoreListQueryDto }),
     storesController.listStores,
   )
   .post(

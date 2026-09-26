@@ -25,6 +25,8 @@ export type RequestContext = {
   customer?: { id: bigint };
   super?: { id: bigint };
   requestId: string;
+  /** Client IP as Express resolves it (honours `trust proxy`). */
+  ip?: string;
   locale: string;
   currency: string;
 };

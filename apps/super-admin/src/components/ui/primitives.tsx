@@ -299,27 +299,35 @@ export const Checkbox = React.forwardRef<
 ));
 Checkbox.displayName = "Checkbox";
 
+const TabsContext = React.createContext<{ active?: string; setActive: (v: string) => void } | null>(null);
+
+/** Tabs work controlled (`value` + `onValueChange`) or uncontrolled (`defaultValue`); triggers may be nested anywhere inside. */
 export function Tabs({
   children,
   defaultValue,
+  value,
+  onValueChange,
   className,
 }: {
   children: React.ReactNode;
   defaultValue?: string;
+  value?: string;
+  onValueChange?: (v: string) => void;
   className?: string;
 }) {
-  const [active, setActive] = React.useState(defaultValue);
+  const [inner, setInner] = React.useState(defaultValue);
+  const active = value ?? inner;
+  const setActive = React.useCallback(
+    (v: string) => {
+      if (value === undefined) setInner(v);
+      onValueChange?.(v);
+    },
+    [value, onValueChange],
+  );
   return (
-    <div className={className}>
-      {React.Children.map(children, (child) =>
-        React.isValidElement(child)
-          ? React.cloneElement(child as React.ReactElement<any>, {
-              active,
-              setActive,
-            })
-          : child,
-      )}
-    </div>
+    <TabsContext.Provider value={{ active, setActive }}>
+      <div className={className}>{children}</div>
+    </TabsContext.Provider>
   );
 }
 
@@ -332,6 +340,7 @@ export function TabsList({
 }) {
   return (
     <div
+      role="tablist"
       className={cn(
         "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
         className,
@@ -345,23 +354,24 @@ export function TabsList({
 export function TabsTrigger({
   children,
   value,
-  active,
-  setActive,
   className,
 }: {
   children: React.ReactNode;
   value: string;
-  active?: string;
-  setActive?: (v: string) => void;
   className?: string;
 }) {
+  const ctx = React.useContext(TabsContext);
+  const isActive = ctx?.active === value;
   return (
     <button
       type="button"
-      onClick={() => setActive?.(value)}
+      role="tab"
+      aria-selected={isActive}
+      data-state={isActive ? "active" : "inactive"}
+      onClick={() => ctx?.setActive(value)}
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        active === value ? "bg-background text-foreground shadow-sm" : "",
+        isActive ? "bg-background text-foreground shadow-sm" : "",
         className,
       )}
     >
@@ -373,17 +383,17 @@ export function TabsTrigger({
 export function TabsContent({
   children,
   value,
-  active,
   className,
 }: {
   children: React.ReactNode;
   value: string;
-  active?: string;
   className?: string;
 }) {
-  if (active !== value) return null;
+  const ctx = React.useContext(TabsContext);
+  if (ctx?.active !== value) return null;
   return (
     <div
+      role="tabpanel"
       className={cn(
         "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
@@ -505,23 +515,60 @@ export type DropdownMenuProps = {
   className?: string;
 };
 
+const DropdownMenuContext = React.createContext<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+} | null>(null);
+
+/** Minimal dropdown: the trigger toggles it; an outside click, Escape or picking an item closes it. */
 export function DropdownMenu({ children, className }: DropdownMenuProps) {
-  return <div className={cn("relative", className)}>{children}</div>;
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <DropdownMenuContext.Provider value={{ open, setOpen }}>
+      <div ref={ref} className={cn("relative inline-block", className)}>
+        {children}
+      </div>
+    </DropdownMenuContext.Provider>
+  );
 }
 
 export function DropdownMenuTrigger({
   children,
   className,
-  asChild,
 }: {
   children: React.ReactNode;
   className?: string;
   asChild?: boolean;
 }) {
-  if (asChild) {
-    return <div className={className}>{children}</div>;
-  }
-  return <div className={className}>{children}</div>;
+  const ctx = React.useContext(DropdownMenuContext);
+  return (
+    <div
+      className={className}
+      aria-haspopup="menu"
+      aria-expanded={ctx?.open ?? false}
+      onClick={() => ctx?.setOpen(!ctx.open)}
+    >
+      {children}
+    </div>
+  );
 }
 
 export const DropdownMenuContent = React.forwardRef<
@@ -533,6 +580,8 @@ export const DropdownMenuContent = React.forwardRef<
     sideOffset?: number;
   } & React.HTMLAttributes<HTMLDivElement>
 >(({ children, className, align = "end" }, ref) => {
+  const ctx = React.useContext(DropdownMenuContext);
+  if (ctx && !ctx.open) return null;
   const alignClass =
     align === "start"
       ? "left-0"
@@ -542,8 +591,9 @@ export const DropdownMenuContent = React.forwardRef<
   return (
     <div
       ref={ref}
+      role="menu"
       className={cn(
-        `absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md ${alignClass}`,
+        `absolute top-full z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md ${alignClass}`,
         className,
       )}
     >
@@ -553,22 +603,28 @@ export const DropdownMenuContent = React.forwardRef<
 });
 DropdownMenuContent.displayName = "DropdownMenuContent";
 
+const itemClass =
+  "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+
 export const DropdownMenuItem = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
     inset?: boolean;
     asChild?: boolean;
   }
->(({ className, inset, asChild, children, ...props }, ref) => {
+>(({ className, inset, asChild, children, onClick, ...props }, ref) => {
+  const ctx = React.useContext(DropdownMenuContext);
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e);
+    ctx?.setOpen(false);
+  };
   if (asChild) {
     return (
       <div
         ref={ref as any}
-        className={cn(
-          "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-          inset && "pl-8",
-          className,
-        )}
+        role="menuitem"
+        className={cn(itemClass, inset && "pl-8", className)}
+        onClick={handleClick as any}
         {...(props as any)}
       >
         {children}
@@ -578,13 +634,14 @@ export const DropdownMenuItem = React.forwardRef<
   return (
     <button
       ref={ref}
-      className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground w-full text-left data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        inset && "pl-8",
-        className,
-      )}
+      type="button"
+      role="menuitem"
+      className={cn(itemClass, inset && "pl-8", className)}
+      onClick={handleClick}
       {...props}
-    />
+    >
+      {children}
+    </button>
   );
 });
 DropdownMenuItem.displayName = "DropdownMenuItem";
@@ -622,14 +679,74 @@ export function DropdownMenuPortal({ children }: { children: React.ReactNode }) 
   return <>{children}</>;
 }
 
+export function DropdownMenuSub({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+export function DropdownMenuSubTrigger() {
+  return null;
+}
+
+export function DropdownMenuSubContent() {
+  return null;
+}
+
+export function DropdownMenuRadioGroup({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
+
+export function DropdownMenuCheckboxItem() {
+  return null;
+}
+
+export function DropdownMenuRadioItem() {
+  return null;
+}
+
+export function DropdownMenuShortcut({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      {...props}
+    />
+  );
+}
+
+type OverlayCtx = { open: boolean; onOpenChange: (open: boolean) => void };
+
+const DialogContext = React.createContext<OverlayCtx | null>(null);
+
+/** Closes an open overlay on Escape. */
+function useEscapeToClose(ctx: OverlayCtx | null) {
+  React.useEffect(() => {
+    if (!ctx?.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") ctx.onOpenChange(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [ctx]);
+}
+
+/** Controlled dialog: content renders only while `open`; overlay click and Escape call onOpenChange(false). */
 export function Dialog({
   children,
+  open = false,
+  onOpenChange,
 }: {
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  return <>{children}</>;
+  const value = React.useMemo(() => ({ open, onOpenChange: onOpenChange ?? (() => {}) }), [open, onOpenChange]);
+  return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
 }
 
 export function DialogTrigger({ children }: { children: React.ReactNode }) {
@@ -664,16 +781,24 @@ export function DialogContent({
   children,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
+  const ctx = React.useContext(DialogContext);
+  useEscapeToClose(ctx);
+  if (ctx && !ctx.open) return null;
   return (
-    <div
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </div>
+    <>
+      <DialogOverlay onClick={() => ctx?.onOpenChange(false)} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -954,14 +1079,20 @@ export function ScrollBar() {
   return null;
 }
 
+const SheetContext = React.createContext<OverlayCtx | null>(null);
+
+/** Controlled side panel, same open/close rules as Dialog. */
 export function Sheet({
   children,
+  open = false,
+  onOpenChange,
 }: {
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  return <>{children}</>;
+  const value = React.useMemo(() => ({ open, onOpenChange: onOpenChange ?? (() => {}) }), [open, onOpenChange]);
+  return <SheetContext.Provider value={value}>{children}</SheetContext.Provider>;
 }
 
 export function SheetTrigger({ children }: { children: React.ReactNode }) {
@@ -985,22 +1116,23 @@ export function SheetContent({
   children: React.ReactNode;
   side?: "left" | "right" | "top" | "bottom";
 }) {
-  const sideClasses = {
-    right: "right-0 top-0 h-full w-full sm:w-[540px] border-l",
-    left: "left-0 top-0 h-full w-full sm:w-[540px] border-r",
-    top: "top-0 left-0 w-full h-auto border-b",
-    bottom: "bottom-0 left-0 w-full h-auto border-t",
-  };
+  const ctx = React.useContext(SheetContext);
+  useEscapeToClose(ctx);
+  if (ctx && !ctx.open) return null;
   return (
-    <div
-      className={cn(
-        "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out",
-        sideClasses[side],
-        className,
-      )}
-    >
-      {children}
-    </div>
+    <>
+      <div className="fixed inset-0 z-50 bg-black/60" onClick={() => ctx?.onOpenChange(false)} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-md flex-col overflow-y-auto border-l bg-background p-6 shadow-lg",
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 

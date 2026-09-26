@@ -1,430 +1,126 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
+import { Building2, DollarSign, Download, ShoppingCart, TrendingUp, Users } from "lucide-react";
 import {
-  BarChart3,
-  PieChart,
-  ShoppingCart,
-  Users,
-  TrendingDown,
-  Download,
-  Calendar,
-  ArrowUpDown,
-  TrendingUp,
-  DollarSign,
-  Building2,
-  Activity,
-} from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  Button,
-  Badge,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-  Input,
-  Select,
-  SelectItem,
-  Skeleton,
-  Progress,
-} from "@/components/ui";
-import { cn } from "@/components/ui";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
 } from "recharts";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  cn,
+} from "@/components/ui";
+import { formatMoney, useGetPlatformReportsQuery, type PlatformReports } from "@/lib/features/platform/platform-api-slice";
+import { EmptyRow, PlanBadge } from "@/components/platform/shared";
 
-const monthlyData = Array.from({ length: 12 }, (_, i) => ({
-  month: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i],
-  revenue: Math.floor(Math.random() * 40000) + 15000,
-  revenuePrev: Math.floor(Math.random() * 35000) + 12000,
-  orders: Math.floor(Math.random() * 3000) + 800,
-  ordersPrev: Math.floor(Math.random() * 2500) + 700,
-  newStores: Math.floor(Math.random() * 50) + 15,
-  newStoresPrev: Math.floor(Math.random() * 40) + 12,
-  newCustomers: Math.floor(Math.random() * 3000) + 1000,
-  newCustomersPrev: Math.floor(Math.random() * 2500) + 800,
-}));
+const RANGES = [3, 6, 12, 24];
 
-const cohortData = [
-  { cohort: "Jan 26", m0: 100, m1: 68, m2: 52, m3: 41, m4: 35, m5: 29 },
-  { cohort: "Dec 25", m0: 100, m1: 71, m2: 56, m3: 45, m4: 38, m5: 32 },
-  { cohort: "Nov 25", m0: 100, m1: 65, m2: 49, m3: 39, m4: 33 },
-  { cohort: "Oct 25", m0: 100, m1: 73, m2: 58, m3: 47 },
-  { cohort: "Sep 25", m0: 100, m1: 69, m2: 53 },
-  { cohort: "Aug 25", m0: 100, m1: 72 },
-];
-
-const plansBreakdown = [
-  { name: "Enterprise", value: 19, color: "#f43f5e" },
-  { name: "Pro", value: 52, color: "#f59e0b" },
-  { name: "Starter", value: 47, color: "#10b981" },
-  { name: "Trial", value: 24, color: "#3b82f6" },
-];
-
-const countryBreakdown = [
-  { country: "Bangladesh", stores: 78, revenue: 98400, flag: "🇧🇩" },
-  { country: "United States", stores: 24, revenue: 62100, flag: "🇺🇸" },
-  { country: "United Kingdom", stores: 14, revenue: 38400, flag: "🇬🇧" },
-  { country: "Singapore", stores: 11, revenue: 28500, flag: "🇸🇬" },
-  { country: "Malaysia", stores: 9, revenue: 14200, flag: "🇲🇾" },
-  { country: "India", stores: 6, revenue: 6900, flag: "🇮🇳" },
-];
-
-const sourceBreakdown = [
-  { source: "Organic Search", value: 38, color: "#10b981" },
-  { source: "Paid Ads", value: 27, color: "#3b82f6" },
-  { source: "Referral", value: 18, color: "#8b5cf6" },
-  { source: "Social Media", value: 12, color: "#f59e0b" },
-  { source: "Direct", value: 5, color: "#64748b" },
-];
-
-const churnMonths = Array.from({ length: 12 }, (_, i) => ({
-  month: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i],
-  gross: (Math.random() * 3 + 1.5).toFixed(1),
-  net: (Math.random() * 1.5 + 0.5).toFixed(1),
-}));
-
-function HeatmapCell({ value }: { value: number }) {
-  const pct = value;
-  let bg = "bg-emerald-500/5 text-slate-500";
-  if (pct >= 70) bg = "bg-emerald-500 text-white font-bold";
-  else if (pct >= 50) bg = "bg-emerald-500/70 text-white font-semibold";
-  else if (pct >= 40) bg = "bg-emerald-500/50 text-white";
-  else if (pct >= 30) bg = "bg-emerald-500/30 text-emerald-900 dark:text-emerald-100";
-  else if (pct >= 15) bg = "bg-amber-500/30 text-amber-800 dark:text-amber-200";
-  return (
-    <div className={cn("h-9 flex items-center justify-center text-xs rounded-sm tabular-nums", bg)}>
-      {pct}%
-    </div>
-  );
+/** Downloads the monthly table as CSV. */
+function exportCsv(r: PlatformReports) {
+  const header = ["month", "orders", "gmv_bdt", "aov_bdt", "new_stores", "new_customers"];
+  const lines = r.monthly.map((m) => [m.month, m.orders, m.revenue, m.aov, m.newStores, m.newCustomers].join(","));
+  const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `platform-report-${r.months}m-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function SuperReportsPage() {
-  const [activeTab, setActiveTab] = useState("revenue");
-  const [range, setRange] = useState("12m");
-  const [compare, setCompare] = useState("yoy");
-  const [dimension, setDimension] = useState("plan");
+  const [months, setMonths] = useState(12);
+  const { data, isLoading, isError, isFetching } = useGetPlatformReportsQuery({ months });
 
-  const runExport = (format: string) => {
-    toast.success(`Export ${format} queued`, {
-      description: `${activeTab.toUpperCase()} report — ${range} range. Will download shortly.`,
-    });
-  };
-
-  const tabs = [
-    { id: "revenue", label: "Revenue", icon: DollarSign },
-    { id: "stores", label: "Stores", icon: Building2 },
-    { id: "orders", label: "Orders", icon: ShoppingCart },
-    { id: "customers", label: "Customers", icon: Users },
-    { id: "churn", label: "Churn", icon: TrendingDown },
-  ];
+  const kpis = data
+    ? [
+        { label: "GMV", value: formatMoney(data.totals.revenue, "BDT"), icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-500/10" },
+        { label: "Orders", value: data.totals.orders.toLocaleString(), icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-500/10" },
+        { label: "Avg. order value", value: formatMoney(data.totals.aov, "BDT"), icon: TrendingUp, color: "text-rose-600", bg: "bg-rose-500/10" },
+        { label: "New stores", value: data.totals.newStores.toLocaleString(), icon: Building2, color: "text-amber-600", bg: "bg-amber-500/10" },
+        { label: "New customers", value: data.totals.newCustomers.toLocaleString(), icon: Users, color: "text-purple-600", bg: "bg-purple-500/10" },
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex items-center justify-between flex-wrap gap-4"
-      >
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            Platform Reports
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Platform Reports</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Comprehensive analytics across all tenant stores. Exportable to
-            PDF & XLSX.
+            All tenant stores combined. GMV counts orders that were not cancelled or failed.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={dimension} onValueChange={setDimension}>
-            <SelectItem value="plan">By Plan</SelectItem>
-            <SelectItem value="country">By Country</SelectItem>
-            <SelectItem value="source">By Signup Source</SelectItem>
-          </Select>
-          <Select value={compare} onValueChange={setCompare}>
-            <SelectItem value="yoy">Compare YoY</SelectItem>
-            <SelectItem value="mom">Compare MoM</SelectItem>
-            <SelectItem value="none">No Comparison</SelectItem>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => runExport("XLSX")}
-          >
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            {RANGES.map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant={months === m ? "default" : "ghost"}
+                className={cn("h-8", months === m && "bg-rose-600 hover:bg-rose-500 text-white")}
+                onClick={() => setMonths(m)}
+              >
+                {m}M
+              </Button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" disabled={!data} onClick={() => data && exportCsv(data)}>
             <Download className="h-4 w-4 mr-1.5" />
-            Export XLSX
-          </Button>
-          <Button
-            size="sm"
-            className="bg-rose-600 hover:bg-rose-500 text-white"
-            onClick={() => runExport("PDF")}
-          >
-            <Download className="h-4 w-4 mr-1.5" />
-            Export PDF
+            Export CSV
           </Button>
         </div>
       </motion.div>
 
-      <div className="flex items-center gap-2 flex-wrap bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 w-fit">
-        {["7d", "30d", "90d", "12m", "ytd", "all"].map((r) => (
-          <Button
-            key={r}
-            onClick={() => setRange(r)}
-            variant={range === r ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              range === r && "bg-rose-600 hover:bg-rose-500 text-white",
-            )}
-          >
-            {r.toUpperCase()}
-          </Button>
-        ))}
-        <div className="w-px h-7 bg-slate-200 dark:bg-slate-700 mx-1" />
-        <Input
-          type="date"
-          className="h-8 w-40 text-xs"
-          defaultValue="2026-09-01"
-        />
-        <span className="text-sm text-slate-500 mx-1">→</span>
-        <Input
-          type="date"
-          className="h-8 w-40 text-xs"
-          defaultValue="2026-09-12"
-        />
-      </div>
-
-      <Tabs defaultValue="revenue" className="w-full">
-        <TabsList className="w-full justify-start overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-transparent h-auto p-0 space-x-1 mb-0 rounded-none">
-          {tabs.map((t) => (
-            <TabsTrigger
-              key={t.id}
-              value={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent",
-                activeTab === t.id
-                  ? "!border-rose-500 !text-rose-600 dark:!text-rose-400"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
-              )}
-            >
-              <t.icon className="h-4 w-4" />
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value="revenue" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Total Revenue", value: "$284,729", delta: "+12.4%", color: "emerald", icon: DollarSign, good: true },
-              { label: "Avg. Order Value", value: "$47.92", delta: "+3.2%", color: "blue", icon: ShoppingCart, good: true },
-              { label: "MRR Growth", value: "6.8%", delta: "+1.1 MoM", color: "rose", icon: TrendingUp, good: true },
-              { label: "YoY Growth", value: "+24.7%", delta: "+2.3 pts", color: "purple", icon: BarChart3, good: true },
-            ].map((k, i) => (
-              <motion.div
-                key={k.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.3 }}
-              >
-                <Card>
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{k.label}</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tracking-tight">{k.value}</p>
-                        <p className="text-xs mt-1 font-medium text-emerald-600">{k.delta}</p>
-                      </div>
-                      <div
-                        className={cn(
-                          "h-10 w-10 rounded-xl flex items-center justify-center",
-                          k.color === "emerald" && "bg-emerald-500/10 text-emerald-600",
-                          k.color === "blue" && "bg-blue-500/10 text-blue-600",
-                          k.color === "rose" && "bg-rose-500/10 text-rose-600",
-                          k.color === "purple" && "bg-purple-500/10 text-purple-600",
-                        )}
-                      >
-                        <k.icon className="h-5 w-5" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 rounded-xl" />
             ))}
           </div>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Revenue Trend</CardTitle>
-                  <CardDescription>Monthly revenue vs previous period</CardDescription>
-                </div>
-                <Badge variant="outline">
-                  <Activity className="h-3 w-3 mr-1.5 text-emerald-500" />
-                  Growing
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="revLineGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#10b981" />
-                        <stop offset="100%" stopColor="#f43f5e" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v / 1000}k`} />
-                    <RechartsTooltip formatter={(v: any) => [`$${Number(v).toLocaleString()}`, ""]} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line
-                      type="monotone"
-                      dataKey="revenue"
-                      name="Current Period"
-                      stroke="url(#revLineGrad)"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="revenuePrev"
-                      name="Previous Period"
-                      stroke="#94a3b8"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Revenue by Country</CardTitle>
-                <CardDescription>Top 6 countries by platform revenue</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {countryBreakdown.map((c, i) => (
-                  <div key={c.country}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{c.flag}</span>
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                          {c.country}
-                        </span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {c.stores} stores
-                        </Badge>
-                      </div>
-                      <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                        ${c.revenue.toLocaleString()}
-                      </span>
-                    </div>
-                    <Progress
-                      value={(c.revenue / countryBreakdown[0].revenue) * 100}
-                      className={cn(
-                        "h-2",
-                        i === 0 && "[&>div]:bg-rose-500",
-                        i === 1 && "[&>div]:bg-amber-500",
-                        i === 2 && "[&>div]:bg-blue-500",
-                        i >= 3 && "[&>div]:bg-emerald-500",
-                      )}
-                    />
+          <Skeleton className="h-80 rounded-xl" />
+        </div>
+      ) : isError || !data ? (
+        <Card>
+          <CardContent className="p-10 text-center text-slate-500">Couldn&apos;t load reports. Check that the API is running.</CardContent>
+        </Card>
+      ) : (
+        <div className={cn("space-y-6", isFetching && "opacity-70")}>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {kpis.map((k) => (
+              <Card key={k.label}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", k.bg)}>
+                    <k.icon className={cn("h-5 w-5", k.color)} />
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Signup Sources</CardTitle>
-                <CardDescription>Where new stores come from</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RePieChart>
-                      <Pie
-                        data={sourceBreakdown}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={45}
-                        outerRadius={70}
-                        dataKey="value"
-                        paddingAngle={3}
-                      >
-                        {sourceBreakdown.map((entry, idx) => (
-                          <Cell key={idx} fill={entry.color} stroke="none" />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip formatter={(v) => [`${v}%`]} />
-                    </RePieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-1.5 mt-1">
-                  {sourceBreakdown.map((s) => (
-                    <div key={s.source} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
-                        <span className="text-slate-600 dark:text-slate-300">{s.source}</span>
-                      </div>
-                      <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-                        {s.value}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="stores" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-            {[
-              { l: "New Stores (Period)", v: "287", d: "+18.2%", g: true },
-              { l: "Conversion → Paid", v: "62.4%", d: "+3.1 pts", g: true },
-              { l: "Avg. Time to Activate", v: "2.3 days", d: "-0.4d", g: true },
-              { l: "Free → Paid Rate", v: "38.7%", d: "+2.4 pts", g: true },
-            ].map((k) => (
-              <Card key={k.l}>
-                <CardContent className="p-5">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{k.l}</p>
-                  <p className="text-2xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
-                    {k.v}
-                  </p>
-                  <p className={cn("text-xs font-medium mt-1", k.g ? "text-emerald-600" : "text-red-600")}>
-                    {k.d}
-                  </p>
+                  <div>
+                    <p className="text-xs text-slate-500">{k.label}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{k.value}</p>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -432,169 +128,135 @@ export default function SuperReportsPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">
-                New Stores vs Activated Stores
-              </CardTitle>
-              <CardDescription>Monthly registration & activation trend</CardDescription>
+              <CardTitle className="text-lg">GMV and Orders</CardTitle>
+              <CardDescription>Last {data.months} months, all stores</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <RechartsTooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="newStores" name="New Stores" fill="#f43f5e" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="newStoresPrev" name="Previous Period" fill="#e2e8f0" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <CardContent className="h-80 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={data.monthly} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200/50 dark:text-slate-800" />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} />
+                  <YAxis yAxisId="gmv" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} tickFormatter={(v) => (v >= 1000 ? `৳${v / 1000}k` : `৳${v}`)} />
+                  <YAxis yAxisId="orders" orientation="right" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} allowDecimals={false} />
+                  <RechartsTooltip
+                    formatter={(value: number, name: string) => (name === "GMV" ? [formatMoney(value, "BDT"), name] : [value, name])}
+                    contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0" }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="gmv" dataKey="revenue" name="GMV" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Growth</CardTitle>
+                <CardDescription>New stores and new customers per month</CardDescription>
+              </CardHeader>
+              <CardContent className="h-72 pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200/50 dark:text-slate-800" />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} allowDecimals={false} />
+                    <RechartsTooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0" }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="newStores" name="New stores" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="newCustomers" name="New customers" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Orders by Status</CardTitle>
+                <CardDescription>Last {data.months} months</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                  <Table>
+                    <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
+                      <TableRow>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Orders</TableHead>
+                        <TableHead className="text-right">Value</TableHead>
+                        <TableHead className="text-right">Share</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.ordersByStatus.length === 0 ? (
+                        <EmptyRow colSpan={4} icon={ShoppingCart} title="No orders in this range" />
+                      ) : (
+                        data.ordersByStatus.map((s) => (
+                          <TableRow key={s.status}>
+                            <TableCell>
+                              <Badge variant={s.status === "CANCELLED" || s.status === "FAILED" ? "destructive" : "secondary"} className="border-0">
+                                {s.status.replace(/_/g, " ")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{s.count}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatMoney(s.revenue, "BDT")}</TableCell>
+                            <TableCell className="text-right tabular-nums text-slate-500">
+                              {data.totals.orders ? Math.round((s.count / data.totals.orders) * 100) : 0}%
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <PieChart className="h-5 w-5 text-rose-500" />
-                Monthly Cohort Retention Heatmap
-              </CardTitle>
-              <CardDescription>
-                % of stores retained each month after signup cohort
-              </CardDescription>
+              <CardTitle className="text-lg">Top Stores</CardTitle>
+              <CardDescription>By GMV in the last {data.months} months</CardDescription>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <div className="min-w-[720px]">
-                <div className="grid grid-cols-7 gap-1.5 mb-2">
-                  <div className="h-9 flex items-center text-xs font-semibold text-slate-500 px-2">
-                    Cohort
-                  </div>
-                  {["M0", "M1", "M2", "M3", "M4", "M5"].map((m) => (
-                    <div
-                      key={m}
-                      className="h-9 flex items-center justify-center text-xs font-semibold text-slate-500"
-                    >
-                      {m}
-                    </div>
-                  ))}
-                </div>
-                {cohortData.map((row, rIdx) => (
-                  <div key={row.cohort} className="grid grid-cols-7 gap-1.5 mb-1.5">
-                    <div className="h-9 flex items-center text-xs font-medium text-slate-700 dark:text-slate-300 px-2 rounded-sm bg-slate-50 dark:bg-slate-800/50">
-                      {row.cohort}
-                    </div>
-                    {[row.m0, row.m1, row.m2, row.m3, row.m4, row.m5].map((v, i) =>
-                      v !== undefined ? (
-                        <HeatmapCell key={i} value={v} />
-                      ) : (
-                        <div key={i} className="h-9 rounded-sm bg-slate-100/50 dark:bg-slate-800/30" />
-                      ),
+            <CardContent>
+              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                <Table>
+                  <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
+                    <TableRow>
+                      <TableHead>Store</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead className="text-right">Orders</TableHead>
+                      <TableHead className="text-right">Buyers</TableHead>
+                      <TableHead className="text-right">GMV</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.topStores.length === 0 ? (
+                      <EmptyRow colSpan={5} icon={Building2} title="No store sales in this range" />
+                    ) : (
+                      data.topStores.map((s) => (
+                        <TableRow key={s.storeId}>
+                          <TableCell>
+                            <Link href={`/stores/${s.storeId}`} className="font-medium hover:text-rose-600">
+                              {s.storeName}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <PlanBadge name={s.plan} />
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{s.orders}</TableCell>
+                          <TableCell className="text-right tabular-nums">{s.customers}</TableCell>
+                          <TableCell className="text-right tabular-nums font-semibold">{formatMoney(s.revenue, "BDT")}</TableCell>
+                        </TableRow>
+                      ))
                     )}
-                  </div>
-                ))}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="orders" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Orders Overview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" fill="url(#ordGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="customers" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">New Customers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Bar dataKey="newCustomers" name="New Customers" fill="#10b981" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="newCustomersPrev" name="Prev Period" fill="#94a3b8" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="churn" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {[
-              { l: "Gross MRR Churn", v: "2.34%", d: "Monthly", color: "red" },
-              { l: "Net MRR Churn", v: "0.98%", d: "Monthly", color: "amber" },
-              { l: "Logo Churn (Stores)", v: "1.72%", d: "Monthly", color: "rose" },
-            ].map((k, i) => (
-              <motion.div
-                key={k.l}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <Card>
-                  <CardContent className="p-5">
-                    <p className="text-xs text-slate-500">{k.l}</p>
-                    <p className="text-3xl font-bold mt-1 text-slate-900 dark:text-white tracking-tight">
-                      {k.v}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">{k.d}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Gross vs Net Churn Trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={churnMonths}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                    <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(v) => `${v}%`} />
-                    <RechartsTooltip formatter={(v) => [`${v}%`]} />
-                    <Legend />
-                    <Line type="monotone" dataKey="gross" name="Gross Churn" stroke="#ef4444" strokeWidth={3} dot={{ r: 4 }} />
-                    <Line type="monotone" dataKey="net" name="Net Churn" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 4" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }

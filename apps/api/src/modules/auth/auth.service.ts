@@ -46,7 +46,7 @@ export class AuthService extends BaseService {
     if (!ok) {
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
-    const lastLoginIp = this.ctx.requestId ?? "";
+    const lastLoginIp = this.ctx.ip ?? "";
     await prisma.platformAdmin.update({
       where: { id: row.id },
       data: { lastLoginAt: new Date(), lastLoginIp },
@@ -79,7 +79,7 @@ export class AuthService extends BaseService {
     if (row.status !== "active") {
       throw new UnauthorizedError("Account inactive", "AUTH_ACCOUNT_INACTIVE");
     }
-    const lastLoginIp = this.ctx.requestId ?? "";
+    const lastLoginIp = this.ctx.ip ?? "";
     await prisma.adminUser.update({
       where: { id: row.id },
       data: { lastLoginAt: new Date(), lastLoginIp },
@@ -109,7 +109,7 @@ export class AuthService extends BaseService {
     if (row.status !== "active") {
       throw new UnauthorizedError("Account suspended", "AUTH_ACCOUNT_SUSPENDED");
     }
-    const lastLoginIp = this.ctx.requestId ?? "";
+    const lastLoginIp = this.ctx.ip ?? "";
     await prisma.customer.update({
       where: { id: row.id },
       data: { lastLoginAt: new Date(), lastLoginIp },

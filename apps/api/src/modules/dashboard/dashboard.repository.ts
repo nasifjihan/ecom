@@ -1,6 +1,5 @@
 import { prisma } from "../../config";
 import type { RequestContext } from "../../core";
-import { StoreStatus } from "@ecom/shared-types";
 
 type DateRange = { from?: Date; to?: Date };
 
@@ -24,7 +23,7 @@ export class SuperDashboardRepo {
 
   async activeStores(): Promise<number> {
     return prisma.store.count({
-      where: { status: { in: [StoreStatus.TRIAL, StoreStatus.ACTIVE] } },
+      where: { status: { in: ["trial", "active"] } },
     });
   }
 
@@ -32,7 +31,7 @@ export class SuperDashboardRepo {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return prisma.store.count({
       where: {
-        status: StoreStatus.CANCELLED,
+        status: "cancelled",
         updatedAt: { gte: cutoff },
       },
     });

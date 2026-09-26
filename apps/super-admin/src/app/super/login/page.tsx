@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,14 +20,14 @@ import {
   CreditCard,
 } from "lucide-react";
 import {
-  Form,
+  FormProvider,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui";
-import { Button, Input, Card, Checkbox, Select, SelectItem } from "@/components/ui";
+import { Button, Input, Checkbox } from "@/components/ui";
 import { useLoginSuperMutation } from "@/lib/features/auth/auth-api-slice";
 import { setSuperCredentials } from "@/lib/features/auth/auth-slice";
 import { useDispatch } from "react-redux";
@@ -82,12 +81,9 @@ export default function SuperAdminLoginPage() {
         }),
       );
 
-      if (values.rememberMe) {
-        const maxAge = 7 * 24 * 60 * 60;
-        document.cookie = `superAccessToken=${result.accessToken}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
-      } else {
-        document.cookie = `superAccessToken=${result.accessToken}; path=/; SameSite=Lax; Secure`;
-      }
+      // Read by middleware.ts to gate dashboard routes; the API refresh cookie keeps the session alive.
+      const maxAge = values.rememberMe ? `; max-age=${7 * 24 * 60 * 60}` : "";
+      document.cookie = `superAccessToken=${result.accessToken}; path=/; SameSite=Lax${maxAge}`;
 
       toast.success("Platform login successful", {
         description: `Welcome back, ${result.user.name}! Super admin mode active.`,
@@ -251,7 +247,7 @@ export default function SuperAdminLoginPage() {
                 </p>
               </motion.div>
 
-              <Form {...form}>
+              <FormProvider {...form}>
                 <form
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="mt-8 space-y-6"
@@ -287,25 +283,6 @@ export default function SuperAdminLoginPage() {
                     />
                   </motion.div>
 
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35, duration: 0.5 }}
-                  >
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium text-slate-300">
-                        Domain / Store Scope
-                      </FormLabel>
-                      <Select disabled value="platform">
-                        <SelectItem value="platform">
-                          🌐 Entire Platform (All Stores)
-                        </SelectItem>
-                      </Select>
-                      <p className="text-xs text-slate-500 mt-1.5">
-                        Super admins have access to all tenant stores by default
-                      </p>
-                    </FormItem>
-                  </motion.div>
 
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -374,12 +351,6 @@ export default function SuperAdminLoginPage() {
                         </FormItem>
                       )}
                     />
-                    <Link
-                      href="/super/forgot-password"
-                      className="text-sm font-medium text-rose-400 hover:text-rose-300"
-                    >
-                      Forgot password?
-                    </Link>
                   </motion.div>
 
                   <motion.div
@@ -424,7 +395,7 @@ export default function SuperAdminLoginPage() {
                     </Button>
                   </motion.div>
                 </form>
-              </Form>
+              </FormProvider>
 
               <motion.div
                 initial={{ opacity: 0 }}
@@ -449,12 +420,12 @@ export default function SuperAdminLoginPage() {
                 className="mt-6 text-center text-sm text-slate-500"
               >
                 Not a platform super admin?{" "}
-                <Link
-                  href="/login"
+                <a
+                  href={process.env.NEXT_PUBLIC_STORE_ADMIN_URL ?? "http://localhost:3001/login"}
                   className="font-medium text-rose-400 hover:text-rose-300"
                 >
                   Go to Store Admin
-                </Link>
+                </a>
               </motion.p>
             </motion.div>
           </div>

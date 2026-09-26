@@ -34,8 +34,10 @@ import {
 } from "@/components/ui";
 import { cn } from "@/components/ui";
 import {
-  useGetSuperDashboardStatsQuery,
-} from "@/lib/features/auth/auth-api-slice";
+  useGetPlatformOverviewQuery,
+  formatMoney,
+} from "@/lib/features/platform/platform-api-slice";
+import Link from "next/link";
 import {
   AreaChart,
   Area,
@@ -51,62 +53,6 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-
-const mockDashboardStats = {
-  totalStores: 142,
-  activeStores: 98,
-  trialStores: 24,
-  suspendedStores: 12,
-  cancelledStores: 8,
-  totalMRR: 24850,
-  newSignupsToday: 12,
-  newSignups7d: 68,
-  newSignups30d: 287,
-  churnRate: 2.4,
-  arpu: 175.28,
-  ltv: 2103.36,
-  platformOrders: 38472,
-  platformRevenue: 1847293,
-  activeAdmins: 8,
-  systemHealth: {
-    cpu: "good",
-    memory: "good",
-    database: "good",
-    redis: "warning",
-  },
-  monthlyMRR: Array.from({ length: 12 }, (_, i) => ({
-    month: [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ][i],
-    trial: Math.floor(Math.random() * 1500) + 500,
-    starter: Math.floor(Math.random() * 3000) + 2000,
-    pro: Math.floor(Math.random() * 5000) + 4000,
-    enterprise: Math.floor(Math.random() * 4000) + 3000,
-  })),
-  topStores: [
-    { rank: 1, storeName: "Fashion BD Premium", domain: "fashionbd.com", plan: "Enterprise", revenue: 48720, orders: 1284 },
-    { rank: 2, storeName: "StyleHub Global", domain: "stylehub.io", plan: "Enterprise", revenue: 36420, orders: 982 },
-    { rank: 3, storeName: "TechGear Pro", domain: "techgear.pro", plan: "Pro", revenue: 28910, orders: 847 },
-    { rank: 4, storeName: "HomeLux Decor", domain: "homelux.com", plan: "Pro", revenue: 21680, orders: 712 },
-    { rank: 5, storeName: "SportMax BD", domain: "sportmax.bd", plan: "Pro", revenue: 18420, orders: 623 },
-    { rank: 6, storeName: "BeautyBliss", domain: "beautybliss.co", plan: "Starter", revenue: 12780, orders: 489 },
-    { rank: 7, storeName: "KidsWorld", domain: "kidsworld.net", plan: "Starter", revenue: 9840, orders: 387 },
-    { rank: 8, storeName: "OrganicPure", domain: "organicpure.life", plan: "Starter", revenue: 7210, orders: 298 },
-  ],
-  plansDistribution: [
-    { plan: "Trial", count: 24, value: 24, color: "#3b82f6" },
-    { plan: "Starter", count: 47, value: 47, color: "#10b981" },
-    { plan: "Pro", count: 52, value: 52, color: "#f59e0b" },
-    { plan: "Enterprise", count: 19, value: 19, color: "#f43f5e" },
-  ],
-};
-
-const newSignupsMock = [
-  { period: "Today", value: mockDashboardStats.newSignupsToday },
-  { period: "7 Days", value: mockDashboardStats.newSignups7d },
-  { period: "30 Days", value: mockDashboardStats.newSignups30d },
-];
 
 function StatCard({
   icon: Icon,
@@ -251,16 +197,33 @@ function HealthIndicator({
   );
 }
 
-const storesPieColors = ["#10b981", "#3b82f6", "#ef4444", "#64748b"];
-
 export default function SuperDashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useGetSuperDashboardStatsQuery(
-    {},
-    { refetchOnMountOrArgChange: false },
-  );
+  const { data, isLoading, isError, refetch } = useGetPlatformOverviewQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+  const statsLoading = isLoading || !data;
 
-  const data = stats ?? mockDashboardStats;
-  const health = data?.systemHealth ?? mockDashboardStats.systemHealth;
+  if (isError && !data) {
+    return (
+      <Card>
+        <CardContent className="p-10 text-center space-y-3">
+          <p className="font-semibold text-slate-900 dark:text-white">Couldn&apos;t load platform stats</p>
+          <button onClick={() => refetch()} className="text-sm font-medium text-rose-600 hover:underline">
+            Try again
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const health = data?.systemHealth ?? { cpu: "good", memory: "good", database: "good", redis: "good" };
+  const newSignups = data
+    ? [
+        { period: "Today", value: data.newSignupsToday },
+        { period: "7 Days", value: data.newSignups7d },
+        { period: "30 Days", value: data.newSignups30d },
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -285,14 +248,14 @@ export default function SuperDashboardPage() {
               className="px-2.5 py-1 text-xs"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />
-              Live Data
+              Live data · refreshes every minute
             </Badge>
           </div>
         </div>
       </motion.div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        {statsLoading ? (
+        {statsLoading || !data ? (
           Array.from({ length: 9 }).map((_, i) => (
             <StatCardSkeleton key={i} delay={i * 0.05} />
           ))
@@ -306,7 +269,7 @@ export default function SuperDashboardPage() {
                 iconColor="text-rose-600 dark:text-rose-400"
                 iconBgColor="bg-rose-500/10"
               >
-                <div className="mt-4 grid grid-cols-4 gap-1">
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   {[
                     { label: "Active", count: data.activeStores, color: "bg-emerald-500" },
                     { label: "Trial", count: data.trialStores, color: "bg-blue-500" },
@@ -331,9 +294,7 @@ export default function SuperDashboardPage() {
             <StatCard
               icon={DollarSign}
               label="Total MRR"
-              value={`$ ${data.totalMRR.toLocaleString()}`}
-              delta={6.8}
-              deltaLabel="vs last month"
+              value={formatMoney(data.totalMRR)}
               iconColor="text-emerald-600 dark:text-emerald-400"
               iconBgColor="bg-emerald-500/10"
               delay={0.05}
@@ -342,7 +303,7 @@ export default function SuperDashboardPage() {
               icon={UserPlus}
               label="New Signups"
               value={`${data.newSignups30d.toLocaleString()}`}
-              delta={12.4}
+              delta={data.newSignupsDelta}
               deltaLabel="vs prev 30d"
               iconColor="text-blue-600 dark:text-blue-400"
               iconBgColor="bg-blue-500/10"
@@ -350,7 +311,7 @@ export default function SuperDashboardPage() {
             >
               <div className="mt-4">
                 <div className="space-y-1.5">
-                  {newSignupsMock.map((item) => (
+                  {newSignups.map((item) => (
                     <div
                       key={item.period}
                       className="flex items-center justify-between"
@@ -363,7 +324,7 @@ export default function SuperDashboardPage() {
                           <div
                             className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
                             style={{
-                              width: `${(item.value / data.newSignups30d) * 100}%`,
+                              width: `${data.newSignups30d ? (item.value / data.newSignups30d) * 100 : 0}%`,
                             }}
                           />
                         </div>
@@ -380,57 +341,55 @@ export default function SuperDashboardPage() {
               icon={TrendingDown}
               label="Churn Rate"
               value={`${data.churnRate}%`}
-              delta={-0.6}
-              deltaLabel="vs last month"
               iconColor="text-red-600 dark:text-red-400"
               iconBgColor="bg-red-500/10"
               delay={0.15}
             />
             <StatCard
               icon={BarChart3}
-              label="ARPU Avg"
-              value={`$ ${data.arpu.toFixed(2)}`}
-              delta={3.2}
+              label={`ARPU (${data.payingStores} paying)`}
+              value={formatMoney(data.arpu)}
               iconColor="text-amber-600 dark:text-amber-400"
               iconBgColor="bg-amber-500/10"
               delay={0.2}
             />
             <StatCard
               icon={Activity}
-              label="Est. LTV"
-              value={`$ ${data.ltv.toFixed(0)}`}
-              delta={4.1}
+              label="Orders (30 days)"
+              value={data.orders30d.toLocaleString()}
+              delta={data.ordersDelta}
+              deltaLabel="vs prev 30d"
               iconColor="text-purple-600 dark:text-purple-400"
               iconBgColor="bg-purple-500/10"
               delay={0.25}
             />
             <StatCard
               icon={ShoppingCart}
-              label="Platform Orders"
+              label="All-time orders"
               value={data.platformOrders.toLocaleString()}
-              delta={8.7}
               iconColor="text-indigo-600 dark:text-indigo-400"
               iconBgColor="bg-indigo-500/10"
               delay={0.3}
             />
             <StatCard
               icon={DollarSign}
-              label="Platform Revenue"
-              value={`$ ${data.platformRevenue.toLocaleString()}`}
-              delta={11.3}
+              label="GMV (30 days)"
+              value={formatMoney(data.revenue30d, "BDT")}
+              delta={data.revenueDelta}
+              deltaLabel="vs prev 30d"
               iconColor="text-teal-600 dark:text-teal-400"
               iconBgColor="bg-teal-500/10"
               delay={0.35}
             />
             <StatCard
               icon={Users}
-              label="Active Admins"
+              label="Active Store Admins"
               value={data.activeAdmins.toLocaleString()}
               iconColor="text-cyan-600 dark:text-cyan-400"
               iconBgColor="bg-cyan-500/10"
               delay={0.4}
             >
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-4 grid grid-cols-1 gap-2">
                 <HealthIndicator
                   label="CPU"
                   icon={Cpu}
@@ -471,7 +430,7 @@ export default function SuperDashboardPage() {
                   Monthly MRR Breakdown
                 </CardTitle>
                 <CardDescription>
-                  Last 12 months — stacked by plan tier
+                  Last 12 months by plan, from each active store&apos;s signup date and current plan
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="text-xs">
@@ -485,26 +444,16 @@ export default function SuperDashboardPage() {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
-                      data={data.monthlyMRR}
+                      data={data!.monthlyMRR}
                       margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                     >
                       <defs>
-                        <linearGradient id="enterpriseGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.6} />
-                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.05} />
-                        </linearGradient>
-                        <linearGradient id="proGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.5} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
-                        </linearGradient>
-                        <linearGradient id="starterGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
-                        </linearGradient>
-                        <linearGradient id="trialGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05} />
-                        </linearGradient>
+                        {data!.planNames.map((p) => (
+                          <linearGradient key={p.name} id={`grad-${p.name}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={p.color} stopOpacity={0.5} />
+                            <stop offset="95%" stopColor={p.color} stopOpacity={0.05} />
+                          </linearGradient>
+                        ))}
                       </defs>
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -521,7 +470,7 @@ export default function SuperDashboardPage() {
                         tickLine={false}
                         axisLine={false}
                         tick={{ fontSize: 12, fill: "#64748b" }}
-                        tickFormatter={(v) => `$${v / 1000}k`}
+                        tickFormatter={(v) => (v >= 1000 ? `$${v / 1000}k` : `$${v}`)}
                       />
                       <RechartsTooltip
                         formatter={(value: number) => [
@@ -533,38 +482,17 @@ export default function SuperDashboardPage() {
                           boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                         }}
                       />
-                      <Area
-                        type="monotone"
-                        dataKey="enterprise"
-                        stackId="1"
-                        stroke="#f43f5e"
-                        fill="url(#enterpriseGrad)"
-                        name="Enterprise"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="pro"
-                        stackId="1"
-                        stroke="#f59e0b"
-                        fill="url(#proGrad)"
-                        name="Pro"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="starter"
-                        stackId="1"
-                        stroke="#10b981"
-                        fill="url(#starterGrad)"
-                        name="Starter"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="trial"
-                        stackId="1"
-                        stroke="#3b82f6"
-                        fill="url(#trialGrad)"
-                        name="Trial"
-                      />
+                      {data!.planNames.map((p) => (
+                        <Area
+                          key={p.name}
+                          type="monotone"
+                          dataKey={p.name}
+                          stackId="1"
+                          stroke={p.color}
+                          fill={`url(#grad-${p.name})`}
+                          name={p.name}
+                        />
+                      ))}
                       <Legend
                         iconType="circle"
                         wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
@@ -602,7 +530,7 @@ export default function SuperDashboardPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPieChart>
                         <Pie
-                          data={data.plansDistribution}
+                          data={data!.plansDistribution}
                           cx="50%"
                           cy="50%"
                           innerRadius={55}
@@ -610,7 +538,7 @@ export default function SuperDashboardPage() {
                           paddingAngle={4}
                           dataKey="value"
                         >
-                          {data.plansDistribution.map((entry, idx) => (
+                          {data!.plansDistribution.map((entry, idx) => (
                             <Cell
                               key={`cell-${idx}`}
                               fill={entry.color}
@@ -632,7 +560,7 @@ export default function SuperDashboardPage() {
                     </ResponsiveContainer>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {data.plansDistribution.map((plan) => (
+                    {data!.plansDistribution.map((plan) => (
                       <div
                         key={plan.plan}
                         className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50"
@@ -671,11 +599,11 @@ export default function SuperDashboardPage() {
                 Top Stores by Revenue
               </CardTitle>
               <CardDescription>
-                Ranked by all-time platform revenue contribution
+                Ranked by all-time GMV (orders not cancelled or failed)
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-xs">
-              Top 8
+              Top {data?.topStores.length ?? 0}
             </Badge>
           </CardHeader>
           <CardContent className="pt-2">
@@ -698,7 +626,7 @@ export default function SuperDashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.topStores.map((store) => (
+                    {data!.topStores.map((store) => (
                       <TableRow key={store.rank}>
                         <TableCell>
                           <div
@@ -718,9 +646,9 @@ export default function SuperDashboardPage() {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            <Link href={`/stores/${store.storeId}`} className="text-sm font-semibold text-slate-900 dark:text-white hover:text-rose-600">
                               {store.storeName}
-                            </p>
+                            </Link>
                             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                               <Activity className="h-3 w-3" />
                               {store.domain}
@@ -730,16 +658,16 @@ export default function SuperDashboardPage() {
                         <TableCell>
                           <Badge
                             variant={
-                              store.plan === "Enterprise"
+                              store.plan === "ENTERPRISE"
                                 ? "destructive"
-                                : store.plan === "Pro"
+                                : store.plan === "PRO"
                                   ? "default"
                                   : "secondary"
                             }
                             className={cn(
-                              store.plan === "Enterprise" &&
+                              store.plan === "ENTERPRISE" &&
                                 "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-0",
-                              store.plan === "Pro" &&
+                              store.plan === "PRO" &&
                                 "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-0",
                             )}
                           >
@@ -748,7 +676,7 @@ export default function SuperDashboardPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                            $ {store.revenue.toLocaleString()}
+                            {formatMoney(store.revenue, "BDT")}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

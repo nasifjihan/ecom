@@ -4,21 +4,13 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export const SUPER_AUDIENCE = "super";
 
-export type SuperAdminRole =
-  | "PLATFORM_SUPER_ADMIN"
-  | "PLATFORM_SUPPORT"
-  | "PLATFORM_FINANCE"
-  | "PLATFORM_OPERATIONS"
-  | "PLATFORM_VIEWER";
-
 export interface SuperAuthUser {
   id: string | number;
   name: string;
   email: string;
-  role: SuperAdminRole;
-  avatar?: string | null;
-  phone?: string | null;
-  twoFactorEnabled?: boolean;
+  /** PlatformAdmin.role, e.g. "super_owner". */
+  role: string;
+  lastLoginAt?: string | null;
 }
 
 interface SuperAuthState {
@@ -68,6 +60,13 @@ const superAuthSlice = createSlice({
         }
       }
     },
+    setSuperAccessToken: (state, action: PayloadAction<string>) => {
+      state.accessToken = action.payload;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("superAccessToken", action.payload);
+        document.cookie = `superAccessToken=${action.payload}; path=/; SameSite=Lax`;
+      }
+    },
     superLogout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -83,5 +82,5 @@ const superAuthSlice = createSlice({
   },
 });
 
-export const { setSuperCredentials, superLogout } = superAuthSlice.actions;
+export const { setSuperCredentials, setSuperAccessToken, superLogout } = superAuthSlice.actions;
 export default superAuthSlice.reducer;
