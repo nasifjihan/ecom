@@ -156,6 +156,10 @@ export const api = createApi({
     "Plan",
     "Subscription",
     "Domain",
+    "Faq",
+    "Menu",
+    "Theme",
+    "Homepage",
   ],
   endpoints: () => ({}),
 });

@@ -14,8 +14,13 @@ import {
 import { Button, Input, Separator } from "../ui";
 import { cn } from "@ecom/utils";
 
+export type FooterLink = { label: string; href: string; external?: boolean };
+
 export type FooterProps = {
   storeName?: string;
+  logoUrl?: string | null;
+  /** Link columns (e.g. from the store's footer menus). Defaults to Company / Help / Categories. */
+  columns?: { title: string; links: FooterLink[] }[];
   storeDescription?: string;
   contactInfo?: {
     address?: string;
@@ -50,6 +55,8 @@ export const Footer: React.FC<FooterProps> = ({
   className,
   showNewsletter = true,
   onNewsletterSubmit,
+  logoUrl,
+  columns,
 }) => {
   const [email, setEmail] = React.useState("");
   const [subscribed, setSubscribed] = React.useState(false);
@@ -63,26 +70,33 @@ export const Footer: React.FC<FooterProps> = ({
     setTimeout(() => setSubscribed(false), 3000);
   };
 
-  const companyLinks = [
+  const companyLinks: FooterLink[] = [
     { label: "About Us", href: "/about" },
     { label: "Careers", href: "/careers" },
     { label: "Press", href: "/press" },
     { label: "Blog", href: "/blog" },
   ];
 
-  const helpLinks = [
+  const helpLinks: FooterLink[] = [
     { label: "Shipping Info", href: "/shipping" },
     { label: "Returns & Refunds", href: "/returns" },
     { label: "FAQs", href: "/faq" },
     { label: "Contact Us", href: "/contact" },
   ];
 
-  const categoryLinks = [
+  const categoryLinks: FooterLink[] = [
     { label: "Women", href: "/categories/women" },
     { label: "Men", href: "/categories/men" },
     { label: "Kids", href: "/categories/kids" },
     { label: "Accessories", href: "/categories/accessories" },
   ];
+
+  const linkColumns = columns ?? [
+    { title: "Company", links: companyLinks },
+    { title: "Help", links: helpLinks },
+    { title: "Categories", links: categoryLinks },
+  ];
+  const hasSocial = Object.values(socialLinks).some(Boolean);
 
   const paymentIcons = [
     { name: "VISA", className: "text-blue-900 font-bold text-xs" },
@@ -128,89 +142,86 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center text-white font-bold">
-                {storeName[0]}
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt={storeName} className="h-8 w-8 rounded-md object-contain" />
+              ) : (
+                <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center text-white font-bold">
+                  {storeName[0]}
+                </div>
+              )}
               <span className="font-bold text-lg tracking-tight">{storeName}</span>
             </Link>
             <p className="text-muted-foreground text-sm mb-4 max-w-sm leading-relaxed">{storeDescription}</p>
             <div className="space-y-2 text-sm">
-              <div className="flex items-start gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{contactInfo.address}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="h-4 w-4 flex-shrink-0" />
-                <span>{contactInfo.phone}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="h-4 w-4 flex-shrink-0" />
-                <span>{contactInfo.email}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
-            <ul className="space-y-2 text-sm">
-              {companyLinks.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Help</h4>
-            <ul className="space-y-2 text-sm">
-              {helpLinks.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Categories</h4>
-            <ul className="space-y-2 text-sm mb-6">
-              {categoryLinks.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider">Follow Us</h4>
-            <div className="flex items-center gap-2">
-              {socialLinks.facebook && (
-                <a href={socialLinks.facebook} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-primary hover:text-white flex items-center justify-center transition-colors">
-                  <Facebook className="h-4 w-4" />
+              {contactInfo.address && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{contactInfo.address}</span>
+                </div>
+              )}
+              {contactInfo.phone && (
+                <a href={`tel:${contactInfo.phone.replace(/[^+\d]/g, "")}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                  <Phone className="h-4 w-4 flex-shrink-0" />
+                  <span>{contactInfo.phone}</span>
                 </a>
               )}
-              {socialLinks.instagram && (
-                <a href={socialLinks.instagram} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-pink-500 hover:text-white flex items-center justify-center transition-colors">
-                  <Instagram className="h-4 w-4" />
-                </a>
-              )}
-              {socialLinks.youtube && (
-                <a href={socialLinks.youtube} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
-                  <Youtube className="h-4 w-4" />
-                </a>
-              )}
-              {socialLinks.twitter && (
-                <a href={socialLinks.twitter} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-sky-500 hover:text-white flex items-center justify-center transition-colors">
-                  <Twitter className="h-4 w-4" />
+              {contactInfo.email && (
+                <a href={`mailto:${contactInfo.email}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                  <Mail className="h-4 w-4 flex-shrink-0" />
+                  <span>{contactInfo.email}</span>
                 </a>
               )}
             </div>
           </div>
+
+          {linkColumns.map((col) => (
+            <div key={col.title}>
+              <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">{col.title}</h4>
+              <ul className="space-y-2 text-sm">
+                {col.links.map((l) => (
+                  <li key={`${l.href}-${l.label}`}>
+                    {l.external ? (
+                      <a href={l.href} target="_blank" rel="noreferrer noopener" className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
+                        {l.label}
+                      </a>
+                    ) : (
+                      <Link href={l.href} className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
+                        {l.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {hasSocial && (
+            <div>
+              <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider">Follow Us</h4>
+              <div className="flex items-center gap-2">
+                {socialLinks.facebook && (
+                  <a href={socialLinks.facebook} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-primary hover:text-white flex items-center justify-center transition-colors">
+                    <Facebook className="h-4 w-4" />
+                  </a>
+                )}
+                {socialLinks.instagram && (
+                  <a href={socialLinks.instagram} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-pink-500 hover:text-white flex items-center justify-center transition-colors">
+                    <Instagram className="h-4 w-4" />
+                  </a>
+                )}
+                {socialLinks.youtube && (
+                  <a href={socialLinks.youtube} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
+                    <Youtube className="h-4 w-4" />
+                  </a>
+                )}
+                {socialLinks.twitter && (
+                  <a href={socialLinks.twitter} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-sky-500 hover:text-white flex items-center justify-center transition-colors">
+                    <Twitter className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -23,9 +23,10 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        // Follows the store's brand colour (Online Store > Theme), injected as --primary by the root layout.
         primary: {
-          DEFAULT: "#7c3aed",
-          foreground: "#ffffff",
+          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
+          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
           50: "#f5f3ff",
           100: "#ede9fe",
           200: "#ddd6fe",

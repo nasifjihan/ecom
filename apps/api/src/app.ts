@@ -54,6 +54,7 @@ import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
 import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
+import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -134,6 +135,8 @@ export function buildApp(): Express {
   app.use("/api/admin/settings", adminSettingsRouter);
   app.use("/api/admin/shipping", adminShippingRouter);
   app.use("/api/storefront/shipping", storefrontShippingRouter);
+  app.use("/api/admin/content", adminContentRouter);                 // pages, blog, FAQs, menus, theme, homepage
+  app.use("/api/storefront/content", storefrontContentRouter);
   app.use("/api/storefront", storefrontCatalogRouter);             // Batch #10: public catalog
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "uploads"), { maxAge: "1y", immutable: true }));
 

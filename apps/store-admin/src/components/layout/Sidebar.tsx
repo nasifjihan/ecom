@@ -29,6 +29,12 @@ import {
   CreditCard,
   ChevronRight,
   ShoppingBag,
+  FileText,
+  Newspaper,
+  HelpCircle,
+  Home,
+  Palette,
+  ListTree,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui";
 import { useMeQuery } from "@/lib/features/auth/auth-api-slice";
@@ -103,6 +109,22 @@ const navSections: NavSection[] = [
       { href: "/marketing/coupons", label: "Coupons", icon: Percent },
       { href: "/marketing/flash-sales", label: "Flash Sales", icon: Zap },
       { href: "/marketing/reviews", label: "Reviews", icon: MessageSquare },
+    ],
+  },
+  {
+    title: "Online Store",
+    items: [
+      { href: "/online-store/homepage", label: "Homepage", icon: Home },
+      { href: "/online-store/theme", label: "Theme", icon: Palette },
+      { href: "/online-store/menus", label: "Menus", icon: ListTree },
+    ],
+  },
+  {
+    title: "Content",
+    items: [
+      { href: "/content/pages", label: "Pages", icon: FileText },
+      { href: "/content/blog", label: "Blog", icon: Newspaper },
+      { href: "/content/faqs", label: "FAQs", icon: HelpCircle },
     ],
   },
   {
