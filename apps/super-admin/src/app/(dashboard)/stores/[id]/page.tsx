@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BarChart3,
@@ -75,7 +75,21 @@ import { DomainsTable } from "@/components/platform/domains-table";
 import { AuditLogTable } from "@/components/platform/audit-log-table";
 import { SubscriptionCard } from "@/components/platform/subscription-card";
 
-function Stat({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function StatBlock({
+  label,
+  value,
+  icon: Icon,
+  iconColor,
+  iconBg,
+  sub,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconColor: string;
+  iconBg: string;
+  sub?: string;
+}) {
   return (
     <Card>
       <CardContent className="p-5 flex items-center gap-3">
