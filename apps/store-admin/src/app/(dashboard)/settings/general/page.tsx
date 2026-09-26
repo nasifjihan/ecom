@@ -394,20 +394,18 @@ export default function GeneralSettingsPage() {
 
   const saveSection = async (section: "general" | "address" | "media" | "legal") => {
     try {
-      let values: any;
-      if (section === "general") {
-        values = await generalMethods.handleSubmit((d) => d)();
-      } else if (section === "address") {
-        values = await addressMethods.handleSubmit((d) => d)();
-      } else if (section === "media") {
-        values = await mediaMethods.handleSubmit((d) => d)();
-      } else {
-        values = await legalMethods.handleSubmit((d) => d)();
+      // handleSubmit(fn)() resolves to void, so validate with trigger() and read the values directly.
+      const methods =
+        section === "general" ? generalMethods : section === "address" ? addressMethods : section === "media" ? mediaMethods : legalMethods;
+      if (!(await (methods as any).trigger())) {
+        toast.error("Please fix the highlighted fields.");
+        return;
       }
+      const values = (methods as any).getValues();
       await updateSettings({ section, values }).unwrap();
       toast.success(`${section.charAt(0).toUpperCase() + section.slice(1)} settings saved.`);
     } catch (e: any) {
-      toast.error(e?.data?.message || `Failed to save ${section} settings.`);
+      toast.error(e?.data?.message || (typeof e?.data === "string" ? e.data : `Failed to save ${section} settings.`));
     }
   };
 

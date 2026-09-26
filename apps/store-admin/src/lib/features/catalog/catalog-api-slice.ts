@@ -260,6 +260,12 @@ const toApiProductBody = (body: Partial<Product>) =>
     ),
   );
 
+const fromApiMedia = (m: ApiRow): MediaItem => ({
+  ...(m as unknown as MediaItem),
+  thumbnailUrl: (m.thumbUrl as string | null) ?? null,
+  size: Number(m.sizeBytes ?? 0),
+});
+
 const toPage = <T>(items: T[], meta: unknown): PaginatedResponse<T> => {
   const { limit, ...rest } = toPaginated(items, meta);
   return { ...rest, perPage: limit };
@@ -562,11 +568,12 @@ export const catalogApiSlice = api.injectEndpoints({
 
     uploadMedia: builder.mutation<MediaItem, FormData>({
       query: (formData) => ({
-        url: "/admin/products/upload",
+        url: "/admin/media/upload",
         method: "POST",
         body: formData,
         formData: true,
       }),
+      transformResponse: (m: ApiRow) => fromApiMedia(m),
       invalidatesTags: [{ type: "Media", id: "LIST" }],
     }),
 
@@ -577,10 +584,11 @@ export const catalogApiSlice = api.injectEndpoints({
         if (params.perPage !== undefined) searchParams.set("perPage", params.perPage.toString());
         if (params.search) searchParams.set("search", params.search);
         return {
-          url: `/admin/products/upload?${searchParams.toString()}`,
+          url: `/admin/media?${searchParams.toString()}`,
           method: "GET",
         };
       },
+      transformResponse: (items: ApiRow[], meta) => toPage(items.map(fromApiMedia), meta),
       providesTags: (result) =>
         result
           ? [
@@ -592,7 +600,7 @@ export const catalogApiSlice = api.injectEndpoints({
 
     deleteMedia: builder.mutation<void, string | number>({
       query: (id) => ({
-        url: `/admin/products/upload/${id}`,
+        url: `/admin/media/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, id) => [
@@ -603,7 +611,7 @@ export const catalogApiSlice = api.injectEndpoints({
 
     updateMediaAltText: builder.mutation<MediaItem, { id: string | number; altText: string }>({
       query: ({ id, altText }) => ({
-        url: `/admin/products/upload/${id}`,
+        url: `/admin/media/${id}`,
         method: "PATCH",
         body: { altText },
       }),

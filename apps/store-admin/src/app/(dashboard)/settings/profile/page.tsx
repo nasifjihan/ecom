@@ -136,7 +136,7 @@ export default function ProfileSettingsPage() {
       }).unwrap();
       toast.success("Profile updated.");
     } catch (e: any) {
-      toast.error(e?.data?.message || "Failed to update profile.");
+      toast.error(e?.data?.message || (typeof e?.data === "string" ? e.data : "Failed to update profile."));
     }
   };
 
@@ -146,7 +146,7 @@ export default function ProfileSettingsPage() {
       toast.success("Password changed.");
       resetPassword({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
     } catch (e: any) {
-      toast.error(e?.data?.message || "Failed to change password.");
+      toast.error(e?.data?.message || (typeof e?.data === "string" ? e.data : "Failed to change password."));
     }
   };
 

@@ -322,6 +322,9 @@ export function fromApiCustomer(c: ApiCustomer): Customer {
 
 export interface StockItem {
   id: string | number;
+  productId: string;
+  /** null for a simple product, whose stock lives on the product row. */
+  variantId: string | null;
   productVariantId: string | number;
   productName: string;
   sku: string;
@@ -382,6 +385,10 @@ export interface StockTransfer {
 }
 
 export interface AdjustStockInput {
+  productId: string;
+  variantId: string | null;
+  /** Current on-hand quantity, needed to turn SET / INVENTORY_COUNT into a delta. */
+  currentQty: number;
   productVariantId: string | number;
   warehouseId: string | number;
   quantity: number;
@@ -398,6 +405,63 @@ export interface CreateTransferInput {
   toWarehouseId: string | number;
   productVariantId: string | number;
   quantity: number;
+}
+
+const MAIN_WAREHOUSE = { warehouseId: "MAIN", warehouseName: "Main stock" };
+
+interface ApiStockRow {
+  id: string;
+  productId: string;
+  variantId: string | null;
+  productName: string;
+  sku: string;
+  imageUrl: string | null;
+  physicalQty: number;
+  reservedQty: number;
+  availableQty: number;
+  lowStockThreshold: number;
+  unitCost: number;
+  lastAdjustedAt: string | null;
+}
+
+interface ApiMovement {
+  id: string;
+  productId: string | null;
+  variantId: string | null;
+  warehouse: string | null;
+  changeQty: number;
+  reason: string;
+  referenceId: string | null;
+  note: string | null;
+  qtyAfter: number;
+  createdAt: string;
+  product?: { name: string; sku: string | null } | null;
+  variant?: { sku: string | null; attributeValues: Record<string, string> | null } | null;
+}
+
+const REASON_TO_TYPE: Record<string, AdjustmentType> = {
+  DAMAGED: "DAMAGE",
+  COUNTED: "INVENTORY_COUNT",
+};
+
+function fromApiMovement(m: ApiMovement): InventoryLog {
+  const label = m.variant?.attributeValues ? Object.values(m.variant.attributeValues).join(" / ") : "";
+  const name = m.product?.name ?? "Deleted product";
+  return {
+    id: m.id,
+    createdAt: m.createdAt,
+    referenceNo: m.referenceId ?? undefined,
+    type: REASON_TO_TYPE[m.reason] ?? (m.changeQty >= 0 ? "ADD" : "DEDUCT"),
+    productVariantId: m.variantId ?? m.productId ?? "",
+    productName: label ? `${name} (${label})` : name,
+    sku: m.variant?.sku ?? m.product?.sku ?? undefined,
+    qtyChange: m.changeQty,
+    reason: m.reason as AdjustmentReason,
+    note: m.note ?? undefined,
+    warehouseId: m.warehouse ?? "MAIN",
+    warehouseName: !m.warehouse || m.warehouse === "MAIN" ? "Main stock" : m.warehouse,
+    newQty: m.qtyAfter,
+  };
 }
 
 export interface StockSummary {
@@ -839,48 +903,88 @@ export const operationsApiSlice = api.injectEndpoints({
         const params = new URLSearchParams();
         if (filters.lowStock) params.set("lowStock", "true");
         if (filters.outOfStock) params.set("outOfStock", "true");
-        if (filters.warehouseIds?.length) {
-          filters.warehouseIds.forEach((w) => params.append("warehouseIds", String(w)));
-        }
         if (filters.search) params.set("search", filters.search);
-        if (filters.page) params.set("page", String(filters.page));
-        if (filters.limit) params.set("limit", String(filters.limit));
+        params.set("page", String(filters.page ?? 1));
+        params.set("perPage", String(filters.limit ?? 50));
         return {
           url: `/admin/inventory/stock?${params.toString()}`,
           method: "GET",
         };
       },
+      transformResponse: (res: {
+        items: ApiStockRow[];
+        summary: StockSummary;
+        total: number;
+        page: number;
+        perPage: number;
+        totalPages: number;
+      }) => ({
+        items: res.items.map((r) => ({
+          ...r,
+          ...MAIN_WAREHOUSE,
+          productVariantId: r.variantId ?? r.productId,
+          imageUrl: r.imageUrl ?? undefined,
+          reorderPoint: r.lowStockThreshold,
+          lastAdjustedAt: r.lastAdjustedAt ?? undefined,
+        })),
+        summary: res.summary,
+        total: res.total,
+        page: res.page,
+        limit: res.perPage,
+        totalPages: res.totalPages,
+      }),
       providesTags: (result) =>
         result
           ? [
-              ...result.items.map((s) => ({ type: "Product" as const, id: s.productVariantId })),
+              ...result.items.map((s) => ({ type: "Product" as const, id: s.productId })),
               { type: "Product", id: "STOCK_LIST" },
             ]
           : [{ type: "Product", id: "STOCK_LIST" }],
     }),
 
-    adjustStock: builder.mutation<InventoryLog, AdjustStockInput>({
-      query: (body) => ({
-        url: `/admin/inventory/adjust`,
-        method: "POST",
-        body,
-      }),
+    adjustStock: builder.mutation<unknown, AdjustStockInput>({
+      query: ({ productId, variantId, currentQty, quantity, type, reason, note }) => {
+        const delta =
+          type === "SET" || type === "INVENTORY_COUNT"
+            ? quantity - currentQty
+            : type === "DEDUCT" || type === "DAMAGE"
+              ? -Math.abs(quantity)
+              : Math.abs(quantity);
+        return {
+          url: `/admin/inventory/adjust`,
+          method: "POST",
+          body: {
+            lines: [
+              {
+                ...(variantId ? { variantId } : { productId }),
+                delta,
+                reason: reason ?? (type === "DAMAGE" ? "DAMAGED" : undefined),
+                note: note || undefined,
+              },
+            ],
+          },
+        };
+      },
       invalidatesTags: [
         { type: "Product", id: "STOCK_LIST" },
         { type: "Product", id: "INVENTORY_LOGS" },
       ],
     }),
 
-    createTransfer: builder.mutation<StockTransfer, CreateTransferInput>({
-      query: (body) => ({
-        url: `/admin/inventory/transfers`,
-        method: "POST",
-        body,
+    updateStockThreshold: builder.mutation<unknown, { productId: string; variantId: string | null; threshold: number }>({
+      query: ({ productId, variantId, threshold }) => ({
+        url: variantId ? `/admin/products/variants/${variantId}` : `/admin/products/${productId}`,
+        method: "PATCH",
+        body: { lowStockThreshold: threshold },
       }),
-      invalidatesTags: [
-        { type: "Product", id: "STOCK_LIST" },
-        { type: "Product", id: "TRANSFERS" },
-      ],
+      invalidatesTags: [{ type: "Product", id: "STOCK_LIST" }],
+    }),
+
+    // Stock is a single pool per SKU (no warehouse model yet), so there is nothing to transfer between.
+    createTransfer: builder.mutation<StockTransfer, CreateTransferInput>({
+      queryFn: async () => ({
+        error: { status: 400, data: "Transfers need multiple warehouses, which the store does not have yet." },
+      }),
     }),
 
     getInventoryLogs: builder.query<
@@ -890,13 +994,14 @@ export const operationsApiSlice = api.injectEndpoints({
       query: ({ productId, page, limit }) => {
         const params = new URLSearchParams();
         if (productId) params.set("productId", String(productId));
-        if (page) params.set("page", String(page));
-        if (limit) params.set("limit", String(limit));
+        params.set("page", String(page ?? 1));
+        params.set("perPage", String(limit ?? 50));
         return {
-          url: `/admin/inventory/logs?${params.toString()}`,
+          url: `/admin/inventory/movements?${params.toString()}`,
           method: "GET",
         };
       },
+      transformResponse: (items: ApiMovement[], meta) => toPaginated(items.map(fromApiMovement), meta),
       providesTags: [{ type: "Product", id: "INVENTORY_LOGS" }],
     }),
 
@@ -904,16 +1009,7 @@ export const operationsApiSlice = api.injectEndpoints({
       PaginatedResponse<StockTransfer>,
       { page?: number; limit?: number }
     >({
-      query: ({ page, limit }) => {
-        const params = new URLSearchParams();
-        if (page) params.set("page", String(page));
-        if (limit) params.set("limit", String(limit));
-        return {
-          url: `/admin/inventory/transfers?${params.toString()}`,
-          method: "GET",
-        };
-      },
-      providesTags: [{ type: "Product", id: "TRANSFERS" }],
+      queryFn: async () => ({ data: { items: [], total: 0, page: 1, limit: 0, totalPages: 1 } }),
     }),
   }),
   overrideExisting: false,
@@ -938,6 +1034,7 @@ export const {
   useLazyExportCustomersQuery,
   useGetStockListQuery,
   useAdjustStockMutation,
+  useUpdateStockThresholdMutation,
   useCreateTransferMutation,
   useGetInventoryLogsQuery,
   useGetStockTransfersQuery,

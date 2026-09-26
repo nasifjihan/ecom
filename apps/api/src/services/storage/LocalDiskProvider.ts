@@ -4,6 +4,7 @@ import { join, dirname, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import type { StoredFile, StorageProvider } from "./types";
+import { env } from "../../config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,7 +23,8 @@ export class LocalDiskProvider implements StorageProvider {
   }
 
   private toUrl(key: string): string {
-    return `/uploads/${key}`;
+    // Absolute, because the storefront and admin run on other origins than the API that serves /uploads.
+    return `${env.API_BASE_URL}/uploads/${key}`;
   }
 
   private async md5Hash(data: Buffer): Promise<string> {
