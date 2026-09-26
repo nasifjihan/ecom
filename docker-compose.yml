@@ -6,6 +6,7 @@
 #
 # Everything in Docker (API + storefront + store admin + super admin):
 #   docker compose --profile full up -d --build
+#   (add --profile extras for MinIO file storage and the Mailpit inbox)
 #   docker compose --profile full run --rm api pnpm prisma:seed   # first run only: demo data
 #   Storefront http://localhost:3000 · Store admin http://localhost:3001
 #   Super admin http://localhost:3002 · API http://localhost:4000
@@ -73,6 +74,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: ecom-minio
+    profiles: ["extras"] # started when named, or with --profile extras
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -98,6 +100,7 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     container_name: ecom-mailpit
+    profiles: ["extras"] # started when named, or with --profile extras
     restart: unless-stopped
     environment:
       TZ: Asia/Dhaka
