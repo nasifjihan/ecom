@@ -11,7 +11,8 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma, tx } from "../../config";
-import { BadRequestError, NotFoundError, type RequestContext } from "../../core";
+import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
+import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
 import { getPaymentProvider } from "../../services/payments";
 import type { PaymentMethod } from "../../services/payments/types";
@@ -757,51 +758,126 @@ export class StorefrontService {
       include: { items: true },
     });
     if (!o) throw new NotFoundError("Order");
+    return orderView(o);
+  }
+
+  /* ---------------------------- Customer account ---------------------------- */
+
+  private get customerId(): bigint {
+    const id = this.ctx.customer?.id;
+    if (id === undefined) throw new BadRequestError("Sign in to see your orders", "BAD_REQUEST");
+    return BigInt(id);
+  }
+
+  /** The signed-in customer's orders, newest first. */
+  async listMyOrders(q: { page: number; perPage: number }) {
+    const where = { storeId: this.storeId, customerId: this.customerId };
+    const [total, rows] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (q.page - 1) * q.perPage,
+        take: q.perPage,
+        include: { items: { select: { quantity: true, productName: true, imageUrl: true } } },
+      }),
+    ]);
     return {
-      orderId: String(o.id),
-      orderRef: o.number,
-      orderKey: o.orderKey,
-      status: o.status,
-      paymentStatus: o.paymentStatus,
-      paymentGateway: o.paymentGatewayCode,
-      createdAt: o.createdAt.toISOString(),
-      email: o.billingEmail,
-      phone: o.shippingPhone ?? o.billingPhone,
-      shippingMethodName: o.shippingMethodName,
-      shipping: {
-        name: `${o.shippingFirstName ?? o.billingFirstName} ${o.shippingLastName ?? o.billingLastName}`,
-        address: [o.shippingAddress1, o.shippingAddress2].filter(Boolean).join(", "),
-        city: o.shippingCity ?? o.billingCity,
-        division: o.shippingState ?? o.billingState,
-        postcode: o.shippingPostcode ?? o.billingPostcode,
-        country: o.shippingCountryCode ?? o.billingCountryCode,
-      },
-      billing: {
-        name: `${o.billingFirstName} ${o.billingLastName}`,
-        address: [o.billingAddress1, o.billingAddress2].filter(Boolean).join(", "),
-        city: o.billingCity,
-        division: o.billingState,
-        postcode: o.billingPostcode,
-        country: o.billingCountryCode,
-      },
-      items: o.items.map((i) => ({
-        id: String(i.id),
-        productId: i.productId ? String(i.productId) : null,
-        title: i.productName,
-        variantLabel: variantLabel(i.variantValues),
-        image: i.imageUrl ?? "",
-        qty: i.quantity,
-        price: num(i.unitPrice),
-        lineTotal: num(i.lineSubtotal),
+      items: rows.map((o) => ({
+        orderRef: o.number,
+        status: o.status,
+        paymentStatus: o.paymentStatus,
+        createdAt: o.createdAt.toISOString(),
+        itemCount: o.items.reduce((n, i) => n + i.quantity, 0),
+        firstItem: o.items[0] ? { title: o.items[0].productName, image: o.items[0].imageUrl ?? "" } : null,
+        grandTotal: num(o.grandTotal),
+        currency: o.currencyCode,
+        canCancel: CUSTOMER_CANCELLABLE.has(o.status),
       })),
-      itemsSubtotal: num(o.itemsSubtotal),
-      discountTotal: num(o.discountTotal),
-      couponUsed: o.couponUsed,
-      shippingTotal: num(o.shippingTotal),
-      taxTotal: num(o.taxTotal),
-      feeTotal: num(o.feeTotal),
-      grandTotal: num(o.grandTotal),
-      currency: o.currencyCode,
+      meta: { page: q.page, perPage: q.perPage, total, totalPages: Math.max(1, Math.ceil(total / q.perPage)) },
     };
   }
+
+  private async findMyOrder(orderRef: string) {
+    const o = await prisma.order.findFirst({
+      where: { storeId: this.storeId, customerId: this.customerId, number: orderRef },
+      include: { items: true, statusHistory: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!o) throw new NotFoundError("Order");
+    return o;
+  }
+
+  async getMyOrder(orderRef: string) {
+    const o = await this.findMyOrder(orderRef);
+    return {
+      ...orderView(o),
+      canCancel: CUSTOMER_CANCELLABLE.has(o.status),
+      history: o.statusHistory.map((l) => ({ status: l.status, note: l.note, at: l.createdAt.toISOString() })),
+    };
+  }
+
+  /** Customers may cancel their own order until the shop starts processing it. Stock goes back. */
+  async cancelMyOrder(orderRef: string) {
+    const o = await this.findMyOrder(orderRef);
+    if (o.status === "CANCELLED") throw new ConflictError("This order is already cancelled.", "ORDER_CANNOT_CANCEL");
+    if (!CUSTOMER_CANCELLABLE.has(o.status)) {
+      throw new ConflictError("This order is already being processed, so it can't be cancelled here. Please contact the shop.", "ORDER_CANNOT_CANCEL");
+    }
+    await new OrdersService(this.ctx).transitionStatus(o.id, { newStatus: "CANCELLED", note: "Cancelled by customer", notifyCustomer: true } as never);
+    return this.getMyOrder(orderRef);
+  }
+}
+
+const CUSTOMER_CANCELLABLE = new Set(["PENDING"]);
+
+type OrderWithItems = Prisma.OrderGetPayload<{ include: { items: true } }>;
+
+/** Customer-facing view of an order (thank-you page and My Account). */
+function orderView(o: OrderWithItems) {
+  return {
+    orderId: String(o.id),
+    orderRef: o.number,
+    orderKey: o.orderKey,
+    status: o.status,
+    paymentStatus: o.paymentStatus,
+    paymentGateway: o.paymentGatewayCode,
+    createdAt: o.createdAt.toISOString(),
+    email: o.billingEmail,
+    phone: o.shippingPhone ?? o.billingPhone,
+    shippingMethodName: o.shippingMethodName,
+    shipping: {
+      name: `${o.shippingFirstName ?? o.billingFirstName} ${o.shippingLastName ?? o.billingLastName}`,
+      address: [o.shippingAddress1, o.shippingAddress2].filter(Boolean).join(", "),
+      city: o.shippingCity ?? o.billingCity,
+      division: o.shippingState ?? o.billingState,
+      postcode: o.shippingPostcode ?? o.billingPostcode,
+      country: o.shippingCountryCode ?? o.billingCountryCode,
+    },
+    billing: {
+      name: `${o.billingFirstName} ${o.billingLastName}`,
+      address: [o.billingAddress1, o.billingAddress2].filter(Boolean).join(", "),
+      city: o.billingCity,
+      division: o.billingState,
+      postcode: o.billingPostcode,
+      country: o.billingCountryCode,
+    },
+    items: o.items.map((i) => ({
+      id: String(i.id),
+      productId: i.productId ? String(i.productId) : null,
+      title: i.productName,
+      variantLabel: variantLabel(i.variantValues),
+      image: i.imageUrl ?? "",
+      qty: i.quantity,
+      price: num(i.unitPrice),
+      lineTotal: num(i.lineSubtotal),
+    })),
+    itemsSubtotal: num(o.itemsSubtotal),
+    discountTotal: num(o.discountTotal),
+    couponUsed: o.couponUsed,
+    shippingTotal: num(o.shippingTotal),
+    taxTotal: num(o.taxTotal),
+    feeTotal: num(o.feeTotal),
+    grandTotal: num(o.grandTotal),
+    currency: o.currencyCode,
+  };
 }

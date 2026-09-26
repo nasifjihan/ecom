@@ -193,8 +193,7 @@ export const ChangePasswordDto = z.object({
     .min(8, { message: "Password must be at least 8 characters" })
     .max(72)
     .regex(/[A-Z]/, "Password needs at least one uppercase letter")
-    .regex(/\d/, "Password needs at least one digit")
-    .regex(/[^A-Za-z0-9]/, "Password needs at least one symbol"),
+    .regex(/\d/, "Password needs at least one digit"),
 });
 export type ChangePasswordDto = z.infer<typeof ChangePasswordDto>;
 

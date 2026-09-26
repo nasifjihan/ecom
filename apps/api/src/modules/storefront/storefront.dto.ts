@@ -83,3 +83,12 @@ export const PlaceOrderDto = z.object({
   termsAgreed: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
 });
 export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;
+
+export const MyOrdersQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const OrderRefParamDto = z.object({
+  orderRef: z.string().min(1).max(40).regex(/^[A-Za-z0-9-]+$/, "Invalid order number"),
+});

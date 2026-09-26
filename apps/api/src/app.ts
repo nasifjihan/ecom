@@ -53,7 +53,7 @@ import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard"
 import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
-import { storefrontCatalogRouter, storefrontCheckoutRouter } from "./modules/storefront";
+import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -123,6 +123,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
   app.use("/api/admin/customers", adminCustomersRouter);
+  app.use("/api/storefront/account", storefrontAccountRouter);
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);

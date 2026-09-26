@@ -53,6 +53,9 @@ export type NavbarProps = {
   className?: string;
   searchPlaceholder?: string;
   storeId?: string;
+  /** The signed-in customer, or null for a guest. */
+  account?: { name: string; email?: string | null } | null;
+  onLogout?: () => void;
 };
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -79,6 +82,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onWishlistClick,
   className,
   searchPlaceholder = "Search products...",
+  account = null,
+  onLogout,
 }) => {
   const [scrolled, setScrolled] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -236,34 +241,40 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent open={userMenuOpen}>
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuLabel>{account ? account.name : "My Account"}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => (window.location.href = "/login")}>
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Log In
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => (window.location.href = "/register")}>
-                  <UserCircle className="h-4 w-4 mr-2" />
-                  Sign Up
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => (window.location.href = "/account")}>
-                  <User className="h-4 w-4 mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => (window.location.href = "/account/orders")}>
-                  <Package className="h-4 w-4 mr-2" />
-                  Orders
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => (window.location.href = "/account/settings")}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Log Out
-                </DropdownMenuItem>
+                {account ? (
+                  <>
+                    <DropdownMenuItem onClick={() => (window.location.href = "/account")}>
+                      <User className="h-4 w-4 mr-2" />
+                      My Account
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => (window.location.href = "/account/orders")}>
+                      <Package className="h-4 w-4 mr-2" />
+                      Orders
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => (window.location.href = "/account/addresses")}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Addresses
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { setUserMenuOpen(false); onLogout?.(); }}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Log Out
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => (window.location.href = "/account/login")}>
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Log In
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => (window.location.href = "/account/register")}>
+                      <UserCircle className="h-4 w-4 mr-2" />
+                      Sign Up
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -331,12 +342,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </nav>
           <div className="mt-6 space-y-2">
-            <Button variant="outline" className="w-full" onClick={() => (window.location.href = "/login")}>
-              <LogIn className="h-4 w-4 mr-2" /> Log In
-            </Button>
-            <Button className="w-full" onClick={() => (window.location.href = "/register")}>
-              <UserCircle className="h-4 w-4 mr-2" /> Create Account
-            </Button>
+            {account ? (
+              <>
+                <Button variant="outline" className="w-full" onClick={() => (window.location.href = "/account")}>
+                  <User className="h-4 w-4 mr-2" /> My Account
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => { setMobileOpen(false); onLogout?.(); }}>
+                  <LogOut className="h-4 w-4 mr-2" /> Log Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" className="w-full" onClick={() => (window.location.href = "/account/login")}>
+                  <LogIn className="h-4 w-4 mr-2" /> Log In
+                </Button>
+                <Button className="w-full" onClick={() => (window.location.href = "/account/register")}>
+                  <UserCircle className="h-4 w-4 mr-2" /> Create Account
+                </Button>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>

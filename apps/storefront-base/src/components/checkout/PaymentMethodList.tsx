@@ -197,6 +197,9 @@ export function PaymentMethodList({
     return () => subscription.unsubscribe();
   }, [watch, onFormDataChange]);
 
+  // The form is untyped (FieldValues), so narrow the nested card errors for the JSX below.
+  const stripeErrors = errors.stripe as Record<string, { message?: unknown } | undefined> | undefined;
+
   const renderStripeFields = () => (
     <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in">
       <div className="flex items-center gap-2 mb-2">
@@ -223,11 +226,11 @@ export function PaymentMethodList({
                   const formatted = val.replace(/(\d{4})(?=\d)/g, "$1 ");
                   field.onChange(formatted);
                 }}
-                className={cn("font-mono tracking-wider", errors.stripe?.cardNumber && "border-destructive")}
+                className={cn("font-mono tracking-wider", stripeErrors?.cardNumber && "border-destructive")}
               />
             </FormControl>
-            {errors.stripe?.cardNumber && (
-              <FormMessage>{String(errors.stripe.cardNumber.message)}</FormMessage>
+            {stripeErrors?.cardNumber && (
+              <FormMessage>{String(stripeErrors!.cardNumber.message)}</FormMessage>
             )}
           </FormItem>
         )}
@@ -249,11 +252,11 @@ export function PaymentMethodList({
                     if (val.length >= 3) val = `${val.slice(0, 2)}/${val.slice(2)}`;
                     field.onChange(val);
                   }}
-                  className={cn("font-mono", errors.stripe?.expiry && "border-destructive")}
+                  className={cn("font-mono", stripeErrors?.expiry && "border-destructive")}
                 />
               </FormControl>
-              {errors.stripe?.expiry && (
-                <FormMessage>{String(errors.stripe.expiry.message)}</FormMessage>
+              {stripeErrors?.expiry && (
+                <FormMessage>{String(stripeErrors!.expiry.message)}</FormMessage>
               )}
             </FormItem>
           )}
@@ -273,11 +276,11 @@ export function PaymentMethodList({
                   onChange={(e) => {
                     field.onChange(e.target.value.replace(/\D/g, "").slice(0, 4));
                   }}
-                  className={cn("font-mono", errors.stripe?.cvc && "border-destructive")}
+                  className={cn("font-mono", stripeErrors?.cvc && "border-destructive")}
                 />
               </FormControl>
-              {errors.stripe?.cvc && (
-                <FormMessage>{String(errors.stripe.cvc.message)}</FormMessage>
+              {stripeErrors?.cvc && (
+                <FormMessage>{String(stripeErrors!.cvc.message)}</FormMessage>
               )}
             </FormItem>
           )}
@@ -293,11 +296,11 @@ export function PaymentMethodList({
               <Input
                 placeholder="JOHN DOE"
                 {...field}
-                className={cn(errors.stripe?.cardName && "border-destructive")}
+                className={cn(stripeErrors?.cardName && "border-destructive")}
               />
             </FormControl>
-            {errors.stripe?.cardName && (
-              <FormMessage>{String(errors.stripe.cardName.message)}</FormMessage>
+            {stripeErrors?.cardName && (
+              <FormMessage>{String(stripeErrors!.cardName.message)}</FormMessage>
             )}
           </FormItem>
         )}

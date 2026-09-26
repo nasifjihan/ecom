@@ -162,6 +162,30 @@ class CustomersController extends BaseController {
     await svc.changePassword(dto);
     envelope(res, { status: 200, message: "Password changed" });
   });
+
+  addMyAddress = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const address = await this.getService(req.ctx).addAddress(req.body as CustomerAddressDtoType);
+    envelope(res, { status: 201, data: address, message: "Address added" });
+  });
+
+  updateMyAddress = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const params = req.params as unknown as AddressIdParamDtoType;
+    const address = await this.getService(req.ctx).updateMyAddress(params.addressId, req.body as CustomerAddressDtoType);
+    envelope(res, { status: 200, data: address, message: "Address updated" });
+  });
+
+  deleteMyAddress = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const params = req.params as unknown as AddressIdParamDtoType;
+    await this.getService(req.ctx).deleteMyAddress(params.addressId);
+    envelope(res, { status: 200, message: "Address deleted" });
+  });
+
+  setMyDefaultAddress = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const params = req.params as unknown as AddressIdParamDtoType;
+    const body = req.body as SetDefaultAddressDtoType;
+    const address = await this.getService(req.ctx).setDefaultAddress(params.addressId, body.type);
+    envelope(res, { status: 200, data: address, message: "Default address updated" });
+  });
 }
 
 export const customersController = new CustomersController();

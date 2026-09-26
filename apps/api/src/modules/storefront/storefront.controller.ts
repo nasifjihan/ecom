@@ -37,4 +37,17 @@ export const storefrontController = {
   getOrderByKey: ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).getOrderByKey(String(req.params.orderKey)) });
   }),
+
+  listMyOrders: ctrl(async (req: Req, res: Response) => {
+    const { items, meta } = await svc(req).listMyOrders(req.query as never);
+    envelope(res, { data: items, meta });
+  }),
+
+  getMyOrder: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).getMyOrder(String(req.params.orderRef)) });
+  }),
+
+  cancelMyOrder: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).cancelMyOrder(String(req.params.orderRef)), message: "Order cancelled" });
+  }),
 };

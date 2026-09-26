@@ -7,7 +7,7 @@ import {
   formatOgImageUrl,
   getSiteBase,
   sanitizeSeoText,
-} from "@ecom/storefront-base/src/lib/seo";
+} from "../../lib/seo";
 
 export type SocialMetaProps = {
   title: string;

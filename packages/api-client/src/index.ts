@@ -86,7 +86,8 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
 
   // Access tokens are short-lived: on 401, refresh once via the httpOnly cookie and retry.
   const url = typeof args === "string" ? args : args.url;
-  if (res.error?.status === 401 && refreshOpts && url !== refreshOpts.path) {
+  // Auth calls (login, register, refresh) answer 401 for bad credentials: never refresh on those.
+  if (res.error?.status === 401 && refreshOpts && !url.startsWith("/auth/")) {
     const opts = refreshOpts;
     refreshInFlight ??= (async () => {
       const r = await rawBaseQuery({ url: opts.path, method: "POST", body: {} }, api, extraOptions);
