@@ -10,12 +10,16 @@ export interface CmsPageRow {
   isPublished: boolean;
   showInFooterMenu: boolean;
   sortOrder: number;
+  template: "text" | "sections" | null;
   updatedAt: string;
 }
+export type PageTemplate = "text" | "sections";
 export interface CmsPage extends CmsPageRow {
   content: string | null;
   seoTitle: string | null;
   metaDesc: string | null;
+  /** Blocks for pages whose template is "sections" (older rows have a null template, meaning text). */
+  sections: HomepageSection[] | null;
 }
 export type CmsPageInput = Partial<Omit<CmsPage, "id" | "updatedAt">>;
 
@@ -112,13 +116,34 @@ export interface HeadingConfig {
   subheading: string;
   limit: number;
 }
-export type HomepageSection =
-  | { type: "hero"; enabled: boolean; config: { slides: HeroSlide[] } }
-  | { type: "features"; enabled: boolean; config: { items: { icon: (typeof FEATURE_ICONS)[number]; title: string; desc: string }[] } }
-  | { type: "categories"; enabled: boolean; config: HeadingConfig }
-  | { type: "featured_products"; enabled: boolean; config: HeadingConfig }
-  | { type: "promo_banner"; enabled: boolean; config: { badge: string; title: string; text: string; ctaText: string; ctaHref: string } }
-  | { type: "new_arrivals"; enabled: boolean; config: HeadingConfig };
+export interface ImageConfig {
+  imageUrl: string;
+  alt: string;
+  caption: string;
+  link: string | null;
+  width: "contained" | "full";
+}
+export interface ImageTextConfig {
+  imageUrl: string | null;
+  heading: string;
+  text: string;
+  ctaText: string;
+  ctaHref: string;
+  imagePosition: "left" | "right";
+}
+/** A block on the homepage or a built page. `id` is only used by the editor to track blocks while dragging. */
+export type HomepageSection = { id?: string; enabled: boolean } & (
+  | { type: "hero"; config: { slides: HeroSlide[] } }
+  | { type: "features"; config: { items: { icon: (typeof FEATURE_ICONS)[number]; title: string; desc: string }[] } }
+  | { type: "categories"; config: HeadingConfig }
+  | { type: "featured_products"; config: HeadingConfig }
+  | { type: "promo_banner"; config: { badge: string; title: string; text: string; ctaText: string; ctaHref: string } }
+  | { type: "new_arrivals"; config: HeadingConfig }
+  | { type: "rich_text"; config: { content: string } }
+  | { type: "image"; config: ImageConfig }
+  | { type: "image_text"; config: ImageTextConfig }
+  | { type: "faq"; config: { heading: string; limit: number } }
+);
 export type HomepageSectionType = HomepageSection["type"];
 
 export interface ListArgs {

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ExternalLink, Loader2, Palette } from "lucide-react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Skeleton, Textarea, cn } from "@/components/ui";
 import { Field, PageTitle, STOREFRONT_URL, Toggle } from "@/components/content/shared";
+import { ImageField } from "@/components/content/media-picker";
 import { errorText, useGetThemeQuery, useSaveThemeMutation, type ThemeSettings } from "@/lib/features/content/content-api-slice";
 
 const SWATCHES = ["#7c3aed", "#2563eb", "#0891b2", "#059669", "#ca8a04", "#ea580c", "#e11d48", "#db2777", "#0f172a"];
@@ -77,18 +78,8 @@ export default function ThemePage() {
             <Field label="Tagline" htmlFor="tagline">
               <Input id="tagline" maxLength={160} value={t.brand.tagline} onChange={(e) => set("brand", { tagline: e.target.value })} />
             </Field>
-            <Field label="Logo URL" htmlFor="logo" hint="Square image works best. Leave blank to show the first letter of your name." error={isLink(t.brand.logoUrl ?? "") ? null : "Use a link starting with https://"}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md text-white font-bold" style={{ background: t.colors.primary }}>
-                  {t.brand.logoUrl && /^(https?:\/\/|\/)/.test(t.brand.logoUrl) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.brand.logoUrl} alt="" className="h-full w-full bg-white object-contain" />
-                  ) : (
-                    (t.brand.storeName[0] ?? "S").toUpperCase()
-                  )}
-                </div>
-                <Input id="logo" value={t.brand.logoUrl ?? ""} onChange={(e) => set("brand", { logoUrl: e.target.value })} placeholder="https://..." />
-              </div>
+            <Field label="Logo" htmlFor="logo" hint="Square image works best. Without one, the first letter of your name is shown." error={isLink(t.brand.logoUrl ?? "") ? null : "Use a link starting with https://"}>
+              <ImageField id="logo" aspect="square" value={t.brand.logoUrl} onChange={(url) => set("brand", { logoUrl: url })} />
             </Field>
           </CardContent>
         </Card>
@@ -190,7 +181,7 @@ export default function ThemePage() {
           <CardContent className="grid gap-4 sm:grid-cols-2">
             {(["facebook", "instagram", "youtube", "twitter"] as const).map((k) => (
               <Field key={k} label={k === "twitter" ? "X (Twitter)" : k[0]!.toUpperCase() + k.slice(1)} htmlFor={k} error={isLink(t.social[k]) ? null : "Use a full https:// link"}>
-                <Input id={k} value={t.social[k]} onChange={(e) => set("social", { [k]: e.target.value.trim() } as Partial<ThemeSettings["social"]>)} placeholder={`https://${k === "twitter" ? "x" : k}.com/yourstore`} />
+                <Input id={k} value={t.social[k]} onChange={(e) => set("social", { [k]: e.target.value.trim() })} placeholder={`https://${k === "twitter" ? "x" : k}.com/yourstore`} />
               </Field>
             ))}
           </CardContent>

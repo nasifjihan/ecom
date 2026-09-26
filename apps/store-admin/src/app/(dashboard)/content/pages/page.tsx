@@ -86,6 +86,11 @@ export default function CmsPagesPage() {
                         <Link href={`/content/pages/${p.id}`} className="hover:underline">
                           {p.title}
                         </Link>
+                        {p.template === "sections" && (
+                          <Badge variant="outline" className="ml-2 align-middle font-normal">
+                            Blocks
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-slate-500">/{p.slug}</TableCell>
                       <TableCell>

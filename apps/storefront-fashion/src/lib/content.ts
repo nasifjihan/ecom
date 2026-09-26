@@ -30,6 +30,9 @@ export interface CmsPage {
   title: string;
   slug: string;
   content: string | null;
+  /** "sections" pages are built from blocks in the admin; "text" pages show `content`. */
+  template: "text" | "sections";
+  sections: HomepageSection[];
   seoTitle: string | null;
   metaDesc: string | null;
   updatedAt: string;
@@ -60,13 +63,22 @@ export interface Faq {
   category: string | null;
 }
 
-export type HomepageSection =
-  | { type: "hero"; enabled: boolean; config: { slides: HeroSlideConfig[] } }
-  | { type: "features"; enabled: boolean; config: { items: { icon: string; title: string; desc: string }[] } }
-  | { type: "categories"; enabled: boolean; config: HeadingConfig }
-  | { type: "featured_products"; enabled: boolean; config: HeadingConfig }
-  | { type: "new_arrivals"; enabled: boolean; config: HeadingConfig }
-  | { type: "promo_banner"; enabled: boolean; config: { badge: string; title: string; text: string; ctaText: string; ctaHref: string } };
+/** A block on the homepage or on a page built from blocks. */
+export type HomepageSection = { id?: string; enabled: boolean } & (
+  | { type: "hero"; config: { slides: HeroSlideConfig[] } }
+  | { type: "features"; config: { items: { icon: string; title: string; desc: string }[] } }
+  | { type: "categories"; config: HeadingConfig }
+  | { type: "featured_products"; config: HeadingConfig }
+  | { type: "new_arrivals"; config: HeadingConfig }
+  | { type: "promo_banner"; config: { badge: string; title: string; text: string; ctaText: string; ctaHref: string } }
+  | { type: "rich_text"; config: { content: string } }
+  | { type: "image"; config: { imageUrl: string; alt: string; caption: string; link: string | null; width: "contained" | "full" } }
+  | {
+      type: "image_text";
+      config: { imageUrl: string | null; heading: string; text: string; ctaText: string; ctaHref: string; imagePosition: "left" | "right" };
+    }
+  | { type: "faq"; config: { heading: string; limit: number } }
+);
 
 export interface HeadingConfig {
   heading: string;

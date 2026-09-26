@@ -4,7 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CreditCard, Gift, Phone, Shield, ShoppingBag, Truck } from "lucide-react";
+import { ArrowRight, ChevronDown, CreditCard, Gift, Phone, Shield, ShoppingBag, Truck } from "lucide-react";
+import { Markdown } from "@ecom/ui";
 import {
   HeroSlider,
   FeaturedCategories,
@@ -17,7 +18,7 @@ import {
   type ProductSummary,
 } from "@ecom/storefront-base";
 import { toast } from "sonner";
-import type { HomepageSection } from "@/lib/content";
+import type { Faq, HomepageSection } from "@/lib/content";
 
 const CATEGORY_COLORS = [
   "from-pink-400 to-rose-500",
@@ -57,7 +58,11 @@ const FALLBACK: HomepageSection[] = [
 
 type SectionOf<T extends HomepageSection["type"]> = Extract<HomepageSection, { type: T }>;
 
-export function HomeSections({ sections }: { sections: HomepageSection[] | null }) {
+/**
+ * Renders blocks from the admin, for the homepage (Online Store > Homepage) and for pages built from
+ * blocks (Content > Pages). FAQ blocks need the published FAQs, which the server page fetches.
+ */
+export function PageSections({ sections, faqs = [], className }: { sections: HomepageSection[] | null; faqs?: Faq[]; className?: string }) {
   const list = sections ?? FALLBACK;
   const { addItem } = useCart();
   const router = useRouter();
@@ -106,21 +111,30 @@ export function HomeSections({ sections }: { sections: HomepageSection[] | null 
   const productProps = { onAddToCart: handleAddToCart, onToggleWishlist: toggleWishlist, wishlistedIds: wishlisted };
 
   return (
-    <div className="flex flex-col gap-10 md:gap-16 pb-10 md:pb-16">
-      {list.map((s) => {
+    <div className={`flex flex-col gap-10 md:gap-16 pb-10 md:pb-16 ${className ?? ""}`}>
+      {list.map((s, i) => {
+        const key = s.id ?? `${s.type}-${i}`;
         switch (s.type) {
           case "hero":
-            return <Hero key={s.type} section={s} />;
+            return <Hero key={key} section={s} />;
           case "features":
-            return <Features key={s.type} section={s} />;
+            return <Features key={key} section={s} />;
           case "categories":
-            return <Categories key={s.type} section={s} />;
+            return <Categories key={key} section={s} />;
           case "featured_products":
-            return <ProductsBlock key={s.type} section={s} query={{ featured: true, sort: "popular" }} moreHref="/products" moreLabel="View All Products" {...productProps} />;
+            return <ProductsBlock key={key} section={s} query={{ featured: true, sort: "popular" }} moreHref="/products" moreLabel="View All Products" {...productProps} />;
           case "new_arrivals":
-            return <ProductsBlock key={s.type} section={s} query={{ sort: "newest" }} moreHref="/products?sort=newest" moreLabel="See all new" {...productProps} />;
+            return <ProductsBlock key={key} section={s} query={{ sort: "newest" }} moreHref="/products?sort=newest" moreLabel="See all new" {...productProps} />;
           case "promo_banner":
-            return <Promo key={s.type} section={s} />;
+            return <Promo key={key} section={s} />;
+          case "rich_text":
+            return <RichText key={key} section={s} />;
+          case "image":
+            return <ImageBlock key={key} section={s} />;
+          case "image_text":
+            return <ImageText key={key} section={s} />;
+          case "faq":
+            return <FaqBlock key={key} section={s} faqs={faqs} />;
           default:
             return null;
         }
@@ -273,6 +287,110 @@ function Promo({ section }: { section: SectionOf<"promo_banner"> }) {
           </Button>
         )}
       </div>
+    </section>
+  );
+}
+
+/** Site paths use client navigation; full links open as normal links. */
+function SmartLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  if (href.startsWith("/")) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} rel="noopener">
+      {children}
+    </a>
+  );
+}
+
+function RichText({ section }: { section: SectionOf<"rich_text"> }) {
+  if (!section.config.content.trim()) return null;
+  return (
+    <section className="container max-w-3xl">
+      <Markdown source={section.config.content} className="text-[15px] md:text-base" />
+    </section>
+  );
+}
+
+function ImageBlock({ section }: { section: SectionOf<"image"> }) {
+  const c = section.config;
+  const full = c.width === "full";
+  const img = (
+    // Admin-chosen URLs can be on any host, so a plain img is used rather than next/image.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={c.imageUrl} alt={c.alt} loading="lazy" className={`w-full h-auto object-cover ${full ? "max-h-[640px]" : "rounded-2xl"}`} />
+  );
+  return (
+    <figure className={full ? "w-full" : "container"}>
+      {c.link ? <SmartLink href={c.link} className="block transition-opacity hover:opacity-95">{img}</SmartLink> : img}
+      {c.caption && <figcaption className={`mt-3 text-center text-sm text-muted-foreground ${full ? "container" : ""}`}>{c.caption}</figcaption>}
+    </figure>
+  );
+}
+
+function ImageText({ section }: { section: SectionOf<"image_text"> }) {
+  const c = section.config;
+  const paragraphs = c.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return (
+    <section className="container">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4 }}
+        className={`grid items-center gap-8 md:gap-12 ${c.imageUrl ? "md:grid-cols-2" : "max-w-3xl"}`}
+      >
+        {c.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={c.imageUrl} alt="" loading="lazy" className={`w-full aspect-[4/3] object-cover rounded-2xl ${c.imagePosition === "right" ? "md:order-2" : ""}`} />
+        )}
+        <div>
+          {c.heading && <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{c.heading}</h2>}
+          {paragraphs.map((p, i) => (
+            <p key={i} className="mt-4 text-muted-foreground leading-relaxed whitespace-pre-line">
+              {p}
+            </p>
+          ))}
+          {c.ctaText && c.ctaHref && (
+            <Button className="mt-6" asChild>
+              <SmartLink href={c.ctaHref}>
+                {c.ctaText}
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </SmartLink>
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+function FaqBlock({ section, faqs }: { section: SectionOf<"faq">; faqs: Faq[] }) {
+  const items = faqs.slice(0, section.config.limit);
+  if (!items.length) return null;
+  return (
+    <section className="container max-w-3xl">
+      {section.config.heading && <h2 className="mb-6 text-2xl md:text-3xl font-bold tracking-tight">{section.config.heading}</h2>}
+      <div className="divide-y rounded-xl border bg-card">
+        {items.map((f) => (
+          <details key={f.id} className="group px-5 py-4 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
+              {f.question}
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <Markdown source={f.answer} className="mt-3 text-sm text-muted-foreground" />
+          </details>
+        ))}
+      </div>
+      {faqs.length > items.length && (
+        <Link href="/faq" className="mt-4 inline-flex items-center text-sm font-medium text-primary hover:underline">
+          See all questions <ArrowRight className="h-4 w-4 ml-1" />
+        </Link>
+      )}
     </section>
   );
 }

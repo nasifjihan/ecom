@@ -12,6 +12,7 @@ import { BadRequestError, ConflictError, NotFoundError, type RequestContext } fr
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
 import {
   HomepageSectionDto,
+  SectionDto,
   type BlogCategoryDto,
   type CreatePageDto,
   type CreatePostDto,
@@ -90,6 +91,7 @@ export class ContentService {
           isPublished: true,
           showInFooterMenu: true,
           sortOrder: true,
+          template: true,
           updatedAt: true,
         },
       }),
@@ -103,17 +105,35 @@ export class ContentService {
     return page
   }
 
+  /** Prisma needs DbNull (not null) to clear a Json column. */
+  private pageData<T extends UpdatePageDto>(d: T) {
+    const { sections, ...rest } = d
+    return {
+      ...rest,
+      ...(sections === undefined
+        ? {}
+        : { sections: sections === null ? Prisma.DbNull : (sections as Prisma.InputJsonValue) }),
+    }
+  }
+
   createPage(d: CreatePageDto) {
     return this.uniqueSlug("page", () =>
       prisma.cmsPage.create({
-        data: { ...d, slug: d.slug ?? slugify(d.title), storeId: this.storeId },
+        data: {
+          ...this.pageData(d),
+          title: d.title,
+          slug: d.slug ?? slugify(d.title),
+          storeId: this.storeId,
+        },
       }),
     )
   }
 
   async updatePage(id: bigint, d: UpdatePageDto) {
     await this.getPage(id)
-    return this.uniqueSlug("page", () => prisma.cmsPage.update({ where: { id }, data: d }))
+    return this.uniqueSlug("page", () =>
+      prisma.cmsPage.update({ where: { id }, data: this.pageData(d) }),
+    )
   }
 
   async deletePage(id: bigint) {
@@ -524,13 +544,27 @@ export class ContentService {
         title: true,
         slug: true,
         content: true,
+        template: true,
+        sections: true,
         seoTitle: true,
         metaDesc: true,
         updatedAt: true,
       },
     })
     if (!page) throw new NotFoundError("page")
-    return page
+    return {
+      ...page,
+      template: page.template === "sections" ? "sections" : "text",
+      sections: this.validSections(page.sections),
+    }
+  }
+
+  /** Enabled sections that still match the current section shapes; anything else is skipped. */
+  private validSections(raw: unknown): HomepageSection[] {
+    if (!Array.isArray(raw)) return []
+    return raw
+      .map((r) => SectionDto.safeParse(r))
+      .flatMap((p) => (p.success && p.data.enabled ? [p.data] : []))
   }
 
   async publicPosts(q: ListQueryDto) {

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, Loader2, Newspaper } from "lucide-react";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Skeleton, Textarea } from "@/components/ui";
 import { Field, MarkdownField, PageTitle, STOREFRONT_URL, toSlug } from "@/components/content/shared";
+import { ImageField } from "@/components/content/media-picker";
 import {
   errorText,
   useCreateBlogPostMutation,
@@ -100,7 +101,7 @@ export default function BlogPostEditor() {
       className="space-y-6"
       onSubmit={(e) => {
         e.preventDefault();
-        save(form.status);
+        void save(form.status);
       }}
     >
       <Button variant="ghost" size="sm" asChild className="-ml-2">
@@ -189,13 +190,9 @@ export default function BlogPostEditor() {
               <Field label="Tags" htmlFor="tags" hint="Separate with commas.">
                 <Input id="tags" value={form.tags} onChange={(e) => set("tags", e.target.value)} placeholder="eid, style" />
               </Field>
-              <Field label="Cover image URL" htmlFor="image" hint="Paste an image link, e.g. from Catalog > Media.">
-                <Input id="image" value={form.featuredImageUrl} onChange={(e) => set("featuredImageUrl", e.target.value)} placeholder="https://..." />
+              <Field label="Cover image" htmlFor="image" hint="Shown on the blog list and at the top of the post.">
+                <ImageField id="image" value={form.featuredImageUrl} onChange={(url) => set("featuredImageUrl", url ?? "")} />
               </Field>
-              {form.featuredImageUrl && /^(https?:\/\/|\/)/.test(form.featuredImageUrl) && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.featuredImageUrl} alt="" className="aspect-video w-full rounded-md border object-cover" />
-              )}
             </CardContent>
           </Card>
           <Card>

@@ -42,6 +42,12 @@ export const CreatePageDto = z.object({
   sortOrder: z.coerce.number().int().default(0),
   seoTitle: optText(200),
   metaDesc: optText(320),
+  /** "text" pages show `content` (Markdown); "sections" pages are built from `sections`. */
+  template: z.enum(["text", "sections"]).default("text"),
+  sections: z
+    .lazy(() => z.array(SectionDto).max(30))
+    .optional()
+    .nullable(),
 })
 export const UpdatePageDto = CreatePageDto.partial()
 export type CreatePageDto = z.infer<typeof CreatePageDto>
@@ -189,16 +195,46 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
     enabled: z.boolean(),
     config: z.object({ ...Heading, limit: Count }),
   }),
+  z.object({
+    type: z.literal("rich_text"),
+    enabled: z.boolean(),
+    config: z.object({ content: text(50_000) }),
+  }),
+  z.object({
+    type: z.literal("image"),
+    enabled: z.boolean(),
+    config: z.object({
+      imageUrl: link.refine((v) => v !== "", "Choose an image"),
+      alt: text(200),
+      caption: text(300),
+      link: optLink,
+      width: z.enum(["contained", "full"]),
+    }),
+  }),
+  z.object({
+    type: z.literal("image_text"),
+    enabled: z.boolean(),
+    config: z.object({
+      imageUrl: optLink,
+      heading: text(160),
+      text: text(5_000),
+      ctaText: text(40),
+      ctaHref: link,
+      imagePosition: z.enum(["left", "right"]),
+    }),
+  }),
+  z.object({
+    type: z.literal("faq"),
+    enabled: z.boolean(),
+    config: z.object({ heading: text(120), limit: z.coerce.number().int().min(1).max(50) }),
+  }),
 ])
+/** Sections carry an optional client id so the editors can track them while reordering. */
+export const SectionDto = z.intersection(
+  HomepageSectionDto,
+  z.object({ id: z.string().max(40).optional() }),
+)
 export type HomepageSection = z.infer<typeof HomepageSectionDto>
 export type HomepageSectionType = HomepageSection["type"]
 
-export const HomepageDto = z.object({
-  sections: z
-    .array(HomepageSectionDto)
-    .max(12)
-    .refine(
-      (s) => new Set(s.map((x) => x.type)).size === s.length,
-      "Each section type can appear once",
-    ),
-})
+export const HomepageDto = z.object({ sections: z.array(SectionDto).max(30) })

@@ -2,21 +2,12 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import type { LucideIcon } from "lucide-react";
+import { ImagePlus, type LucideIcon } from "lucide-react";
 import { Markdown } from "@ecom/ui";
 import { Label, Textarea, cn } from "@/components/ui";
+import { MediaPickerDialog } from "./media-picker";
 
-export function PageTitle({
-  icon: Icon,
-  title,
-  description,
-  actions,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description?: string;
-  actions?: React.ReactNode;
-}) {
+export function PageTitle({ icon: Icon, title, description, actions }: { icon: LucideIcon; title: string; description?: string; actions?: React.ReactNode }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -25,7 +16,7 @@ export function PageTitle({
       className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
     >
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
           <Icon className="h-6 w-6 text-blue-600" /> {title}
         </h1>
         {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
@@ -54,11 +45,7 @@ export function Field({
     <div className={cn("space-y-1.5", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : hint ? (
-        <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
-      ) : null}
+      {error ? <p className="text-destructive text-xs">{error}</p> : hint ? <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p> : null}
     </div>
   );
 }
@@ -78,7 +65,7 @@ export function Toggle({
   id?: string;
 }) {
   return (
-    <label htmlFor={id} className="flex items-start gap-3 cursor-pointer select-none">
+    <label htmlFor={id} className="flex cursor-pointer select-none items-start gap-3">
       <button
         id={id}
         type="button"
@@ -87,7 +74,7 @@ export function Toggle({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "focus-visible:ring-ring relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2",
           checked ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-700",
         )}
       >
@@ -120,33 +107,73 @@ export function MarkdownField({
   placeholder?: string;
 }) {
   const [preview, setPreview] = React.useState(false);
+  const [picking, setPicking] = React.useState(false);
+  const area = React.useRef<HTMLTextAreaElement>(null);
+
+  /** Inserts ![alt](url) on its own line at the cursor, so it renders as a full-width image. */
+  const insertImage = (url: string, alt: string) => {
+    const el = area.current;
+    const at = el && !preview ? el.selectionStart : value.length;
+    const before = value.slice(0, at);
+    const after = value.slice(at);
+    const snippet = `${before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : ""}![${alt.replace(/[[\]]/g, "")}](${url})\n\n`;
+    onChange(before + snippet + after.replace(/^\n+/, ""));
+    setPreview(false);
+    requestAnimationFrame(() => {
+      const pos = (before + snippet).length;
+      area.current?.focus();
+      area.current?.setSelectionRange(pos, pos);
+    });
+  };
+
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id}>{label}</Label>
-        <div className="inline-flex rounded-md border p-0.5 text-xs">
-          {(["Write", "Preview"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setPreview(m === "Preview")}
-              className={cn("rounded px-2.5 py-1", (m === "Preview") === preview ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-500")}
-            >
-              {m}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <ImagePlus className="h-3.5 w-3.5" /> Image
+          </button>
+          <div className="inline-flex rounded-md border p-0.5 text-xs">
+            {(["Write", "Preview"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setPreview(m === "Preview")}
+                className={cn(
+                  "rounded px-2.5 py-1",
+                  (m === "Preview") === preview ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-500",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {preview ? (
-        <div className="min-h-[12rem] rounded-md border bg-background p-4 text-sm">
+        <div className="bg-background min-h-[12rem] rounded-md border p-4 text-sm">
           {value.trim() ? <Markdown source={value} /> : <p className="text-slate-400">Nothing to preview yet.</p>}
         </div>
       ) : (
-        <Textarea id={id} rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="font-mono text-sm" />
+        <Textarea
+          ref={area}
+          id={id}
+          rows={rows}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className="font-mono text-sm"
+        />
       )}
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Formatting: ## Heading, **bold**, *italic*, - list item, [link text](/products). Leave a blank line between paragraphs.
       </p>
+      <MediaPickerDialog open={picking} onClose={() => setPicking(false)} onSelect={(m) => insertImage(m.url, m.altText ?? "")} title="Insert an image" />
     </div>
   );
 }

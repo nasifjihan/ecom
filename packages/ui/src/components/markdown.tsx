@@ -6,11 +6,13 @@ import { cn } from "@ecom/utils";
  *
  * It builds React elements and never injects HTML, so text typed by a store admin
  * can't run scripts on the storefront. Supported: # headings, paragraphs, - and 1.
- * lists, > quotes, **bold**, *italic*, `code` and [links](/path).
+ * lists, > quotes, **bold**, *italic*, `code`, [links](/path) and ![images](https://...).
  */
 
 const SAFE_URL = /^(\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i;
-const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+const SAFE_IMAGE = /^(\/(?!\/)|https?:\/\/)/i;
+const INLINE = /(!\[[^\]]*\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+const IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 
 function inline(text: string, keyPrefix: string): React.ReactNode[] {
   return text.split(INLINE).map((part, i) => {
@@ -18,6 +20,12 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
     if (!part) return null;
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) return <strong key={key}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("`") && part.endsWith("`") && part.length > 2) return <code key={key}>{part.slice(1, -1)}</code>;
+    const image = IMAGE.exec(part);
+    if (image) {
+      const [, alt, src] = image;
+      // eslint-disable-next-line @next/next/no-img-element
+      return SAFE_IMAGE.test(src!) ? <img key={key} src={src} alt={alt} loading="lazy" /> : null;
+    }
     if (/^(\*[^*].*\*|_[^_].*_)$/.test(part)) return <em key={key}>{part.slice(1, -1)}</em>;
     const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
     if (link) {
@@ -40,6 +48,7 @@ function lines(text: string, key: string) {
 }
 
 type Block =
+  | { kind: "img"; alt: string; src: string }
   | { kind: "h"; level: number; text: string }
   | { kind: "ul" | "ol"; items: string[] }
   | { kind: "quote" | "p"; lines: string[] };
@@ -60,6 +69,12 @@ function parse(source: string): Block[] {
     const line = raw.trimEnd();
     if (!line.trim()) {
       flush();
+      continue;
+    }
+    const img = IMAGE.exec(line.trim());
+    if (img) {
+      flush();
+      blocks.push({ kind: "img", alt: img[1]!, src: img[2]! });
       continue;
     }
     const h = HEADING.exec(line.trim());
@@ -100,6 +115,14 @@ export function Markdown({ source, className }: { source: string | null | undefi
       {parse(source ?? "").map((b, i) => {
         const key = `b${i}`;
         switch (b.kind) {
+          case "img":
+            return SAFE_IMAGE.test(b.src) ? (
+              <figure key={key}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={b.src} alt={b.alt} loading="lazy" />
+                {b.alt && <figcaption>{b.alt}</figcaption>}
+              </figure>
+            ) : null;
           case "h": {
             const Tag = `h${b.level}` as "h2" | "h3" | "h4";
             return <Tag key={key}>{inline(b.text, key)}</Tag>;
@@ -121,6 +144,7 @@ export function Markdown({ source, className }: { source: string | null | undefi
 /** Plain-text version for meta descriptions and excerpts. */
 export function markdownToText(source: string | null | undefined, max = 160): string {
   const text = (source ?? "")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[#>*_`]/g, "")
     .replace(/^\s*[-\d.)]+\s+/gm, "")
