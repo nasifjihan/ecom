@@ -429,6 +429,10 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
     });
   }
 
+  /**
+   * Put an order line's quantity back on the shelf (cancel/refund). Checkout takes
+   * stock straight off stockQty without reserving it, so only stockQty goes back.
+   */
   async restock(
     productId: bigint,
     variantId: bigint | null | undefined,
@@ -441,46 +445,20 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
     return prisma.$transaction(async (tx: any) => {
       const pid = BigInt(productId);
       const vid = variantId ? BigInt(variantId) : null;
-      let qtyBefore: number;
-      let qtyAfter: number;
+      const inStore = ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {};
 
-      if (vid !== null && vid !== undefined) {
-        const target = await tx.productVariant.findFirst({
-          where: {
-            id: vid,
-            ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
-          },
-        });
-        qtyBefore = Number(target?.stockQty ?? 0);
-        qtyAfter = qtyBefore + qty;
-        await tx.productVariant.update({
-          where: { id: vid },
-          data: {
-            stockQty: qtyAfter,
-            reservedQty: { decrement: qty },
-          },
-        });
-      } else {
-        const target = await tx.product.findFirst({
-          where: {
-            id: pid,
-            ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
-          },
-        });
-        qtyBefore = Number(target?.stockQty ?? 0);
-        qtyAfter = qtyBefore + qty;
-        await tx.product.update({
-          where: { id: pid },
-          data: {
-            stockQty: qtyAfter,
-            reservedStock: { decrement: qty },
-          },
-        });
-      }
+      const target = vid
+        ? await tx.productVariant.findFirst({ where: { id: vid, product: inStore } })
+        : await tx.product.findFirst({ where: { id: pid, ...inStore } });
+      if (!target) return null; // product deleted since the order: nothing to restock
+
+      const qtyBefore = Number(target.stockQty ?? 0);
+      const qtyAfter = qtyBefore + qty;
+      if (vid) await tx.productVariant.update({ where: { id: vid }, data: { stockQty: { increment: qty } } });
+      else await tx.product.update({ where: { id: pid }, data: { stockQty: { increment: qty } } });
 
       return tx.inventoryLog.create({
         data: {
-          ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
           productId: pid,
           variantId: vid,
           reason,

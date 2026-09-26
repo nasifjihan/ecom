@@ -143,12 +143,12 @@ export class CustomersService extends BaseService {
   }
 
   async getCustomer(id: bigint | number): Promise<unknown> {
-    return this.customers.findFull(this.ctx, id);
+    return withoutSecrets(await this.customers.findFull(this.ctx, id));
   }
 
   async getMyProfile(): Promise<unknown> {
     const cid = await this.requireCustomerIdFromCtx();
-    return this.customers.findFull(this.ctx, cid);
+    return withoutSecrets(await this.customers.findFull(this.ctx, cid));
   }
 
   async updateCustomer(id: bigint | number, dto: UpdateCustomerDto): Promise<unknown> {
@@ -179,7 +179,8 @@ export class CustomersService extends BaseService {
 
   async updateMyProfile(dto: UpdateProfileDto): Promise<unknown> {
     const cid = await this.requireCustomerIdFromCtx();
-    return this.updateCustomer(cid, dto as UpdateCustomerDto);
+    await this.updateCustomer(cid, dto as UpdateCustomerDto);
+    return this.getMyProfile();
   }
 
   async deleteCustomer(id: bigint | number): Promise<{ success: true; id: bigint | number }> {
@@ -307,6 +308,29 @@ export class CustomersService extends BaseService {
     return this.addresses.setDefault(this.ctx, { customerId, type, addressId });
   }
 
+  private async requireMyAddress(addressId: bigint | number) {
+    const customerId = await this.requireCustomerIdFromCtx();
+    const addr = await prisma.customerAddress.findFirst({ where: { id: BigInt(addressId), customerId } });
+    if (!addr) throw new NotFoundError("customerAddress", addressId);
+    return addr;
+  }
+
+  async updateMyAddress(addressId: bigint | number, dto: CustomerAddressDto): Promise<unknown> {
+    const addr = await this.requireMyAddress(addressId);
+    const { isDefault, ...fields } = dto;
+    return tx(async (t: any) => {
+      if (isDefault) {
+        await t.customerAddress.updateMany({ where: { customerId: addr.customerId, type: dto.type }, data: { isDefault: false } });
+      }
+      return t.customerAddress.update({ where: { id: addr.id }, data: { ...fields, isDefault: isDefault || (addr.isDefault && addr.type === dto.type) } });
+    });
+  }
+
+  async deleteMyAddress(addressId: bigint | number): Promise<void> {
+    const addr = await this.requireMyAddress(addressId);
+    await prisma.customerAddress.delete({ where: { id: addr.id } });
+  }
+
   async changePassword(dto: ChangePasswordDto): Promise<{ success: true }> {
     const cid = await this.requireCustomerIdFromCtx();
     const existing = await prisma.customer.findFirst({
@@ -333,4 +357,11 @@ export class CustomersService extends BaseService {
     void dto;
     throw new BadRequestError("Password reset token flow not implemented", "BAD_REQUEST");
   }
+}
+
+/** Customer rows must never leave the API with their password hash or 2FA secret. */
+function withoutSecrets<T>(row: T): T {
+  if (!row || typeof row !== "object") return row;
+  const { passwordHash: _p, twoFactorSecret: _t, ...rest } = row as Record<string, unknown>;
+  return rest as T;
 }

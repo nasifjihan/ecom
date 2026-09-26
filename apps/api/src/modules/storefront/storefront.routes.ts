@@ -16,6 +16,8 @@ import {
   StorefrontOrderKeyParamDto,
   ApplyCouponDto,
   PlaceOrderDto,
+  MyOrdersQueryDto,
+  OrderRefParamDto,
 } from "./storefront.dto";
 
 export const storefrontCatalogRouter = Router();
@@ -58,3 +60,11 @@ storefrontCheckoutRouter.get(
   validate({ params: StorefrontOrderKeyParamDto }),
   storefrontController.getOrderByKey,
 );
+
+/** Mounted at /api/storefront/account next to the profile routes: the signed-in customer's orders. */
+export const storefrontAccountRouter = Router();
+storefrontAccountRouter.use(authMiddleware("customer"));
+
+storefrontAccountRouter.get("/orders", validate({ query: MyOrdersQueryDto }), storefrontController.listMyOrders);
+storefrontAccountRouter.get("/orders/:orderRef", validate({ params: OrderRefParamDto }), storefrontController.getMyOrder);
+storefrontAccountRouter.post("/orders/:orderRef/cancel", validate({ params: OrderRefParamDto }), storefrontController.cancelMyOrder);

@@ -15,7 +15,9 @@ import {
   ExternalLink,
   FileText,
   Globe2,
+  LogIn,
   Package,
+  UserPlus,
   PauseCircle,
   ShoppingCart,
   Users,
@@ -30,6 +32,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Skeleton,
   Table,
   TableBody,
@@ -56,10 +64,12 @@ import {
   apiErrorMessage,
   formatDate,
   formatMoney,
+  useCreateStoreOwnerMutation,
   useGetStoreOverviewQuery,
+  useImpersonateOwnerMutation,
   useSetStoreStatusMutation,
 } from "@/lib/features/platform/platform-api-slice";
-import { EmptyRow, PlanBadge, StoreStatusBadge, initials } from "@/components/platform/shared";
+import { EmptyRow, OwnerFields, PlanBadge, StoreStatusBadge, initials, type OwnerFieldsValue } from "@/components/platform/shared";
 import { ChangePlanDialog } from "@/components/platform/change-plan-dialog";
 import { DomainsTable } from "@/components/platform/domains-table";
 import { AuditLogTable } from "@/components/platform/audit-log-table";
@@ -104,6 +114,25 @@ export default function SuperStoreDetailPage() {
   const [changingPlan, setChangingPlan] = useState(false);
   const { data, isLoading, isError } = useGetStoreOverviewQuery(storeId);
   const [setStoreStatus, { isLoading: statusBusy }] = useSetStoreStatusMutation();
+  const [impersonate, { isLoading: impersonating }] = useImpersonateOwnerMutation();
+  const [addingOwner, setAddingOwner] = useState(false);
+
+  const loginAsOwner = async () => {
+    // Open the tab now: browsers block window.open after an await.
+    const tab = window.open("about:blank", "_blank");
+    try {
+      const grant = await impersonate(storeId).unwrap();
+      const url = `${grant.adminUrl}/impersonate#token=${encodeURIComponent(grant.accessToken)}`;
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+      toast.success(`Opened the store admin as ${grant.owner.email}`, {
+        description: `The session lasts ${grant.expiresInMin} minutes and is recorded in the audit log.`,
+      });
+    } catch (err) {
+      tab?.close();
+      toast.error("Couldn't log in as the owner", { description: apiErrorMessage(err) });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -134,6 +163,7 @@ export default function SuperStoreDetailPage() {
   }
 
   const { store, owner, admins, stats, quotas, daily, auditLogs } = data;
+  const hasOwner = owner?.role?.slug === "owner" && owner.status === "active";
   const storefront = store.domains.find((d) => d.type === "storefront" && d.primary) ?? store.domains.find((d) => d.type === "storefront");
 
   const toggleStatus = async () => {
@@ -186,6 +216,12 @@ export default function SuperStoreDetailPage() {
                 <ExternalLink className="h-4 w-4 mr-1.5" />
                 Open storefront
               </a>
+            </Button>
+          )}
+          {hasOwner && (
+            <Button variant="outline" size="sm" disabled={impersonating} onClick={loginAsOwner}>
+              <LogIn className="h-4 w-4 mr-1.5" />
+              Log in as owner
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setChangingPlan(true)}>
@@ -313,6 +349,12 @@ export default function SuperStoreDetailPage() {
                   ) : (
                     <p className="text-slate-500">This store has no admin users yet.</p>
                   )}
+                  {!hasOwner && (
+                    <Button size="sm" variant="outline" className="mt-2" onClick={() => setAddingOwner(true)}>
+                      <UserPlus className="h-4 w-4 mr-1.5" />
+                      Create owner login
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
 
@@ -424,10 +466,50 @@ export default function SuperStoreDetailPage() {
         </TabsContent>
       </Tabs>
 
+      <CreateOwnerDialog storeId={storeId} open={addingOwner} onOpenChange={setAddingOwner} />
       <ChangePlanDialog
         store={changingPlan ? { id: store.id, name: store.name, status: store.status, plan: store.plan } : null}
         onOpenChange={(o) => !o && setChangingPlan(false)}
       />
     </div>
+  );
+}
+
+function CreateOwnerDialog({ storeId, open, onOpenChange }: { storeId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const [value, setValue] = useState<OwnerFieldsValue>({ name: "", email: "", password: "" });
+  const [createOwner, { isLoading }] = useCreateStoreOwnerMutation();
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createOwner({ storeId, name: value.name.trim(), email: value.email.trim(), password: value.password }).unwrap();
+      toast.success(`Owner login created for ${value.email.trim()}`);
+      setValue({ name: "", email: "", password: "" });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error("Couldn't create the owner", { description: apiErrorMessage(err) });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Create owner login</DialogTitle>
+            <DialogDescription>The owner gets full access to this store&apos;s admin panel and signs in on its admin domain.</DialogDescription>
+          </DialogHeader>
+          <OwnerFields value={value} onChange={setValue} />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading} className="bg-rose-600 hover:bg-rose-500 text-white">
+              {isLoading ? "Creating..." : "Create owner"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

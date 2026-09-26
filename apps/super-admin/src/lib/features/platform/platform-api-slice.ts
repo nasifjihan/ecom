@@ -80,6 +80,21 @@ export interface StoreInput {
   planId?: string;
   status?: StoreStatus;
   trialDays?: number;
+  owner?: StoreOwnerInput;
+}
+
+export interface StoreOwnerInput {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}
+
+export interface ImpersonationGrant {
+  accessToken: string;
+  expiresInMin: number;
+  adminUrl: string;
+  owner: { id: string; name: string; email: string };
 }
 
 export interface StoreAdmin {
@@ -265,6 +280,14 @@ export const platformApiSlice = api.injectEndpoints({
       invalidatesTags: ["Store", "Plan", "Subscription"],
     }),
 
+    createStoreOwner: builder.mutation<{ id: string; email: string }, { storeId: string } & StoreOwnerInput>({
+      query: ({ storeId, ...body }) => ({ url: `/super/stores/${storeId}/owner`, method: "POST", body: clean(body as never) }),
+      invalidatesTags: ["Store", "User", "Subscription"],
+    }),
+    impersonateOwner: builder.mutation<ImpersonationGrant, string>({
+      query: (storeId) => ({ url: `/super/stores/${storeId}/impersonate`, method: "POST", body: {} }),
+    }),
+
     getDomains: builder.query<StoreDomain[], { storeId?: string } | void>({
       query: (args) => ({ url: "/super/domains", params: clean({ ...(args ?? {}) }) }),
       providesTags: ["Domain"],
@@ -342,6 +365,8 @@ export const {
   useCreateStoreMutation,
   useUpdateStoreMutation,
   useSetStoreStatusMutation,
+  useCreateStoreOwnerMutation,
+  useImpersonateOwnerMutation,
   useGetDomainsQuery,
   useCreateDomainMutation,
   useUpdateDomainMutation,

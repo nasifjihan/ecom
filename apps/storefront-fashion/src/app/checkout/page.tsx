@@ -58,7 +58,9 @@ import {
   mapCouponTypeToDisplay,
   AddressFormData,
 } from "@ecom/storefront-base";
-import { useAppSelector } from "@/lib/store";
+import { useAppDispatch, useAppSelector } from "@/lib/store";
+import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
+import { passwordProblem } from "@/app/account/_components";
 
 const CURRENCY = "BDT";
 
@@ -110,6 +112,34 @@ export default function CheckoutPage() {
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Signed-in customers: the session is restored after the first render, so pick up
+  // their email then, and fill the address from their default saved address once.
+  const dispatch = useAppDispatch();
+  const [registerCustomer] = useCustomerRegisterMutation();
+  React.useEffect(() => {
+    if (isAuthenticated && customerEmail) setContactEmail((e) => e || customerEmail);
+  }, [isAuthenticated, customerEmail]);
+  const { data: savedAddresses } = useGetMyAddressesQuery(undefined, { skip: !mounted || !isAuthenticated });
+  const prefilled = React.useRef(false);
+  React.useEffect(() => {
+    if (prefilled.current || !savedAddresses?.length) return;
+    const a = savedAddresses.find((x) => x.type === "shipping" && x.isDefault) ?? savedAddresses.find((x) => x.type === "shipping") ?? savedAddresses[0]!;
+    prefilled.current = true;
+    setShippingAddress((s) => ({
+      ...s,
+      firstName: s.firstName || a.firstName,
+      lastName: s.lastName || a.lastName,
+      company: s.company || a.company || undefined,
+      country: a.countryCode || s.country,
+      division: a.state || s.division,
+      district: s.district || a.city,
+      postcode: s.postcode || a.postcode || "",
+      addressLine1: s.addressLine1 || a.address1,
+      addressLine2: s.addressLine2 || a.address2 || "",
+      phone: s.phone || a.phone || "",
+    }));
+  }, [savedAddresses]);
 
   const shippingQueryArgs = React.useMemo(
     () => ({
@@ -271,8 +301,8 @@ export default function CheckoutPage() {
           toast.error("Valid email required", { description: "Please enter a valid contact email" });
           return false;
         }
-        if (createAccount && accountPassword.length < 8) {
-          toast.error("Password too short", { description: "Account password must be at least 8 characters" });
+        if (createAccount && !isAuthenticated && passwordProblem(accountPassword)) {
+          toast.error("Choose a stronger password", { description: passwordProblem(accountPassword)! });
           return false;
         }
         return true;
@@ -320,6 +350,29 @@ export default function CheckoutPage() {
       return;
     }
 
+    // "Create an account": register first, so the order is placed on the new account.
+    let signedIn = isAuthenticated;
+    if (createAccount && !isAuthenticated) {
+      try {
+        const account = await registerCustomer({
+          email: contactEmail.trim(),
+          password: accountPassword,
+          firstName: shippingAddress.firstName ?? "",
+          lastName: shippingAddress.lastName ?? "",
+          phone: shippingAddress.phone || undefined,
+          acceptMarketing: subscribeNewsletter,
+        }).unwrap();
+        signIn(dispatch, account);
+        signedIn = true;
+        setCreateAccount(false);
+      } catch (err) {
+        toast.error("Couldn't create your account", {
+          description: `${apiErrorMessage(err)} You can untick "Create an account" to check out as a guest.`,
+        });
+        return;
+      }
+    }
+
     try {
       const shippingPayload = {
         firstName: shippingAddress.firstName ?? "",
@@ -355,8 +408,7 @@ export default function CheckoutPage() {
       const result = await placeOrder({
         email: contactEmail || customerEmail || shippingPayload.email || "",
         phone: shippingPayload.phone,
-        isGuest: !isAuthenticated,
-        accountCreatePassword: createAccount ? accountPassword : undefined,
+        isGuest: !signedIn,
         subscribeNewsletter,
         shippingAddress: shippingPayload,
         billingAddress: billingPayload,
@@ -518,7 +570,7 @@ export default function CheckoutPage() {
                         <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                         <div className="flex-1 text-sm">
                           <span className="text-muted-foreground">Already have an account? </span>
-                          <Link href="/account/login" className="font-semibold text-primary hover:underline">
+                          <Link href="/account/login?next=/checkout" className="font-semibold text-primary hover:underline">
                             Log in
                           </Link>
                           <span className="text-muted-foreground"> for a faster checkout experience.</span>
@@ -578,7 +630,7 @@ export default function CheckoutPage() {
                                   <Label className="text-xs">Password *</Label>
                                   <Input
                                     type="password"
-                                    placeholder="At least 8 characters"
+                                    placeholder="8+ characters, an uppercase letter and a number"
                                     value={accountPassword}
                                     onChange={(e) => setAccountPassword(e.target.value)}
                                   />

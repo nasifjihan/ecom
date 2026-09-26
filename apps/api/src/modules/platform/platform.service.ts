@@ -13,6 +13,7 @@ import os from "node:os";
 import { Prisma } from "@prisma/client";
 import { prisma, redis } from "../../config";
 import { BaseService, NotFoundError, ConflictError, type RequestContext } from "../../core";
+import { AuthService } from "../auth/auth.service";
 import type {
   CreatePlanDto,
   UpdatePlanDto,
@@ -547,5 +548,47 @@ export class PlatformService extends BaseService {
       prisma.auditLog.count({ where }),
     ]);
     return { items, meta: { page: q.page, perPage: q.perPage, total, totalPages: Math.max(1, Math.ceil(total / q.perPage)) } };
+  }
+
+  /**
+   * Issue a short-lived store-admin access token for the store's owner so a
+   * platform admin can open that store's admin panel as them. No refresh token
+   * is issued, so the session ends when the access token expires. Audited.
+   */
+  async impersonateOwner(storeId: bigint) {
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      include: { domains: { orderBy: [{ primary: "desc" }, { createdAt: "asc" }] } },
+    });
+    if (!store) throw new NotFoundError("store", storeId);
+    const owner = await prisma.adminUser.findFirst({
+      where: { storeId, status: "active", role: { slug: "owner" } },
+      include: { role: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!owner) throw new ConflictError("This store has no active owner to log in as", "CONFLICT");
+    const adminDomain = store.domains.find((d) => d.type === "admin");
+    if (!adminDomain) throw new ConflictError("Add an admin domain to this store first", "CONFLICT");
+
+    const tokens = await new AuthService({ ...this.ctx, storeId }).issueTokens(owner, "admin");
+    await prisma.auditLog.create({
+      data: {
+        storeId,
+        adminId: owner.id,
+        action: "super.impersonate",
+        objectType: "admin_user",
+        objectId: String(owner.id),
+        changes: { superAdminId: String(this.ctx.super?.id ?? "") },
+        ipAddress: this.ctx.ip ?? null,
+      },
+    });
+    const host = adminDomain.hostname;
+    const scheme = /^(localhost|127\.|[^.]+$)/.test(host) || !adminDomain.sslEnabled ? "http" : "https";
+    return {
+      accessToken: tokens.accessToken,
+      expiresInMin: tokens.expiresInMin,
+      adminUrl: `${scheme}://${host}`,
+      owner: { id: owner.id, name: owner.name, email: owner.email },
+    };
   }
 }

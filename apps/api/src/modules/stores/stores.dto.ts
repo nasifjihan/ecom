@@ -1,15 +1,26 @@
 import { z } from "zod";
 
-export const CreateStoreDto = z.object({
+export const StoreOwnerDto = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().toLowerCase().email().max(254),
+  password: z.string().min(8).max(128),
+  phone: z.string().trim().max(20).optional(),
+});
+export type StoreOwnerDto = z.infer<typeof StoreOwnerDto>;
+
+const StoreFieldsDto = z.object({
   name: z.string().min(2),
   slug: z.string().min(3).regex(/^[a-z0-9-]+$/),
   planId: z.coerce.bigint().optional(),
   status: z.enum(["active", "trial", "suspended", "cancelled"]).default("trial"),
   trialDays: z.coerce.number().int().min(0).max(365).optional(),
 });
+
+/** A new store can be created with its owner login in one step. */
+export const CreateStoreDto = StoreFieldsDto.extend({ owner: StoreOwnerDto.optional() });
 export type CreateStoreDto = z.infer<typeof CreateStoreDto>;
 
-export const UpdateStoreDto = CreateStoreDto.deepPartial();
+export const UpdateStoreDto = StoreFieldsDto.deepPartial();
 export type UpdateStoreDto = z.infer<typeof UpdateStoreDto>;
 
 export const CreateDomainDto = z.object({

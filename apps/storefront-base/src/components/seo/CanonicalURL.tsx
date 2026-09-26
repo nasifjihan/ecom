@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { buildCanonical, getSiteBase } from "@ecom/storefront-base/src/lib/seo";
+import { buildCanonical, getSiteBase } from "../../lib/seo";
 
 export type CanonicalURLProps = {
   path?: string;

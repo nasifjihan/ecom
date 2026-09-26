@@ -1,3 +1,5 @@
+import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 import { prisma, cacheDel, CACHE_KEYS } from "../../config";
 import {
   BaseService,
@@ -11,11 +13,13 @@ import { StoreRepository, DomainRepository, PlanRepository } from "./stores.repo
 import type {
   CreateStoreDto,
   UpdateStoreDto,
+  StoreOwnerDto,
   CreateDomainDto,
   UpdateDomainDto,
   StoreListQueryDto as StoreListQueryDtoType,
 } from "./stores.dto";
 import { PlatformService } from "../platform/platform.service";
+import { STORE_ROLE_PERMISSIONS, roleNameFromSlug } from "./store-roles";
 
 export class StoresService extends BaseService {
   private storeRepo: StoreRepository;
@@ -136,10 +140,58 @@ export class StoresService extends BaseService {
         },
       });
 
+      const ownerRole = await this.ensureDefaultRoles(tx, store.id);
+      if (dto.owner) await this.createOwnerTx(tx, store.id, ownerRole.id, dto.owner);
+
       return store;
     });
 
     return this.storeRepo.findFull(this.ctx, newStore.id);
+  }
+
+  /** Creates any missing built-in roles (owner, product_manager, ...) for a store; returns the owner role. */
+  async ensureDefaultRoles(tx: Prisma.TransactionClient, storeId: bigint) {
+    for (const [slug, perms] of Object.entries(STORE_ROLE_PERMISSIONS)) {
+      const existing = await tx.role.findUnique({ where: { storeId_slug: { storeId, slug } } });
+      if (existing) continue;
+      await tx.role.create({
+        data: {
+          storeId,
+          slug,
+          name: roleNameFromSlug(slug),
+          isSystem: true,
+          permissions: { create: perms.map((permission) => ({ permission })) },
+        },
+      });
+    }
+    return tx.role.findUniqueOrThrow({ where: { storeId_slug: { storeId, slug: "owner" } } });
+  }
+
+  private async createOwnerTx(tx: Prisma.TransactionClient, storeId: bigint, roleId: bigint, owner: StoreOwnerDto) {
+    const dup = await tx.adminUser.findUnique({ where: { storeId_email: { storeId, email: owner.email } } });
+    if (dup) throw new ConflictError(`${owner.email} is already an admin of this store`, "CONFLICT");
+    return tx.adminUser.create({
+      data: {
+        storeId,
+        roleId,
+        name: owner.name,
+        email: owner.email,
+        phone: owner.phone || null,
+        passwordHash: await bcrypt.hash(owner.password, 12),
+        status: "active",
+      },
+      select: { id: true, name: true, email: true, phone: true, status: true, createdAt: true },
+    });
+  }
+
+  /** Adds an owner login to an existing store (seeding its default roles first if it has none). */
+  async createOwner(storeId: bigint, owner: StoreOwnerDto) {
+    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new NotFoundError("store", storeId);
+    return prisma.$transaction(async (tx) => {
+      const role = await this.ensureDefaultRoles(tx, storeId);
+      return this.createOwnerTx(tx, storeId, role.id, owner);
+    });
   }
 
   async updateStore(id: bigint | number, dto: UpdateStoreDto) {

@@ -158,12 +158,26 @@ customerSelfRouter.post(
   "/me/addresses",
   authMiddleware("customer"),
   validate({ body: CustomerAddressDto }),
-  customersController.addAddress,
+  customersController.addMyAddress,
+);
+
+customerSelfRouter.patch(
+  "/me/addresses/:addressId",
+  authMiddleware("customer"),
+  validate({ params: AddressIdParamDto, body: CustomerAddressDto }),
+  customersController.updateMyAddress,
+);
+
+customerSelfRouter.delete(
+  "/me/addresses/:addressId",
+  authMiddleware("customer"),
+  validate({ params: AddressIdParamDto }),
+  customersController.deleteMyAddress,
 );
 
 customerSelfRouter.post(
   "/me/addresses/:addressId/default",
   authMiddleware("customer"),
   validate({ params: AddressIdParamDto, body: SetDefaultAddressDto }),
-  customersController.setDefaultAddress,
+  customersController.setMyDefaultAddress,
 );
