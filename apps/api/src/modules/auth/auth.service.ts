@@ -51,22 +51,8 @@ export class AuthService extends BaseService {
       where: { id: row.id },
       data: { lastLoginAt: new Date(), lastLoginIp },
     });
-    const exists = await prisma.adminUser.findUnique({
-      where: { id: row.id },
-    }).catch(() => null);
-    if (exists) {
-      await prisma.auditLog.create({
-        data: {
-          storeId: this.ctx.storeId,
-          action: "SUPER_LOGIN",
-          entityType: "PLATFORM_ADMIN",
-          entityId: String(row.id),
-          meta: { ip: lastLoginIp, adminId: String(row.id) },
-        } as any,
-      });
-    } else {
-      logger.info({ superAdminId: String(row.id), ip: lastLoginIp }, "Super login");
-    }
+    // AuditLog is store-scoped (storeId required), so platform logins are logged only.
+    logger.info({ superAdminId: String(row.id), ip: lastLoginIp }, "Super login");
     return row;
   }
 
