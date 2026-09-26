@@ -13,3 +13,5 @@ process.env.JWT_CUSTOMER_REFRESH_SECRET ||= "test_secret_customer_refresh_xxxxxx
 process.env.JWT_SUPER_ACCESS_SECRET ||= "test_secret_super_access_xxxxxxxxxxxxxxxxxxxxxxxx";
 process.env.COOKIE_SECRET ||= "test_cookie_secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 process.env.APP_ENCRYPTION_KEY ||= "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+process.env.JWT_SUPER_REFRESH_SECRET ||= "test_secret_super_refresh_xxxxxxxxxxxxxxxxxxxxxxx";
+process.env.MAIL_FROM_ADDRESS ||= "no-reply@example.com";

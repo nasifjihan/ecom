@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # Required: the API and shared packages must typecheck, build and pass tests
+  # (including DB-backed tests against a real Postgres).
+  api:
+    name: API & packages (typecheck, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ecom_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/ecom_test?schema=public
+      DIRECT_URL: postgresql://postgres:test@localhost:5432/ecom_test?schema=public
+      RUN_DB_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Apply database schema
+        working-directory: apps/api
+        # Use migrations once they exist; until the init migration lands, sync the schema directly.
+        run: |
+          if [ -d prisma/migrations ]; then
+            pnpm exec prisma migrate deploy
+          else
+            pnpm exec prisma db push --skip-generate
+          fi
+      - run: pnpm turbo run typecheck build test --filter=@ecom/api --filter='./packages/*'
+
+  # Informational until the existing errors are fixed: these run and report,
+  # but do not block merging. Remove continue-on-error to make them required.
+  lint:
+    name: Lint (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm turbo run lint --continue
+
+  frontend:
+    name: Frontend apps (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run typecheck build test --continue --filter='./apps/*' --filter='!@ecom/api'
