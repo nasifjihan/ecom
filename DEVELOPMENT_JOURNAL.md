@@ -1329,3 +1329,11 @@ The idempotent "BATCH #10 BASELINE" block adds 7 categories under Women, Men and
 
 ### 11.5 Still not wired (API has no endpoint yet)
 Order invoice PDF, order email, order notes, shipping tracking update, refunds UI mapping. Products/catalog, customers, marketing, inventory and settings pages are next.
+
+## ✅ BATCH #11 (part 2) — Store admin catalog on the real API (2026-09-26)
+- Products list/edit, categories and brands read real data. `fromApiProduct` converts decimal strings to numbers, flattens `categories`/`images` join rows into `categoryIds`, `categories`, `imageUrls`, `thumbnailUrl`, and upper-cases status (DB stores `published`; admin uses `PUBLISHED`). Outgoing bodies lower-case status again and turn form BigInts into strings.
+- Product save sent nothing: the form's `z.coerce.bigint()` ids made `JSON.stringify` throw. Fixed in the slice; edit/new pages now toast the first invalid field instead of failing silently.
+- `PATCH /admin/products/:id` rejected every save of a variable product ("SKU already taken") because it checked variant SKUs against the product's own variants, then deleted and recreated all variants (new ids, order lines detached). Variants now sync by `id`: update sent ones, create new, delete missing; SKU check only against other products.
+- `GET /admin/categories/tree` 500'd: `cacheSet` used plain `JSON.stringify` on BigInt ids. `cacheSet` now serialises BigInt as string (fixes every cached endpoint). The admin tree also includes inactive categories and `_count.products`.
+- Admin `Dialog`/`Sheet` ignored `open` (every confirm dialog was permanently on screen) and `Tabs` only worked when triggers were direct children and ignored `value`/`onValueChange`. Both rewritten with context. Admin type errors: 119 → 107, none in touched files.
+- Still mock or unwired: customers, marketing (coupons, flash sales, reviews), inventory, settings, media library, attributes edit, new-product create flow not yet clicked through.

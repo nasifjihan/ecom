@@ -1,6 +1,6 @@
 "use client";
 
-import { api } from "@ecom/api-client";
+import { api, toPaginated } from "@ecom/api-client";
 import { ProductStatus, ExportFormat } from "@ecom/shared-types";
 
 export interface ProductVariant {
@@ -211,6 +211,75 @@ export interface BulkDeleteProductsDto {
   ids: (string | number)[];
 }
 
+// ---- API → admin shapes. Prisma decimals arrive as strings, relations as join rows. ----
+
+const num = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : Number(v));
+
+type ApiRow = Record<string, unknown>;
+
+function fromApiVariant(v: ApiRow): ProductVariant {
+  return {
+    ...(v as ProductVariant),
+    regularPrice: num(v.regularPrice),
+    salePrice: num(v.salePrice),
+    weight: num(v.weight),
+    length: num(v.length),
+    width: num(v.width),
+    height: num(v.height),
+  };
+}
+
+export function fromApiProduct(p: ApiRow): Product {
+  const images = (p.images as { imageUrl: string }[] | undefined) ?? [];
+  const cats = (p.categories as { categoryId: string; category?: { id: string; name: string; slug: string } }[] | undefined) ?? [];
+  return {
+    ...(p as unknown as Product),
+    // The DB stores lowercase ("published"); the admin UI uses the ProductStatus enum ("PUBLISHED").
+    status: String(p.status ?? "draft").toUpperCase(),
+    regularPrice: num(p.regularPrice),
+    salePrice: num(p.salePrice),
+    weight: num(p.weight),
+    length: num(p.length),
+    width: num(p.width),
+    height: num(p.height),
+    supplierCost: num(p.supplierCost),
+    imageUrls: images.map((i) => i.imageUrl),
+    thumbnailUrl: images[0]?.imageUrl ?? null,
+    categoryIds: cats.map((c) => c.categoryId),
+    categories: cats.filter((c) => c.category).map((c) => ({ id: c.category!.id, name: c.category!.name, slug: c.category!.slug })),
+    variants: ((p.variants as ApiRow[] | undefined) ?? []).map(fromApiVariant),
+  };
+}
+
+/** Outgoing product bodies: status back to the lowercase value the API and storefront query on. */
+/** Also turns form BigInts (z.coerce.bigint ids) into strings, which JSON.stringify would otherwise throw on. */
+const toApiProductBody = (body: Partial<Product>) =>
+  JSON.parse(
+    JSON.stringify(body.status ? { ...body, status: body.status.toLowerCase() } : body, (_k, v: unknown) =>
+      typeof v === "bigint" ? v.toString() : v,
+    ),
+  );
+
+const toPage = <T>(items: T[], meta: unknown): PaginatedResponse<T> => {
+  const { limit, ...rest } = toPaginated(items, meta);
+  return { ...rest, perPage: limit };
+};
+
+/** Flattens the category tree depth-first, adding depth, parent and a rolled-up product count. */
+function flattenCategories(nodes: ApiRow[], depth = 0, parent: { id: string; name: string } | null = null): Category[] {
+  return nodes.flatMap((n) => {
+    const children = (n.children as ApiRow[] | undefined) ?? [];
+    const self: Category = {
+      ...(n as unknown as Category),
+      depth,
+      parent,
+      children: undefined,
+      productCount: (n._count as { products?: number } | undefined)?.products ?? (n.productCount as number | undefined),
+    };
+    return [self, ...flattenCategories(children, depth + 1, { id: String(n.id), name: String(n.name) })];
+  });
+}
+
 export const catalogApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
     getProducts: builder.query<PaginatedResponse<Product>, ProductQueryParams>({
@@ -221,7 +290,7 @@ export const catalogApiSlice = api.injectEndpoints({
         if (params.search) searchParams.set("search", params.search);
         if (params.categoryId !== undefined) searchParams.set("categoryId", String(params.categoryId));
         if (params.brandId !== undefined) searchParams.set("brandId", String(params.brandId));
-        if (params.status) searchParams.set("status", params.status);
+        if (params.status) searchParams.set("status", params.status.toLowerCase());
         if (params.minPrice !== undefined) searchParams.set("minPrice", params.minPrice.toString());
         if (params.maxPrice !== undefined) searchParams.set("maxPrice", params.maxPrice.toString());
         if (params.inStock !== undefined) searchParams.set("inStock", String(params.inStock));
@@ -233,6 +302,7 @@ export const catalogApiSlice = api.injectEndpoints({
           method: "GET",
         };
       },
+      transformResponse: (items: ApiRow[], meta) => toPage(items.map(fromApiProduct), meta),
       providesTags: (result) =>
         result
           ? [
@@ -247,6 +317,7 @@ export const catalogApiSlice = api.injectEndpoints({
         url: `/admin/products/${id}`,
         method: "GET",
       }),
+      transformResponse: (p: ApiRow) => fromApiProduct(p),
       providesTags: (_result, _error, id) => [{ type: "Product", id }],
     }),
 
@@ -254,7 +325,7 @@ export const catalogApiSlice = api.injectEndpoints({
       query: (body) => ({
         url: "/admin/products",
         method: "POST",
-        body,
+        body: toApiProductBody(body),
       }),
       invalidatesTags: [{ type: "Product", id: "LIST" }],
     }),
@@ -263,7 +334,7 @@ export const catalogApiSlice = api.injectEndpoints({
       query: ({ id, body }) => ({
         url: `/admin/products/${id}`,
         method: "PATCH",
-        body,
+        body: toApiProductBody(body),
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "Product", id },
@@ -303,11 +374,13 @@ export const catalogApiSlice = api.injectEndpoints({
       invalidatesTags: [{ type: "Product", id: "LIST" }],
     }),
 
+    // The API exposes the tree only; the flat list is derived from it.
     getCategories: builder.query<Category[], void>({
       query: () => ({
-        url: "/admin/categories",
+        url: "/admin/categories/tree",
         method: "GET",
       }),
+      transformResponse: (tree: ApiRow[]) => flattenCategories(tree),
       providesTags: (result) =>
         result
           ? [
@@ -370,6 +443,11 @@ export const catalogApiSlice = api.injectEndpoints({
           method: "GET",
         };
       },
+      transformResponse: (items: ApiRow[], meta) =>
+        toPage(
+          items.map((b) => ({ ...(b as unknown as Brand), productCount: (b._count as { products?: number } | undefined)?.products })),
+          meta,
+        ),
       providesTags: (result) =>
         result
           ? [

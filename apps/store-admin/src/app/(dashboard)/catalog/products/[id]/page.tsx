@@ -350,6 +350,12 @@ export default function EditProductPage() {
     setVariants((v) => v.filter((_, i) => i !== idx));
   };
 
+  // Surface the first failing field instead of silently doing nothing.
+  const onInvalid = (errors: Record<string, { message?: string } | undefined>) => {
+    const [field, err] = Object.entries(errors)[0] ?? [];
+    if (field) toast.error(`${field}: ${err?.message ?? "invalid value"}`);
+  };
+
   const onSubmit = async (values: ProductEditFormValues) => {
     if (values.salePrice != null && values.regularPrice != null && values.salePrice > values.regularPrice) {
       toast.error("Sale price cannot exceed regular price");
@@ -397,7 +403,8 @@ export default function EditProductPage() {
       toast.success("Product updated successfully");
       router.push("/catalog/products");
     } catch (err: any) {
-      const msg = err?.data?.message;
+      // baseQuery puts the API message (string) or field errors (object) directly on err.data.
+      const msg = err?.data?.message ?? err?.data;
       if (typeof msg === "string") {
         toast.error(msg);
       } else if (typeof msg === "object") {
@@ -460,7 +467,7 @@ export default function EditProductPage() {
 
   return (
     <FormProvider {...methods}>
-      <Form onSubmit={handleSubmit(onSubmit)} className="min-h-screen">
+      <Form onSubmit={handleSubmit(onSubmit, onInvalid)} className="min-h-screen">
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-4">
@@ -485,7 +492,7 @@ export default function EditProductPage() {
               <Button type="button" variant="outline" onClick={() => toast.success("Preview opened")}>
                 <Eye className="mr-2 h-4 w-4" /> Preview
               </Button>
-              <Button type="button" variant="secondary" onClick={handleSubmit(onSubmit)} disabled={isSaving}>
+              <Button type="button" variant="secondary" onClick={handleSubmit(onSubmit, onInvalid)} disabled={isSaving}>
                 {isSaving ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Save Draft
               </Button>

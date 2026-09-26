@@ -43,7 +43,9 @@ export async function cacheSet(
   value: unknown,
   ttlSeconds = 300,
 ): Promise<void> {
-  await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
+  // Prisma ids are BigInt, which JSON.stringify rejects; cache them as strings (as API responses do).
+  const json = JSON.stringify(value, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v));
+  await redis.set(key, json, "EX", ttlSeconds);
 }
 
 export async function cacheDel(...keys: string[]): Promise<number> {

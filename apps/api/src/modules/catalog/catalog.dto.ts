@@ -32,6 +32,8 @@ export const VariantIdParamDto = z.object({ variantId: z.coerce.bigint().positiv
 export type VariantIdParamDto = z.infer<typeof VariantIdParamDto>;
 
 const BaseProductVariantDto = z.object({
+  /** Present when updating an existing variant; omitted for new ones. */
+  id: z.coerce.bigint().positive().optional(),
   attributeValues: z.record(z.unknown()).default({}),
   sku: z.string().max(100).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),

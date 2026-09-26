@@ -240,9 +240,13 @@ export class CatalogService extends BaseService {
     }
 
     if (dto.variants !== undefined) {
+      // This product's own variants are being updated, so only other products' SKUs conflict.
       for (const v of dto.variants) {
         if (v.sku) {
-          await this.checkVariantSkuUniqueness(storeId, v.sku);
+          const dup = await prisma.productVariant.findFirst({
+            where: { sku: v.sku, product: { storeId }, NOT: { productId } },
+          });
+          if (dup) throw new ConflictError(`SKU already taken: ${v.sku}`, "DUPLICATE_SKU");
         }
       }
     }
@@ -273,30 +277,36 @@ export class CatalogService extends BaseService {
       }
 
       if (dto.variants !== undefined) {
-        await t.productVariant.deleteMany({ where: { productId } });
-        if (dto.variants.length > 0) {
-          await t.productVariant.createMany({
-            data: dto.variants.map((v: CreateProductVariantDto) => ({
-              productId,
-              attributeValues: v.attributeValues,
-              sku: v.sku ?? null,
-              barcode: v.barcode ?? null,
-              regularPrice: v.regularPrice ?? null,
-              salePrice: v.salePrice ?? null,
-              salePriceStartAt: v.salePriceStartAt ?? null,
-              salePriceEndAt: v.salePriceEndAt ?? null,
-              manageStock: v.manageStock ?? true,
-              stockQty: v.stockQty ?? null,
-              allowBackorder: v.allowBackorder ?? false,
-              lowStockThreshold: v.lowStockThreshold ?? null,
-              imageUrl: v.imageUrl ?? null,
-              weight: v.weight ?? null,
-              length: v.length ?? null,
-              width: v.width ?? null,
-              height: v.height ?? null,
-              status: v.status ?? "active",
-            })),
-          });
+        // Sync by id: update the variants sent back, create new ones, delete the rest.
+        // Recreating everything would change variant ids and detach order lines and stock logs.
+        const variants = dto.variants as CreateProductVariantDto[];
+        const toData = (v: CreateProductVariantDto) => ({
+          attributeValues: v.attributeValues as any,
+          sku: v.sku ?? null,
+          barcode: v.barcode ?? null,
+          regularPrice: v.regularPrice ?? null,
+          salePrice: v.salePrice ?? null,
+          salePriceStartAt: v.salePriceStartAt ?? null,
+          salePriceEndAt: v.salePriceEndAt ?? null,
+          manageStock: v.manageStock ?? true,
+          stockQty: v.stockQty ?? null,
+          allowBackorder: v.allowBackorder ?? false,
+          lowStockThreshold: v.lowStockThreshold ?? null,
+          imageUrl: v.imageUrl ?? null,
+          weight: v.weight ?? null,
+          length: v.length ?? null,
+          width: v.width ?? null,
+          height: v.height ?? null,
+          status: v.status ?? "active",
+        });
+        const keepIds = variants.filter((v) => v.id !== undefined).map((v) => BigInt(v.id!));
+        await t.productVariant.deleteMany({ where: { productId, id: { notIn: keepIds } } });
+        for (const v of variants.filter((v) => v.id !== undefined)) {
+          await t.productVariant.updateMany({ where: { id: BigInt(v.id!), productId }, data: toData(v) });
+        }
+        const fresh = variants.filter((v) => v.id === undefined);
+        if (fresh.length > 0) {
+          await t.productVariant.createMany({ data: fresh.map((v) => ({ productId, ...toData(v) })) });
         }
       }
 

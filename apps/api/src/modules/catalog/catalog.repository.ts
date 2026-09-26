@@ -147,7 +147,11 @@ export class CategoryRepository extends BaseRepository<"category"> {
   }
 
   async findTree(ctx: RequestContext): Promise<unknown[]> {
-    const all = await this.list(ctx, { isActive: true }, { orderBy: { sortOrder: "asc" } });
+    // Admin-only tree: inactive categories must stay visible so they can be re-enabled.
+    const all = await this.list(ctx, {}, {
+      orderBy: { sortOrder: "asc" },
+      include: { _count: { select: { products: true } } },
+    });
     return buildTree(all as CategoryRow[]);
   }
 
