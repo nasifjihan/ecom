@@ -140,8 +140,8 @@ const CARRIERS = ["Pathao", "RedX", "eCourier", "Paperfly", "SA Paribahan", "Sun
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 0) return "??";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
 }
 
 function formatDate(iso: string) {
@@ -244,8 +244,8 @@ export default function OrderDetailPage() {
       .filter((l: OrderLine) => (refundLines[String(l.id)] ?? 0) > 0)
       .map((l: OrderLine) => ({
         orderLineId: l.id,
-        quantity: refundLines[String(l.id)],
-        amount: refundLines[String(l.id)] * l.unitPrice,
+        quantity: refundLines[String(l.id)] ?? 0,
+        amount: (refundLines[String(l.id)] ?? 0) * l.unitPrice,
       }));
     if (lines.length === 0) { toast.error("Select at least one item"); return; }
     try {
@@ -561,8 +561,8 @@ export default function OrderDetailPage() {
             <CardContent className="pb-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Method</span>
-                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", PAYMENT_METHOD_META[order.paymentMethod]?.color)}>
-                  <CreditCard className="h-3 w-3" /> {PAYMENT_METHOD_META[order.paymentMethod]?.label}
+                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", (PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.color)}>
+                  <CreditCard className="h-3 w-3" /> {(PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.label}
                 </span>
               </div>
               <div className="flex justify-between">

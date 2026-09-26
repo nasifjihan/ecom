@@ -1,68 +1,39 @@
 # syntax=docker/dockerfile:1.7
 # ============================================================
-#   @ecom/api — 2-stage Docker build
-#   Stage 1 (builder): pnpm install + tsc build
-#   Stage 2 (runtime): slim node:22-alpine with only deps + dist
+#   @ecom/api
+#   The API and the shared packages are TypeScript sources run with tsx
+#   (the workspace packages have no compiled output), so the image keeps
+#   the workspace install and runs src/server.ts directly.
+#
+#   Build from the repo root:  docker build -f apps/api/Dockerfile .
+#   Default command: apply migrations, then start the API.
+#   Seed once with:            docker compose run --rm api pnpm prisma:seed
 # ============================================================
-
-# -------- DEPS / BUILDER STAGE --------
-FROM node:22-alpine AS builder
-RUN apk add --no-cache libc6-compat python3 make g++
+FROM node:22-alpine
+# Prisma needs OpenSSL on Alpine.
+RUN apk add --no-cache openssl
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
-# Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-
-# Copy workspace configs first (for better caching)
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* turbo.json tsconfig.base.json ./
-
-# Copy shared packages' package.json
-COPY packages/shared-types/package.json ./packages/shared-types/package.json
-COPY packages/utils/package.json ./packages/utils/package.json
-COPY packages/zod-schemas/package.json ./packages/zod-schemas/package.json
-COPY packages/api-client/package.json ./packages/api-client/package.json
-COPY packages/ui/package.json ./packages/ui/package.json
-
-# Copy api + any apps needed for install (we just need api + shared)
-COPY apps/api/package.json ./apps/api/package.json
-
-# Install prod + dev deps in builder (for build/tsc)
+# Workspace manifests first so the install layer caches between code changes.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/utils/package.json packages/utils/
+COPY packages/zod-schemas/package.json packages/zod-schemas/
+COPY packages/api-client/package.json packages/api-client/
+COPY packages/ui/package.json packages/ui/
+COPY packages/export-utils/package.json packages/export-utils/
+COPY apps/api/package.json apps/api/
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+    pnpm install --frozen-lockfile --filter @ecom/api...
 
-# Copy full source
 COPY packages ./packages
 COPY apps/api ./apps/api
-
-# Build the workspace
-RUN pnpm --filter @ecom/api... build
-
-# -------- RUNTIME STAGE --------
-FROM node:22-alpine AS runtime
-ENV NODE_ENV=production
-WORKDIR /app
-RUN apk add --no-cache libc6-compat curl tini
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-
-ENTRYPOINT ["/sbin/tini", "--"]
-EXPOSE 4000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -fsS http://localhost:4000/healthz || exit 1
-
-# Only copy built packages + their package.json
-COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/turbo.json ./
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/api/package.json /app/apps/api/
-COPY --from=builder /app/apps/api/dist /app/apps/api/dist
-COPY --from=builder /app/apps/api/prisma /app/apps/api/prisma
-
-# Re-install only production deps
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --prod --ignore-scripts || pnpm install --prod
-
-# Generate Prisma client
 RUN cd apps/api && pnpm exec prisma generate
 
-USER node
+ENV NODE_ENV=production
 WORKDIR /app/apps/api
-CMD ["node", "dist/server.js"]
+EXPOSE 4000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+  CMD node -e "fetch('http://localhost:4000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec tsx src/server.ts"]

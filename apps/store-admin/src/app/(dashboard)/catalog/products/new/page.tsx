@@ -20,6 +20,9 @@ import {
   Search,
   Check,
   ArrowLeft,
+  Star,
+  Trash2,
+  Package,
 } from "lucide-react";
 import {
   Button,
@@ -250,7 +253,7 @@ export default function NewProductPage() {
       const removed = g.filter((x) => x.id !== id);
       const hadFeatured = g.find((x) => x.id === id)?.isFeatured;
       if (hadFeatured && removed.length > 0) {
-        removed[0].isFeatured = true;
+        removed[0]!.isFeatured = true;
       }
       return removed;
     });
@@ -973,7 +976,7 @@ export default function NewProductPage() {
                                   categories.map((c) => {
                                     const depth = (c as any).depth || 0;
                                     const indent = "— ".repeat(depth);
-                                    const selected = field.value?.some((x) => String(x) === String(c.id));
+                                    const selected = field.value?.some((x: unknown) => String(x) === String(c.id));
                                     return (
                                       <div key={String(c.id)} className="flex items-center gap-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1">
                                         <Checkbox

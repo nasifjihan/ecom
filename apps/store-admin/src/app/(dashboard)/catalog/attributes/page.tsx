@@ -105,7 +105,7 @@ const ATTR_TYPES = [
 
 function TypeBadge({ type }: { type: string }) {
   const t = type?.toLowerCase();
-  const info = ATTR_TYPES.find((a) => a.value === t) || ATTR_TYPES[0];
+  const info = ATTR_TYPES.find((a) => a.value === t) ?? ATTR_TYPES[0]!;
   const Icon = info.icon;
   return (
     <Badge variant="outline" className="gap-1.5 px-2">

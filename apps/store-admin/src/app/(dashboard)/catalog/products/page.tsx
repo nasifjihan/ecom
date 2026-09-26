@@ -389,8 +389,8 @@ export default function ProductsPage() {
       page,
       perPage,
       search: appliedSearch || undefined,
-      categoryId: appliedFilters.categoryId,
-      brandId: appliedFilters.brandId,
+      categoryId: appliedFilters.categoryId?.toString(),
+      brandId: appliedFilters.brandId?.toString(),
       status: appliedFilters.status || undefined,
       minPrice: appliedFilters.minPrice,
       maxPrice: appliedFilters.maxPrice,
@@ -410,7 +410,7 @@ export default function ProductsPage() {
   const totalPages = data?.totalPages ?? 1;
 
   const selectedIds = useMemo(() => {
-    return Object.keys(rowSelection).map((k) => products[Number(k)]?.id).filter(Boolean);
+    return Object.keys(rowSelection).map((k) => products[Number(k)]?.id).filter((id): id is NonNullable<typeof id> => id !== undefined && id !== null && id !== "");
   }, [rowSelection, products]);
 
   const columns: ColumnDef<Product>[] = useMemo(
