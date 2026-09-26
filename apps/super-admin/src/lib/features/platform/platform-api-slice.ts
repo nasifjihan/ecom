@@ -93,8 +93,21 @@ export function fromApiStore(s: ApiRow): PlatformStore {
   };
 }
 
+export interface PlatformStats {
+  totalStores: number;
+  activeStores: number;
+  churnedLast30: number;
+  newSignupsByDay: { date: string; count: number }[];
+  planDistribution: { planId: string | null; planName: string; count: number }[];
+  mrrLast30d: number;
+}
+
 export const platformApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
+    // newSignupsByDay covers the last 30 days.
+    getPlatformStats: builder.query<PlatformStats, void>({
+      query: () => "/super/dashboard/stats",
+    }),
     getStores: builder.query<Paginated<PlatformStore>, { page?: number; perPage?: number; search?: string }>({
       query: ({ page = 1, perPage = 50, search }) => {
         const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
@@ -176,6 +189,7 @@ export const platformApiSlice = api.injectEndpoints({
 });
 
 export const {
+  useGetPlatformStatsQuery,
   useGetStoresQuery,
   useGetStoreQuery,
   useSuspendStoreMutation,
