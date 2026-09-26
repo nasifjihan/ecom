@@ -61,9 +61,12 @@ export function buildApp(): Express {
   if (_app) return _app;
   const app = express();
   // Prisma returns BigInt ids; JSON.stringify throws on BigInt, so emit them as strings.
-  app.set("json replacer", (_key: string, value: unknown) =>
-    typeof value === "bigint" ? value.toString() : value,
-  );
+  // Credential columns are dropped from every response, whichever query returned the row.
+  const SECRET_KEYS = new Set(["passwordHash", "twoFactorSecret"]);
+  app.set("json replacer", (key: string, value: unknown) => {
+    if (SECRET_KEYS.has(key)) return undefined;
+    return typeof value === "bigint" ? value.toString() : value;
+  });
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
 

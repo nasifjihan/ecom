@@ -1,6 +1,6 @@
 import { prisma } from "../../config";
 import { BaseRepository, type RequestContext, type Paginated, paginate, NotFoundError, ConflictError } from "../../core";
-import type { CouponSearchQueryDto, ListReviewsQueryDto } from "./marketing.dto";
+import { couponTypeToDiscountType, type CouponSearchQueryDto, type ListReviewsQueryDto } from "./marketing.dto";
 import { CouponType } from "@ecom/shared-types";
 
 export class CouponRepository extends BaseRepository<"coupon"> {
@@ -34,7 +34,8 @@ export class CouponRepository extends BaseRepository<"coupon"> {
   ): Promise<Paginated<unknown>> {
     const where: Record<string, unknown> = {};
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
-    if (filters.type) where.type = filters.type;
+    // Filter arrives as the admin CouponType; the column stores the DiscountType enum.
+    if (filters.type) where.type = couponTypeToDiscountType(filters.type);
     if (filters.status === "active") where.isActive = true;
     if (filters.status === "inactive") where.isActive = false;
     if (filters.status === "expired") {

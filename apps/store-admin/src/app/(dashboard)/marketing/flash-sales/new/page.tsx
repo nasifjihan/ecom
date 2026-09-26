@@ -153,8 +153,8 @@ export default function NewFlashSalePage() {
   const title = watch("title");
   const discountValue = watch("discountValue");
 
-  const [createSale, createLoading] = useCreateFlashSaleMutation();
-  const [updateSale, updateLoading] = useUpdateFlashSaleMutation();
+  const [createSale, { isLoading: createLoading }] = useCreateFlashSaleMutation();
+  const [updateSale, { isLoading: updateLoading }] = useUpdateFlashSaleMutation();
 
   const { data: existing } = useGetFlashSaleQuery(editId as string, {
     skip: !isEdit,

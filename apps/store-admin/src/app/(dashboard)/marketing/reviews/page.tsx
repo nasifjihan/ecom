@@ -162,10 +162,10 @@ export default function ReviewsPage() {
     setSelectedIds(next);
   };
 
-  const [updateReview, updateLoading] = useUpdateReviewMutation();
-  const [bulkUpdate, bulkLoading] = useBulkUpdateReviewsMutation();
-  const [markSpam, spamLoading] = useMarkSpamReviewMutation();
-  const [deleteReview, deleteLoading] = useDeleteReviewMutation();
+  const [updateReview, { isLoading: updateLoading }] = useUpdateReviewMutation();
+  const [bulkUpdate, { isLoading: bulkLoading }] = useBulkUpdateReviewsMutation();
+  const [markSpam, { isLoading: spamLoading }] = useMarkSpamReviewMutation();
+  const [deleteReview, { isLoading: deleteLoading }] = useDeleteReviewMutation();
 
   const applyAction = async (
     id: string | number,

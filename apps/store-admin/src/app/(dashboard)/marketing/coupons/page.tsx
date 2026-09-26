@@ -153,9 +153,9 @@ export default function CouponsPage() {
     setSelectedIds(next);
   };
 
-  const [bulkUpdate, bulkLoading] = useBulkUpdateCouponsMutation();
-  const [deleteCoupon, deleteLoading] = useDeleteCouponMutation();
-  const [exportCoupons, exportLoading] = useExportCouponsMutation();
+  const [bulkUpdate, { isLoading: bulkLoading }] = useBulkUpdateCouponsMutation();
+  const [deleteCoupon, { isLoading: deleteLoading }] = useDeleteCouponMutation();
+  const [exportCoupons, { isLoading: exportLoading }] = useExportCouponsMutation();
 
   const runBulk = async (action: "enable" | "disable" | "delete") => {
     if (selectedIds.size === 0) {

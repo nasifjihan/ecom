@@ -10,6 +10,26 @@ const noXss = (v: string | null | undefined): boolean => {
 };
 const noXssMessage = "No JavaScript injection allowed";
 
+/** Admin/API CouponType → the DiscountType enum stored in the Coupon.type column. */
+export function couponTypeToDiscountType(type: CouponType): string {
+  switch (type) {
+    case CouponType.PERCENT_CART:
+      return "PERCENTAGE";
+    case CouponType.PERCENT_PRODUCT:
+      return "PERCENTAGE";
+    case CouponType.BUY_X_GET_Y:
+      return "BOGO";
+    case CouponType.FIXED_CART:
+      return "FIXED_CART";
+    case CouponType.FIXED_PRODUCT:
+      return "FIXED_PRODUCT";
+    case CouponType.FREE_SHIPPING:
+      return "FREE_SHIPPING";
+    default:
+      return "FIXED_CART";
+  }
+}
+
 const bigintArray = z.array(z.coerce.bigint().positive()).optional();
 
 export const CouponIdParamDto = z.object({ id: z.coerce.bigint().positive() });

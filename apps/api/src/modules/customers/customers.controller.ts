@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { envelope, ctrl, BaseController, type RequestContext, NotFoundError } from "../../core";
+import { prisma } from "../../config";
 import { CustomersService } from "./customers.service";
 import type {
   CreateCustomerDto as CreateCustomerDtoType,
@@ -26,6 +27,16 @@ class CustomersController extends BaseController {
     const dto = req.body as CreateCustomerDtoType;
     const customer = await svc.createCustomer(dto);
     envelope(res, { status: 201, data: customer, message: "Customer created" });
+  });
+
+  /** Store-defined customer groups (e.g. General, VIP) for admin filters and forms. */
+  listGroups = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const groups = await prisma.customerGroup.findMany({
+      where: { storeId: req.ctx.storeId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, discountPercent: true, _count: { select: { customers: true } } },
+    });
+    envelope(res, { status: 200, data: groups });
   });
 
   listCustomers = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

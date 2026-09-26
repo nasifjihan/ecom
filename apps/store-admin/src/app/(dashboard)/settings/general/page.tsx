@@ -238,7 +238,7 @@ export default function GeneralSettingsPage() {
   const { data: mediaData, isLoading: mediaLoading } = useGetSettingsQuery("media");
   const { data: legalData, isLoading: legalLoading } = useGetSettingsQuery("legal");
 
-  const [updateSettings, updateLoading] = useUpdateSettingsMutation();
+  const [updateSettings, { isLoading: updateLoading }] = useUpdateSettingsMutation();
 
   const generalMethods = useForm<GeneralForm>({
     resolver: zodResolver(generalSchema),

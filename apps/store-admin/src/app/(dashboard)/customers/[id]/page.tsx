@@ -22,7 +22,6 @@ import {
   Star,
   Heart,
   Gift,
-  Note,
   Calendar,
   TrendingUp,
   Package,
@@ -57,20 +56,22 @@ import {
 } from "@/components/ui";
 import {
   useGetCustomerQuery,
+  useGetOrderListQuery,
   type Customer,
   type CustomerGroup,
 } from "@/lib/features/operations/operations-api-slice";
+import { useGetReviewsQuery } from "@/lib/features/marketing/marketing-api-slice";
 import { cn } from "@/components/ui";
 
-const GROUP_STYLES: Record<CustomerGroup, string> = {
-  WHOLESALE: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-  RETAIL: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
-  VIP: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
-  GUEST: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+// Groups are store-defined; known names get a colour, anything else the neutral style.
+const GROUP_STYLES: Record<string, string> = {
+  wholesale: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  vip: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
+  guest: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
 };
-const GROUP_LABELS: Record<CustomerGroup, string> = {
-  WHOLESALE: "Wholesale", RETAIL: "Retail", VIP: "VIP", GUEST: "Guest",
-};
+const groupStyle = (g: CustomerGroup) =>
+  GROUP_STYLES[g.toLowerCase()] ??
+  "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20";
 
 function getAvatarColor(name: string) {
   const colors = ["bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-blue-500", "bg-purple-500", "bg-cyan-500", "bg-orange-500"];
@@ -94,67 +95,15 @@ function fdd(iso?: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function mockCustomer(id: string | number): Customer {
-  const spent = 500 + ((Number(id) * 1277) % 95000);
-  const orders = 1 + (Number(id) % 15);
-  return {
-    id, firstName: "Farhana", lastName: "Rahman", name: "Farhana Rahman",
-    email: "farhana.rahman@example.com",
-    phone: "+880 1712 345 678",
-    group: (Number(id) % 4 === 0 ? "VIP" : "RETAIL") as CustomerGroup,
-    isVerified: true, emailVerified: true, phoneVerified: true,
-    totalSpent: spent, ordersCount: orders,
-    ltv: Math.ceil(spent * 1.15), aov: Math.round(spent / orders),
-    refundsCount: Number(id) % 11 === 0 ? 1 : 0,
-    lastOrderAt: new Date(Date.now() - Number(id) * 86400000).toISOString(),
-    lastActiveAt: new Date(Date.now() - Number(id) * 3600000 * 3).toISOString(),
-    createdAt: new Date(Date.now() - Number(id) * 86400000 * 180).toISOString(),
-    billingAddress: {
-      firstName: "Farhana", lastName: "Rahman",
-      address1: "House 15, Road 7, Block A", address2: "Banani",
-      country: "Bangladesh", division: "Dhaka", district: "Dhaka", postcode: "1213",
-      phone: "+880 1712 345 678",
-    },
-    shippingAddress: {
-      firstName: "Farhana", lastName: "Rahman",
-      address1: "House 15, Road 7, Block A", address2: "Banani",
-      country: "Bangladesh", division: "Dhaka", district: "Dhaka", postcode: "1213",
-      phone: "+880 1712 345 678",
-    },
-  };
-}
-
-const MOCK_ORDERS = [
-  { id: 1, orderNumber: "#ORD-10234", date: new Date(Date.now() - 86400000 * 2).toISOString(), status: "DELIVERED", total: 4850, itemsCount: 2 },
-  { id: 2, orderNumber: "#ORD-10201", date: new Date(Date.now() - 86400000 * 30).toISOString(), status: "COMPLETED", total: 12500, itemsCount: 3 },
-  { id: 3, orderNumber: "#ORD-10155", date: new Date(Date.now() - 86400000 * 75).toISOString(), status: "COMPLETED", total: 3200, itemsCount: 1 },
-  { id: 4, orderNumber: "#ORD-10120", date: new Date(Date.now() - 86400000 * 120).toISOString(), status: "COMPLETED", total: 8900, itemsCount: 4 },
-  { id: 5, orderNumber: "#ORD-10099", date: new Date(Date.now() - 86400000 * 160).toISOString(), status: "RETURNED", total: 2100, itemsCount: 1 },
-];
-
-const MOCK_WISHLIST = [
-  { id: 1, name: "Premium Leather Handbag", sku: "LH-BRN-002", price: 4500, image: "" },
-  { id: 2, name: "Silk Saree - Maroon", sku: "SS-MAR-005", price: 7800, image: "" },
-  { id: 3, name: "Gold Plated Earrings", sku: "GP-ER-012", price: 1890, image: "" },
-];
-
-const MOCK_REVIEWS = [
-  { id: 1, product: "Premium Cotton Panjabi", rating: 5, comment: "Excellent quality, perfect fit. Will order again!", date: new Date(Date.now() - 86400000 * 10).toISOString() },
-  { id: 2, product: "Linen Shirt", rating: 4, comment: "Good fabric, runs slightly large.", date: new Date(Date.now() - 86400000 * 45).toISOString() },
-];
-
-const MOCK_NOTES = [
-  { id: 1, content: "Customer called regarding delivery time preferences - prefers after 5 PM.", author: "Admin User", createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
-  { id: 2, content: "Customer is a bulk buyer - flagged for VIP consideration after 12th order.", author: "Staff Member A", createdAt: new Date(Date.now() - 86400000 * 60).toISOString() },
-];
-
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const cid = params.id ?? "1";
   const { data: customerRaw, isLoading } = useGetCustomerQuery(cid);
-  const c = (customerRaw as Customer) ?? mockCustomer(cid);
+  const { data: ordersData } = useGetOrderListQuery({ customerId: cid, limit: 50 });
+  const { data: reviewsData } = useGetReviewsQuery({ customerId: cid, perPage: 50 });
   const [tab, setTab] = useState("overview");
-  const [newNote, setNewNote] = useState("");
+  const orders = ordersData?.items ?? [];
+  const reviews = reviewsData?.items ?? [];
 
   if (isLoading) {
     return (
@@ -166,18 +115,24 @@ export default function CustomerDetailPage() {
     );
   }
 
+  if (!customerRaw) {
+    return (
+      <div className="py-24 text-center">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Customer not found</h1>
+        <Link href="/customers" className="mt-6 inline-block text-sm font-medium text-indigo-600 hover:underline">Back to customers</Link>
+      </div>
+    );
+  }
+  const c: Customer = customerRaw;
+  const lastOrderAt = orders[0]?.createdAt;
+  const refundsCount = orders.filter((o) => o.status === "REFUNDED").length;
+
   const stats = [
     { icon: ShoppingCart, label: "Orders", value: c.ordersCount.toLocaleString(), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-500/10", hint: `AOV ${fc(c.aov ?? 0)}` },
-    { icon: Wallet, label: "Total Spent", value: fc(c.totalSpent), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-500/10", hint: `LTV ~${fc(c.ltv ?? c.totalSpent)}` },
+    { icon: Wallet, label: "Total Spent", value: fc(c.totalSpent), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-500/10", hint: `Store credit ${fc(c.storeCredit ?? 0)}` },
     { icon: BarChart3, label: "Avg Order Value", value: fc(c.aov ?? 0), color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-500/10", hint: `${c.ordersCount} orders` },
-    { icon: RotateCcw, label: "Refunds", value: `${c.refundsCount ?? 0}`, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-500/10", hint: c.lastOrderAt ? `Last: ${fdd(c.lastOrderAt)}` : "No orders" },
+    { icon: RotateCcw, label: "Refunded orders", value: `${refundsCount}`, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-500/10", hint: lastOrderAt ? `Last order: ${fdd(lastOrderAt)}` : "No orders" },
   ];
-
-  function addNote() {
-    if (!newNote.trim()) return;
-    toast.success("Internal note added");
-    setNewNote("");
-  }
 
   return (
     <div className="space-y-6 pb-12">
@@ -196,10 +151,10 @@ export default function CustomerDetailPage() {
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{c.name}</h1>
-                  <Badge variant="outline" className={cn(GROUP_STYLES[c.group], "font-medium")}>
-                    {GROUP_LABELS[c.group]}
+                  <Badge variant="outline" className={cn(groupStyle(c.group), "font-medium")}>
+                    {c.group}
                   </Badge>
-                  {c.isVerified && <Badge variant="success" className="text-xs"><TrendingUp className="h-3 w-3 mr-1" />Verified</Badge>}
+                  {c.status && c.status !== "ACTIVE" && <Badge variant="outline" className="text-xs">{c.status}</Badge>}
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
                   <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">
@@ -219,15 +174,11 @@ export default function CustomerDetailPage() {
                 )}
               </div>
               <div className="flex flex-wrap sm:flex-col sm:items-end gap-2">
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success(`Email composer opened for ${c.email}`)}>
-                  <Send className="h-4 w-4" /> Send Email
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Creating manual order...")}>
-                  <PlusCircle className="h-4 w-4" /> Create Order
-                </Button>
-                <Button size="sm" className="gap-1.5" onClick={() => toast.success(`Impersonating ${c.name}...`)}>
-                  <LogIn className="h-4 w-4" /> Login As
-                </Button>
+                <a href={`mailto:${c.email}`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Send className="h-4 w-4" /> Send Email
+                  </Button>
+                </a>
               </div>
             </CardContent>
           </Card>
@@ -268,10 +219,9 @@ export default function CustomerDetailPage() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="orders">Orders ({c.ordersCount})</TabsTrigger>
                 <TabsTrigger value="addresses">Addresses</TabsTrigger>
-                <TabsTrigger value="wishlist">Wishlist ({MOCK_WISHLIST.length})</TabsTrigger>
-                <TabsTrigger value="reviews">Reviews ({MOCK_REVIEWS.length})</TabsTrigger>
-                <TabsTrigger value="points">Points & Rewards</TabsTrigger>
-                <TabsTrigger value="notes">Notes ({MOCK_NOTES.length})</TabsTrigger>
+                <TabsTrigger value="wishlist">Wishlist ({c.wishlistCount ?? 0})</TabsTrigger>
+                <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
+                <TabsTrigger value="points">Points & Credit</TabsTrigger>
               </TabsList>
             </div>
             <div className="p-5">
@@ -286,9 +236,16 @@ export default function CustomerDetailPage() {
                         <div className="relative pl-6 space-y-4">
                           <div className="absolute left-[11px] top-1 bottom-1 w-[2px] bg-slate-200 dark:bg-slate-700" />
                           {[
-                            { color: "bg-indigo-500", text: "Placed order #ORD-10234", sub: fd(MOCK_ORDERS[0].date) },
-                            { color: "bg-emerald-500", text: "Order #ORD-10234 delivered", sub: fd(MOCK_ORDERS[0].date) },
-                            { color: "bg-amber-500", text: "Verified phone number", sub: fd(c.createdAt) },
+                            ...orders.slice(0, 5).map((o) => ({
+                              color: "bg-indigo-500",
+                              text: `Placed order ${o.orderNumber} (${o.status.replace(/_/g, " ").toLowerCase()})`,
+                              sub: fd(o.createdAt),
+                            })),
+                            ...reviews.slice(0, 3).map((r) => ({
+                              color: "bg-amber-500",
+                              text: `Reviewed ${r.productName} (${r.rating}/5)`,
+                              sub: fd(r.submittedAt),
+                            })),
                             { color: "bg-purple-500", text: "Account created", sub: fd(c.createdAt) },
                           ].map((e, i) => (
                             <div key={i} className="relative">
@@ -311,11 +268,11 @@ export default function CustomerDetailPage() {
                       <CardContent className="text-sm space-y-2.5">
                         {[
                           ["Customer ID", `#${c.id}`],
-                          ["Group", GROUP_LABELS[c.group]],
-                          ["Verified", c.isVerified ? "Yes" : "No"],
-                          ["Email verified", c.emailVerified ? "Yes" : "No"],
-                          ["Phone verified", c.phoneVerified ? "Yes" : "No"],
-                          ["Last order", fdd(c.lastOrderAt)],
+                          ["Group", c.group],
+                          ["Status", c.status ?? "—"],
+                          ["Loyalty points", (c.loyaltyPoints ?? 0).toLocaleString()],
+                          ["Store credit", fc(c.storeCredit ?? 0)],
+                          ["Last order", fdd(lastOrderAt)],
                           ["Last active", fdd(c.lastActiveAt)],
                           ["Signed up", fdd(c.createdAt)],
                         ].map(([k, v]) => (
@@ -345,21 +302,24 @@ export default function CustomerDetailPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {MOCK_ORDERS.map((o) => (
+                        {orders.length === 0 && (
+                          <TableRow><TableCell colSpan={6} className="text-center text-sm text-slate-500 py-8">No orders yet.</TableCell></TableRow>
+                        )}
+                        {orders.map((o) => (
                           <TableRow key={o.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                             <TableCell>
                               <Link href={`/orders/${o.id}`} className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">{o.orderNumber}</Link>
                             </TableCell>
-                            <TableCell className="text-sm text-slate-600">{fdd(o.date)}</TableCell>
+                            <TableCell className="text-sm text-slate-600">{fdd(o.createdAt)}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className={cn(
                                 o.status === "DELIVERED" || o.status === "COMPLETED" ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-transparent"
-                                : o.status === "RETURNED" ? "text-red-700 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-transparent"
+                                : o.status === "CANCELLED" || o.status === "REFUNDED" || o.status === "FAILED" ? "text-red-700 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-transparent"
                                 : "text-indigo-700 bg-indigo-50 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-transparent"
                               )}>{o.status}</Badge>
                             </TableCell>
                             <TableCell className="text-sm">{o.itemsCount}</TableCell>
-                            <TableCell className="text-right font-semibold">{fc(o.total)}</TableCell>
+                            <TableCell className="text-right font-semibold">{fc(o.grandTotal)}</TableCell>
                             <TableCell className="text-right">
                               <Link href={`/orders/${o.id}`}>
                                 <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="h-4 w-4" /></Button>
@@ -398,33 +358,23 @@ export default function CustomerDetailPage() {
               </TabsContent>
 
               <TabsContent value="wishlist" className="mt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {MOCK_WISHLIST.map((w) => (
-                    <Card key={w.id} className="border-slate-200 dark:border-slate-800 overflow-hidden">
-                      <div className="aspect-square bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                        <Heart className="h-10 w-10" />
-                      </div>
-                      <CardContent className="p-4">
-                        <div className="font-semibold text-slate-900 dark:text-white text-sm">{w.name}</div>
-                        <div className="text-xs text-slate-500 font-mono mb-2">{w.sku}</div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{fc(w.price)}</span>
-                          <Button size="sm" variant="outline" className="h-8">Move to cart</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <Card className="border-slate-200 dark:border-slate-800">
+                  <CardContent className="p-8 text-center text-sm text-slate-500">
+                    <Heart className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+                    This customer has {c.wishlistCount ?? 0} wishlist item(s). Listing them here needs an admin wishlist endpoint, which the API does not have yet.
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="reviews" className="mt-2 space-y-4">
-                {MOCK_REVIEWS.map((r) => (
+                {reviews.length === 0 && <p className="text-sm text-slate-500 py-6 text-center">No reviews yet.</p>}
+                {reviews.map((r) => (
                   <Card key={r.id} className="border-slate-200 dark:border-slate-800">
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <div className="font-semibold text-slate-900 dark:text-white">{r.product}</div>
-                          <div className="text-xs text-slate-500">{fdd(r.date)}</div>
+                          <div className="font-semibold text-slate-900 dark:text-white">{r.productName}</div>
+                          <div className="text-xs text-slate-500">{fdd(r.submittedAt)} · {r.status}</div>
                         </div>
                         <div className="flex items-center gap-0.5">
                           {Array.from({ length: 5 }).map((_, i) => (
@@ -432,7 +382,7 @@ export default function CustomerDetailPage() {
                           ))}
                         </div>
                       </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300">&ldquo;{r.comment}&rdquo;</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">&ldquo;{r.text}&rdquo;</p>
                     </CardContent>
                   </Card>
                 ))}
@@ -442,49 +392,19 @@ export default function CustomerDetailPage() {
                 <Card className="border-slate-200 dark:border-slate-800">
                   <CardContent className="p-8 text-center">
                     <Gift className="h-12 w-12 text-amber-500 mx-auto mb-3" />
-                    <h3 className="text-lg font-semibold mb-1 text-slate-900 dark:text-white">Points & Rewards</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-5">
-                      Loyalty program module coming soon. This customer will be migrated with a starting points balance proportional to lifetime spend.
-                    </p>
-                    <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold">
-                      Estimated starting balance: <span className="text-xl">{Math.floor(c.totalSpent / 100).toLocaleString()} pts</span>
+                    <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Points & Store Credit</h3>
+                    <div className="flex flex-wrap justify-center gap-3">
+                      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold">
+                        Loyalty points: <span className="text-xl">{(c.loyaltyPoints ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold">
+                        Store credit: <span className="text-xl">{fc(c.storeCredit ?? 0)}</span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="notes" className="mt-2 space-y-5">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <Textarea
-                      placeholder="Add an internal staff note about this customer..."
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <Button onClick={addNote} disabled={!newNote.trim()} className="gap-1.5 h-auto px-4 self-end">
-                    <Note className="h-4 w-4" /> Add Note
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {MOCK_NOTES.map((n) => (
-                    <div key={n.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback className="bg-slate-400 text-white text-[10px] font-bold">{getInitials(n.author)}</AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm font-semibold text-slate-900 dark:text-white">{n.author}</span>
-                          <Badge variant="outline" className="text-[10px] bg-slate-200/50 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border-0">Internal</Badge>
-                        </div>
-                        <span className="text-xs text-slate-500">{fd(n.createdAt)}</span>
-                      </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{n.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
             </div>
           </Tabs>
         </CardContent>

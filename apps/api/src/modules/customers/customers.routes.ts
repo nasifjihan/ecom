@@ -39,6 +39,13 @@ adminCustomersRouter.get(
 );
 
 adminCustomersRouter.get(
+  "/groups",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("customers.*"),
+  customersController.listGroups,
+);
+
+adminCustomersRouter.get(
   "/export",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("customers.*"),

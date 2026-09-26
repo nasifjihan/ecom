@@ -191,8 +191,8 @@ export default function NewCouponPage() {
   const amount = watch("amount");
   const freeShipping = watch("freeShipping");
 
-  const [createCoupon, createLoading] = useCreateCouponMutation();
-  const [updateCoupon, updateLoading] = useUpdateCouponMutation();
+  const [createCoupon, { isLoading: createLoading }] = useCreateCouponMutation();
+  const [updateCoupon, { isLoading: updateLoading }] = useUpdateCouponMutation();
   const [checkUnique, checkState] = useLazyCheckCouponUniqueQuery();
   const [uniquenessState, setUniquenessState] = useState<
     "idle" | "checking" | "unique" | "taken"

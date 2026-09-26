@@ -26,7 +26,15 @@ export type PaymentMethod =
 
 export type ShippingZone = "DHAKA_METRO" | "REST_BD" | "INTERNATIONAL";
 
-export type CustomerGroup = "WHOLESALE" | "RETAIL" | "VIP" | "GUEST";
+/** Display name of the customer group: a store-defined group name (e.g. "VIP"), "Guest", or "No group". */
+export type CustomerGroup = string;
+
+export interface CustomerGroupOption {
+  id: string;
+  name: string;
+  discountPercent: number;
+  customersCount: number;
+}
 
 export type AdjustmentType =
   | "ADD"
@@ -105,6 +113,7 @@ export interface Order {
 
 export interface OrderListFilters {
   status?: OrderStatus;
+  customerId?: string | number;
   dateFrom?: string;
   dateTo?: string;
   paymentMethod?: PaymentMethod;
@@ -177,6 +186,13 @@ export interface Customer {
   email: string;
   phone?: string;
   group: CustomerGroup;
+  groupId?: string;
+  status?: string;
+  storeCredit?: number;
+  loyaltyPoints?: number;
+  reviewsCount?: number;
+  wishlistCount?: number;
+  addresses?: (Address & { id: string; label?: string; isDefault?: boolean })[];
   isVerified: boolean;
   emailVerified: boolean;
   phoneVerified: boolean;
@@ -195,7 +211,8 @@ export interface Customer {
 
 export interface CustomerFilters {
   search?: string;
-  group?: CustomerGroup;
+  /** Customer group id, or "GUEST" for guest checkouts. */
+  groupId?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -208,9 +225,99 @@ export interface CreateCustomerInput {
   email: string;
   phone?: string;
   password: string;
-  group: CustomerGroup;
-  isVerified?: boolean;
-  sendWelcomeEmail?: boolean;
+  groupId?: string;
+}
+
+interface ApiCustomer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  isGuest: boolean;
+  status: string;
+  groupId: string | null;
+  group?: { id: string; name: string } | null;
+  storeCredit: string;
+  loyaltyPoints: number;
+  totalSpent: string;
+  orderCount: number;
+  lastLoginAt: string | null;
+  createdAt: string;
+  addresses?: {
+    id: string;
+    type: string;
+    label: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    company: string | null;
+    address1: string;
+    address2: string | null;
+    city: string;
+    state: string | null;
+    postcode: string | null;
+    countryCode: string;
+    phone: string | null;
+    isDefault: boolean;
+  }[];
+  _count?: { orders?: number; reviews?: number; wishlistItems?: number };
+}
+
+export function fromApiCustomer(c: ApiCustomer): Customer {
+  const addresses = (c.addresses ?? []).map((a) => ({
+    id: a.id,
+    label: a.label ?? undefined,
+    isDefault: a.isDefault,
+    firstName: a.firstName ?? undefined,
+    lastName: a.lastName ?? undefined,
+    company: a.company ?? undefined,
+    address1: a.address1,
+    address2: a.address2 ?? undefined,
+    country: a.countryCode,
+    division: a.state ?? undefined,
+    district: a.city,
+    postcode: a.postcode ?? undefined,
+    phone: a.phone ?? undefined,
+  }));
+  // Default address of a type, else the first one of that type.
+  const byType = (t: string) => {
+    const rows = c.addresses ?? [];
+    const i = rows.findIndex((a) => a.type === t && a.isDefault);
+    const j = i >= 0 ? i : rows.findIndex((a) => a.type === t);
+    return j >= 0 ? addresses[j] : undefined;
+  };
+  const totalSpent = Number(c.totalSpent);
+  const orders = c._count?.orders ?? c.orderCount;
+  return {
+    id: c.id,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    name: `${c.firstName} ${c.lastName}`.trim(),
+    email: c.email,
+    phone: c.phone ?? undefined,
+    group: c.isGuest ? "Guest" : c.group?.name ?? "No group",
+    groupId: c.groupId ?? undefined,
+    status: c.status,
+    storeCredit: Number(c.storeCredit),
+    loyaltyPoints: c.loyaltyPoints,
+    reviewsCount: c._count?.reviews,
+    wishlistCount: c._count?.wishlistItems,
+    addresses,
+    // The schema has no verification flags yet; an active, non-guest account is treated as verified.
+    isVerified: !c.isGuest && c.status === "ACTIVE",
+    emailVerified: false,
+    phoneVerified: false,
+    avatarUrl: c.avatarUrl ?? undefined,
+    totalSpent,
+    ordersCount: orders,
+    ltv: totalSpent,
+    aov: orders > 0 ? Math.round((totalSpent / orders) * 100) / 100 : 0,
+    lastActiveAt: c.lastLoginAt ?? undefined,
+    createdAt: c.createdAt,
+    billingAddress: byType("billing"),
+    shippingAddress: byType("shipping"),
+  };
 }
 
 export interface StockItem {
@@ -454,6 +561,7 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.minTotal !== undefined) params.set("minTotal", String(filters.minTotal));
         if (filters.maxTotal !== undefined) params.set("maxTotal", String(filters.maxTotal));
         if (filters.search) params.set("search", filters.search);
+        if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
         params.set("page", String(filters.page ?? 1));
         params.set("perPage", String(filters.limit ?? 20));
         const [list, stats] = await Promise.all([
@@ -631,16 +739,18 @@ export const operationsApiSlice = api.injectEndpoints({
       query: (filters) => {
         const params = new URLSearchParams();
         if (filters.search) params.set("search", filters.search);
-        if (filters.group) params.set("group", filters.group);
+        if (filters.groupId === "GUEST") params.set("isGuest", "true");
+        else if (filters.groupId) params.set("groupId", filters.groupId);
         if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
         if (filters.dateTo) params.set("dateTo", filters.dateTo);
-        if (filters.page) params.set("page", String(filters.page));
-        if (filters.limit) params.set("limit", String(filters.limit));
+        params.set("page", String(filters.page ?? 1));
+        params.set("perPage", String(filters.limit ?? 20));
         return {
           url: `/admin/customers?${params.toString()}`,
           method: "GET",
         };
       },
+      transformResponse: (items: ApiCustomer[], meta) => toPaginated(items.map(fromApiCustomer), meta),
       providesTags: (result) =>
         result
           ? [
@@ -655,15 +765,29 @@ export const operationsApiSlice = api.injectEndpoints({
         url: `/admin/customers/${id}`,
         method: "GET",
       }),
+      transformResponse: (c: ApiCustomer) => fromApiCustomer(c),
       providesTags: (_r, _e, id) => [{ type: "Customer", id }],
     }),
 
+    getCustomerGroups: builder.query<CustomerGroupOption[], void>({
+      query: () => "/admin/customers/groups",
+      transformResponse: (rows: { id: string; name: string; discountPercent: string; _count: { customers: number } }[]) =>
+        rows.map((g) => ({
+          id: g.id,
+          name: g.name,
+          discountPercent: Number(g.discountPercent),
+          customersCount: g._count.customers,
+        })),
+      providesTags: [{ type: "Customer", id: "GROUPS" }],
+    }),
+
     createCustomer: builder.mutation<Customer, CreateCustomerInput>({
-      query: (body) => ({
+      query: ({ groupId, phone, ...rest }) => ({
         url: `/admin/customers`,
         method: "POST",
-        body,
+        body: { ...rest, phone: phone || undefined, groupId: groupId || undefined },
       }),
+      transformResponse: (c: ApiCustomer) => fromApiCustomer(c),
       invalidatesTags: [{ type: "Customer", id: "LIST" }],
     }),
 
@@ -698,7 +822,7 @@ export const operationsApiSlice = api.injectEndpoints({
         const params = new URLSearchParams();
         params.set("format", format);
         if (filters?.search) params.set("search", filters.search);
-        if (filters?.group) params.set("group", filters.group);
+        if (filters?.groupId && filters.groupId !== "GUEST") params.set("groupId", filters.groupId);
         return {
           url: `/admin/customers/export?${params.toString()}`,
           method: "GET",
@@ -806,6 +930,7 @@ export const {
   useCreateRefundMutation,
   useUpdateOrderShippingTrackingMutation,
   useGetCustomersQuery,
+  useGetCustomerGroupsQuery,
   useGetCustomerQuery,
   useCreateCustomerMutation,
   useUpdateCustomerMutation,

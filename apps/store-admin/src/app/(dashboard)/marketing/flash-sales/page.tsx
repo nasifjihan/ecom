@@ -107,14 +107,18 @@ function TimeBlock({ label, value }: { label: string; value: string }) {
 
 export default function FlashSalesPage() {
   const [tab, setTab] = useState<FlashStatus>("active");
-  const { data: listData, isLoading } = useGetFlashSalesQuery({ status: tab });
-  const sales = listData?.items ?? [];
-  const [stopSale, stopLoading] = useStopFlashSaleMutation();
+  // Status is derived from the dates, so fetch all sales and split them into tabs here.
+  const { data: listData, isLoading } = useGetFlashSalesQuery({ perPage: 100 });
+  const sales = useMemo(
+    () => (listData?.items ?? []).filter((s) => computeFlashStatus(s) === tab),
+    [listData, tab],
+  );
+  const [stopSale, { isLoading: stopLoading }] = useStopFlashSaleMutation();
 
-  const activeSale = useMemo(() => {
-    if (tab === "active") return sales[0];
-    return sales.find((s) => computeFlashStatus(s) === "active");
-  }, [sales, tab]);
+  const activeSale = useMemo(
+    () => (listData?.items ?? []).find((s) => s.visibility !== false && computeFlashStatus(s) === "active"),
+    [listData],
+  );
 
   const stats = useMemo(() => {
     const all = (listData?.items ?? sales).length > 0 ? listData?.items ?? sales : undefined;

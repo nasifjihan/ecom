@@ -85,8 +85,8 @@ export default function ProfileSettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const { data: me, isLoading: profileLoading } = useGetMyProfileQuery();
-  const [updateProfile, updateLoading] = useUpdateMyProfileMutation();
-  const [changePassword, passwordLoading] = useChangePasswordMutation();
+  const [updateProfile, { isLoading: updateLoading }] = useUpdateMyProfileMutation();
+  const [changePassword, { isLoading: passwordLoading }] = useChangePasswordMutation();
 
   const profileMethods = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),

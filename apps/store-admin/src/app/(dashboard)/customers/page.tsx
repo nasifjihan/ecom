@@ -78,6 +78,7 @@ import {
 } from "@/components/ui";
 import {
   useGetCustomersQuery,
+  useGetCustomerGroupsQuery,
   useCreateCustomerMutation,
   useDeleteCustomerMutation,
   type Customer,
@@ -85,19 +86,15 @@ import {
 } from "@/lib/features/operations/operations-api-slice";
 import { cn } from "@/components/ui";
 
-const GROUP_STYLES: Record<CustomerGroup, string> = {
-  WHOLESALE: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-  RETAIL: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
-  VIP: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
-  GUEST: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+// Groups are store-defined; known names get a colour, anything else the neutral style.
+const GROUP_STYLES: Record<string, string> = {
+  wholesale: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  vip: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
+  guest: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
 };
-
-const GROUP_LABELS: Record<CustomerGroup, string> = {
-  WHOLESALE: "Wholesale",
-  RETAIL: "Retail",
-  VIP: "VIP",
-  GUEST: "Guest",
-};
+const DEFAULT_GROUP_STYLE =
+  "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20";
+const groupStyle = (g: CustomerGroup) => GROUP_STYLES[g.toLowerCase()] ?? DEFAULT_GROUP_STYLE;
 
 function getAvatarColor(name: string) {
   const colors = [
@@ -126,44 +123,6 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function p90ceil(ltv: number, orders: number) {
-  const base = ltv || 0;
-  return Math.ceil(base * (1 + Math.min(0.4, orders * 0.02)));
-}
-
-function generateMockCustomers(count: number): Customer[] {
-  const groups: CustomerGroup[] = ["RETAIL", "RETAIL", "RETAIL", "VIP", "WHOLESALE", "GUEST"];
-  const first = ["Farhana", "Karim", "Nusrat", "Sakib", "Tasnim", "Rafiq", "Ayesha", "Hasan", "Fatema", "Jahid", "Samia", "Imran", "Rina", "Arif", "Luna"];
-  const last = ["Rahman", "Hossain", "Jahan", "Ahmed", "Akter", "Islam", "Siddika", "Mahmud", "Khatun", "Hasan", "Sultana", "Khan", "Begum", "Uddin", "Haque"];
-  const out: Customer[] = [];
-  for (let i = 0; i < count; i++) {
-    const fn = first[i % first.length];
-    const ln = last[(i * 3) % last.length];
-    const name = `${fn} ${ln}`;
-    const spent = 500 + ((i * 1277) % 95000);
-    const orders = 1 + (i % 15);
-    out.push({
-      id: 1000 + i,
-      firstName: fn, lastName: ln, name,
-      email: `${fn.toLowerCase()}.${ln.toLowerCase()}${i}@example.com`,
-      phone: `+880 17${String(10000000 + i * 7).slice(-8)}`,
-      group: groups[i % groups.length],
-      isVerified: i % 5 !== 0,
-      emailVerified: i % 5 !== 0,
-      phoneVerified: i % 7 !== 0,
-      totalSpent: spent,
-      ordersCount: orders,
-      ltv: p90ceil(spent, orders),
-      aov: Math.round(spent / orders),
-      refundsCount: i % 11 === 0 ? 1 : 0,
-      lastOrderAt: new Date(Date.now() - i * 86400000 * 2).toISOString(),
-      lastActiveAt: new Date(Date.now() - i * 3600000 * 5).toISOString(),
-      createdAt: new Date(Date.now() - i * 86400000 * 30).toISOString(),
-    });
-  }
-  return out;
-}
-
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState<string>("");
@@ -175,19 +134,20 @@ export default function CustomersPage() {
 
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phone: "", password: "",
-    group: "RETAIL" as CustomerGroup, isVerified: false, sendWelcomeEmail: true,
+    groupId: "",
   });
+  const { data: groupOptions = [] } = useGetCustomerGroupsQuery();
 
   const { data, isLoading } = useGetCustomersQuery({
     search: search || undefined,
-    group: (group as CustomerGroup) || undefined,
+    groupId: group || undefined,
     page, limit: 20,
   });
   const [createCustomer] = useCreateCustomerMutation();
   const [deleteCustomer] = useDeleteCustomerMutation();
 
-  const customers = data?.items ?? generateMockCustomers(20);
-  const totalPages = data?.totalPages ?? 6;
+  const customers = data?.items ?? [];
+  const totalPages = data?.totalPages ?? 1;
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
@@ -234,8 +194,8 @@ export default function CustomersPage() {
         cell: ({ row }) => {
           const g = row.getValue("group") as CustomerGroup;
           return (
-            <Badge variant="outline" className={cn(GROUP_STYLES[g], "font-medium")}>
-              {GROUP_LABELS[g]}
+            <Badge variant="outline" className={cn(groupStyle(g), "font-medium")}>
+              {g}
             </Badge>
           );
         },
@@ -260,17 +220,14 @@ export default function CustomersPage() {
       },
       {
         accessorKey: "ltv",
-        header: "LTV (P90)",
+        header: "LTV",
         cell: ({ row }) => {
           const c = row.original;
-          const v = p90ceil(c.ltv ?? c.totalSpent, c.ordersCount);
+          const v = c.ltv ?? c.totalSpent;
           return (
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                 {formatCurrency(v)}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 font-semibold">
-                P90
               </span>
             </div>
           );
@@ -399,15 +356,16 @@ export default function CustomersPage() {
         email: form.email,
         phone: form.phone || undefined,
         password: form.password,
-        group: form.group,
-        isVerified: form.isVerified,
-        sendWelcomeEmail: form.sendWelcomeEmail,
+        groupId: form.groupId || undefined,
       }).unwrap();
       toast.success("Customer created");
       setShowAdd(false);
-      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", group: "RETAIL", isVerified: false, sendWelcomeEmail: true });
-    } catch {
-      toast.error("Failed to create customer");
+      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", groupId: "" });
+    } catch (err: any) {
+      // Field errors come back as { field: [message] }; show the first one.
+      const d = err?.data;
+      const first = d && typeof d === "object" ? Object.entries(d)[0] : undefined;
+      toast.error(typeof d === "string" ? d : first ? `${first[0]}: ${(first[1] as string[])[0]}` : "Failed to create customer");
     }
   }
 
@@ -447,9 +405,10 @@ export default function CustomersPage() {
               <div className="w-40">
                 <Select value={group} onValueChange={setGroup}>
                   <SelectItem value="">All Groups</SelectItem>
-                  {(Object.keys(GROUP_LABELS) as CustomerGroup[]).map((g) => (
-                    <SelectItem key={g} value={g}>{GROUP_LABELS[g]}</SelectItem>
+                  {groupOptions.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                   ))}
+                  <SelectItem value="GUEST">Guest checkouts</SelectItem>
                 </Select>
               </div>
               <DropdownMenu>
@@ -653,29 +612,14 @@ export default function CustomersPage() {
               <div>
                 <Label className="text-xs mb-1.5 block">Customer Group</Label>
                 <Select
-                  value={form.group}
-                  onValueChange={(v) => setForm({ ...form, group: v as CustomerGroup })}
+                  value={form.groupId}
+                  onValueChange={(v) => setForm({ ...form, groupId: v })}
                 >
-                  {(Object.keys(GROUP_LABELS) as CustomerGroup[]).map((g) => (
-                    <SelectItem key={g} value={g}>{GROUP_LABELS[g]}</SelectItem>
+                  <SelectItem value="">No group</SelectItem>
+                  {groupOptions.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                   ))}
                 </Select>
-              </div>
-              <div className="flex flex-col justify-end gap-2 pb-0.5">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={form.isVerified}
-                    onCheckedChange={(v) => setForm({ ...form, isVerified: !!v })}
-                  />
-                  <Label className="text-sm cursor-pointer">Mark as verified</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={form.sendWelcomeEmail}
-                    onCheckedChange={(v) => setForm({ ...form, sendWelcomeEmail: !!v })}
-                  />
-                  <Label className="text-sm cursor-pointer">Send welcome email</Label>
-                </div>
               </div>
             </div>
             <Separator />
