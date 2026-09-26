@@ -1,0 +1,14 @@
+# Keep the build context small and free of local secrets/artifacts.
+.git
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/*.log
+.env
+.env.*
+!.env.example
+apps/api/uploads
+apps/api/storage
+docker-compose.override.yml

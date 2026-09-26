@@ -352,10 +352,12 @@ export function TabsTrigger({
   children,
   value,
   className,
+  onClick,
 }: {
   children: React.ReactNode;
   value: string;
   className?: string;
+  onClick?: () => void;
 }) {
   const ctx = React.useContext(TabsContext);
   const isActive = ctx?.active === value;
@@ -365,7 +367,11 @@ export function TabsTrigger({
       role="tab"
       aria-selected={isActive}
       data-state={isActive ? "active" : "inactive"}
-      onClick={() => ctx?.setActive(value)}
+      data-active={isActive}
+      onClick={() => {
+        ctx?.setActive(value);
+        onClick?.();
+      }}
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         isActive ? "bg-background text-foreground shadow-sm" : "",
@@ -746,7 +752,7 @@ export function Dialog({
   return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
 }
 
-export function DialogTrigger({ children }: { children: React.ReactNode }) {
+export function DialogTrigger({ children }: { children: React.ReactNode; asChild?: boolean }) {
   return <>{children}</>;
 }
 
@@ -859,11 +865,13 @@ export function DialogDescription({
 export function Select({
   children,
   value,
+  defaultValue,
   onValueChange,
   className,
 }: {
   children: React.ReactNode;
   value?: string;
+  defaultValue?: string;
   onValueChange?: (v: string) => void;
   className?: string;
 }) {
@@ -871,6 +879,7 @@ export function Select({
     <div className={cn("relative", className)}>
       <select
         value={value}
+        defaultValue={value === undefined ? defaultValue : undefined}
         onChange={(e) => onValueChange?.(e.target.value)}
         className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none pr-8"
       >
@@ -957,15 +966,10 @@ export function SelectScrollDownButton() {
 
 export function Form({
   children,
-  className,
-  onSubmit,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  onSubmit?: React.FormEventHandler<HTMLFormElement>;
-}) {
+  ...props
+}: React.FormHTMLAttributes<HTMLFormElement> & { children: React.ReactNode }) {
   return (
-    <form onSubmit={onSubmit} className={className}>
+    <form {...props}>
       {children}
     </form>
   );
