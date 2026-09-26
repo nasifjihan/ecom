@@ -24,7 +24,8 @@ export class SuperDashboardRepo {
 
   async activeStores(): Promise<number> {
     return prisma.store.count({
-      where: { status: { in: [StoreStatus.TRIAL, StoreStatus.ACTIVE] } },
+      // Store.status is stored lowercase ("active", "suspended"), unlike the StoreStatus enum.
+      where: { status: { in: [StoreStatus.TRIAL, StoreStatus.ACTIVE].map((s) => s.toLowerCase()) } },
     });
   }
 
@@ -32,7 +33,7 @@ export class SuperDashboardRepo {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return prisma.store.count({
       where: {
-        status: StoreStatus.CANCELLED,
+        status: { in: [StoreStatus.CANCELLED, StoreStatus.CLOSED].map((s) => s.toLowerCase()) },
         updatedAt: { gte: cutoff },
       },
     });
@@ -60,13 +61,134 @@ export class SuperDashboardRepo {
     return rows;
   }
 
-  async mrrLast30d(): Promise<number> {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const rows = await prisma.billingSubscription.findMany({
-      where: {
-        status: "active",
-        createdAt: { gte: cutoff },
+  /** Everything the super-admin dashboard renders, computed from real platform data. */
+  async getOverview() {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [stores, subs, paid, orderCount, activeAdmins, signupsToday, signups7d, signups30d, churned30] = await Promise.all([
+      prisma.store.findMany({
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          plan: { select: { name: true, type: true, priceMonthly: true } },
+          domains: { select: { hostname: true, primary: true } },
+        },
+      }),
+      prisma.billingSubscription.findMany({
+        select: { status: true, createdAt: true, updatedAt: true, plan: { select: { type: true, priceMonthly: true } } },
+      }),
+      prisma.order.groupBy({
+        by: ["storeId"],
+        where: { paymentStatus: { in: ["PAID", "paid"] } },
+        _sum: { grandTotal: true },
+        _count: { _all: true },
+      }),
+      prisma.order.count(),
+      prisma.adminUser.count({ where: { status: "active" } }),
+      prisma.store.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.store.count({ where: { createdAt: { gte: new Date(now - 7 * DAY) } } }),
+      prisma.store.count({ where: { createdAt: { gte: new Date(now - 30 * DAY) } } }),
+      prisma.store.count({ where: { status: { in: ["cancelled", "closed"] }, updatedAt: { gte: new Date(now - 30 * DAY) } } }),
+    ]);
+
+    const byStatus = (s: string) => stores.filter((st) => st.status.toLowerCase() === s).length;
+    const activeSubs = subs.filter((s) => s.status === "active");
+    const totalMRR = activeSubs.reduce((n, s) => n + Number(s.plan.priceMonthly), 0);
+    const churnRate = stores.length ? Math.round((churned30 / stores.length) * 1000) / 10 : 0;
+    const arpu = activeSubs.length ? totalMRR / activeSubs.length : 0;
+
+    // MRR per plan tier at the end of each of the last 12 months (subscriptions active then).
+    const tierKey = (t: string) => (t === "BASIC" ? "starter" : t === "PRO" ? "pro" : t === "ENTERPRISE" ? "enterprise" : "trial");
+    const monthlyMRR = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - (11 - i));
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      const row = { month: d.toLocaleString("en-US", { month: "short" }), trial: 0, starter: 0, pro: 0, enterprise: 0 };
+      for (const s of subs) {
+        const endedBefore = s.status !== "active" && s.updatedAt < monthEnd;
+        if (s.createdAt <= monthEnd && !endedBefore) row[tierKey(String(s.plan.type))] += Number(s.plan.priceMonthly);
+      }
+      return row;
+    });
+
+    const revenueByStore = new Map(paid.map((p) => [String(p.storeId), { revenue: Number(p._sum.grandTotal ?? 0), orders: p._count._all }]));
+    const platformRevenue = [...revenueByStore.values()].reduce((n, r) => n + r.revenue, 0);
+    const topStores = stores
+      .map((s) => ({
+        storeName: s.name,
+        domain: s.domains.find((d) => d.primary)?.hostname ?? s.domains[0]?.hostname ?? "—",
+        plan: s.plan?.name ?? "No plan",
+        revenue: revenueByStore.get(String(s.id))?.revenue ?? 0,
+        orders: revenueByStore.get(String(s.id))?.orders ?? 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue || b.orders - a.orders)
+      .slice(0, 8)
+      .map((s, i) => ({ rank: i + 1, ...s }));
+
+    const planCounts = new Map<string, number>();
+    for (const s of stores) {
+      const key = s.status.toLowerCase() === "trial" ? "Trial" : s.plan?.name ?? "No plan";
+      planCounts.set(key, (planCounts.get(key) ?? 0) + 1);
+    }
+    const plansDistribution = [...planCounts.entries()].map(([plan, count]) => ({ plan, count, value: count }));
+
+    // Health from real probes; CPU/memory are this API process host's load.
+    const os = await import("node:os");
+    const health = (ok: boolean, warn = false) => (!ok ? "critical" : warn ? "warning" : "good");
+    const load = (os.loadavg()[0] ?? 0) / Math.max(1, os.cpus().length);
+    const memUsed = 1 - os.freemem() / os.totalmem();
+    let dbOk = true;
+    let redisOk = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbOk = false;
+    }
+    try {
+      const { redis } = await import("../../config");
+      redisOk = (await redis.ping()) === "PONG";
+    } catch {
+      redisOk = false;
+    }
+
+    return {
+      totalStores: stores.length,
+      activeStores: byStatus("active"),
+      trialStores: byStatus("trial"),
+      suspendedStores: byStatus("suspended"),
+      cancelledStores: byStatus("cancelled") + byStatus("closed"),
+      totalMRR: Math.round(totalMRR * 100) / 100,
+      newSignupsToday: signupsToday,
+      newSignups7d: signups7d,
+      newSignups30d: signups30d,
+      churnRate,
+      arpu: Math.round(arpu * 100) / 100,
+      // Simple LTV = ARPU / monthly churn; 0 until churn is observed.
+      ltv: churnRate > 0 ? Math.round((arpu / (churnRate / 100)) * 100) / 100 : 0,
+      platformOrders: orderCount,
+      platformRevenue: Math.round(platformRevenue * 100) / 100,
+      activeAdmins,
+      systemHealth: {
+        cpu: health(true, load > 0.8),
+        memory: health(true, memUsed > 0.9),
+        database: health(dbOk),
+        redis: health(redisOk),
       },
+      monthlyMRR,
+      topStores,
+      plansDistribution,
+    };
+  }
+
+  /** Monthly recurring revenue: every active subscription, not only ones started in the last 30 days. */
+  async mrrLast30d(): Promise<number> {
+    const rows = await prisma.billingSubscription.findMany({
+      where: { status: "active" },
       select: { plan: { select: { priceMonthly: true } } },
     });
     let total = 0;

@@ -28,6 +28,10 @@ export class DashboardService extends BaseService {
     return this.superRepo.getSuperStats(r);
   }
 
+  async getSuperOverview() {
+    return this.superRepo.getOverview();
+  }
+
   async getStoreStats(range?: DashboardRangeQueryDto): Promise<unknown> {
     const r = range ? { from: range.from, to: range.to } : {};
     return this.storeRepo.getStoreStats(r);

@@ -67,39 +67,60 @@ export interface SuperDashboardStats {
   }>;
 }
 
+/** PlatformAdmin row as returned by /auth/super/login and /auth/me/super. */
+interface ApiPlatformAdmin {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+const toSuperUser = (u: ApiPlatformAdmin): SuperAuthUser => ({
+  id: u.id,
+  name: u.name,
+  email: u.email,
+  role: u.role as SuperAuthUser["role"],
+});
+
 export const superAuthApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
     loginSuper: builder.mutation<SuperLoginResponse, SuperLoginCredentials>({
-      query: (credentials) => ({
-        url: "/super/auth/login",
+      query: ({ email, password }) => ({
+        url: "/auth/super/login",
         method: "POST",
-        body: credentials,
+        body: { email, password },
+      }),
+      // The refresh token comes back as an httpOnly cookie, not in the body.
+      transformResponse: (res: { accessToken: string; user: ApiPlatformAdmin }) => ({
+        user: toSuperUser(res.user),
+        accessToken: res.accessToken,
+        refreshToken: "",
+        permissions: ["*"],
+        audience: "super" as const,
       }),
       invalidatesTags: ["Me"],
     }),
-    refreshSuper: builder.mutation<
-      { accessToken: string },
-      { refreshToken: string }
-    >({
-      query: (body) => ({
-        url: "/super/auth/refresh",
+    refreshSuper: builder.mutation<{ accessToken: string }, void>({
+      query: () => ({
+        url: "/auth/super/refresh",
         method: "POST",
-        body,
+        body: {},
       }),
     }),
     meSuper: builder.query<SuperMeResponse, void>({
-      query: () => "/super/auth/me",
+      query: () => "/auth/me/super",
+      transformResponse: (u: ApiPlatformAdmin) => ({ user: toSuperUser(u), permissions: ["*"], audience: "super" as const }),
       providesTags: ["Me"],
     }),
     logoutSuper: builder.mutation<void, void>({
       query: () => ({
-        url: "/super/auth/logout",
+        url: "/auth/logout",
         method: "POST",
       }),
       invalidatesTags: ["Me"],
     }),
     getSuperDashboardStats: builder.query<SuperDashboardStats, void>({
-      query: () => "/super/dashboard/stats",
+      query: () => "/super/dashboard/overview",
     }),
   }),
   overrideExisting: false,

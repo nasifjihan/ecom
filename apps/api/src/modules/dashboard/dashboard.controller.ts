@@ -44,6 +44,10 @@ class DashboardController extends BaseController {
     envelope(res, { status: 200, data: result });
   });
 
+  superOverview = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 200, data: await this.getService(req.ctx).getSuperOverview() });
+  });
+
   storeOverview = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
     const { days } = req.query as unknown as z.infer<typeof OverviewQuery>;
@@ -83,6 +87,13 @@ superDashboardRouter.get(
   rbacMiddleware("super.*"),
   validate({ query: BaseRangeQuery }),
   dashboardController.superStats,
+);
+
+superDashboardRouter.get(
+  "/overview",
+  authMiddleware("super"),
+  rbacMiddleware("super.*"),
+  dashboardController.superOverview,
 );
 
 superDashboardRouter.get(

@@ -174,7 +174,15 @@ export class StoresService extends BaseService {
     return this.storeRepo.paginate(this.ctx, {
       ...pagination,
       where,
-      include: { plan: true },
+      // Enough for the super-admin stores table: primary domain, owner, country, subscription, volumes.
+      include: {
+        plan: true,
+        billingSub: { include: { plan: true } },
+        domains: { select: { hostname: true, primary: true, type: true } },
+        generalSettings: { select: { countryCode: true } },
+        admins: { where: { role: { slug: "owner" } }, select: { email: true, name: true }, take: 1 },
+        _count: { select: { orders: true, products: true, customers: true } },
+      },
     });
   }
 

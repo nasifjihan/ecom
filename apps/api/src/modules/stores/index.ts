@@ -7,4 +7,5 @@ export {
   superDomainsRouter,
   storeSelfRouter,
   superPlansRouter,
+  superSubscriptionsRouter,
 } from "./stores.routes";

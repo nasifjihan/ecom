@@ -27,6 +27,7 @@ import {
   superDomainsRouter,
   storeSelfRouter,
   superPlansRouter,
+  superSubscriptionsRouter,
 } from "./modules/stores";
 import {
   adminUsersRouter,
@@ -107,6 +108,7 @@ export function buildApp(): Express {
   app.use("/api/super/stores", superStoresRouter);
   app.use("/api/super/domains", superDomainsRouter);
   app.use("/api/super/plans", superPlansRouter);
+  app.use("/api/super/subscriptions", superSubscriptionsRouter);
   app.use("/api/super/admin-users", superAdminUsersRouter);
   app.use("/api/super/roles", superRolesRouter);
   app.use("/api/store", storeSelfRouter);

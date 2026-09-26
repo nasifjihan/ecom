@@ -52,61 +52,7 @@ import {
   Bar,
 } from "recharts";
 
-const mockDashboardStats = {
-  totalStores: 142,
-  activeStores: 98,
-  trialStores: 24,
-  suspendedStores: 12,
-  cancelledStores: 8,
-  totalMRR: 24850,
-  newSignupsToday: 12,
-  newSignups7d: 68,
-  newSignups30d: 287,
-  churnRate: 2.4,
-  arpu: 175.28,
-  ltv: 2103.36,
-  platformOrders: 38472,
-  platformRevenue: 1847293,
-  activeAdmins: 8,
-  systemHealth: {
-    cpu: "good",
-    memory: "good",
-    database: "good",
-    redis: "warning",
-  },
-  monthlyMRR: Array.from({ length: 12 }, (_, i) => ({
-    month: [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ][i],
-    trial: Math.floor(Math.random() * 1500) + 500,
-    starter: Math.floor(Math.random() * 3000) + 2000,
-    pro: Math.floor(Math.random() * 5000) + 4000,
-    enterprise: Math.floor(Math.random() * 4000) + 3000,
-  })),
-  topStores: [
-    { rank: 1, storeName: "Fashion BD Premium", domain: "fashionbd.com", plan: "Enterprise", revenue: 48720, orders: 1284 },
-    { rank: 2, storeName: "StyleHub Global", domain: "stylehub.io", plan: "Enterprise", revenue: 36420, orders: 982 },
-    { rank: 3, storeName: "TechGear Pro", domain: "techgear.pro", plan: "Pro", revenue: 28910, orders: 847 },
-    { rank: 4, storeName: "HomeLux Decor", domain: "homelux.com", plan: "Pro", revenue: 21680, orders: 712 },
-    { rank: 5, storeName: "SportMax BD", domain: "sportmax.bd", plan: "Pro", revenue: 18420, orders: 623 },
-    { rank: 6, storeName: "BeautyBliss", domain: "beautybliss.co", plan: "Starter", revenue: 12780, orders: 489 },
-    { rank: 7, storeName: "KidsWorld", domain: "kidsworld.net", plan: "Starter", revenue: 9840, orders: 387 },
-    { rank: 8, storeName: "OrganicPure", domain: "organicpure.life", plan: "Starter", revenue: 7210, orders: 298 },
-  ],
-  plansDistribution: [
-    { plan: "Trial", count: 24, value: 24, color: "#3b82f6" },
-    { plan: "Starter", count: 47, value: 47, color: "#10b981" },
-    { plan: "Pro", count: 52, value: 52, color: "#f59e0b" },
-    { plan: "Enterprise", count: 19, value: 19, color: "#f43f5e" },
-  ],
-};
-
-const newSignupsMock = [
-  { period: "Today", value: mockDashboardStats.newSignupsToday },
-  { period: "7 Days", value: mockDashboardStats.newSignups7d },
-  { period: "30 Days", value: mockDashboardStats.newSignups30d },
-];
+const PLAN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#f43f5e", "#8b5cf6", "#64748b"];
 
 function StatCard({
   icon: Icon,
@@ -254,13 +200,25 @@ function HealthIndicator({
 const storesPieColors = ["#10b981", "#3b82f6", "#ef4444", "#64748b"];
 
 export default function SuperDashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useGetSuperDashboardStatsQuery(
-    {},
-    { refetchOnMountOrArgChange: false },
-  );
+  const { data: stats, isLoading: statsLoading, isError } = useGetSuperDashboardStatsQuery();
 
-  const data = stats ?? mockDashboardStats;
-  const health = data?.systemHealth ?? mockDashboardStats.systemHealth;
+  if (!stats) {
+    return (
+      <div className="py-24 text-center text-sm text-slate-500">
+        {statsLoading ? "Loading platform metrics…" : isError ? "Could not load platform metrics." : null}
+      </div>
+    );
+  }
+  const data = {
+    ...stats,
+    plansDistribution: stats.plansDistribution.map((p, i) => ({ ...p, color: PLAN_COLORS[i % PLAN_COLORS.length] })),
+  };
+  const health = data.systemHealth;
+  const newSignups = [
+    { period: "Today", value: data.newSignupsToday },
+    { period: "7 Days", value: data.newSignups7d },
+    { period: "30 Days", value: data.newSignups30d },
+  ];
 
   return (
     <div className="space-y-6">
@@ -332,8 +290,6 @@ export default function SuperDashboardPage() {
               icon={DollarSign}
               label="Total MRR"
               value={`$ ${data.totalMRR.toLocaleString()}`}
-              delta={6.8}
-              deltaLabel="vs last month"
               iconColor="text-emerald-600 dark:text-emerald-400"
               iconBgColor="bg-emerald-500/10"
               delay={0.05}
@@ -342,15 +298,13 @@ export default function SuperDashboardPage() {
               icon={UserPlus}
               label="New Signups"
               value={`${data.newSignups30d.toLocaleString()}`}
-              delta={12.4}
-              deltaLabel="vs prev 30d"
               iconColor="text-blue-600 dark:text-blue-400"
               iconBgColor="bg-blue-500/10"
               delay={0.1}
             >
               <div className="mt-4">
                 <div className="space-y-1.5">
-                  {newSignupsMock.map((item) => (
+                  {newSignups.map((item) => (
                     <div
                       key={item.period}
                       className="flex items-center justify-between"
@@ -363,7 +317,7 @@ export default function SuperDashboardPage() {
                           <div
                             className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
                             style={{
-                              width: `${(item.value / data.newSignups30d) * 100}%`,
+                              width: `${(item.value / Math.max(1, data.newSignups30d)) * 100}%`,
                             }}
                           />
                         </div>
@@ -380,8 +334,6 @@ export default function SuperDashboardPage() {
               icon={TrendingDown}
               label="Churn Rate"
               value={`${data.churnRate}%`}
-              delta={-0.6}
-              deltaLabel="vs last month"
               iconColor="text-red-600 dark:text-red-400"
               iconBgColor="bg-red-500/10"
               delay={0.15}
@@ -390,7 +342,6 @@ export default function SuperDashboardPage() {
               icon={BarChart3}
               label="ARPU Avg"
               value={`$ ${data.arpu.toFixed(2)}`}
-              delta={3.2}
               iconColor="text-amber-600 dark:text-amber-400"
               iconBgColor="bg-amber-500/10"
               delay={0.2}
@@ -399,7 +350,6 @@ export default function SuperDashboardPage() {
               icon={Activity}
               label="Est. LTV"
               value={`$ ${data.ltv.toFixed(0)}`}
-              delta={4.1}
               iconColor="text-purple-600 dark:text-purple-400"
               iconBgColor="bg-purple-500/10"
               delay={0.25}
@@ -408,16 +358,14 @@ export default function SuperDashboardPage() {
               icon={ShoppingCart}
               label="Platform Orders"
               value={data.platformOrders.toLocaleString()}
-              delta={8.7}
               iconColor="text-indigo-600 dark:text-indigo-400"
               iconBgColor="bg-indigo-500/10"
               delay={0.3}
             />
             <StatCard
               icon={DollarSign}
-              label="Platform Revenue"
-              value={`$ ${data.platformRevenue.toLocaleString()}`}
-              delta={11.3}
+              label="Paid Order Revenue (store currencies)"
+              value={data.platformRevenue.toLocaleString()}
               iconColor="text-teal-600 dark:text-teal-400"
               iconBgColor="bg-teal-500/10"
               delay={0.35}
@@ -748,7 +696,7 @@ export default function SuperDashboardPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                            $ {store.revenue.toLocaleString()}
+                            {store.revenue.toLocaleString()}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

@@ -68,6 +68,13 @@ const superAuthSlice = createSlice({
         }
       }
     },
+    setSuperAccessToken: (state, action: PayloadAction<string>) => {
+      state.accessToken = action.payload;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("superAccessToken", action.payload);
+        document.cookie = `superAccessToken=${action.payload}; path=/; SameSite=Lax`;
+      }
+    },
     superLogout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -83,5 +90,5 @@ const superAuthSlice = createSlice({
   },
 });
 
-export const { setSuperCredentials, superLogout } = superAuthSlice.actions;
+export const { setSuperCredentials, setSuperAccessToken, superLogout } = superAuthSlice.actions;
 export default superAuthSlice.reducer;

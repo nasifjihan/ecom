@@ -21,7 +21,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import {
-  Form,
+  FormProvider,
   FormControl,
   FormField,
   FormItem,
@@ -251,7 +251,7 @@ export default function SuperAdminLoginPage() {
                 </p>
               </motion.div>
 
-              <Form {...form}>
+              <FormProvider {...form}>
                 <form
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="mt-8 space-y-6"
@@ -424,7 +424,7 @@ export default function SuperAdminLoginPage() {
                     </Button>
                   </motion.div>
                 </form>
-              </Form>
+              </FormProvider>
 
               <motion.div
                 initial={{ opacity: 0 }}
