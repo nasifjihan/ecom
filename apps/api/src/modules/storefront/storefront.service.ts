@@ -28,6 +28,9 @@ import { emitOrderPlaced } from "../notifications";
 import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
 import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
 import { FulfilmentService } from "../fulfilment/fulfilment.service";
+import { PaymentsService } from "../payments/payments.service";
+import { recordPaidAtEntry } from "../payments/payments.records";
+import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -152,6 +155,8 @@ export type OrderMeta = {
   status?: "PENDING" | "PROCESSING";
   paid?: boolean;
   transactionId?: string | null;
+  /** A transfer the customer says they made (checked shape and not used before). */
+  transfer?: { transactionId: string; senderNumber: string | null };
   historyNote: string;
   notifyCustomer?: boolean;
 };
@@ -863,7 +868,7 @@ export class StorefrontService {
       const taxable = itemsSubtotal - discountTotal;
       const itemTaxRatio = taxable > 0 ? (taxTotal * (taxable / (taxable + shippingTotal))) / taxable : 0;
 
-      return t.order.create({
+      const order = await t.order.create({
         data: {
           storeId,
           number: await this.nextOrderNumber(t),
@@ -945,7 +950,36 @@ export class StorefrontService {
           },
         },
       });
+      if (meta.paid) await recordPaidAtEntry(t, order, meta.createdByAdminId ?? null);
+      // A bKash / Nagad / bank payment the customer reported at checkout waits for staff to check it.
+      if (meta.transfer) {
+        await t.paymentRecord.create({
+          data: {
+            storeId, orderId: order.id, kind: "transfer", method: gateway.code, amount: grandTotal,
+            transactionId: meta.transfer.transactionId, senderNumber: meta.transfer.senderNumber,
+            status: "to_verify", moneyIsWith: "customer", submittedBy: "customer",
+          },
+        });
+      }
+      return order;
     });
+  }
+
+  /** A transaction ID typed at checkout: right shape, and not already used in this store. */
+  private async checkTransfer(method: string, p: { transactionId: string; senderNumber?: string }) {
+    const problem = trxIdProblem(method, p.transactionId);
+    if (problem) throw new BadRequestError(problem, "VALIDATION_FAILED");
+    const transactionId = method === "bank_transfer" ? p.transactionId.trim().toUpperCase() : normalizeTrxId(p.transactionId);
+    let senderNumber: string | null = null;
+    if (p.senderNumber) {
+      senderNumber = method === "bank_transfer" ? p.senderNumber.trim() : normalizeBdMobile(p.senderNumber);
+      if (!senderNumber) throw new BadRequestError("Enter the wallet number you paid from, e.g. 01712345678", "VALIDATION_FAILED");
+    } else if (method !== "bank_transfer") {
+      throw new BadRequestError("Enter the wallet number you paid from", "VALIDATION_FAILED");
+    }
+    const used = await prisma.paymentRecord.findFirst({ where: { storeId: this.storeId, method, transactionId, status: { not: "rejected" } } });
+    if (used) throw new BadRequestError("This transaction ID has already been used", "VALIDATION_FAILED");
+    return { transactionId, senderNumber };
   }
 
   async placeOrder(dto: PlaceOrderDto) {
@@ -962,11 +996,14 @@ export class StorefrontService {
       requireEnabledGateway: true,
       applyGatewayFee: true,
     });
+    const manual = quote.gateway!.mode === "manual" && isManualCapable(quote.gateway!.code);
+    const transfer = manual && dto.payment?.transactionId ? await this.checkTransfer(quote.gateway!.code, dto.payment) : undefined;
     const order = await this.createOrder(quote, {
       customerId: this.ctx.customer?.id ?? null,
       customerNote: dto.customerNote,
+      transfer,
       source: "website",
-      historyNote: `Order placed on storefront (${quote.gateway!.name})`,
+      historyNote: `Order placed on storefront (${quote.gateway!.name}${transfer ? `, transaction ${transfer.transactionId} to verify` : ""})`,
     });
 
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
@@ -974,7 +1011,7 @@ export class StorefrontService {
     const { grandTotal } = quote.totals;
     const bill = quote.bill;
     let redirectPaymentURL: string | undefined;
-    if (!OFFLINE_GATEWAYS.has(dto.paymentGateway)) {
+    if (!OFFLINE_GATEWAYS.has(dto.paymentGateway) && !manual) {
       try {
         const provider = getPaymentProvider(dto.paymentGateway as PaymentMethod);
         const init = await provider.initiate({
@@ -1021,6 +1058,10 @@ export class StorefrontService {
       name: g.name,
       description: g.description ?? undefined,
       instructions: g.instructions ?? undefined,
+      /** "manual": send money to accountNumber and give the transaction ID at checkout. */
+      mode: g.mode === "manual" && isManualCapable(g.code) ? "manual" : g.code === "cod" ? "cod" : "online",
+      accountNumber: g.mode === "manual" ? g.accountNumber ?? undefined : undefined,
+      accountType: g.mode === "manual" ? g.accountType ?? undefined : undefined,
       feeFixed: num(g.feeFixed),
       feePercent: num(g.feePercent),
     }));
@@ -1030,10 +1071,39 @@ export class StorefrontService {
   async getOrderByKey(orderKey: string) {
     const o = await prisma.order.findFirst({
       where: { storeId: this.storeId, orderKey },
-      include: { items: true },
+      include: { items: true, paymentRecords: true },
     });
     if (!o) throw new NotFoundError("Order");
-    return orderView(o);
+    return { ...orderView(o), payment: await this.paymentView(o) };
+  }
+
+  /**
+   * How the customer pays a bKash / Nagad / Rocket / bank order by hand: where to send the money,
+   * what's still due, and the transaction IDs they gave with their state (a rejection says why).
+   */
+  private async paymentView(o: Prisma.OrderGetPayload<{ include: { paymentRecords: true } }>) {
+    const g = await prisma.paymentGatewayConfig.findFirst({ where: { storeId: this.storeId, code: o.paymentGatewayCode } });
+    const manual = !!g && g.mode === "manual" && isManualCapable(g.code);
+    const state = PaymentsService.transferState(o);
+    return {
+      method: o.paymentGatewayCode,
+      methodName: g?.name ?? o.paymentGatewayCode,
+      manual,
+      accountNumber: manual ? g!.accountNumber : null,
+      accountType: manual ? g!.accountType : null,
+      instructions: manual ? g!.instructions : null,
+      due: state.due,
+      canSubmit: manual && state.canSubmit && !["CANCELLED", "FAILED", "REFUNDED"].includes(o.status),
+      transfers: o.paymentRecords
+        .filter((r) => r.kind === "transfer")
+        .map((r) => ({
+          transactionId: r.transactionId,
+          amount: num(r.amount),
+          status: r.status,
+          rejectReason: r.rejectReason,
+          createdAt: r.createdAt.toISOString(),
+        })),
+    };
   }
 
   /* ---------------------------- Customer account ---------------------------- */
@@ -1081,6 +1151,7 @@ export class StorefrontService {
         statusHistory: { orderBy: { createdAt: "asc" } },
         shipments: { where: { status: { not: "cancelled" } }, include: { items: true }, orderBy: { id: "asc" } },
         returns: { include: { items: true }, orderBy: { id: "asc" } },
+        paymentRecords: { orderBy: { createdAt: "asc" } },
       },
     });
     if (!o) throw new NotFoundError("Order");
@@ -1124,6 +1195,7 @@ export class StorefrontService {
         items: r.items.map((i) => ({ title: name.get(String(i.orderItemId)) ?? "Item", quantity: i.quantity })),
       })),
       returnWindowUntil: window.until?.toISOString() ?? null,
+      payment: await this.paymentView(o),
       canRequestReturn: window.open && returnable.length > 0,
       returnable,
     };

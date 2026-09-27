@@ -204,24 +204,6 @@ adminOrdersRouter.get(
   ordersController.listShippingMethods,
 );
 
-export const adminPaymentsRouter = Router();
-
-adminPaymentsRouter.get(
-  "/",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.view"),
-  validate({ query: OrderSearchQueryDto }),
-  ordersController.listOrders,
-);
-
-adminPaymentsRouter.post(
-  "/offline-confirm",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.edit"),
-  validate({ body: PaymentConfirmDto }),
-  ordersController.confirmPayment,
-);
-
 export const checkoutRouter = Router();
 
 checkoutRouter.post(

@@ -10,6 +10,7 @@
  */
 import { api, fileResponse, toPaginated, type Paginated } from "@ecom/api-client";
 import type { AppDispatch } from "@/lib/store";
+import type { OrderPayment, TransferInput } from "@ecom/storefront-base";
 
 const TOKEN_KEY = "accessToken";
 const CUSTOMER_KEY = "customer";
@@ -99,6 +100,8 @@ export interface MyOrder {
   canRequestReturn: boolean;
   /** Units per line that can still be returned. */
   returnable: { orderItemId: string; title: string; variantLabel: string; quantity: number }[];
+  /** Paying by bKash / Nagad / Rocket / bank by hand: where to send it and the transaction IDs sent. */
+  payment: OrderPayment;
 }
 
 export const RETURN_REASONS = [
@@ -289,6 +292,14 @@ export const accountApi = api.injectEndpoints({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/cancel`, method: "POST", body: {} }),
       invalidatesTags: ["Order"],
     }),
+    submitMyOrderPayment: builder.mutation<{ transactionId: string; status: string; amount: number }, TransferInput & { orderRef: string }>({
+      query: ({ orderRef, ...body }) => ({
+        url: `/storefront/account/orders/${encodeURIComponent(orderRef)}/payments`,
+        method: "POST",
+        body: clean(body),
+      }),
+      invalidatesTags: (_r, _e, { orderRef }) => [{ type: "Order", id: orderRef }],
+    }),
     requestReturn: builder.mutation<{ code: string; status: string }, ReturnRequestInput>({
       query: ({ orderRef, ...body }) => ({
         url: `/storefront/account/orders/${encodeURIComponent(orderRef)}/returns`,
@@ -326,6 +337,7 @@ export const {
   useGetMyOrderQuery,
   useCancelMyOrderMutation,
   useRequestReturnMutation,
+  useSubmitMyOrderPaymentMutation,
   useMyOrderInvoiceMutation,
   useOrderInvoiceByKeyMutation,
 } = accountApi;

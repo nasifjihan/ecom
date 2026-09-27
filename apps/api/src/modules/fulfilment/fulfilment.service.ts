@@ -14,6 +14,7 @@ import { BadRequestError, ConflictError, NotFoundError, type RequestContext } fr
 import { getPaymentProvider } from "../../services/payments";
 import type { PaymentMethod } from "../../services/payments/types";
 import { OrdersService, STATUS_TRANSITIONS } from "../orders/orders.service";
+import { recordParcelCash } from "../payments/payments.records";
 import {
   RETURN_WINDOW_DAYS,
   canMoveParcel,
@@ -216,6 +217,8 @@ export class FulfilmentService {
         },
       });
       await t.shipmentEvent.create({ data: { shipmentId: id, status: dto.status, note: dto.note || null, adminId: this.adminId } });
+      // The courier now holds this parcel's cash until it pays the shop (Cash & couriers).
+      if (dto.status === "delivered") await recordParcelCash(t, s);
       return this.recompute(t, s.orderId);
     });
     const target = orderStatusForFulfillment(derived.fulfillmentStatus, dto.status);

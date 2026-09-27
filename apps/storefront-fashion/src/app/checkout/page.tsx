@@ -208,7 +208,12 @@ export default function CheckoutPage() {
       enabledGateways
         ? DEFAULT_PAYMENT_GATEWAYS.flatMap((g) => {
             const cfg = enabledGateways.find((e) => e.code === g.id);
-            return cfg ? [{ ...g, extraFee: cfg.feeFixed > 0 ? cfg.feeFixed : undefined }] : [];
+            if (!cfg) return [];
+            const manual =
+              cfg.mode === "manual"
+                ? { accountNumber: cfg.accountNumber, accountType: cfg.accountType, instructions: cfg.instructions }
+                : undefined;
+            return [{ ...g, brandName: cfg.name || g.brandName, extraFee: cfg.feeFixed > 0 ? cfg.feeFixed : undefined, manual }];
           })
         : DEFAULT_PAYMENT_GATEWAYS,
     [enabledGateways],
@@ -432,6 +437,21 @@ export default function CheckoutPage() {
           };
 
 
+      // bKash / Nagad / Rocket / bank paid by hand: send the transaction ID if the customer has one.
+      const method = selectedPaymentMethod ?? PaymentMethod.COD;
+      const wallet = (paymentFormData as Record<string, { accountNumber?: string; transactionId?: string } | undefined>)[method];
+      const bankRef = paymentFormData.bankTransfer?.referenceId?.trim();
+      const manualPayment =
+        selectedGatewayConfig?.mode !== "manual"
+          ? undefined
+          : method === PaymentMethod.BANK_TRANSFER
+            ? bankRef
+              ? { transactionId: bankRef }
+              : undefined
+            : wallet?.transactionId?.trim()
+              ? { transactionId: wallet.transactionId.trim(), senderNumber: wallet.accountNumber?.trim() || undefined }
+              : undefined;
+
       const result = await placeOrder({
         email: contactEmail || customerEmail || shippingPayload.email || "",
         phone: shippingPayload.phone,
@@ -444,7 +464,7 @@ export default function CheckoutPage() {
         shippingProviderId: selectedRate?.providerId,
         shippingCost: shippingAmount,
         paymentGateway: selectedPaymentMethod ?? PaymentMethod.COD,
-        paymentDetails: paymentFormData as Record<string, unknown>,
+        payment: manualPayment,
         couponCodes: appliedCoupon?.valid ? [appliedCoupon.couponCode] : [],
         items: items.map((it) => ({
           productId: it.productId,
@@ -1008,6 +1028,7 @@ export default function CheckoutPage() {
                     formData={paymentFormData}
                     onFormDataChange={setPaymentFormData}
                     currency={CURRENCY}
+                    amount={grandTotal}
                   />
                 </CardContent>
               </Card>

@@ -12,9 +12,11 @@ import {
   useGetMyOrderQuery,
   useMyOrderInvoiceMutation,
   useRequestReturnMutation,
+  useSubmitMyOrderPaymentMutation,
   type MyOrder,
 } from "@/lib/account";
 import { AccountShell, OrderStatusBadge, formatBDT, formatDate } from "../../_components";
+import { OrderPaymentCard } from "../../../_components/order-payment";
 
 export default function OrderDetailPage() {
   const { ref } = useParams<{ ref: string }>();
@@ -29,6 +31,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
   const { data: o, isLoading, isError } = useGetMyOrderQuery(orderRef);
   const [cancel, { isLoading: cancelling }] = useCancelMyOrderMutation();
   const [loadInvoice, { isLoading: loadingInvoice }] = useMyOrderInvoiceMutation();
+  const [submitPayment] = useSubmitMyOrderPaymentMutation();
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (isError || !o) {
@@ -124,6 +127,9 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         </CardContent>
       </Card>
 
+      {o.payment?.manual && (
+        <OrderPaymentCard payment={o.payment} currency={o.currency} onSubmit={(input) => submitPayment({ orderRef: o.orderRef, ...input }).unwrap()} />
+      )}
       {o.parcels.length > 0 && <Parcels order={o} />}
       {(o.returns.length > 0 || o.canRequestReturn) && <Returns order={o} />}
 

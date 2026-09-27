@@ -270,7 +270,8 @@ async function seedFashionBDStore() {
     });
     if (!ex) {
       await prisma.paymentGatewayConfig.create({
-        data: { storeId: store.id, ...g },
+        // bKash / Nagad / Rocket / bank: customers pay by hand and staff verify the transaction ID.
+        data: { storeId: store.id, ...g, mode: ["bkash", "nagad", "rocket", "bank_transfer"].includes(g.code) ? "manual" : "online" },
       });
       console.log(`  ✅ Payment gateway ${g.code} (${g.name}) default row added`);
     }

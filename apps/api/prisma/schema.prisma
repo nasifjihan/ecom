@@ -66,6 +66,8 @@ model Store {
   paymentSettings      PaymentGatewayConfig[]
   shippingZones        ShippingZone[]
   shipments            Shipment[]
+  paymentRecords       PaymentRecord[]
+  courierSettlements   CourierSettlement[]
   locationsOff         StoreLocationOff[]
   taxClasses           TaxClass[]
   emailSettings        StoreEmailSetting?
@@ -432,21 +434,27 @@ model StoreLocalizationSetting {
 // PAYMENT, SHIPPING, TAX
 // ============================================================
 model PaymentGatewayConfig {
-  id           BigInt   @id @default(autoincrement())
-  storeId      BigInt
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  code         String
-  name         String
-  description  String?
-  enabled      Boolean  @default(false)
-  testMode     Boolean  @default(true)
-  sortOrder    Int      @default(0)
-  credentials  Json?
-  instructions String?  @db.Text
-  feeFixed     Decimal  @default(0) @db.Decimal(12, 2)
-  feePercent   Decimal  @default(0) @db.Decimal(5, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            BigInt   @id @default(autoincrement())
+  storeId       BigInt
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  description   String?
+  enabled       Boolean  @default(false)
+  testMode      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  credentials   Json?
+  instructions  String?  @db.Text
+  /// bKash / Nagad / Rocket: "manual" = customers send money to accountNumber and enter the
+  /// transaction ID, staff verify it; "online" = the gateway's checkout page.
+  mode          String   @default("online")
+  accountNumber String?
+  /// personal | agent | merchant (how the customer should send: Send Money, Cash Out, Payment)
+  accountType   String?
+  feeFixed      Decimal  @default(0) @db.Decimal(12, 2)
+  feePercent    Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([storeId, code])
 }
@@ -1161,6 +1169,7 @@ model Order {
   shipments              Shipment[]
   refunds                Refund[]
   returns                ReturnRequest[]
+  paymentRecords         PaymentRecord[]
   reviews                Review[]
   invoice                Invoice?
   giftCards              GiftCard[]
@@ -1242,6 +1251,7 @@ model Shipment {
   weightKg       Decimal?        @db.Decimal(8, 3)
   items          ShipmentItem[]
   events         ShipmentEvent[]
+  paymentRecords PaymentRecord[]
   notes          String?
   failedReason   String?
   adminId        BigInt?
@@ -1254,6 +1264,82 @@ model Shipment {
   @@unique([storeId, code])
   @@index([storeId, status])
   @@index([orderId])
+}
+
+/// Money for an order that staff must check: a bKash/Nagad/bank transfer the customer reports
+/// (kind "transfer"), or cash collected on delivery (kind "cod").
+model PaymentRecord {
+  id            BigInt             @id @default(autoincrement())
+  storeId       BigInt
+  store         Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId       BigInt
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// transfer | cod
+  kind          String
+  /// bkash | nagad | rocket | bank_transfer | cod | cash
+  method        String
+  amount        Decimal            @db.Decimal(14, 2)
+  transactionId String?
+  /// The customer's wallet number or bank account the money came from.
+  senderNumber  String?
+  /// transfer: to_verify | verified | rejected
+  /// cod: with_courier | cash_in_hand | received | not_collected
+  status        String
+  /// customer | courier | office | gateway
+  moneyIsWith   String?
+  /// cod: the parcel that collected it, and its courier.
+  shipmentId    BigInt?
+  shipment      Shipment?          @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  courierCode   String?
+  courierName   String?
+  settlementId  BigInt?
+  settlement    CourierSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  /// customer | staff | system
+  submittedBy   String             @default("customer")
+  note          String?
+  rejectReason  String?
+  checkedById   BigInt?
+  checkedAt     DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([storeId, kind, status])
+  @@index([storeId, method, transactionId])
+  @@index([orderId])
+  @@index([settlementId])
+}
+
+/// A COD payout from a courier: the parcels it covers, what it should have been and what arrived.
+model CourierSettlement {
+  id             BigInt          @id @default(autoincrement())
+  storeId        BigInt
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// "PAY-0001"
+  code           String
+  courierCode    String
+  courierName    String
+  /// Bank / mobile transfer reference of the payout.
+  reference      String?
+  paidOn         DateTime
+  /// Sum of the parcels' cash.
+  expectedAmount Decimal         @db.Decimal(14, 2)
+  /// Delivery and COD charges the courier kept.
+  charges        Decimal         @default(0) @db.Decimal(14, 2)
+  receivedAmount Decimal         @db.Decimal(14, 2)
+  /// expected - charges - received (positive = courier paid too little)
+  shortfall      Decimal         @default(0) @db.Decimal(14, 2)
+  /// balanced | short | over | resolved
+  status         String
+  note           String?
+  resolvedNote   String?
+  adminId        BigInt?
+  records        PaymentRecord[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, courierCode])
+  @@index([storeId, status])
 }
 
 model ShipmentEvent {

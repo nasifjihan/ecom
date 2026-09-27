@@ -1599,3 +1599,119 @@ An order now has four separate states: the order status, the payment status, a *
 - Order notes (`/admin/orders/:id/notes`) and the order page's Audit log tab are still placeholders built from the status history. The API has no notes endpoint yet.
 - Exchanges (return one item, send another) and photos with a return request.
 - storefront-base's account pages don't show parcels or returns (the fashion storefront does).
+
+## ✅ BATCH #21 — Payment verification and cash on delivery (2026-09-27)
+Most Bangladeshi customers pay in one of two ways:
+- They send money to the shop's bKash/Nagad/Rocket number and type the transaction ID (TrxID).
+- They pay cash to the courier, who pays the shop later.
+
+Neither could be tracked before. There was also no screen to set payment methods up: only cash on delivery was on, and bKash, Nagad, Rocket and bank transfer couldn't be turned on.
+
+### 21.1 Schema (migration `payment_verification`)
+- **`PaymentRecord`** holds money staff have to check. Each record has:
+  - the order and method (bkash, nagad, rocket, bank_transfer, cod, cash) and the amount;
+  - the transaction ID and the number it was sent from;
+  - a status. Transfers are to_verify, verified or rejected. COD cash is with_courier, cash_in_hand, received or not_collected;
+  - where the money is (customer, courier, office);
+  - the parcel and courier, the payout that settled it, who submitted it, and who checked it and when;
+  - the rejection reason.
+- **`CourierSettlement`** records a COD payout: code (`PAY-0001`), courier, reference, date, expected cash, charges the courier kept, amount received, shortfall and status (balanced, short, over, resolved), plus the note that resolved it.
+- `PaymentGatewayConfig` gains:
+  - `mode`: "manual" means send money and give the TrxID; "online" means the gateway's payment page;
+  - `accountNumber` and `accountType`: personal = Send Money, agent = Cash Out, merchant = Make Payment.
+- Backfill:
+  - bKash, Nagad, Rocket and bank transfer start in manual mode (also in the seed);
+  - cash on parcels already delivered is "with courier";
+  - transfers already marked paid with a transaction ID count as verified.
+- New permission area **`payments`** (view / edit):
+  - Order Manager and Finance get both; Shipper, Reports and Viewer get view.
+  - Roles a store made get `payments.view` / `payments.edit` if they had `orders.view` / `orders.edit`, so nobody loses access.
+
+### 21.2 Rules (`modules/payments/payments.rules.ts`, 37 table tests)
+- Transaction IDs are cleaned up (spaces removed, upper case) and must look like one (6–20 letters and digits including a digit; bank references 4–40). Bangladeshi mobile numbers accept `+880…`, `880…` or `1…` and are stored as `01XXXXXXXXX`.
+- An order's payment status comes from verified transfers:
+  - paid once they cover the total;
+  - partially paid when some money arrived;
+  - refund states are left alone.
+- A payout's shortfall is expected − charges − received. Anything over 1 paisa either way is flagged short or over.
+
+### 21.3 API (`modules/payments`)
+- `GET /api/admin/payments`: the queue, with status/method/courier/search filters, counts and amounts per status. `kind=cod` lists COD cash.
+- `POST /api/admin/payments/:id/verify`: takes the amount that actually arrived, so partial payments work.
+- `POST /api/admin/payments/:id/reject`: takes a reason. `POST /api/admin/payments/:id/not-collected`.
+- `GET|POST /api/admin/orders/:id/payments`: staff record a transfer, e.g. a TrxID sent on WhatsApp, and can verify it straight away.
+- `GET /api/admin/cod/summary`:
+  - cash with couriers, cash in hand, still to deliver, received, not collected;
+  - short payouts;
+  - owed by courier, with the oldest item's age.
+- `POST /api/admin/cod/confirm`: marks cash in hand as received.
+- `GET|POST /api/admin/cod/settlements`, `GET …/:id`, `POST …/:id/resolve`.
+- `GET|PATCH /api/admin/payment-methods`:
+  - checks the wallet number and requires bank details before bank transfer can be turned on;
+  - keeps at least one method on;
+  - never returns merchant credentials.
+- Storefront:
+  - checkout takes `payment: { transactionId, senderNumber }` for manual methods and skips the online redirect for them;
+  - `POST /api/storefront/account/orders/:ref/payments` for signed-in customers;
+  - `POST /api/storefront/checkout/orders/:orderKey/payment` for guests on the thank-you page;
+  - payment methods and order views now include where to pay, what's due and each TrxID with its state.
+- Rules enforced:
+  - a TrxID can't be used twice in a store (a rejected one can be sent again);
+  - a customer can have one payment waiting at a time;
+  - nothing can be sent for a paid, cancelled or refunded order.
+- Each change adds a line to the order's history. When a transfer makes a pending order paid, the order moves to Processing, which sends the usual email.
+- Cash is recorded automatically:
+  - A delivered parcel with cash to collect creates a "with courier" record, or "cash in hand" for own delivery.
+  - A cash-on-delivery order marked delivered without such a parcel records the order's cash as "cash in hand".
+  - A manual order entered as paid records verified money (or received cash for a walk-in). The same duplicate-TrxID check applies.
+- **Removed / fixed:**
+  - The old `/api/admin/payments` router (an order list and an `offline-confirm`) was unused. Its confirm path, the online-gateway confirm and the IPN path wrote a `paymentTxnId` column that doesn't exist; they now write `transactionId`.
+
+### 21.4 Store admin
+- **Orders → Payments to verify:**
+  - tabs To verify / Verified / Rejected with counts and the total waiting;
+  - method filter and search by TrxID, number, order or name;
+  - Verify dialog with the amount that arrived (warns when it's less);
+  - Reject dialog with common reasons or your own. The customer sees the reason.
+- **Orders → Cash & couriers:**
+  - cards for with couriers, cash in hand, still to deliver and short payouts;
+  - "Owed by courier" table, with the age going red after 7 days and a **Record payout** button. The payout dialog lets staff untick parcels and enter charges, amount received, reference, date and note, and shows the shortfall as they type;
+  - parcel cash by stage, with bulk "Mark received" for cash in hand, and "Not collected";
+  - payouts list: short payouts show the difference in red, and "Mark settled" takes a note.
+- **Settings → Payment methods:**
+  - turn each method on or off;
+  - for bKash, Nagad and Rocket: mode (send to our number / online page), the number and the account type;
+  - bank details for bank transfer;
+  - checkout name, instructions and fees.
+- **Order page:** Payment Details lists the order's payments (TrxID, sender, courier, payout code, rejection reason) with Verify / Reject, and "Record a payment" while money is due.
+
+### 21.5 Storefront
+- **Checkout:** the bKash, Nagad and Rocket panel shows the store's real number, how to send (Send Money / Cash Out / Make Payment) and the amount, then asks for the number paid from and the TrxID. Both are optional: customers can pay after ordering.
+- Bank transfer shows the store's bank details and asks for the reference.
+- **Checkout fix:** the old panel showed hardcoded fake wallet numbers (01700-000000…) and two invented bank accounts, and had a slip upload nothing received. Customers could have sent money there. These are gone. The payment form's card fields are no longer sent to the API with the order.
+- **Thank-you page and account order page:** a payment card shows where to send the money and what's due. It lists each TrxID sent (Checking / Received / Not accepted, with the reason) and has a form to send one, or the correct one after a rejection.
+
+### 21.6 Verification
+- API: `tsc` clean; 173/173 tests with `RUN_DB_TESTS=1` (37 new rule tests; the two vitest "errors" are the existing Batch 9 Redis-mock ones). Migration applied to the dev database with the backfill checked; seed runs.
+- curl:
+  - Settings: turning on without a number, a bad number, or bank transfer without details is refused; `+880 1712-345678` is saved as `01712345678`.
+  - Checkout: a bad TrxID is refused. A good one creates "to verify". Reusing an ID at checkout, on the thank-you page or on a manual order is refused.
+  - A second submission while one is waiting is refused.
+  - Verified ৳4000 of ৳4324 gave partially paid. Staff recorded the rest as verified, and the order became paid and moved to Processing.
+  - A rejection with no reason is refused. With a reason, the customer sees it and can send again.
+  - A COD order delivered without a parcel gave cash in hand ৳4324, then Received; confirming it again is refused.
+  - A RedX parcel marked delivered gave one "with courier" record.
+  - Pathao payout of ৳15,617 − ৳120 charges with ৳15,000 received was flagged short by ৳497, then resolved. The Steadfast payout balanced. A second payout with nothing owed is refused, and charges above the cash are refused.
+  - Walk-in manual orders paid in cash / bKash recorded received / verified.
+- Chromium, no failed requests or page errors:
+  - A customer checked out with bKash and saw the store's number, the amount and the TrxID fields; the thank-you page showed "Checking".
+  - Staff verified it from Payments to verify.
+  - Cash & couriers, Settings → Payment methods and the order page (a rejected and a waiting TrxID with Verify / Reject / Record) render.
+- Typecheck: every app and package except `storefront-base`, which fails as before on its self-imports. My changes there (checkout panel, checkout slice) compile in the fashion storefront. Production builds of the three Next apps pass (`next build --no-lint`; the apps have older lint errors, and the files added in this batch lint clean).
+
+### 21.7 Not done
+- No emails or SMS yet for "payment received" or "payment not accepted". Customers see the state on their order page; the order's move to Processing does send the usual status email.
+- Online bKash / Nagad / SSLCommerz checkout for a store's own merchant account; credentials are still platform-wide environment variables.
+- Importing a courier's payout statement (CSV) to match parcels automatically. That comes with the courier integrations in Batch 22.
+- Payment slips (photos) with a bank transfer, and matching transfers against an SMS or statement feed.
+- COD refunds after delivery still use the Batch 20 refund flow; nothing links them to cash that is still with the courier.

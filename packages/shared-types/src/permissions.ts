@@ -22,6 +22,7 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { key: "dashboard", group: "Overview", label: "Dashboard", help: "Sales figures and charts", actions: ["view"] },
 
   { key: "orders", group: "Orders", label: "Orders", help: "Create = enter orders by hand; Edit = status, refunds, invoices, emails", actions: ["view", "create", "edit"] },
+  { key: "payments", group: "Orders", label: "Payments and cash", help: "Edit = verify or reject bKash/Nagad/bank payments, confirm cash, record courier payouts", actions: ["view", "edit"] },
 
   { key: "products", group: "Catalog", label: "Products", actions: ALL },
   { key: "categories", group: "Catalog", label: "Categories and brands", actions: ALL },

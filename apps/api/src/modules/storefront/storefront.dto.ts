@@ -86,6 +86,10 @@ export const PlaceOrderDto = z.object({
   billingSameAsShipping: z.boolean().optional().default(true),
   shippingMethodId: z.coerce.bigint().positive(),
   paymentGateway: z.string().trim().toLowerCase().min(2).max(32),
+  /** bKash / Nagad / Rocket / bank sent by hand: what the customer paid from and the transaction ID. */
+  payment: z
+    .object({ transactionId: safeText(60), senderNumber: safeText(40).optional() })
+    .optional(),
   couponCodes: z.array(z.string().trim().toUpperCase().max(40)).max(1).optional().default([]),
   items: z.array(CartLineDto.passthrough()).min(1).max(100),
   customerNote: safeText(2000).optional(),

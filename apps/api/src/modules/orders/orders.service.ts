@@ -1,4 +1,5 @@
 import { prisma, tx, cacheGet, cacheSet, cacheDel, CACHE_KEYS } from "../../config";
+import { recordOrderCash } from "../payments/payments.records";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, ForbiddenError, type RequestContext } from "../../core";
 import { getPaymentProvider, PAYMENT_METHODS } from "../../services/payments";
 import type { PaymentMethod, PaymentStatus } from "../../services/payments/types";
@@ -414,6 +415,8 @@ export class OrdersService extends BaseService {
       }
 
       await t.order.update({ where: { id: oid }, data: updateData as any });
+      // Cash on delivery handed over without a parcel carrying it: count it as cash in hand.
+      if (newStatus === "DELIVERED") await recordOrderCash(t, oid);
 
       await t.orderStatusLog.create({
         data: {
@@ -510,7 +513,7 @@ export class OrdersService extends BaseService {
       data: {
         paymentStatus: confirmResult.status,
         paidAt: confirmResult.paidAt ?? new Date(),
-        paymentTxnId: confirmResult.transactionId ?? dto.gatewayTxnId,
+        transactionId: confirmResult.transactionId ?? dto.gatewayTxnId,
       } as any,
     });
 
@@ -551,7 +554,7 @@ export class OrdersService extends BaseService {
         data: {
           paymentStatus: confirmResult.status ?? "paid",
           paidAt: confirmResult.paidAt ?? new Date(),
-          paymentTxnId: ipnResult.transactionId,
+          transactionId: ipnResult.transactionId,
         } as any,
       });
     }

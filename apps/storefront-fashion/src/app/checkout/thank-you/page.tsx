@@ -1,5 +1,6 @@
 "use client";
 
+import { OrderPaymentCard } from "../../_components/order-payment";
 import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -38,6 +39,7 @@ import {
   toast,
   CheckoutStepper,
   useGetOrderByKeyQuery,
+  useSubmitOrderPaymentMutation,
   useGetProductsQuery,
   type OrderAddressSummary,
 } from "@ecom/storefront-base";
@@ -74,6 +76,7 @@ export default function ThankYouPage() {
 
   const orderKey = searchParams.get("key") ?? "";
   const { data: order, isLoading, isError } = useGetOrderByKeyQuery(orderKey, { skip: !orderKey });
+  const [submitPayment] = useSubmitOrderPaymentMutation();
   const { data: suggestions } = useGetProductsQuery({ featured: true, perPage: 3, sort: "popular" });
   const crossSell: ProductCardData[] = suggestions?.items ?? [];
   const [loadInvoice, { isLoading: loadingInvoice }] = useOrderInvoiceByKeyMutation();
@@ -237,6 +240,13 @@ export default function ThankYouPage() {
 
       <div className="grid lg:grid-cols-3 gap-6 mb-10">
         <div className="lg:col-span-2 space-y-6">
+          {order.payment?.manual && (
+            <OrderPaymentCard
+              payment={order.payment}
+              currency={order.currency}
+              onSubmit={(input) => submitPayment({ orderKey, ...input }).unwrap()}
+            />
+          )}
           <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">

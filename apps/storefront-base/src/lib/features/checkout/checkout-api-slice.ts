@@ -42,9 +42,31 @@ export type PaymentMethodOption = {
   name: string;
   description?: string;
   instructions?: string;
+  /** "manual": the customer sends money to accountNumber and gives the transaction ID. */
+  mode?: "manual" | "online" | "cod";
+  accountNumber?: string;
+  /** personal | agent | merchant */
+  accountType?: string;
   feeFixed: number;
   feePercent: number;
 };
+
+/** A bKash / Nagad / Rocket / bank payment paid by hand, and what the shop made of it. */
+export type OrderPayment = {
+  method: string;
+  methodName: string;
+  manual: boolean;
+  accountNumber: string | null;
+  accountType: string | null;
+  instructions: string | null;
+  /** What's still to pay after verified payments. */
+  due: number;
+  /** A transaction ID can be sent now (nothing waiting to be checked, money still due). */
+  canSubmit: boolean;
+  transfers: { transactionId: string | null; amount: number; status: "to_verify" | "verified" | "rejected" | string; rejectReason: string | null; createdAt: string }[];
+};
+
+export type TransferInput = { transactionId: string; senderNumber?: string };
 
 export type OrderDetail = {
   orderId: string;
@@ -68,6 +90,7 @@ export type OrderDetail = {
   feeTotal: number;
   grandTotal: number;
   currency: string;
+  payment?: OrderPayment;
 };
 
 export type OrderAddressSummary = {
@@ -153,6 +176,8 @@ export type PlaceOrderBody = {
   shippingCost?: number;
   paymentGateway: PaymentMethod | string;
   paymentDetails?: Record<string, unknown>;
+  /** Manual bKash / Nagad / Rocket / bank payments: the transaction ID and the number paid from. */
+  payment?: TransferInput;
   couponCodes?: string[];
   items: OrderItemSnapshot[];
   subtotal?: number;
@@ -311,6 +336,12 @@ export const checkoutApi = api.injectEndpoints({
       query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}`, method: "GET" }),
       providesTags: (_res, _err, key) => [{ type: "Order" as const, id: key }],
     }),
+
+    /** Sends a transaction ID for an order from the thank-you page (the order key is the secret). */
+    submitOrderPayment: builder.mutation<{ transactionId: string; status: string; amount: number }, TransferInput & { orderKey: string }>({
+      query: ({ orderKey, ...body }) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}/payment`, method: "POST", body }),
+      invalidatesTags: (_res, _err, { orderKey }) => [{ type: "Order" as const, id: orderKey }],
+    }),
   }),
   overrideExisting: true,
 });
@@ -325,6 +356,7 @@ export const {
   usePlaceOrderMutation,
   useGetPaymentMethodsQuery,
   useGetOrderByKeyQuery,
+  useSubmitOrderPaymentMutation,
 } = checkoutApi;
 
 /**

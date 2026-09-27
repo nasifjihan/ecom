@@ -5,6 +5,8 @@
 import {
   Activity,
   Award,
+  Banknote,
+  CreditCard,
   FileText,
   HelpCircle,
   Home,
@@ -32,6 +34,7 @@ import {
   Undo2,
   User2,
   UserCog,
+  Wallet,
   Users,
   Warehouse,
   Zap,
@@ -60,6 +63,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/orders/new", label: "New order", icon: PackagePlus, perm: "orders.create" },
       { href: "/orders/shipments", label: "Shipments", icon: Truck, perm: "orders.view" },
       { href: "/orders/returns", label: "Returns", icon: Undo2, perm: "orders.view" },
+      { href: "/orders/payments", label: "Payments to verify", icon: CreditCard, perm: "payments.view" },
+      { href: "/orders/cash", label: "Cash & couriers", icon: Banknote, perm: "payments.view" },
     ],
   },
   {
@@ -121,6 +126,7 @@ export const SETTINGS_SECTIONS: NavSection[] = [
     title: "Store",
     items: [
       { href: "/settings/general", label: "Store details", icon: Store, perm: "settings.view" },
+      { href: "/settings/payments", label: "Payment methods", icon: Wallet, perm: "settings.view" },
       { href: "/settings/emails", label: "Emails", icon: Mail, perm: "emails.view" },
     ],
   },

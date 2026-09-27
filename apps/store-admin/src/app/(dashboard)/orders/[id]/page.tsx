@@ -89,6 +89,7 @@ import {
 import { FULFILLMENT_LABELS, FULFILLMENT_STYLES, RETURN_LABELS, RETURN_STYLES, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
 import { ParcelsCard } from "@/components/orders/parcels-card";
 import { ReturnsCard } from "@/components/orders/returns-card";
+import { OrderPayments } from "@/components/orders/order-payments";
 import { useCan } from "@/lib/permissions";
 import { openFile } from "@ecom/api-client";
 import { cn } from "@/components/ui";
@@ -542,9 +543,10 @@ export default function OrderDetailPage() {
                   order.paymentStatus === "PAID" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-amber-700 bg-amber-50 border-amber-200",
                   "dark:border-transparent",
                 )}>
-                  {order.paymentStatus ?? "UNKNOWN"}
+                  {(order.paymentStatus ?? "UNKNOWN").replace(/_/g, " ")}
                 </Badge>
               </div>
+              <OrderPayments orderId={order.id} method={String(order.paymentMethod)} closed={["CANCELLED", "FAILED", "REFUNDED"].includes(order.status)} />
             </CardContent>
           </Card>
 
