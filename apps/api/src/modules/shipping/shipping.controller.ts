@@ -127,7 +127,7 @@ adminShippingRouter.get(
 adminShippingRouter.post(
   "/zones",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.create"),
   validate({ body: CreateShippingZoneDto }),
   shippingController.createZone,
 );
@@ -140,14 +140,14 @@ adminShippingRouter.get(
 adminShippingRouter.put(
   "/zones/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.edit"),
   validate({ body: UpdateShippingZoneDto }),
   shippingController.updateZone,
 );
 adminShippingRouter.delete(
   "/zones/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.delete"),
   shippingController.deleteZone,
 );
 
@@ -160,27 +160,27 @@ adminShippingRouter.get(
 adminShippingRouter.post(
   "/methods",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.create"),
   validate({ body: CreateShippingMethodDto }),
   shippingController.createMethod,
 );
 adminShippingRouter.put(
   "/methods/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.edit"),
   validate({ body: UpdateShippingMethodDto }),
   shippingController.updateMethod,
 );
 adminShippingRouter.delete(
   "/methods/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.delete"),
   shippingController.deleteMethod,
 );
 adminShippingRouter.post(
   "/methods/import",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.create"),
   validate({ body: BulkImportMethodsDto }),
   shippingController.bulkImport,
 );
@@ -188,28 +188,28 @@ adminShippingRouter.post(
 adminShippingRouter.get(
   "/tax-rates",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("settings.taxes"),
+  rbacMiddleware("taxes.view"),
   validate({ query: TaxRateSearchDto }),
   shippingController.listTaxes,
 );
 adminShippingRouter.post(
   "/tax-rates",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("settings.taxes"),
+  rbacMiddleware("taxes.create"),
   validate({ body: CreateTaxRateDto }),
   shippingController.createTax,
 );
 adminShippingRouter.put(
   "/tax-rates/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("settings.taxes"),
+  rbacMiddleware("taxes.edit"),
   validate({ body: UpdateTaxRateDto }),
   shippingController.updateTax,
 );
 adminShippingRouter.delete(
   "/tax-rates/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("settings.taxes"),
+  rbacMiddleware("taxes.delete"),
   shippingController.deleteTax,
 );
 

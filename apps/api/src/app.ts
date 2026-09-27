@@ -28,8 +28,6 @@ import {
   storeSelfRouter,
 } from "./modules/stores";
 import {
-  adminUsersRouter,
-  adminRolesRouter,
   superAdminUsersRouter,
   superRolesRouter,
 } from "./modules/admin-users";
@@ -57,6 +55,7 @@ import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRou
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
+import { adminAuditRouter, adminPermissionsRouter, adminStaffRouter, adminTeamRolesRouter, auditMiddleware } from "./modules/team";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -116,8 +115,12 @@ export function buildApp(): Express {
   app.use("/api/super/admin-users", superAdminUsersRouter);
   app.use("/api/super/roles", superRolesRouter);
   app.use("/api/store", storeSelfRouter);
-  app.use("/api/admin/users", adminUsersRouter);
-  app.use("/api/admin/roles", adminRolesRouter);
+  // Every successful change through the store admin API goes into the activity log.
+  app.use("/api/admin", auditMiddleware);
+  app.use("/api/admin/permissions", adminPermissionsRouter);
+  app.use("/api/admin/roles", adminTeamRolesRouter);                // roles and their permissions
+  app.use("/api/admin/staff", adminStaffRouter);                    // staff accounts
+  app.use("/api/admin/audit-logs", adminAuditRouter);               // activity log
   app.use("/api/admin/products", adminProductsRouter);
   app.use("/api/admin/categories", adminCategoriesRouter);
   app.use("/api/admin/brands", adminBrandsRouter);

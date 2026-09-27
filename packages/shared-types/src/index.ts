@@ -223,3 +223,4 @@ export enum EventName {
   SHIPMENT_TRACKING_UPDATED = "shipment.tracking_updated",
   COUPON_REDEEMED = "coupon.redeemed",
 }
+export * from "./permissions";

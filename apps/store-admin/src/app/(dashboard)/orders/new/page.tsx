@@ -8,6 +8,7 @@ import { AlertCircle, ArrowLeft, Minus, PackagePlus, Plus, Search, ShoppingBag, 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, cn } from "@/components/ui";
 import { Field, PageTitle, Toggle } from "@/components/content/shared";
 import { AreaSelects, type AreaValue } from "@/components/orders/area-selects";
+import { useCan } from "@/lib/permissions";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { ORDER_SOURCES, type OrderSource } from "@/lib/features/operations/operations-api-slice";
 import {
@@ -173,6 +174,7 @@ function ProductPicker({ onAdd }: { onAdd: (p: PickProduct, variant?: { id: stri
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const { can } = useCan();
   const [quote, { isLoading: quoting }] = useQuoteManualOrderMutation();
   const [create, { isLoading: creating }] = useCreateManualOrderMutation();
   const [result, setResult] = useState<ManualOrderQuote | null>(null);
@@ -286,7 +288,9 @@ export default function NewOrderPage() {
     try {
       const r = await create(body).unwrap();
       toast.success(`Order ${r.number} created`);
-      router.push(`/orders/${r.id}`);
+      // Staff who can take orders but not open them start a fresh form instead.
+      if (can("orders.view")) router.push(`/orders/${r.id}`);
+      else window.location.reload();
     } catch (err) {
       toast.error(errorText(err, "Couldn't create the order."));
     }

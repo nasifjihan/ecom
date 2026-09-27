@@ -1,86 +1,77 @@
+import { PERMISSION_AREAS, perm, type PermissionAction } from "@ecom/shared-types";
+
+/** `area` with the given actions, or every action the area has when none are given. */
+const g = (area: string, ...actions: PermissionAction[]) => {
+  const def = PERMISSION_AREAS.find((a) => a.key === area);
+  if (!def) throw new Error(`Unknown permission area "${area}"`);
+  return (actions.length ? actions : def.actions).map((x) => perm(area, x));
+};
+
 /**
- * The built-in roles every store gets, keyed by slug, with the permission codes the admin routes check
- * (rbacMiddleware("products.*"), "orders.read", ...). Used by the seed and by store creation.
+ * The built-in roles every store gets, keyed by slug, with codes from PERMISSION_AREAS
+ * (@ecom/shared-types). Used by the seed and by store creation; the role_permission_catalogue
+ * migration moved existing stores onto the same lists.
  */
 export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   owner: ["*"],
   product_manager: [
-    "products.*",
-    "categories.*",
-    "brands.*",
-    "attributes.*",
-    "collections.*",
-    "inventory.read",
-    "inventory.update",
-    "media.*",
-    "suppliers.*",
+    ...g("dashboard"),
+    ...g("products"),
+    ...g("categories"),
+    ...g("attributes"),
+    ...g("media"),
+    ...g("inventory"),
+    ...g("reviews", "view"),
   ],
   order_manager: [
-    "orders.read",
-    "orders.update",
-    "orders.statusChange",
-    "shipments.*",
-    "orders.create",
-    "invoices.read",
-    "invoices.create",
-    "refunds.*",
-    "returns.*",
-    "abandoned_carts.read",
-    "abandoned_carts.update",
+    ...g("dashboard"),
+    ...g("orders"),
+    ...g("customers", "view", "create", "edit"),
+    ...g("products", "view"),
+    ...g("inventory", "view"),
+    ...g("shipping", "view"),
   ],
   customer_support: [
-    "customers.read",
-    "customers.update",
-    "customers.notes",
-    "orders.read",
-    "orders.create",
-    "reviews.*",
-    "tickets.*",
-    "returns.read",
-    "returns.update",
+    ...g("orders", "view", "create"),
+    ...g("customers", "view", "create", "edit"),
+    ...g("reviews", "view", "edit"),
+    ...g("products", "view"),
   ],
   marketing: [
-    "coupons.*",
-    "flash_sales.*",
-    "banners.*",
-    "gift_cards.*",
-    "affiliates.read",
-    "affiliates.update",
-    "abandoned_carts.read",
-    "email_templates.read",
-    "email_templates.update",
-    "notifications.send",
+    ...g("dashboard"),
+    ...g("coupons"),
+    ...g("flash_sales"),
+    ...g("reviews"),
+    ...g("products", "view"),
+    ...g("categories", "view"),
+    ...g("customers", "view"),
+    ...g("emails"),
   ],
   content: [
-    "pages.*",
-    "blog.*",
-    "faqs.*",
-    "menus.*",
-    "themes.read",
-    "themes.update",
-    "homepage_sections.*",
-    "page_builder.*",
+    ...g("pages"),
+    ...g("blog"),
+    ...g("faqs"),
+    ...g("menus"),
+    ...g("online_store"),
+    ...g("media", "view", "create"),
+    ...g("products", "view"),
+    ...g("categories", "view"),
   ],
   finance: [
-    "orders.read",
-    "invoices.*",
-    "refunds.read",
-    "reports.*",
-    "payment_gateways.read",
-    "payouts.*",
-    "billing.read",
-    "billing.update",
+    ...g("dashboard"),
+    ...g("orders", "view", "edit"),
+    ...g("customers", "view"),
+    ...g("taxes"),
+    ...g("settings", "view"),
+    ...g("audit_logs"),
   ],
   shipper: [
-    "orders.read",
-    "orders.statusChange",
-    "shipments.create",
-    "shipments.update",
-    "shipments.print",
-    "orders.export",
+    ...g("orders", "view", "edit"),
+    ...g("shipping", "view"),
+    ...g("inventory", "view"),
   ],
-  reports: ["reports.*", "orders.read", "customers.read", "products.read"],
-  viewer: ["dashboard.read", "orders.read", "products.read", "customers.read"],
+  reports: [...g("dashboard"), ...g("orders", "view"), ...g("customers", "view"), ...g("products", "view"), ...g("inventory", "view")],
+  viewer: PERMISSION_AREAS.filter((a) => a.actions.includes("view") && !["audit_logs", "staff", "roles"].includes(a.key)).map((a) => perm(a.key, "view")),
 };
 
 /** "product_manager" -> "Product Manager" */

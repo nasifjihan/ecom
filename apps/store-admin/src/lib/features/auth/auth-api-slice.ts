@@ -32,6 +32,7 @@ export interface MeResponse {
     name: string;
     email: string;
     role?: string;
+    roleId?: string;
     avatar?: string | null;
   };
   storeId?: string;
@@ -49,6 +50,7 @@ interface ApiAdminUser {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  roleId?: string;
   role?: { name: string; permissions?: { permission: string }[] } | null;
 }
 
@@ -57,6 +59,7 @@ const toAuthUser = (u: ApiAdminUser) => ({
   name: u.name,
   email: u.email,
   role: u.role?.name,
+  roleId: u.roleId,
   avatar: u.avatarUrl ?? null,
 });
 

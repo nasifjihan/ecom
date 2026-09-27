@@ -29,7 +29,7 @@ export const adminOrdersRouter = Router();
 adminOrdersRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ query: OrderSearchQueryDto }),
   ordersController.listOrders,
 );
@@ -37,7 +37,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.create"),
   validate({ body: CreateOrderFromCartDto }),
   ordersController.createOrderFromCart,
 );
@@ -108,7 +108,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.get(
   "/invoices",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ query: InvoiceIdsQueryDto }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const { ids } = req.query as unknown as { ids: bigint[] };
@@ -119,7 +119,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ params: OrderIdParamDto }),
   ordersController.getOrderById,
 );
@@ -127,7 +127,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.get(
   "/number/:number",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ params: OrderNumberParamDto }),
   ordersController.getOrderByNumber,
 );
@@ -135,7 +135,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.post(
   "/:id/status",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.edit"),
   validate({ params: OrderIdParamDto, body: TransitionStatusDto }),
   ordersController.transitionStatus,
 );
@@ -144,7 +144,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.get(
   "/:id/invoice",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ params: OrderIdParamDto }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const file = await InvoiceService.forContext(req.ctx).forOrderId(BigInt((req.params as { id: string }).id));
@@ -156,7 +156,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.post(
   "/:id/send-email",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.edit"),
   validate({ params: OrderIdParamDto }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const sent = await EmailService.forContext(req.ctx).orderPlaced(BigInt((req.params as { id: string }).id), "customer");
@@ -168,7 +168,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.post(
   "/:id/refunds",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.edit"),
   validate({ params: OrderIdParamDto, body: CreateRefundDto }),
   ordersController.createRefund,
 );
@@ -176,7 +176,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.get(
   "/:id/refunds",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ params: OrderIdParamDto }),
   ordersController.listRefunds,
 );
@@ -184,7 +184,7 @@ adminOrdersRouter.get(
 adminOrdersRouter.post(
   "/export",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   validate({ body: ExportOrdersDto }),
   ordersController.exportOrders,
 );
@@ -192,7 +192,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.post(
   "/:id/payments",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.edit"),
   validate({ params: OrderIdParamDto, body: PaymentInitiateDto }),
   ordersController.initiatePayment,
 );
@@ -200,7 +200,7 @@ adminOrdersRouter.post(
 adminOrdersRouter.post(
   "/payments/confirm",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.edit"),
   validate({ body: PaymentConfirmDto }),
   ordersController.confirmPayment,
 );
@@ -208,14 +208,14 @@ adminOrdersRouter.post(
 adminOrdersRouter.get(
   "/dashboard/stats",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   ordersController.dashboardStats,
 );
 
 adminOrdersRouter.get(
   "/shipping-methods",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.*"),
+  rbacMiddleware("orders.view"),
   ordersController.listShippingMethods,
 );
 
@@ -224,7 +224,7 @@ export const adminPaymentsRouter = Router();
 adminPaymentsRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("payments.*"),
+  rbacMiddleware("orders.view"),
   validate({ query: OrderSearchQueryDto }),
   ordersController.listOrders,
 );
@@ -232,7 +232,7 @@ adminPaymentsRouter.get(
 adminPaymentsRouter.post(
   "/offline-confirm",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("payments.*"),
+  rbacMiddleware("orders.edit"),
   validate({ body: PaymentConfirmDto }),
   ordersController.confirmPayment,
 );

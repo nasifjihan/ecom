@@ -129,13 +129,13 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 |---|---|---|
 | Stock list, adjustments, movement log | ✅ | |
 | Warehouses, stock per warehouse, transfers with shortfall | ❌ | Batch 11 removed the fake warehouse UI |
-| Audit log viewer for store admin | 🟡 | Super admin has it; store admin doesn't |
+| Audit log viewer for store admin | ✅ | Batch 25: every admin change recorded |
 
 ### Settings & access (reference 05, 21)
 | Feature | Status | Note |
 |---|---|---|
 | 10 default roles | ✅ | |
-| **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ❌ | |
+| **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
 | Staff on some sites only | ❌ | Needs multi-storefront |
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Email on/off per template ✅ |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | 🟡 | We add tax on top |
@@ -176,7 +176,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Encrypted secrets for gateway/courier/SMS keys | ❌ |
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing only) |
 | OpenAPI docs at `/api/docs` | ❌ |
-| Audit row on every admin change | 🟡 |
+| Audit row on every admin change | ✅ |
 | Background jobs: courier sync, COD, exports, imports | 🟡 (email only) |
 | Product CSV/XLSX import | ❌ |
 
@@ -195,7 +195,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 22 | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |
 | 23 | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
 | 24 | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
-| 25 | **Custom role editor** + store-admin audit log | Shops hire staff | M |
+| 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
 | 26 | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
 | 27 | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
 | 28 | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |

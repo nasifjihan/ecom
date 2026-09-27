@@ -181,7 +181,7 @@ adminSettingsRouter.put(
 adminSettingsRouter.get(
   "/:section",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware(["store.settings.update", "store.owner", "settings.*"]),
+  rbacMiddleware("settings.view"),
   ctrl(async (req: Req, res: Response) => {
     const section = String(req.params.section);
     if (!(SECTIONS as readonly string[]).includes(section)) {
@@ -197,7 +197,7 @@ adminSettingsRouter.get(
 adminSettingsRouter.put(
   "/:section",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware(["store.settings.update", "store.owner", "settings.*"]),
+  rbacMiddleware("settings.edit"),
   ctrl(async (req: Req, res: Response) => {
     const storeId = storeIdOf(req);
     const section = String(req.params.section);

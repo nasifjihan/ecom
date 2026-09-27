@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
+import { PageGuard } from "@/components/layout/page-guard";
 
 export default function DashboardLayout({
   children,
@@ -30,7 +31,9 @@ export default function DashboardLayout({
           collapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-6">
+          <PageGuard>{children}</PageGuard>
+        </main>
       </motion.div>
     </div>
   );

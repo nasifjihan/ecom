@@ -108,7 +108,7 @@ export const storeDashboardRouter = Router();
 storeDashboardRouter.get(
   "/stats",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("dashboard.*"),
+  rbacMiddleware("dashboard.view"),
   validate({ query: BaseRangeQuery }),
   dashboardController.storeStats,
 );
@@ -116,14 +116,14 @@ storeDashboardRouter.get(
 storeDashboardRouter.get(
   "/summary",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("dashboard.*"),
+  rbacMiddleware("dashboard.view"),
   dashboardController.storeSummary,
 );
 
 storeDashboardRouter.get(
   "/overview",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("dashboard.*"),
+  rbacMiddleware("dashboard.view"),
   validate({ query: OverviewQuery }),
   dashboardController.storeOverview,
 );
@@ -131,7 +131,7 @@ storeDashboardRouter.get(
 storeDashboardRouter.get(
   "/export",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("dashboard.*"),
+  rbacMiddleware("dashboard.view"),
   validate({ query: StoreDashboardExportDto }),
   dashboardController.exportStore,
 );

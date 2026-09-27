@@ -44,7 +44,7 @@ adminLocationsRouter.get(
 
 adminLocationsRouter.put(
   "/:id/delivery",
-  rbacMiddleware("shipping.manage"),
+  rbacMiddleware("shipping.edit"),
   validate({ params: IdParam, body: DeliveryBody }),
   ctrl(async (req: Req, res: Response) => {
     const { id } = req.params as unknown as z.infer<typeof IdParam>;

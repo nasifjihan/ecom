@@ -110,12 +110,12 @@ storeSelfRouter
   .route("/me")
   .get(
     authMiddleware("admin"),
-    rbacMiddleware(["store.read", "store.settings.read"]),
+    rbacMiddleware("settings.view"),
     storesController.getStoreMe,
   )
   .patch(
     authMiddleware("admin"),
-    rbacMiddleware(["store.settings.update", "store.owner"]),
+    rbacMiddleware("settings.edit"),
     validate({ body: UpdateStoreDto }),
     storesController.updateStoreMe,
   );
