@@ -75,3 +75,6 @@ Thumbs.db
 
 # Local media uploads (STORAGE_DRIVER=local)
 apps/api/uploads/
+
+# Redis snapshot written when redis-server runs in the repo
+dump.rdb
