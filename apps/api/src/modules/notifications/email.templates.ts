@@ -20,6 +20,8 @@ export interface TemplateDef {
   blocks: TemplateBlock[]
   /** Button under the message: its label and the variable holding its link. */
   button?: { label: string; url: string }
+  /** Attach the order's invoice as a PDF. */
+  attachInvoice?: boolean
   variables: string[]
 }
 
@@ -45,6 +47,7 @@ export const EMAIL_TEMPLATES = {
       "# Thanks for your order\n\nHi {{customer.first_name}},\n\nWe've received order #{{order.number}} and are getting it ready. We'll email you again when it's on its way.",
     blocks: ["order_summary"],
     button: { label: "View your order", url: "order.url" },
+    attachInvoice: true,
     variables: [...STORE, ...CUSTOMER, ...ORDER],
   },
   order_new_admin: {

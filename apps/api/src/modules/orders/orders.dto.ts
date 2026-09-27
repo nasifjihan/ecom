@@ -321,3 +321,14 @@ export const ExportOrdersDto = BaseExportOrdersDto.superRefine((v, ctx) => {
   }
 });
 export type ExportOrdersDto = z.infer<typeof ExportOrdersDto>;
+
+/** ?ids=1,2,3 for printing several invoices at once. */
+export const InvoiceIdsQueryDto = z.object({
+  ids: z
+    .string()
+    .trim()
+    .regex(/^\d+(,\d+)*$/, "ids must be order ids separated by commas")
+    .transform((v) => [...new Set(v.split(","))].map((id) => BigInt(id)))
+    .pipe(z.array(z.bigint()).min(1).max(100, "Print up to 100 invoices at a time")),
+  download: z.string().optional(),
+});

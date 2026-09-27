@@ -4,18 +4,10 @@
  * Store-written text is never compiled as a template: {{variables}} are looked up in a flat map
  * and everything is HTML-escaped, so a message can't inject markup or run code.
  */
+import type { StoreBrand } from "../content/store-details"
 import type { TemplateBlock } from "./email.templates"
 
-export interface EmailBrand {
-  storeName: string
-  logoUrl: string | null
-  /** Brand colour as #rrggbb. */
-  color: string
-  storeUrl: string
-  address: string
-  phone: string
-  email: string
-}
+export type EmailBrand = StoreBrand
 
 export interface OrderSummary {
   items: { name: string; detail: string; qty: number; total: string; imageUrl: string | null }[]

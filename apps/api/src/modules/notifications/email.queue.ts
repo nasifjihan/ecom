@@ -10,6 +10,7 @@ import { Queue, Worker } from "bullmq"
 import { Redis } from "ioredis"
 import type { Prisma } from "@prisma/client"
 import { env, getMailer, logger, prisma } from "../../config"
+import { InvoiceService } from "../invoices"
 
 export const EMAIL_QUEUE_NAME = "notifications"
 const ATTEMPTS = 3
@@ -30,6 +31,8 @@ export interface EmailLogData {
   attempts: number
   error?: string
   messageId?: string
+  /** Attach the invoice PDF for orderId when sending. */
+  attachInvoice?: boolean
   /** Set when the mail driver is "log": the email was recorded but not handed to a mail server. */
   logOnly?: boolean
   orderId?: string
@@ -124,6 +127,8 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
   const data = readData(row)
   if (data.status === "sent") return
   try {
+    const attachments =
+      data.attachInvoice && data.orderId ? await invoiceAttachment(row.storeId, data.orderId) : []
     const info = (await getMailer().sendMail({
       from: { name: data.fromName, address: env.MAIL_FROM_ADDRESS },
       to: data.to,
@@ -131,6 +136,7 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
       subject: row.title,
       html: row.body ?? undefined,
       text: data.text,
+      attachments,
     })) as { messageId?: string }
     await update(
       logId,
@@ -167,6 +173,17 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
       last ? "Email failed" : "Email failed, will retry",
     )
     if (!last) throw err
+  }
+}
+
+/** The order's invoice PDF as an attachment. If it can't be made, the email goes without it. */
+async function invoiceAttachment(storeId: bigint, orderId: string) {
+  try {
+    const file = await new InvoiceService(storeId).forOrderId(BigInt(orderId))
+    return [{ filename: file.filename, content: file.pdf, contentType: "application/pdf" }]
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, orderId }, "Invoice not attached")
+    return []
   }
 }
 

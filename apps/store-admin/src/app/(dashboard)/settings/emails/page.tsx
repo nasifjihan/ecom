@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Eye, Inbox, Mail, Pencil, RotateCw, Search, Users, UserRound } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Inbox, Mail, Paperclip, Pencil, RotateCw, Search, Users, UserRound } from "lucide-react";
 import {
   Button,
   Card,
@@ -325,6 +325,11 @@ function SentEmail({ id, onResend, onClose, resending }: { id: string; onResend:
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <StatusBadge status={data.status} logOnly={data.logOnly} />
             {data.attempts > 1 && <span className="text-slate-500">{data.attempts} attempts</span>}
+            {data.invoiceAttached && (
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <Paperclip className="h-3.5 w-3.5" /> Invoice PDF attached
+              </span>
+            )}
             {data.error && data.status !== "sent" && <span className="text-red-600">{data.error}</span>}
             <div className="ml-auto flex gap-2">
               <Button size="sm" variant="outline" disabled={resending} onClick={onResend}>

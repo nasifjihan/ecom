@@ -19,7 +19,9 @@ import {
   Clock,
   Copy,
   Check,
+  FileDown,
 } from "lucide-react";
+import { openFile } from "@ecom/api-client";
 import { PaymentMethod } from "@ecom/shared-types";
 import {
   Card,
@@ -39,6 +41,7 @@ import {
   useGetProductsQuery,
   type OrderAddressSummary,
 } from "@ecom/storefront-base";
+import { useOrderInvoiceByKeyMutation } from "@/lib/account";
 
 const CURRENCY = "BDT";
 const formatBDT = (n: number) => formatMoney(n, CURRENCY);
@@ -73,6 +76,18 @@ export default function ThankYouPage() {
   const { data: order, isLoading, isError } = useGetOrderByKeyQuery(orderKey, { skip: !orderKey });
   const { data: suggestions } = useGetProductsQuery({ featured: true, perPage: 3, sort: "popular" });
   const crossSell: ProductCardData[] = suggestions?.items ?? [];
+  const [loadInvoice, { isLoading: loadingInvoice }] = useOrderInvoiceByKeyMutation();
+
+  const onInvoice = async () => {
+    try {
+      await openFile(() => loadInvoice(orderKey).unwrap(), {
+        filename: `invoice-INV-${order?.orderRef ?? "order"}.pdf`,
+        mode: "download",
+      });
+    } catch {
+      toast.error("Couldn't download the invoice. Please try again.");
+    }
+  };
 
   const expectedDelivery = React.useMemo(() => {
     const d = order ? new Date(order.createdAt) : new Date();
@@ -379,6 +394,9 @@ export default function ThankYouPage() {
                 <Link href="/">
                   <Home className="h-4 w-4 mr-2" /> Continue Shopping
                 </Link>
+              </Button>
+              <Button variant="outline" className="w-full h-11" disabled={loadingInvoice} onClick={onInvoice}>
+                <FileDown className="h-4 w-4 mr-2" /> {loadingInvoice ? "Preparing invoice..." : "Download Invoice"}
               </Button>
             </CardContent>
           </Card>

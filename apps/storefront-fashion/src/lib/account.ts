@@ -8,7 +8,7 @@
  * customer. The refresh token is an httpOnly cookie set by the API; the API
  * client refreshes on 401 through /auth/customer/refresh.
  */
-import { api, toPaginated, type Paginated } from "@ecom/api-client";
+import { api, fileResponse, toPaginated, type Paginated } from "@ecom/api-client";
 import type { AppDispatch } from "@/lib/store";
 
 const TOKEN_KEY = "accessToken";
@@ -252,6 +252,13 @@ export const accountApi = api.injectEndpoints({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/cancel`, method: "POST", body: {} }),
       invalidatesTags: ["Order"],
     }),
+    /** Invoice PDFs, as object URLs for openFile() from @ecom/api-client. */
+    myOrderInvoice: builder.mutation<string, string>({
+      query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/invoice`, responseHandler: fileResponse }),
+    }),
+    orderInvoiceByKey: builder.mutation<string, string>({
+      query: (key) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(key)}/invoice`, responseHandler: fileResponse }),
+    }),
   }),
   overrideExisting: false,
 });
@@ -273,4 +280,6 @@ export const {
   useGetMyOrdersQuery,
   useGetMyOrderQuery,
   useCancelMyOrderMutation,
+  useMyOrderInvoiceMutation,
+  useOrderInvoiceByKeyMutation,
 } = accountApi;

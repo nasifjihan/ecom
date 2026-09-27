@@ -388,6 +388,12 @@ export class OrdersService extends BaseService {
       const updateData: Record<string, unknown> = { status: newStatus };
       if (newStatus === "DELIVERED") {
         (updateData as any).completedAt = new Date();
+        // Cash on delivery is collected when the parcel is handed over.
+        const o = order as { paymentGatewayCode?: string; paymentStatus?: string };
+        if (o.paymentGatewayCode === "cod" && o.paymentStatus === "unpaid") {
+          updateData.paymentStatus = "paid";
+          updateData.paidAt = new Date();
+        }
       }
       if (newStatus === "CANCELLED") {
         (updateData as any).cancelledAt = new Date();

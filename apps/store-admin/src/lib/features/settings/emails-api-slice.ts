@@ -25,6 +25,8 @@ export interface EmailTemplate extends EmailTemplateRow {
   /** Parts drawn under the message: the order table and the courier box. */
   blocks: ("order_summary" | "tracking")[];
   buttonLabel: string | null;
+  /** The order's invoice is attached as a PDF. */
+  attachesInvoice: boolean;
   defaultSubject: string;
   defaultMessage: string;
 }
@@ -54,6 +56,8 @@ export interface EmailLogRow {
   attempts: number;
   /** The mail driver only logged it: nothing was handed to a mail server. */
   logOnly: boolean;
+  /** The order's invoice PDF went with it. */
+  invoiceAttached: boolean;
   orderId: string | null;
   createdAt: string;
   sentAt: string | null;

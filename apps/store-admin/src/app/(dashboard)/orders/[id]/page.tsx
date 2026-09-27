@@ -75,7 +75,7 @@ import {
 import {
   useGetOrderQuery,
   useUpdateOrderStatusMutation,
-  useLazyGenerateOrderInvoicePdfQuery,
+  useOrderInvoiceMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
   useCreateRefundMutation,
@@ -88,6 +88,7 @@ import {
   type OrderLine,
   type RefundLine,
 } from "@/lib/features/operations/operations-api-slice";
+import { openFile } from "@ecom/api-client";
 import { cn } from "@/components/ui";
 
 const STATUS_STYLES_LOCAL: Record<OrderStatus, string> = {
@@ -162,7 +163,7 @@ export default function OrderDetailPage() {
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
 
   const [updateStatus] = useUpdateOrderStatusMutation();
-  const [triggerInvoicePdf] = useLazyGenerateOrderInvoicePdfQuery();
+  const [loadInvoice] = useOrderInvoiceMutation();
   const [sendEmail] = useSendOrderEmailMutation();
   const [createNote] = useCreateOrderNoteMutation();
   const [createRefund] = useCreateRefundMutation();
@@ -193,17 +194,13 @@ export default function OrderDetailPage() {
       .catch(() => toast.error("Failed to update status"));
   }
 
-  function handlePrint() {
-    const w = window.open("", "_blank", "width=900,height=700");
-    if (!w) { toast.error("Pop-up blocked"); return; }
-    w.document.write(`<html><head><title>Invoice ${order.orderNumber}</title><body onload="print()"><h1>Invoice ${order.orderNumber}</h1><p>Customer: ${order.customerName}</p><p>Total: ৳ ${order.grandTotal.toLocaleString()}</p></body></html>`);
-    w.document.close();
-  }
-
-  async function handleInvoice() {
-    toast.info("Generating invoice PDF...");
-    try { await triggerInvoicePdf(order.id).unwrap(); toast.success("Invoice PDF generated"); }
-    catch { toast.error("Failed to generate PDF"); }
+  /** Opens the invoice PDF in a new tab (print it from there), or saves it. */
+  async function handleInvoice(mode: "open" | "download") {
+    try {
+      await openFile(() => loadInvoice(order.id).unwrap(), { filename: `invoice-INV-${order.orderNumber}.pdf`, mode });
+    } catch {
+      toast.error("Couldn't load the invoice. Please try again.");
+    }
   }
 
   async function handleSendEmail() {
@@ -320,15 +317,15 @@ export default function OrderDetailPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleInvoice}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handleInvoice("download")}>
               <FileText className="h-4 w-4" />
-              Generate Invoice
+              Download Invoice
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSendEmail}>
               <Mail className="h-4 w-4" />
               Send Email
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={handlePrint}>
+            <Button size="sm" className="gap-1.5" onClick={() => handleInvoice("open")}>
               <Printer className="h-4 w-4" />
               Print Invoice
             </Button>

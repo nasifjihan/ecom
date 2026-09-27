@@ -218,6 +218,7 @@ function Editor({ template }: { template: EmailTemplate }) {
                   <>
                     A blank line starts a new paragraph, and a line starting with <code className="rounded bg-slate-100 px-1 dark:bg-slate-800"># </code> is a heading.
                     {extras.length > 0 && <> Below your message the email adds {joinList(extras)}.</>}
+                    {template.attachesInvoice && <> The order&apos;s invoice is attached as a PDF.</>}
                   </>
                 }
               >

@@ -5,7 +5,7 @@
 import type { Prisma } from "@prisma/client"
 import { env, logger, prisma } from "../../config"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
-import { ContentService } from "../content/content.service"
+import { storeBrand, storeUrls, type StoreUrls } from "../content/store-details"
 import { dispatchEmail, type EmailLogData } from "./email.queue"
 import {
   renderEmail,
@@ -22,11 +22,6 @@ import {
   templateDef,
   type TemplateKey,
 } from "./email.templates"
-
-export interface StoreUrls {
-  storefront: string
-  admin: string
-}
 
 interface SendOptions {
   to: string[]
@@ -56,12 +51,6 @@ export interface EmailLogQuery {
   search?: string
   status?: EmailLogData["status"]
 }
-
-const LOCAL_HOST = /^(localhost|127\.|0\.0\.0\.0|\[::1\])|\.(local|test|localhost)(:\d+)?$/i
-
-/** Local and non-SSL hosts get http links; everything else https. */
-const originFor = (hostname: string, ssl: boolean) =>
-  `${LOCAL_HOST.test(hostname) || !ssl ? "http" : "https"}://${hostname}`
 
 export const money = (v: unknown) => {
   // Prisma Decimals convert through valueOf.
@@ -125,44 +114,14 @@ export class EmailService {
   // ------------------------------------------------------------------ store details
 
   async urls(): Promise<StoreUrls> {
-    const rows = await prisma.domain.findMany({
-      where: { storeId: this.storeId },
-      orderBy: [{ primary: "desc" }, { id: "asc" }],
-    })
-    const pick = (type: string) => rows.find((r) => r.type === type)
-    const url = (type: string, fallback: string) => {
-      const r = pick(type)
-      return r ? originFor(r.hostname, r.sslEnabled) : fallback
-    }
-    return {
-      storefront: url("storefront", "http://localhost:3000"),
-      admin: url("admin", "http://localhost:3001"),
-    }
+    return storeUrls(this.storeId)
   }
 
   /** Store name, logo, colour and contact details from the theme (Online Store > Theme). */
   private async context() {
     if (this.cache) return this.cache
-    const [theme, urls] = await Promise.all([
-      new ContentService({
-        storeId: this.storeId,
-        requestId: "email",
-        locale: "en",
-        currency: "BDT",
-      }).getTheme(),
-      this.urls(),
-    ])
-    const logo = theme.brand.logoUrl ?? null
-    const brand: EmailBrand = {
-      storeName: theme.brand.storeName,
-      logoUrl: logo?.startsWith("/") ? `${urls.storefront}${logo}` : logo,
-      color: theme.colors.primary,
-      storeUrl: urls.storefront,
-      address: theme.footer.address,
-      phone: theme.footer.phone,
-      email: theme.footer.email,
-    }
-    this.cache = { brand, urls, replyTo: theme.footer.email.trim() || null }
+    const { brand, urls } = await storeBrand(this.storeId)
+    this.cache = { brand, urls, replyTo: brand.email.trim() || null }
     return this.cache
   }
 
@@ -247,6 +206,7 @@ export class EmailService {
       status: "queued",
       attempts: 0,
       ...(opts.orderId ? { orderId: String(opts.orderId) } : {}),
+      ...(opts.orderId && templateDef(key).attachInvoice ? { attachInvoice: true } : {}),
     }
     const row = await prisma.notification.create({
       data: {
@@ -303,7 +263,7 @@ export class EmailService {
         name: i.productName,
         detail: variantText(i.variantValues),
         qty: i.quantity,
-        total: money(i.lineTotal),
+        total: money(i.lineSubtotal),
         imageUrl: i.imageUrl,
       })),
       totals: [
@@ -477,6 +437,7 @@ export class EmailService {
       variables: def.variables,
       blocks: def.blocks,
       buttonLabel: def.button?.label ?? null,
+      attachesInvoice: !!def.attachInvoice,
       defaultSubject: def.subject,
       defaultMessage: def.message,
       ...config,
@@ -600,6 +561,7 @@ export class EmailService {
       error: d.error ?? null,
       attempts: d.attempts ?? 0,
       logOnly: !!d.logOnly,
+      invoiceAttached: !!d.attachInvoice,
       orderId: d.orderId ?? null,
       createdAt: r.createdAt,
       sentAt: r.sentAt,
