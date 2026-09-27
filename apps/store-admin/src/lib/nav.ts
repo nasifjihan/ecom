@@ -28,6 +28,8 @@ import {
   SlidersHorizontal,
   Store,
   Tags,
+  Truck,
+  Undo2,
   User2,
   UserCog,
   Users,
@@ -56,6 +58,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/orders", label: "Orders", icon: ShoppingCart, perm: "orders.view" },
       { href: "/orders/new", label: "New order", icon: PackagePlus, perm: "orders.create" },
+      { href: "/orders/shipments", label: "Shipments", icon: Truck, perm: "orders.view" },
+      { href: "/orders/returns", label: "Returns", icon: Undo2, perm: "orders.view" },
     ],
   },
   {

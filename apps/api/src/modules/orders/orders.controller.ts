@@ -57,21 +57,6 @@ class OrdersController extends BaseController {
     envelope(res, { status: 200, data: order });
   });
 
-  createRefund = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const dto = req.body as CreateRefundDtoType;
-    const refund = await svc.createRefund(dto);
-    envelope(res, { status: 201, data: refund, message: "Refund created" });
-  });
-
-  listRefunds = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const params = req.params as unknown as OrderIdParamDtoType;
-    const oid = BigInt(params.id);
-    const refunds = await (svc as any).refunds.listForOrder(oid, req.ctx);
-    envelope(res, { status: 200, data: refunds });
-  });
-
   initiatePayment = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
     const params = req.params as unknown as OrderIdParamDtoType;

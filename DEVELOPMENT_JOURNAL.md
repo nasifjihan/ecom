@@ -1537,3 +1537,65 @@ Done ahead of Batch 20 because the permission checks didn't match the roles: alm
 - Staff who may edit staff but not view roles see an empty role list in the staff dialog (no built-in role has that combination).
 - Pages still show action buttons (e.g. Delete) the API will refuse for someone with view-only access; the refusal message is shown. Hiding them page by page is follow-up work.
 - Two-factor sign-in for staff, per-site staff access (multi-storefront) and an order-manager view of "my orders" are not in this batch.
+
+## ✅ BATCH #20 — Parcels, returns and refunds (2026-09-27)
+An order now has four separate states: the order status, the payment status, a **fulfilment status** worked out from its parcels (not packed, partly packed, packed, shipped, delivered, delivery failed, returned) and a **return status** from its newest return (none, requested, approved, received, refunded, rejected). Parcels and returns each keep their own status history.
+
+### 20.1 Schema (migration `parcels_returns`)
+- `Shipment` (a parcel): store, code (`<order number>-P1`, unique per store), status (ready, picked_up, in_transit, out_for_delivery, delivered, failed, returned, cancelled), courier, tracking number and link, cash to collect, weight, failure reason, who created it, returned date. `ShipmentEvent` is its history.
+- `ReturnRequest`: code (`-R1`), who asked (customer or staff), approved / received / closed dates; `ReturnEvent` history; `ReturnItem.restocked`; refunds can point at the return they pay.
+- `Refund.method` (original, cash, bKash, Nagad, bank, store credit); `Order.fulfillmentStatus`, `returnStatus`, `refundedTotal`.
+- Existing shipments get a code, store and status from their dates, and `refundedTotal` is filled from existing refunds. Tested on a copy with old rows.
+
+### 20.2 Rules (`modules/fulfilment/fulfilment.rules.ts`, 30 table tests)
+- Parcel moves: ready → picked up / in transit / cancelled; on the way → out for delivery / delivered / failed / returned; failed → sent out again or returned. Delivered, returned and cancelled are final. "Failed" needs a note.
+- Parcel changes move the order forward along the allowed order transitions (never through hold or cancel), one step at a time with the usual emails, and only the last step emails the customer. When every parcel is delivered the order becomes Delivered, which marks a cash-on-delivery order paid.
+- A parcel takes what's left of each line; items in a cancelled parcel, or one the courier brought back, can be packed again. On a cash-on-delivery order the parcel collects what's still due by default.
+- Returns: requested → approved / received / rejected / cancelled; approved → received / cancelled; received → refunded (only by refunding) or rejected (needs a reason). A customer can ask within **7 days of delivery**, only for their own order and only for units not already in a return. Staff can open one once the order has gone out.
+- Receiving a return puts the items back in stock unless staff untick them. Refunds skip items a return already restocked.
+- Refunds: items at the price actually paid (line total ÷ quantity, so discounts and VAT are included), plus an optional extra amount (e.g. the delivery charge). A refund can't exceed what's left of each line or of the order total, and needs a reason. It works only on paid orders: cash on delivery counts as paid once delivered. "Original method" goes back through the payment gateway where it's online. Store credit is added to the customer's balance. The payment status becomes partially refunded or refunded, and a full refund sets the order to Refunded.
+
+### 20.3 API
+- `POST /api/admin/orders/:id/shipments`, `GET /api/admin/shipments` (status, search, paging and counts per status), `GET|PATCH /api/admin/shipments/:id`, `POST /api/admin/shipments/:id/status`.
+- `POST /api/admin/orders/:id/returns`, `GET /api/admin/returns`, `GET /api/admin/returns/:id`, `POST /api/admin/returns/:id/status`.
+- `POST|GET /api/admin/orders/:id/refunds` replaces the old refund endpoint, which wrote columns the Refund table doesn't have (`refundMethod`, `totalAmount`, `gatewayRefund`) and so always failed.
+- `POST /api/storefront/account/orders/:ref/returns` for customers. The customer's order detail now includes parcels (courier, tracking), returns, the return deadline and what can still be returned.
+- All admin changes are `orders.edit`, lists are `orders.view`, and every change is in the activity log.
+
+### 20.4 Store admin
+- **Order page:** the fake "Shipping Details" box (carrier and tracking saved to an endpoint that never existed) is replaced by a **Parcels** card. It lets staff split the order into parcels, choose the courier (Pathao, Steadfast, RedX, Paperfly, eCourier, Sundarban, SA Paribahan, own delivery, other), set tracking, a link and the cash to collect, move each parcel along, edit its courier details, and see its history.
+- The placeholder Refunds and Shipping labels tabs and the old refund dialog are replaced by a **Returns & refunds** card:
+  - start a return;
+  - approve, receive (with a restock tick per item), reject or cancel it;
+  - refund by item and/or amount, by method, optionally against a received return;
+  - see the refunds list and how much can still be refunded.
+- The header shows fulfilment and return badges, and the totals show the refunded amount.
+- **Shipments** and **Returns** pages under Orders: status tabs with counts, search by code, tracking number, order number, name or phone, and paging. Parcels can be moved from the list.
+- The orders list shows the fulfilment and return state under the order status.
+- Layout fix: wide pages no longer push the whole admin sideways (`min-w-0` on the content column).
+
+### 20.5 Storefront (fashion)
+- The order page shows each parcel (courier, tracking link, items, sent/delivered date) and each return with its state in plain words.
+- **Request a return:** choose items and quantities (only what can still be returned), a reason and a note, until the deadline shown.
+
+### 20.6 Verification
+- API: `tsc` clean. 136/136 tests with `RUN_DB_TESTS=1`, including 30 new rule tests. The two "errors" vitest reports come from the Redis mock in the Batch 9 smoke test and also happen without this batch's changes. The seed runs cleanly.
+- curl, on a cash-on-delivery order with two lines:
+  - Two parcels (Pathao with the full COD, Steadfast with 0). The order moved Pending → Processing → Shipped → Out for delivery → Delivered and was marked paid.
+  - A failed attempt and resend recorded in the parcel's history.
+  - The customer's return was refused for too many units, and a refund before receiving was refused.
+  - Receiving restocked 48 → 49 with no second restock at refund.
+  - bKash refund, then store credit (the customer's balance went up), then line and order caps enforced, then a full refund set the order to Refunded.
+- Chromium (admin + storefront), no failed requests or page errors:
+  - Packed a Steadfast parcel and marked it picked up, then delivered.
+  - The customer requested a return on the storefront.
+  - Staff saw it on Returns, approved it, marked it received with restock, and refunded it by bKash from the return.
+  - The order page, the Shipments list and the orders list show the new states.
+- Typecheck: api, store-admin, storefront-fashion, super-admin and packages are clean. `storefront-base` fails as before on its own self-imports; it has no changes in this batch. Production builds of the three Next apps pass (`next build --no-lint`: the apps have older lint errors, e.g. in super-admin; the files added in this batch lint clean).
+
+### 20.7 Not done
+- Courier bookings, labels and tracking from the courier (Batch 22). Parcel status is set by hand for now.
+- No emails yet for return approved/rejected or refund issued (the order-status emails still go out).
+- Order notes (`/admin/orders/:id/notes`) and the order page's Audit log tab are still placeholders built from the status history. The API has no notes endpoint yet.
+- Exchanges (return one item, send another) and photos with a return request.
+- storefront-base's account pages don't show parcels or returns (the fashion storefront does).

@@ -1,6 +1,17 @@
 "use client";
 
 import { api, fileResponse, toPaginated } from "@ecom/api-client";
+import {
+  fromApiParcel,
+  fromApiRefund,
+  fromApiReturn,
+  type ApiParcel,
+  type ApiRefund,
+  type ApiReturn,
+  type Parcel,
+  type RefundRow,
+  type ReturnRequest,
+} from "./fulfilment-api-slice";
 
 /** Mirrors the API OrderStatus enum (prisma/schema.prisma). */
 export type OrderStatus =
@@ -102,7 +113,7 @@ export interface Order {
   customerPhone?: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
-  paymentStatus?: "PAID" | "UNPAID" | "PARTIALLY_PAID" | "REFUNDED";
+  paymentStatus?: "PAID" | "UNPAID" | "PENDING" | "PARTIALLY_PAID" | "PARTIALLY_REFUNDED" | "REFUNDED" | "FAILED";
   transactionId?: string;
   paidAt?: string;
   shippingMethod?: string;
@@ -128,6 +139,11 @@ export interface Order {
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
+  /** From the order's parcels: unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned. */
+  fulfillmentStatus: string;
+  /** From the newest return: none, requested, approved, received, refunded, rejected. */
+  returnStatus: string;
+  refundedTotal: number;
 }
 
 export interface OrderListFilters {
@@ -160,23 +176,6 @@ export interface OrderNote {
   type: "INTERNAL" | "CUSTOMER";
   userId?: string | number;
   userName?: string;
-  createdAt: string;
-}
-
-export interface RefundLine {
-  orderLineId: string | number;
-  quantity: number;
-  amount: number;
-}
-
-export interface Refund {
-  id: string | number;
-  orderId: string | number;
-  lines: RefundLine[];
-  reason?: string;
-  amount: number;
-  method?: string;
-  images?: string[];
   createdAt: string;
 }
 
@@ -566,7 +565,12 @@ interface ApiOrder {
     createdAt: string;
     admin?: { name: string } | null;
   }[];
-  refunds?: { id: string; amount: string; reason: string | null; createdAt: string; status?: string }[];
+  refunds?: ApiRefund[];
+  shipments?: ApiParcel[];
+  returns?: ApiReturn[];
+  fulfillmentStatus?: string;
+  returnStatus?: string;
+  refundedTotal?: string;
 }
 
 const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
@@ -634,6 +638,9 @@ export function fromApiOrder(o: ApiOrder): Order {
     source: o.source ?? "website",
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
+    fulfillmentStatus: o.fulfillmentStatus ?? "unfulfilled",
+    returnStatus: o.returnStatus ?? "none",
+    refundedTotal: Number(o.refundedTotal ?? 0),
   };
 }
 
@@ -680,7 +687,9 @@ export const operationsApiSlice = api.injectEndpoints({
     getOrder: builder.query<
       Order & {
         notes?: OrderNote[];
-        refunds?: Refund[];
+        refunds?: RefundRow[];
+        parcels?: Parcel[];
+        returns?: ReturnRequest[];
         timeline?: OrderTimelineEntry[];
         auditLog?: AuditLogEntry[];
       },
@@ -704,14 +713,9 @@ export const operationsApiSlice = api.injectEndpoints({
               userName: h.admin?.name ?? "System",
               createdAt: h.createdAt,
             })),
-          refunds: (o.refunds ?? []).map((r) => ({
-            id: r.id,
-            orderId: o.id,
-            lines: [],
-            reason: r.reason ?? undefined,
-            amount: Number(r.amount),
-            createdAt: r.createdAt,
-          })),
+          refunds: (o.refunds ?? []).map(fromApiRefund),
+          parcels: (o.shipments ?? []).map(fromApiParcel),
+          returns: (o.returns ?? []).map(fromApiReturn),
           auditLog: history.slice(1).map((h, i) => ({
             id: h.id,
             action: "Status changed",
@@ -787,46 +791,7 @@ export const operationsApiSlice = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [{ type: "Order", id }],
     }),
 
-    createRefund: builder.mutation<
-      Refund,
-      {
-        orderId: string | number;
-        lines: RefundLine[];
-        reason?: string;
-        amount: number;
-        images?: (File | string)[];
-      }
-    >({
-      query: ({ orderId, ...body }) => ({
-        url: `/admin/orders/${orderId}/refunds`,
-        method: "POST",
-        body,
-      }),
-      invalidatesTags: (_r, _e, { orderId }) => [
-        { type: "Order", id: orderId },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
-
-    updateOrderShippingTracking: builder.mutation<
-      Order,
-      {
-        id: string | number;
-        carrier?: string;
-        trackingNo?: string;
-        shipDate?: string;
-      }
-    >({
-      query: ({ id, ...body }) => ({
-        url: `/admin/orders/${id}/shipping-tracking`,
-        method: "PATCH",
-        body,
-      }),
-      invalidatesTags: (_r, _e, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
+    // Refunds, parcels and returns: fulfilment-api-slice.ts.
 
     getCustomers: builder.query<PaginatedResponse<Customer>, CustomerFilters>({
       query: (filters) => {
@@ -1053,8 +1018,6 @@ export const {
   useOrderInvoicesMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
-  useCreateRefundMutation,
-  useUpdateOrderShippingTrackingMutation,
   useGetCustomersQuery,
   useGetCustomerGroupsQuery,
   useGetCustomerQuery,

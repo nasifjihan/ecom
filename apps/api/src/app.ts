@@ -55,6 +55,7 @@ import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRou
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
+import { adminOrderFulfilmentRouter, adminReturnsRouter, adminShipmentsRouter, storefrontReturnsRouter } from "./modules/fulfilment";
 import { adminAuditRouter, adminPermissionsRouter, adminStaffRouter, adminTeamRolesRouter, auditMiddleware } from "./modules/team";
 import path from "node:path";
 
@@ -126,12 +127,16 @@ export function buildApp(): Express {
   app.use("/api/admin/brands", adminBrandsRouter);
   app.use("/api/admin/attributes", adminAttributesRouter);
   app.use("/api/admin/media", productUploadRouter);
+  app.use("/api/admin/orders", adminOrderFulfilmentRouter);         // parcels, returns, refunds of an order
+  app.use("/api/admin/shipments", adminShipmentsRouter);
+  app.use("/api/admin/returns", adminReturnsRouter);
   app.use("/api/admin/orders", adminOrdersRouter);
   app.use("/api/admin/payments", adminPaymentsRouter);
   app.use("/api/storefront/checkout", storefrontCheckoutRouter); // Batch #10: POST / , /coupons/apply, GET /orders/:orderKey
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
   app.use("/api/admin/customers", adminCustomersRouter);
+  app.use("/api/storefront/account", storefrontReturnsRouter);
   app.use("/api/storefront/account", storefrontAccountRouter);
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);

@@ -92,6 +92,7 @@ import {
   ORDER_SOURCES,
   sourceLabel,
 } from "@/lib/features/operations/operations-api-slice";
+import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
 import { cn } from "@/components/ui";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
@@ -298,13 +299,24 @@ export default function OrdersPage() {
         header: "Status",
         cell: ({ row }) => {
           const status = row.getValue("status") as OrderStatus;
+          const o = row.original;
+          // Parcel and return state, when there is something to say beyond the order status.
+          const extra = [
+            o.fulfillmentStatus !== "unfulfilled" && o.fulfillmentStatus.toUpperCase() !== status
+              ? FULFILLMENT_LABELS[o.fulfillmentStatus]
+              : null,
+            o.returnStatus !== "none" ? `Return ${RETURN_LABELS[o.returnStatus as ReturnStatus]?.toLowerCase() ?? o.returnStatus}` : null,
+          ].filter(Boolean);
           return (
-            <Badge
-              variant="outline"
-              className={cn(STATUS_STYLES[status], "capitalize font-medium whitespace-nowrap")}
-            >
-              {status.replace(/_/g, " ")}
-            </Badge>
+            <div className="space-y-1">
+              <Badge
+                variant="outline"
+                className={cn(STATUS_STYLES[status], "capitalize font-medium whitespace-nowrap")}
+              >
+                {status.replace(/_/g, " ")}
+              </Badge>
+              {extra.length > 0 && <div className="text-[11px] text-slate-500 whitespace-nowrap">{extra.join(" · ")}</div>}
+            </div>
           );
         },
       },

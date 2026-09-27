@@ -12,7 +12,6 @@ import {
   OrderIdParamDto,
   OrderNumberParamDto,
   TransitionStatusDto,
-  CreateRefundDto,
   ExportOrdersDto,
   PaymentInitiateDto,
   PaymentConfirmDto,
@@ -165,21 +164,7 @@ adminOrdersRouter.post(
   }),
 );
 
-adminOrdersRouter.post(
-  "/:id/refunds",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.edit"),
-  validate({ params: OrderIdParamDto, body: CreateRefundDto }),
-  ordersController.createRefund,
-);
-
-adminOrdersRouter.get(
-  "/:id/refunds",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.view"),
-  validate({ params: OrderIdParamDto }),
-  ordersController.listRefunds,
-);
+// Refunds, parcels and returns: modules/fulfilment (mounted on /api/admin/orders before this router).
 
 adminOrdersRouter.post(
   "/export",

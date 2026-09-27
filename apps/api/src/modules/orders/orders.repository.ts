@@ -24,6 +24,8 @@ export class OrderRepository extends BaseRepository<"order"> {
         refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         createdByAdmin: { select: { id: true, name: true } },
+        shipments: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
+        returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
       },
     });
   }

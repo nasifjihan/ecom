@@ -5,7 +5,11 @@ import { useMemo } from "react";
 import { Label } from "@/components/ui";
 import type { OrderArea } from "@/lib/features/operations/manual-order-api-slice";
 
-export type AreaValue = { divisionId: string; districtId: string; upazilaId: string };
+export interface AreaValue {
+  divisionId: string;
+  districtId: string;
+  upazilaId: string;
+}
 
 const SELECT =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50";

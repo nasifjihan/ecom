@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -78,8 +78,6 @@ import {
   useOrderInvoiceMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
-  useCreateRefundMutation,
-  useUpdateOrderShippingTrackingMutation,
   VALID_STATUS_TRANSITIONS,
   PAYMENT_METHOD_META,
   sourceLabel,
@@ -87,8 +85,11 @@ import {
   type OrderStatus,
   type OrderNote,
   type OrderLine,
-  type RefundLine,
 } from "@/lib/features/operations/operations-api-slice";
+import { FULFILLMENT_LABELS, FULFILLMENT_STYLES, RETURN_LABELS, RETURN_STYLES, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
+import { ParcelsCard } from "@/components/orders/parcels-card";
+import { ReturnsCard } from "@/components/orders/returns-card";
+import { useCan } from "@/lib/permissions";
 import { openFile } from "@ecom/api-client";
 import { cn } from "@/components/ui";
 
@@ -137,8 +138,6 @@ const TIMELINE_LABELS: Record<OrderStatus, string> = {
   OUT_FOR_DELIVERY: "Out for Delivery",
 };
 
-const CARRIERS = ["Pathao", "RedX", "eCourier", "Paperfly", "SA Paribahan", "Sundarban", "Other"];
-
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 0) return "??";
@@ -167,24 +166,12 @@ export default function OrderDetailPage() {
   const [loadInvoice] = useOrderInvoiceMutation();
   const [sendEmail] = useSendOrderEmailMutation();
   const [createNote] = useCreateOrderNoteMutation();
-  const [createRefund] = useCreateRefundMutation();
-  const [updateTracking] = useUpdateOrderShippingTrackingMutation();
+  const { can } = useCan();
+  const canEdit = can("orders.edit");
 
   const [newNote, setNewNote] = useState("");
   const [noteType, setNoteType] = useState<"INTERNAL" | "CUSTOMER">("INTERNAL");
   const [tab, setTab] = useState("notes");
-  const [showRefund, setShowRefund] = useState(false);
-  const [refundReason, setRefundReason] = useState("");
-  const [refundLines, setRefundLines] = useState<Record<string, number>>({});
-  const [carrier, setCarrier] = useState(order.carrier ?? "");
-  const [trackingNo, setTrackingNo] = useState(order.trackingNo ?? "");
-  const [shipDate, setShipDate] = useState("");
-
-  useEffect(() => {
-    if (!orderRaw) return;
-    setCarrier(orderRaw.carrier ?? "");
-    setTrackingNo(orderRaw.trackingNo ?? "");
-  }, [orderRaw]);
 
   const allowedTransitions = VALID_STATUS_TRANSITIONS[order.status as OrderStatus] ?? [];
 
@@ -216,43 +203,6 @@ export default function OrderDetailPage() {
       setNewNote("");
       toast.success("Note added");
     } catch { toast.error("Failed to add note"); }
-  }
-
-  async function handleSaveTracking() {
-    try {
-      await updateTracking({ id: order.id, carrier, trackingNo, shipDate }).unwrap();
-      toast.success("Shipping details saved");
-    } catch { toast.error("Failed to save"); }
-  }
-
-  function setRefundLineQty(lineId: string | number, qty: number, maxQty: number) {
-    const v = Math.max(0, Math.min(maxQty, qty));
-    setRefundLines({ ...refundLines, [String(lineId)]: v });
-  }
-
-  const refundTotal = useMemo(() => {
-    return order.lines.reduce((sum: number, l: OrderLine) => {
-      const qty = refundLines[String(l.id)] ?? 0;
-      return sum + qty * l.unitPrice;
-    }, 0);
-  }, [refundLines, order.lines]);
-
-  async function handleSubmitRefund() {
-    const lines: RefundLine[] = order.lines
-      .filter((l: OrderLine) => (refundLines[String(l.id)] ?? 0) > 0)
-      .map((l: OrderLine) => ({
-        orderLineId: l.id,
-        quantity: refundLines[String(l.id)] ?? 0,
-        amount: (refundLines[String(l.id)] ?? 0) * l.unitPrice,
-      }));
-    if (lines.length === 0) { toast.error("Select at least one item"); return; }
-    try {
-      await createRefund({ orderId: order.id, lines, reason: refundReason, amount: refundTotal }).unwrap();
-      toast.success(`Refund of ৳ ${refundTotal.toLocaleString()} processed`);
-      setShowRefund(false);
-      setRefundLines({});
-      setRefundReason("");
-    } catch { toast.error("Failed to create refund"); }
   }
 
   if (isLoading) {
@@ -295,6 +245,16 @@ export default function OrderDetailPage() {
             <Badge variant="outline" className={cn(STATUS_STYLES_LOCAL[order.status as OrderStatus], "capitalize font-medium px-3 py-1")}>
               {(order.status as string).replace(/_/g, " ")}
             </Badge>
+            {order.fulfillmentStatus && order.fulfillmentStatus.toUpperCase() !== order.status && (
+              <Badge variant="outline" className={cn(FULFILLMENT_STYLES[order.fulfillmentStatus], "font-medium px-3 py-1")}>
+                {FULFILLMENT_LABELS[order.fulfillmentStatus] ?? order.fulfillmentStatus}
+              </Badge>
+            )}
+            {order.returnStatus && order.returnStatus !== "none" && (
+              <Badge variant="outline" className={cn(RETURN_STYLES[order.returnStatus as ReturnStatus], "font-medium px-3 py-1")}>
+                Return {RETURN_LABELS[order.returnStatus as ReturnStatus]?.toLowerCase() ?? order.returnStatus}
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
@@ -472,21 +432,10 @@ export default function OrderDetailPage() {
               </div>
             </div>
 
-            {order.refunds?.length > 0 && (
-              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-purple-50/50 dark:bg-purple-500/5 space-y-3">
-                <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-semibold text-sm">
-                  <RotateCcw className="h-4 w-4" /> Refunds ({order.refunds.length})
-                </div>
-                {order.refunds.map((r: any) => (
-                  <div key={r.id} className="bg-white dark:bg-slate-900 rounded-lg border border-purple-200 dark:border-purple-500/20 p-3 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-purple-700 dark:text-purple-400">#RF-{r.id}</span>
-                      <span className="font-bold">{formatCurrency(r.amount)}</span>
-                    </div>
-                    {r.reason && <div className="text-xs text-slate-500">{r.reason}</div>}
-                    <div className="text-xs text-slate-500">{r.method ?? "Original method"} · {formatDate(r.createdAt)}</div>
-                  </div>
-                ))}
+            {order.refundedTotal > 0 && (
+              <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-purple-50/50 dark:bg-purple-500/5 flex justify-between text-sm">
+                <span className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-medium"><RotateCcw className="h-4 w-4" /> Refunded</span>
+                <span className="font-semibold text-purple-700 dark:text-purple-400">-{formatCurrency(order.refundedTotal)}</span>
               </div>
             )}
           </CardContent>
@@ -599,44 +548,11 @@ export default function OrderDetailPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-sm dark:border-slate-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Truck className="h-4 w-4 text-indigo-600" /> Shipping Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4 space-y-3">
-              <div className="text-sm flex justify-between">
-                <span className="text-slate-500">Method</span>
-                <span className="font-medium">{order.shippingMethod ?? "—"}</span>
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">Carrier</Label>
-                <Select value={carrier} onValueChange={setCarrier}>
-                  <SelectItem value="">Select carrier</SelectItem>
-                  {CARRIERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">Tracking #</Label>
-                <Input value={trackingNo} onChange={(e) => setTrackingNo(e.target.value)} placeholder="Enter tracking number" className="h-9" />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">Ship Date</Label>
-                <Input type="date" value={shipDate} onChange={(e) => setShipDate(e.target.value)} className="h-9" />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => toast.info("Printing shipping label...")}>
-                  <Printer className="h-4 w-4" /> Label
-                </Button>
-                <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveTracking}>
-                  <Send className="h-4 w-4" /> Save
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <ParcelsCard order={order} canEdit={canEdit} />
         </div>
       </div>
+
+      <ReturnsCard order={order} canEdit={canEdit} />
 
       <Card className="border-slate-200 shadow-sm dark:border-slate-800">
         <CardContent className="p-0">
@@ -644,8 +560,6 @@ export default function OrderDetailPage() {
             <div className="px-4 pt-4">
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="notes">Order Notes</TabsTrigger>
-                <TabsTrigger value="refunds">Refunds</TabsTrigger>
-                <TabsTrigger value="labels">Shipping Labels</TabsTrigger>
                 <TabsTrigger value="audit">Audit Log</TabsTrigger>
               </TabsList>
             </div>
@@ -730,29 +644,6 @@ export default function OrderDetailPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="refunds" className="mt-2">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-slate-900 dark:text-white">Refunds & Returns</h3>
-                    <p className="text-sm text-slate-500">Process partial or full refunds</p>
-                  </div>
-                  <Button variant="outline" className="gap-1.5" onClick={() => setShowRefund(true)}>
-                    <RotateCcw className="h-4 w-4" /> Partial Refund
-                  </Button>
-                </div>
-                <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-sm text-slate-500">
-                  <RotateCcw className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                  No refunds processed yet for this order.
-                </div>
-              </TabsContent>
-
-              <TabsContent value="labels" className="mt-2">
-                <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-sm text-slate-500">
-                  <Printer className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                  Shipping labels will appear here once you mark the order as Shipped.
-                </div>
-              </TabsContent>
-
               <TabsContent value="audit" className="mt-2">
                 <div className="relative pl-6 space-y-4">
                   <div className="absolute left-[11px] top-1 bottom-1 w-[2px] bg-slate-200 dark:bg-slate-800" />
@@ -791,76 +682,6 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {showRefund && (
-        <Dialog open={showRefund} onOpenChange={(o) => !o && setShowRefund(false)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create Partial Refund</DialogTitle>
-              <DialogDescription>Select items and quantities to refund. Original payment method will be credited.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Item</TableHead>
-                      <TableHead className="text-xs">Qty</TableHead>
-                      <TableHead className="text-xs">Refund Qty</TableHead>
-                      <TableHead className="text-xs text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {order.lines.map((l: OrderLine) => {
-                      const curQty = refundLines[String(l.id)] ?? 0;
-                      return (
-                        <TableRow key={l.id}>
-                          <TableCell>
-                            <div className="text-sm font-medium">{l.productName}</div>
-                            <div className="text-xs text-slate-500 font-mono">{l.sku}</div>
-                          </TableCell>
-                          <TableCell className="text-sm">{l.quantity}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={l.quantity}
-                              value={curQty}
-                              onChange={(e) => setRefundLineQty(l.id, parseInt(e.target.value) || 0, l.quantity)}
-                              className="h-8 w-20"
-                            />
-                          </TableCell>
-                          <TableCell className="text-sm text-right font-semibold">
-                            {formatCurrency(curQty * l.unitPrice)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">Reason for refund</Label>
-                <Textarea rows={2} value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder="e.g. Customer damaged, wrong item sent..." />
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">Photo Proof (optional)</Label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 text-center text-sm text-slate-500 hover:border-indigo-400 transition-colors cursor-pointer">
-                  <ImageIcon className="h-6 w-6 mx-auto mb-1 text-slate-400" />
-                  Click to upload photos
-                </div>
-              </div>
-              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
-                <div className="text-sm text-slate-500">Refund Total</div>
-                <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(refundTotal)}</div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowRefund(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={handleSubmitRefund}>Process Refund</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import type {
 import { emitOrderPlaced } from "../notifications";
 import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
 import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
+import { FulfilmentService } from "../fulfilment/fulfilment.service";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -1075,7 +1076,12 @@ export class StorefrontService {
   private async findMyOrder(orderRef: string) {
     const o = await prisma.order.findFirst({
       where: { storeId: this.storeId, customerId: this.customerId, number: orderRef },
-      include: { items: true, statusHistory: { orderBy: { createdAt: "asc" } } },
+      include: {
+        items: true,
+        statusHistory: { orderBy: { createdAt: "asc" } },
+        shipments: { where: { status: { not: "cancelled" } }, include: { items: true }, orderBy: { id: "asc" } },
+        returns: { include: { items: true }, orderBy: { id: "asc" } },
+      },
     });
     if (!o) throw new NotFoundError("Order");
     return o;
@@ -1083,10 +1089,43 @@ export class StorefrontService {
 
   async getMyOrder(orderRef: string) {
     const o = await this.findMyOrder(orderRef);
+    const name = new Map(o.items.map((i) => [String(i.id), i.productName]));
+    // What can still be returned (returns that are open or done hold their items).
+    const taken = new Map<string, number>();
+    for (const r of o.returns) {
+      if (r.status === "cancelled" || r.status === "rejected") continue;
+      for (const i of r.items) taken.set(String(i.orderItemId), (taken.get(String(i.orderItemId)) ?? 0) + i.quantity);
+    }
+    const window = new FulfilmentService(this.ctx).returnWindow(o);
+    const returnable = o.items
+      .map((i) => ({ orderItemId: String(i.id), title: i.productName, variantLabel: variantLabel(i.variantValues), quantity: i.quantity - (taken.get(String(i.id)) ?? 0) }))
+      .filter((i) => i.quantity > 0);
     return {
       ...orderView(o),
       canCancel: CUSTOMER_CANCELLABLE.has(o.status),
       history: o.statusHistory.map((l) => ({ status: l.status, note: l.note, at: l.createdAt.toISOString() })),
+      fulfillmentStatus: o.fulfillmentStatus,
+      parcels: o.shipments.map((sh) => ({
+        code: sh.code,
+        status: sh.status,
+        courier: sh.providerName,
+        trackingNumber: sh.trackingNumber,
+        trackingUrl: sh.trackingUrl,
+        shippedAt: sh.shippedAt?.toISOString() ?? null,
+        deliveredAt: sh.deliveredAt?.toISOString() ?? null,
+        items: sh.items.map((i) => ({ title: name.get(String(i.orderItemId)) ?? "Item", quantity: i.quantity })),
+      })),
+      returns: o.returns.map((r) => ({
+        code: r.code,
+        status: r.status,
+        reason: r.reason,
+        createdAt: r.createdAt.toISOString(),
+        amount: Number(r.resolutionAmount ?? r.requestedAmount),
+        items: r.items.map((i) => ({ title: name.get(String(i.orderItemId)) ?? "Item", quantity: i.quantity })),
+      })),
+      returnWindowUntil: window.until?.toISOString() ?? null,
+      canRequestReturn: window.open && returnable.length > 0,
+      returnable,
     };
   }
 

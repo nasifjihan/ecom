@@ -25,13 +25,13 @@ export default function DashboardLayout({
       <motion.div
         animate={{ marginLeft: sidebarCollapsed ? 72 : 256 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="flex min-h-screen flex-1 flex-col"
+        className="flex min-h-screen min-w-0 flex-1 flex-col"
       >
         <Header
           collapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 min-w-0 overflow-auto p-6">
           <PageGuard>{children}</PageGuard>
         </main>
       </motion.div>

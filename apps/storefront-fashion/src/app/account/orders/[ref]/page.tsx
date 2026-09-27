@@ -3,10 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, FileDown } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileDown, Truck, Undo2 } from "lucide-react";
 import { openFile } from "@ecom/api-client";
-import { Button, Card, CardContent, CardHeader, CardTitle, Separator, Skeleton, apiErrorMessage, toast } from "@ecom/storefront-base";
-import { useCancelMyOrderMutation, useGetMyOrderQuery, useMyOrderInvoiceMutation } from "@/lib/account";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Separator, Skeleton, apiErrorMessage, cn, toast } from "@ecom/storefront-base";
+import {
+  RETURN_REASONS,
+  useCancelMyOrderMutation,
+  useGetMyOrderQuery,
+  useMyOrderInvoiceMutation,
+  useRequestReturnMutation,
+  type MyOrder,
+} from "@/lib/account";
 import { AccountShell, OrderStatusBadge, formatBDT, formatDate } from "../../_components";
 
 export default function OrderDetailPage() {
@@ -117,6 +124,9 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         </CardContent>
       </Card>
 
+      {o.parcels.length > 0 && <Parcels order={o} />}
+      {(o.returns.length > 0 || o.canRequestReturn) && <Returns order={o} />}
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -156,5 +166,197 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+const PARCEL_TEXT: Record<string, string> = {
+  ready: "Packed, waiting for the courier",
+  picked_up: "With the courier",
+  in_transit: "On the way",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  failed: "Delivery attempt failed",
+  returned: "Returned to the shop",
+  cancelled: "Cancelled",
+};
+const PARCEL_TONE: Record<string, string> = {
+  delivered: "bg-emerald-100 text-emerald-800",
+  failed: "bg-red-100 text-red-800",
+  returned: "bg-orange-100 text-orange-800",
+  out_for_delivery: "bg-cyan-100 text-cyan-800",
+};
+const RETURN_TEXT: Record<string, string> = {
+  requested: "Waiting for the shop to review",
+  approved: "Approved, please send the items back",
+  received: "Items received, refund on the way",
+  refunded: "Refunded",
+  rejected: "Not accepted",
+  cancelled: "Cancelled",
+};
+const RETURN_TONE: Record<string, string> = {
+  refunded: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-red-100 text-red-800",
+  approved: "bg-blue-100 text-blue-800",
+  received: "bg-indigo-100 text-indigo-800",
+};
+
+function Parcels({ order: o }: { order: MyOrder }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Truck className="h-5 w-5" /> {o.parcels.length > 1 ? `Parcels (${o.parcels.length})` : "Parcel"}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {o.parcels.map((p) => (
+          <div key={p.code} className="rounded-lg border p-4 text-sm space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{p.courier ?? "Courier"}</span>
+              <Badge className={cn("border-0", PARCEL_TONE[p.status] ?? "bg-slate-100 text-slate-700")}>{PARCEL_TEXT[p.status] ?? p.status}</Badge>
+            </div>
+            {p.trackingNumber && (
+              <p>
+                Tracking:{" "}
+                {p.trackingUrl ? (
+                  <a href={p.trackingUrl} target="_blank" rel="noreferrer" className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                    {p.trackingNumber} <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="font-mono">{p.trackingNumber}</span>
+                )}
+              </p>
+            )}
+            <p className="text-muted-foreground">{p.items.map((i) => `${i.quantity} × ${i.title}`).join(", ")}</p>
+            {(p.deliveredAt ?? p.shippedAt) && (
+              <p className="text-xs text-muted-foreground">
+                {p.deliveredAt ? `Delivered ${formatDate(p.deliveredAt)}` : `Sent ${formatDate(p.shippedAt!)}`}
+              </p>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Returns({ order: o }: { order: MyOrder }) {
+  const [open, setOpen] = React.useState(false);
+  const [qty, setQty] = React.useState<Record<string, number>>({});
+  const [reason, setReason] = React.useState<string>(RETURN_REASONS[0].value);
+  const [note, setNote] = React.useState("");
+  const [requestReturn, { isLoading }] = useRequestReturnMutation();
+  const items = Object.entries(qty).filter(([, q]) => q > 0).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!items.length) {
+      toast.error("Choose the items to return");
+      return;
+    }
+    try {
+      const r = await requestReturn({ orderRef: o.orderRef, items, reason, note: note.trim() || undefined }).unwrap();
+      toast.success("Return requested", { description: `Reference ${r.code}. The shop will get back to you.` });
+      setOpen(false);
+      setQty({});
+      setNote("");
+    } catch (err) {
+      toast.error("Couldn't request the return", { description: apiErrorMessage(err) });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Undo2 className="h-5 w-5" /> Returns
+          </CardTitle>
+          {o.returnWindowUntil && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {new Date(o.returnWindowUntil).getTime() > Date.now() ? "You can ask for a return until " : "Returns closed on "}
+              {formatDate(o.returnWindowUntil)}
+            </p>
+          )}
+        </div>
+        {o.canRequestReturn && !open && (
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+            Request a return
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {o.returns.map((r) => (
+          <div key={r.code} className="rounded-lg border p-4 text-sm space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-xs">{r.code}</span>
+              <Badge className={cn("border-0", RETURN_TONE[r.status] ?? "bg-amber-100 text-amber-800")}>{RETURN_TEXT[r.status] ?? r.status}</Badge>
+            </div>
+            <p className="text-muted-foreground">{r.items.map((i) => `${i.quantity} × ${i.title}`).join(", ")}</p>
+            <p className="text-xs text-muted-foreground">
+              {RETURN_REASONS.find((x) => x.value === r.reason)?.label ?? r.reason} · asked {formatDate(r.createdAt)} ·{" "}
+              {formatBDT(r.amount, o.currency)}
+            </p>
+          </div>
+        ))}
+        {open && (
+          <form onSubmit={submit} className="rounded-lg border p-4 space-y-4">
+            <p className="text-sm font-medium">What would you like to return?</p>
+            {o.returnable.map((i) => (
+              <div key={i.orderItemId} className="flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate">{i.title}</p>
+                  {i.variantLabel && <p className="text-xs text-muted-foreground">{i.variantLabel}</p>}
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  max={i.quantity}
+                  value={qty[i.orderItemId] ?? 0}
+                  onChange={(e) => setQty({ ...qty, [i.orderItemId]: Math.max(0, Math.min(i.quantity, parseInt(e.target.value) || 0)) })}
+                  className="w-20"
+                  aria-label={`How many ${i.title} to return (up to ${i.quantity})`}
+                />
+              </div>
+            ))}
+            <div className="space-y-1.5">
+              <Label htmlFor="return-reason">Reason</Label>
+              <select
+                id="return-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {RETURN_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="return-note">Anything else?</Label>
+              <textarea
+                id="return-note"
+                rows={3}
+                maxLength={1000}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. The size runs small"
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || !items.length}>
+                {isLoading ? "Sending..." : "Request return"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
+    </Card>
   );
 }

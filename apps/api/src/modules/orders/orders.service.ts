@@ -3,12 +3,12 @@ import { BaseService, ConflictError, NotFoundError, BadRequestError, ForbiddenEr
 import { getPaymentProvider, PAYMENT_METHODS } from "../../services/payments";
 import type { PaymentMethod, PaymentStatus } from "../../services/payments/types";
 import { OrderRepository, CartRepository, RefundRepository, CouponRepository, InventoryLogRepository, ShippingRepository } from "./orders.repository";
-import type { CreateOrderFromCartDto, TransitionStatusDto, CreateRefundDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
+import type { CreateOrderFromCartDto, TransitionStatusDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
 import { newId, slugify } from "@ecom/utils";
 import { Prisma } from "@prisma/client";
 import { emitOrderStatusChanged } from "../notifications";
 
-const STATUS_TRANSITIONS: Record<string, string[]> = {
+export const STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["PROCESSING", "ON_HOLD", "CANCELLED"],
   PROCESSING: ["ON_HOLD", "SHIPPED", "CANCELLED"],
   ON_HOLD: ["PROCESSING", "CANCELLED"],
@@ -454,116 +454,6 @@ export class OrdersService extends BaseService {
     const order = await this.orders.findByNumber(number, this.ctx);
     if (!order) throw new NotFoundError("order", number);
     return order;
-  }
-
-  async createRefund(dto: CreateRefundDto) {
-    const oid = BigInt(dto.orderId);
-    const order = await this.orders.findById(this.ctx, oid);
-    if (!order) throw new NotFoundError("order", oid);
-
-    const orderItems = await prisma.orderItem.findMany({ where: { orderId: oid } });
-    const orderItemMap = new Map<bigint, any>();
-    for (const oi of orderItems) {
-      orderItemMap.set(BigInt((oi as any).id), oi);
-    }
-
-    let totalRefundAmount = 0;
-    const perItemRefunded = new Map<bigint, number>();
-
-    for (const line of dto.items) {
-      const oi = orderItemMap.get(BigInt(line.orderItemId));
-      if (!oi) throw new BadRequestError(`Order item ${line.orderItemId} not found`, "REFUND_NOT_ALLOWED");
-      const lineTotal = Number((oi as any).lineTotal ?? 0);
-      const existingForItem = perItemRefunded.get(BigInt(line.orderItemId)) ?? 0;
-      const newRefundForItem = existingForItem + line.amount * line.quantity;
-      if (newRefundForItem > lineTotal) {
-        throw new BadRequestError(
-          `Refund amount for item ${line.orderItemId} exceeds line total`,
-          "REFUND_AMOUNT_EXCEEDS_PAID",
-        );
-      }
-      perItemRefunded.set(BigInt(line.orderItemId), newRefundForItem);
-      totalRefundAmount += line.amount * line.quantity;
-    }
-
-    const refundResult = await tx(async (t: Prisma.TransactionClient) => {
-      const adminId = this.ctx.admin?.id ? BigInt(this.ctx.admin.id) : null;
-      const refund = await t.refund.create({
-        data: {
-          ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}),
-          orderId: oid,
-          adminId,
-          reason: dto.reason,
-          refundMethod: dto.refundMethod,
-          totalAmount: totalRefundAmount,
-          restockItems: dto.restockItems,
-          gatewayRefund: dto.gatewayRefund,
-          noteToCustomer: dto.noteToCustomer ?? null,
-          status: "PENDING",
-        } as any,
-      });
-      const refundId = BigInt((refund as any).id);
-
-      const refundItemInserts = dto.items.map((line) => ({
-        refundId,
-        orderItemId: BigInt(line.orderItemId),
-        quantity: line.quantity,
-        amount: line.amount,
-      }));
-      await t.refundItem.createMany({ data: refundItemInserts as any });
-
-      if (dto.restockItems) {
-        for (const line of dto.items) {
-          const oi = orderItemMap.get(BigInt(line.orderItemId));
-          if (oi) {
-            await this.inventory.restock(
-              BigInt((oi as any).productId),
-              (oi as any).variantId ? BigInt((oi as any).variantId) : null,
-              line.quantity,
-              "REFUND_RESTOCK",
-              String(refundId),
-              undefined,
-              this.ctx,
-            );
-          }
-        }
-      }
-
-      if (dto.gatewayRefund) {
-        const gatewayCode = (order as any).paymentGatewayCode as PaymentMethod;
-        try {
-          const provider = getPaymentProvider(gatewayCode);
-          await provider.refund({
-            orderId: oid,
-            amount: totalRefundAmount,
-            reason: dto.reason,
-          });
-        } catch {
-          // gateway refund failure is logged but doesn't block refund record
-        }
-      }
-
-      const orderGrandTotal = Number((order as any).grandTotal ?? 0);
-      if (totalRefundAmount >= orderGrandTotal - 0.001) {
-        await t.order.update({
-          where: { id: oid },
-          data: { status: "REFUNDED", paymentStatus: "refunded" } as any,
-        });
-        await t.orderStatusLog.create({
-          data: {
-            orderId: oid,
-            status: "REFUNDED",
-            note: `Order fully refunded via refund #${refundId}`,
-            notifyCustomer: true,
-            adminId,
-          } as any,
-        });
-      }
-
-      return refund;
-    });
-
-    return refundResult;
   }
 
   async initiatePayment(dto: PaymentInitiateDto, order: any) {

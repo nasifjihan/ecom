@@ -81,6 +81,40 @@ export interface MyOrder {
   currency: string;
   canCancel: boolean;
   history: { status: string; note: string | null; at: string }[];
+  /** unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned */
+  fulfillmentStatus: string;
+  parcels: {
+    code: string;
+    status: string;
+    courier: string | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    items: { title: string; quantity: number }[];
+  }[];
+  returns: { code: string; status: string; reason: string | null; createdAt: string; amount: number; items: { title: string; quantity: number }[] }[];
+  /** Last day a return can be asked for (7 days after delivery), once delivered. */
+  returnWindowUntil: string | null;
+  canRequestReturn: boolean;
+  /** Units per line that can still be returned. */
+  returnable: { orderItemId: string; title: string; variantLabel: string; quantity: number }[];
+}
+
+export const RETURN_REASONS = [
+  { value: "wrong_size", label: "Wrong size" },
+  { value: "damaged", label: "Damaged or faulty" },
+  { value: "not_as_described", label: "Not as described" },
+  { value: "wrong_item", label: "Wrong item sent" },
+  { value: "changed_mind", label: "Changed my mind" },
+  { value: "other", label: "Other" },
+] as const;
+
+export interface ReturnRequestInput {
+  orderRef: string;
+  items: { orderItemId: string; quantity: number }[];
+  reason: string;
+  note?: string;
 }
 
 interface AuthResult {
@@ -255,6 +289,14 @@ export const accountApi = api.injectEndpoints({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/cancel`, method: "POST", body: {} }),
       invalidatesTags: ["Order"],
     }),
+    requestReturn: builder.mutation<{ code: string; status: string }, ReturnRequestInput>({
+      query: ({ orderRef, ...body }) => ({
+        url: `/storefront/account/orders/${encodeURIComponent(orderRef)}/returns`,
+        method: "POST",
+        body: clean(body),
+      }),
+      invalidatesTags: (_r, _e, { orderRef }) => [{ type: "Order", id: orderRef }],
+    }),
     /** Invoice PDFs, as object URLs for openFile() from @ecom/api-client. */
     myOrderInvoice: builder.mutation<string, string>({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/invoice`, responseHandler: fileResponse }),
@@ -283,6 +325,7 @@ export const {
   useGetMyOrdersQuery,
   useGetMyOrderQuery,
   useCancelMyOrderMutation,
+  useRequestReturnMutation,
   useMyOrderInvoiceMutation,
   useOrderInvoiceByKeyMutation,
 } = accountApi;
