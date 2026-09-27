@@ -89,6 +89,9 @@ model Store {
   returns              ReturnRequest[]
   coupons              Coupon[]
   promotions           Promotion[]
+  smsSetting           StoreSmsSetting?
+  smsMessages          SmsMessage[]
+  phoneOtps            PhoneOtp[]
   flashSales           FlashSale[]
   giftCards            GiftCard[]
   banners              Banner[]
@@ -372,6 +375,64 @@ model StoreEmailSetting {
   logoUrl        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+/// SMS provider and order-SMS settings (modules/sms). Credentials are encrypted JSON.
+model StoreSmsSetting {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt    @unique
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// log (record only, nothing sent) | bulksmsbd | alphasms | sslwireless
+  provider      String    @default("log")
+  senderId      String?
+  credentials   String?
+  /// Per event: { enabled, template } (order_placed, order_confirmed, order_shipped, …)
+  events        Json?
+  /// Customers can sign in with a code sent to their phone.
+  phoneOtpLogin Boolean   @default(false)
+  lastTestAt    DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// Every SMS the store sent or tried to send. One-time codes are stored masked.
+model SmsMessage {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  to          String
+  body        String
+  /// otp | order_placed | order_confirmed | order_shipped | order_delivered | order_cancelled | invoice | test
+  kind        String
+  orderId     BigInt?
+  provider    String
+  /// sent | failed | logged
+  status      String
+  providerRef String?
+  error       String?
+  segments    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([storeId, orderId])
+}
+
+/// One-time sign-in codes sent by SMS; only a hash of the code is kept.
+model PhoneOtp {
+  id         BigInt    @id @default(autoincrement())
+  storeId    BigInt
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  phone      String
+  codeHash   String
+  purpose    String    @default("login")
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([storeId, phone, createdAt])
 }
 
 model StoreSeoSetting {

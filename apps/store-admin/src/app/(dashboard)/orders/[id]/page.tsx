@@ -90,6 +90,7 @@ import {
 import { FULFILLMENT_LABELS, FULFILLMENT_STYLES, RETURN_LABELS, RETURN_STYLES, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
 import { ParcelsCard } from "@/components/orders/parcels-card";
 import { ReturnsCard } from "@/components/orders/returns-card";
+import { OrderSmsCard } from "@/components/orders/order-sms-card";
 import { OrderPayments } from "@/components/orders/order-payments";
 import { useCan } from "@/lib/permissions";
 import { openFile } from "@ecom/api-client";
@@ -577,6 +578,7 @@ export default function OrderDetailPage() {
       </div>
 
       <ReturnsCard order={order} canEdit={canEdit} />
+      <OrderSmsCard orderId={order.id} phone={order.shippingAddress?.phone ?? order.customerPhone} canEdit={canEdit} />
 
       <Card className="border-slate-200 shadow-sm dark:border-slate-800">
         <CardContent className="p-0">

@@ -45,6 +45,7 @@ import {
 } from "./modules/orders";
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
+import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
 import { adminPromotionsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
@@ -115,6 +116,7 @@ export function buildApp(): Express {
 
   // Order and account events turn into queued emails.
   registerEmailListeners();
+  registerSmsListeners();
 
   // =============== MODULE ROUTES (Batch #5 wired) ===============
   app.use("/api/auth", authRoutes);
@@ -135,6 +137,7 @@ export function buildApp(): Express {
   app.use("/api/admin/brands", adminBrandsRouter);
   app.use("/api/admin/attributes", adminAttributesRouter);
   app.use("/api/admin/media", productUploadRouter);
+  app.use("/api/admin/orders", adminOrderSmsRouter);                // SMS of an order, invoice by SMS
   app.use("/api/admin/orders", adminOrderCourierRouter);            // book many orders with a courier
   app.use("/api/admin/orders", adminOrderPaymentsRouter);           // payments of an order
   app.use("/api/admin/orders", adminOrderFulfilmentRouter);         // parcels, returns, refunds of an order
@@ -158,6 +161,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
+  app.use("/api/admin/sms", adminSmsRouter);
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);
   app.use("/api/admin/marketing/flash-sales", marketingFlashSalesRouter);
   app.use("/api/admin/marketing/reviews", marketingReviewsRouter);

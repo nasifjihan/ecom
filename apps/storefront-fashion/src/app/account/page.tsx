@@ -122,7 +122,11 @@ function ProfileForm({ profile }: { profile: Customer }) {
         <Field id="firstName" label="First name" required value={form.firstName} onChange={set("firstName")} />
         <Field id="lastName" label="Last name" required value={form.lastName} onChange={set("lastName")} />
       </div>
-      <Field id="email" label="Email" value={profile.email} disabled readOnly />
+      {profile.email ? (
+        <Field id="email" label="Email" value={profile.email} disabled readOnly />
+      ) : (
+        <p className="text-sm text-muted-foreground">You sign in with a code sent to your mobile number.</p>
+      )}
       <Field id="phone" label="Mobile" type="tel" placeholder="01XXXXXXXXX" value={form.phone} onChange={set("phone")} />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.acceptMarketing} onChange={(e) => setForm((f) => ({ ...f, acceptMarketing: e.target.checked }))} />

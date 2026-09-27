@@ -17,7 +17,8 @@ const CUSTOMER_KEY = "customer";
 
 export interface Customer {
   id: string;
-  email: string;
+  /** Null for accounts made by signing in with a phone code. */
+  email: string | null;
   firstName: string;
   lastName: string;
   phone: string | null;
@@ -238,6 +239,16 @@ export const accountApi = api.injectEndpoints({
     customerLogin: builder.mutation<AuthResult, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/customer/login", method: "POST", body }),
     }),
+    /** How customers can sign in here (phone codes are turned on in the admin's Settings → SMS). */
+    loginMethods: builder.query<{ email: boolean; phoneOtp: boolean }, void>({
+      query: () => "/auth/customer/login-methods",
+    }),
+    requestPhoneCode: builder.mutation<{ sent: boolean; expiresInMinutes: number }, { phone: string }>({
+      query: (body) => ({ url: "/auth/customer/otp/request", method: "POST", body }),
+    }),
+    verifyPhoneCode: builder.mutation<AuthResult & { created: boolean }, { phone: string; code: string; firstName?: string; lastName?: string }>({
+      query: (body) => ({ url: "/auth/customer/otp/verify", method: "POST", body: clean(body) }),
+    }),
     customerRegister: builder.mutation<AuthResult, RegisterInput>({
       query: (body) => ({ url: "/auth/customer/register", method: "POST", body: clean(body) }),
     }),
@@ -323,6 +334,9 @@ export const accountApi = api.injectEndpoints({
 
 export const {
   useCustomerLoginMutation,
+  useLoginMethodsQuery,
+  useRequestPhoneCodeMutation,
+  useVerifyPhoneCodeMutation,
   useCustomerRegisterMutation,
   useCustomerLogoutMutation,
   useForgotPasswordMutation,

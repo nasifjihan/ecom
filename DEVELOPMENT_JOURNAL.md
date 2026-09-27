@@ -1920,3 +1920,81 @@ The store can now run offers that apply by themselves at checkout, with no code:
 - Limits per promotion (total uses, per customer) and "first order only".
 - Promotion ROI in reports (Batch 28).
 - A page-builder "Promotion slot" block; the home slots sit at fixed places for now.
+
+---
+
+## ✅ BATCH #24 — Phone sign-in by SMS code, SMS provider and order SMS (2026-09-27)
+Customers can sign in with a 6-digit code sent to their mobile number. A new number gets an account automatically. The shop connects a Bangladeshi bulk-SMS account, and customers get order updates by SMS. Staff can send the invoice link by SMS, and every SMS is logged.
+
+**Important:** the SMS providers couldn't be reached from this container. The adapters follow each provider's published API and open-source clients:
+- BulkSMSBD: `GET bulksmsbd.net/api/smsapi`, success is `response_code` 202;
+- Alpha SMS / sms.net.bd: `POST api.sms.net.bd/sendsms`, success is `error` 0;
+- SSL Wireless SMS Plus: `POST smsplus.sslwireless.com/api/v3/send-sms` with `api_token`, `sid`, `msisdn`, `sms` and `csms_id`, success is `status_code` 200.
+
+They were tested against a local mock (`pnpm --filter @ecom/api sms:mock`). **Send one real test SMS with the shop's account before relying on them.**
+
+### 24.1 Schema (migration `sms_phone_otp`)
+- **`StoreSmsSetting`** (one per store): provider (`log` / `bulksmsbd` / `alphasms` / `sslwireless`), sender ID, credentials as encrypted JSON, per-event on/off and template, the phone sign-in switch, and the last test result.
+- **`SmsMessage`**: every SMS, with number, text, type, order, provider, status (sent / failed / logged), the provider's message id, error and number of parts. Sign-in codes are stored masked.
+- **`PhoneOtp`**: an HMAC of the code (keyed with the app secret and bound to store and number, so the code itself is never stored), tries, expiry, used time and IP.
+
+### 24.2 Rules (`modules/sms/sms.rules.ts`) and providers (`sms.providers.ts`); 40 tests
+- **Numbers:** Bangladeshi mobiles in any form (`+880 1712-345678`, `8801…`, `1712…`) become `01XXXXXXXXX`, and are sent to providers as `8801…`. A customer can be found by any stored form of the number.
+- **Length:** SMS parts are 160 / 153 characters for plain text and 70 / 67 once there's any Bangla or symbol. The admin shows the count as you type.
+- **Amounts:** written as "Tk 4,588.50". The ৳ sign alone turns a message Unicode, which about doubles its cost; an early test caught this. The default templates are all plain text, and a test checks that.
+- **Templates:** placeholders `{name} {order} {total} {store} {phone} {courier} {tracking} {link}`, with tidy spacing when one is empty. Defaults: order placed, shipped and cancelled on; confirmed and delivered off.
+- **Codes:** 6 digits, valid for 5 minutes, used once, 5 wrong tries end the code. A new code for the same number only once a minute and 5 an hour. The existing strict rate limit (20/min/IP) also covers `/auth/customer/otp`.
+- **Providers:**
+  - BulkSMSBD needs an API key and an approved sender ID. Alpha SMS needs an API key and optionally a sender ID. SSL Wireless needs an API token and SID, and gets our message id as `csms_id`.
+  - "Record only" logs messages without sending, for checking wording before an account is connected.
+  - Errors are the provider's own words, or plain wording for BulkSMSBD's codes; a network failure or non-JSON reply gets a readable message. 15-second timeout. Base URLs can point at the mock (`BULKSMSBD_API_URL`, `ALPHASMS_API_URL`, `SSLWIRELESS_API_URL`).
+
+### 24.3 API
+- **Settings:** `GET|PUT /api/admin/sms/settings` (`settings.view` / `settings.edit`).
+  - Keys are never returned, only their last 4 characters. A blank key keeps the stored one; switching provider starts afresh.
+  - Phone sign-in can't be turned on with "Record only".
+- **Test and log:** `POST /api/admin/sms/test`; `GET /api/admin/sms/log` (filter by type, status or text; also returns SMS parts sent in the last 30 days); `POST /api/admin/sms/log/:id/resend` (not for sign-in codes).
+- **Per order:** `GET /api/admin/orders/:id/sms` (`orders.view`) and `POST /api/admin/orders/:id/sms-invoice` (`orders.edit`), which sends the order and invoice link.
+- **Order SMS:** listens to the same events as order emails.
+  - Order placed; Processing → confirmed; Shipped (with the courier and tracking link from the parcel); Delivered; Cancelled.
+  - Nothing is sent when staff choose not to tell the customer. Each event goes to an order at most once.
+- **Phone sign-in:**
+  - `GET /api/auth/customer/login-methods`, `POST /api/auth/customer/otp/request` `{phone}`, `POST /api/auth/customer/otp/verify` `{phone, code, firstName?, lastName?}`. Verify signs in like email login (access token plus refresh cookie).
+  - **Which account:** an account with a password or email is used first, then the latest record with that number, for example one the shop made for a phone order. So a phone-order customer sees their orders once they sign in.
+  - A suspended account is refused. A new number gets an account, named "Customer" if no name is given, and the welcome email event fires.
+- The old global `SMS_DRIVER` / `SSLWIRELESS_*` env settings were never used and are superseded by the per-store settings.
+
+### 24.4 Store admin
+- **Settings → SMS:**
+  - provider, sender ID and keys (shown masked), with a test send and its result;
+  - the phone sign-in switch;
+  - each order update with on/off and an editable message (Bangla works) with a live character and part count;
+  - the "Sent SMS" log with filters, failures and why, resend, and parts sent in the last 30 days.
+- **Order page:** an SMS card with the messages sent for the order and "Send invoice by SMS" (the number can be changed).
+
+### 24.5 Storefront
+- **Log in:** "Mobile number" and "Email" tabs, with mobile first when the shop turns it on.
+  - Number, then "Send code by SMS". The code box uses the phone's one-time-code autofill. There's an optional name for new accounts, a 60-second resend timer, and "Change number".
+- **Profile:** phone-only accounts show "You sign in with a code sent to your mobile number" instead of an empty email field.
+
+### 24.6 Checked
+- **Tests:** 311/311 API tests, including 40 new SMS tests.
+- **Against the mock:**
+  - **Provider errors:** a missing sender ID, an invalid number and a bad key are refused with a clear reason. Keys are stored encrypted, and "Record only" can't be used for phone sign-in.
+  - **Sign-in codes:** the SMS log has the code masked. Asking again at once is refused ("wait 60 seconds"). A wrong code is refused, and 5 wrong codes end the code, so even the right one no longer works. A used code doesn't work twice.
+  - **Accounts:** a new number made an account named from the form. The shop's phone-order customer signed in to their existing record and saw their order.
+  - **Order SMS:** a manual order sent "order placed". Processing sent a Bangla "confirmed" template (Unicode, 2 parts). Cancelled and the invoice link were sent. The per-order list and the log show all of them.
+- **Chromium:**
+  - admin: turn on "delivered" and edit it, save, send a test, and send the invoice by SMS from the order page;
+  - storefront: sign in with a phone code as a new customer, landing on the account page;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean. Edited files have no new lint errors except one in `auth.controller.ts`, from the `omitPasswordHash(any)` pattern the file already uses. The three Next apps build.
+
+### 24.7 Not done
+- **Real provider runs.** Each provider's exact error codes and delivery reports need a real account.
+- **Delivery reports.** A "sent" message was accepted by the provider, not confirmed delivered.
+- **Checkout still asks for an email.** Phone-only customers type one at checkout (Batch 26).
+- Email one-time codes and Google/Facebook sign-in.
+- Marketing SMS and campaigns.
+- WhatsApp.
+- A per-event × channel notification matrix.

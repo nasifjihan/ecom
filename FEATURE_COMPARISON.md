@@ -60,7 +60,7 @@ These are our advantages. Keep them.
 | Courier assignment (bulk) | ✅ | Batch 22: select orders → "Book courier"; per-order results (area matching for Pathao/RedX) |
 | Shipments/parcels screen (ready → picked up → in transit → delivered / failed / returned) | ✅ | Batch 20: parcels per order (split shipments, COD per parcel), Shipments page with status tabs. Courier APIs: Batch 22 |
 | Returns screen (request → received → approved → refunded / rejected) | ✅ | Batch 20: customer requests on the storefront (7-day window), staff approve / receive (restock) / reject / refund; Returns page |
-| Invoice by SMS | ❌ | Needs SMS adapter |
+| Invoice by SMS | ✅ | Batch 24: order page "Send invoice by SMS" |
 | Gift orders (recipient vs buyer, print labels) | ❌ | |
 | Stock reserved on order, committed on payment | 🟡 | We decrement at checkout; no reservation step |
 | Order code `ORD-YYYYMMDD-XXXXXX`, prefix per store | 🟡 | We use `20260926000001`; add a prefix setting |
@@ -150,8 +150,8 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Product display toggles (show rating, show sales count, low-stock threshold) | ❌ |
 | Checkout style (single page vs steps), guest checkout | 🟡 |
 | Payment gateway credentials per store, sandbox/live, **encrypted**, test button | 🟡 |
-| Login methods: **phone OTP**, email OTP, Google, Facebook | ❌ |
-| SMS provider settings | ❌ |
+| Login methods: **phone OTP**, email OTP, Google, Facebook | 🟡 | Batch 24: phone OTP; email OTP / Google / Facebook not yet |
+| SMS provider settings | ✅ | Batch 24: BulkSMSBD, Alpha SMS, SSL Wireless; encrypted keys, test send, log |
 | Invoice name / note / order prefix | 🟡 |
 | robots.txt editable | ❌ |
 
@@ -173,7 +173,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Money and stock in DB transactions, server re-prices | ✅ |
 | Idempotency key on order create and webhooks | ❌ |
 | Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 (classes exist, untested) |
-| Encrypted secrets for gateway/courier/SMS keys | 🟡 | Batch 22: courier keys, webhook secrets and tokens encrypted (AES-256-GCM). Payment gateway keys still come from env |
+| Encrypted secrets for gateway/courier/SMS keys | 🟡 | Batch 22: courier keys, webhook secrets and tokens; Batch 24: SMS keys (AES-256-GCM). Payment gateway keys still come from env |
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
 | OpenAPI docs at `/api/docs` | ❌ |
 | Audit row on every admin change | ✅ |
@@ -194,7 +194,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 21 ✅ | **COD and payment verification**: verify bKash/Nagad TrxIDs, cash collections, courier settlements with shortfall | Money reconciliation | M |
 | 22 ✅ | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |
 | 23 ✅ | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
-| 24 | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
+| 24 ✅ | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
 | 26 | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
 | 27 | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
