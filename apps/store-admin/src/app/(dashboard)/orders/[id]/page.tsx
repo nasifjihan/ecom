@@ -82,6 +82,7 @@ import {
   useUpdateOrderShippingTrackingMutation,
   VALID_STATUS_TRANSITIONS,
   PAYMENT_METHOD_META,
+  sourceLabel,
   type Order,
   type OrderStatus,
   type OrderNote,
@@ -376,7 +377,7 @@ export default function OrderDetailPage() {
                 {order.billingAddress?.address1 && <div>{order.billingAddress.address1}</div>}
                 {order.billingAddress?.address2 && <div>{order.billingAddress.address2}</div>}
                 <div>
-                  {[order.billingAddress?.district, order.billingAddress?.division, order.billingAddress?.postcode].filter(Boolean).join(", ")}
+                  {[order.billingAddress?.upazila, order.billingAddress?.district, order.billingAddress?.division, order.billingAddress?.postcode].filter(Boolean).join(", ")}
                 </div>
                 {order.billingAddress?.country && <div>{order.billingAddress.country}</div>}
                 {order.billingAddress?.phone && <div className="text-xs text-slate-500">{order.billingAddress.phone}</div>}
@@ -395,7 +396,7 @@ export default function OrderDetailPage() {
                 {order.shippingAddress?.address1 && <div>{order.shippingAddress.address1}</div>}
                 {order.shippingAddress?.address2 && <div>{order.shippingAddress.address2}</div>}
                 <div>
-                  {[order.shippingAddress?.district, order.shippingAddress?.division, order.shippingAddress?.postcode].filter(Boolean).join(", ")}
+                  {[order.shippingAddress?.upazila, order.shippingAddress?.district, order.shippingAddress?.division, order.shippingAddress?.postcode].filter(Boolean).join(", ")}
                 </div>
               </div>
             </div>
@@ -448,12 +449,18 @@ export default function OrderDetailPage() {
             </ScrollArea>
             <div className="p-4 space-y-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Subtotal</span><span className="font-medium">{formatCurrency(order.subtotal)}</span></div>
-              {order.discountAmount > 0 && (
+              {order.discountAmount - order.manualDiscount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">
                     Discount {order.couponCode && <span className="text-indigo-600 dark:text-indigo-400 font-mono text-xs ml-1">({order.couponCode})</span>}
                   </span>
-                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount)}</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount - order.manualDiscount)}</span>
+                </div>
+              )}
+              {order.manualDiscount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">Staff discount</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(order.manualDiscount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Shipping ({order.shippingMethod})</span><span className="font-medium">{formatCurrency(order.shippingCost)}</span></div>
@@ -558,10 +565,20 @@ export default function OrderDetailPage() {
             <CardContent className="pb-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Method</span>
-                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", (PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.color)}>
-                  <CreditCard className="h-3 w-3" /> {(PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.label}
+                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", (PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.color ?? "bg-slate-100 text-slate-700")}>
+                  <CreditCard className="h-3 w-3" /> {(PAYMENT_METHOD_META as Record<string, { label: string; color: string } | undefined>)[String(order.paymentMethod)]?.label ?? String(order.paymentMethod).replace(/_/g, " ").toLowerCase()}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Source</span>
+                <span>{sourceLabel(order.source)}</span>
+              </div>
+              {order.createdByName && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Entered by</span>
+                  <span>{order.createdByName}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Transaction ID</span>
                 <span className="font-mono text-xs">{order.transactionId ?? "—"}</span>

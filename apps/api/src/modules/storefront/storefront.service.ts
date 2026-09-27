@@ -11,7 +11,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma, tx } from "../../config";
-import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
+import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext } from "../../core";
 import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
 import { getPaymentProvider } from "../../services/payments";
@@ -105,6 +105,54 @@ const LIST_INCLUDE = {
   categories: { include: { category: { select: { id: true, name: true, slug: true } } } },
   images: { orderBy: { sortOrder: "asc" as const }, take: 2 },
   variants: { where: { status: "active" }, select: { stockQty: true, reservedStock: true, manageStock: true, allowBackorder: true } },
+};
+
+type PricedLine = NonNullable<Awaited<ReturnType<StorefrontService["quoteLines"]>>[number]["priced"]>;
+
+export type DeliveryOption = {
+  id: string;
+  zoneId: string | null;
+  code: string;
+  name: string;
+  fee: number;
+  freeReason: string | null;
+  minDays: number | null;
+  maxDays: number | null;
+};
+
+/** What an order is made of before it's priced. */
+export type OrderDraft = {
+  /** Throw on the first problem (checkout) instead of collecting them (admin form). */
+  strict: boolean;
+  items: CartLineDto[];
+  email?: string | null;
+  shippingAddress: StorefrontAddressDto;
+  billingAddress?: StorefrontAddressDto;
+  billingSameAsShipping?: boolean;
+  /** A zone method, a fee typed by staff, or pickup (no delivery charge). */
+  delivery: { methodId: bigint | string } | { customFee: number; name?: string } | { pickup: true };
+  /** Also list the zone's delivery options (for the admin form) when delivery isn't a zone method. */
+  listShippingOptions?: boolean;
+  couponCode?: string;
+  manualDiscount?: { type: "percent" | "fixed"; value: number };
+  paymentGateway: string;
+  requireEnabledGateway: boolean;
+  applyGatewayFee: boolean;
+};
+
+export type OrderQuote = Awaited<ReturnType<StorefrontService["quoteOrder"]>>;
+
+/** Who and what an order is recorded as. */
+export type OrderMeta = {
+  customerId: bigint | null;
+  customerNote?: string | null;
+  source: string;
+  createdByAdminId?: bigint | null;
+  status?: "PENDING" | "PROCESSING";
+  paid?: boolean;
+  transactionId?: string | null;
+  historyNote: string;
+  notifyCustomer?: boolean;
 };
 
 export class StorefrontService {
@@ -403,7 +451,7 @@ export class StorefrontService {
    * Re-prices cart lines from the DB, flash sales included. Never throws for a bad line: each
    * line carries its `problem` (gone, out of stock, too few left) for the cart page to show.
    */
-  private async quoteLines(lines: CartLineDto[]) {
+  async quoteLines(lines: CartLineDto[]) {
     const productIds = [...new Set(lines.map((l) => l.productId))];
     const [products, flashSales] = await Promise.all([
       prisma.product.findMany({
@@ -612,55 +660,109 @@ export class StorefrontService {
     return { ...a, division: r.division ?? "", district: r.district ?? a.district, upazila: r.upazila ?? "", locationId: r.locationId, chain: r.chain };
   }
 
-  async placeOrder(dto: PlaceOrderDto) {
+  /**
+   * Prices an order without saving it: lines (flash sales included), delivery, coupon, a staff
+   * discount, tax and payment fee. Storefront checkout and manual orders in the admin both use it,
+   * so they charge the same way. With `strict`, the first problem throws; otherwise problems are
+   * collected so the admin's order form can show them next to the totals.
+   */
+  async quoteOrder(input: OrderDraft) {
     const storeId = this.storeId;
+    const problems: string[] = [];
+    const fail = (message: string, code: ErrorCode) => {
+      if (input.strict) throw new BadRequestError(message, code);
+      problems.push(message);
+    };
 
-    const gateway = await prisma.paymentGatewayConfig.findFirst({ where: { storeId, code: dto.paymentGateway } });
-    if (!gateway || !gateway.enabled) {
-      throw new BadRequestError(`Payment method "${dto.paymentGateway}" is not available for this store`, "PAYMENT_GATEWAY_ERROR");
+    const gateway = await prisma.paymentGatewayConfig.findFirst({ where: { storeId, code: input.paymentGateway } });
+    if (!gateway || (input.requireEnabledGateway && !gateway.enabled)) {
+      fail(`Payment method "${input.paymentGateway}" is not available for this store`, "PAYMENT_GATEWAY_ERROR");
     }
 
-    const lines = await this.priceLines(dto.items);
+    const quoted = await this.quoteLines(input.items);
+    const lines: PricedLine[] = [];
+    for (const q of quoted) {
+      if (q.problem || !q.priced) fail(q.problem?.message ?? "A product is no longer available", q.problem?.code ?? "CART_INVALID");
+      if (q.priced) lines.push(q.priced);
+    }
     const itemsSubtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal, 0));
     const qty = lines.reduce((s, l) => s + l.qty, 0);
     const weightKG = lines.reduce((s, l) => s + l.weightKG, 0);
-    const ship = await this.withLocation(dto.shippingAddress);
-    const bill = dto.billingSameAsShipping || !dto.billingAddress ? ship : await this.withLocation(dto.billingAddress);
+
+    const ship = await this.withLocation(input.shippingAddress);
+    const bill = input.billingSameAsShipping || !input.billingAddress ? ship : await this.withLocation(input.billingAddress);
     if (ship.chain.length) {
       const off = offInChain(ship.chain, await storeLocationsOff(storeId));
-      if (off) throw new BadRequestError(`Sorry, we don't deliver to ${off.nameEn} yet.`, "LOCATION_NOT_SERVED");
+      if (off) fail(`Sorry, we don't deliver to ${off.nameEn} yet.`, "LOCATION_NOT_SERVED");
     }
 
-    // Shipping: the chosen method must be one the zone matcher offers for this address.
-    const rates: any = await this.shipping.computeShippingOptions(this.ctx, {
-      countryCode: ship.country,
-      division: ship.division || undefined,
-      district: ship.district,
-      upazila: ship.upazila || undefined,
-      locationId: ship.locationId ?? undefined,
-      postcode: ship.postcode || undefined,
-      subtotal: itemsSubtotal,
-      weightKG,
-      qty,
-    } as any);
-    const option = (rates.options as any[]).find((o) => String(o.id) === String(dto.shippingMethodId));
-    if (!option) {
-      throw new BadRequestError("The selected delivery option is not available for this address", "SHIPPING_UNAVAILABLE_FOR_ZONE");
+    // Delivery: a method the zone matcher offers for this address, a fee the staff typed, or pickup.
+    let shippingOptions: DeliveryOption[] = [];
+    let delivery: { zoneId: bigint | null; code: string; name: string; fee: number } | null = null;
+    if ("methodId" in input.delivery || input.listShippingOptions) {
+      const rates: any = await this.shipping.computeShippingOptions(this.ctx, {
+        countryCode: ship.country,
+        division: ship.division || undefined,
+        district: ship.district,
+        upazila: ship.upazila || undefined,
+        locationId: ship.locationId ?? undefined,
+        postcode: ship.postcode || undefined,
+        subtotal: itemsSubtotal,
+        weightKG,
+        qty,
+      } as any);
+      shippingOptions = (rates.options as any[]).map((o) => ({
+        id: String(o.id),
+        zoneId: o.zoneId ? String(o.zoneId) : null,
+        code: o.code,
+        name: o.name,
+        fee: o.finalRateBDT,
+        freeReason: o.freeReason ?? null,
+        minDays: o.transit?.minDays ?? null,
+        maxDays: o.transit?.maxDays ?? null,
+      }));
+      if (!shippingOptions.length && rates.reason && "methodId" in input.delivery) fail(rates.reason, "SHIPPING_UNAVAILABLE_FOR_ZONE");
+    }
+    if ("methodId" in input.delivery) {
+      const methodId = String(input.delivery.methodId);
+      const o = shippingOptions.find((x) => x.id === methodId);
+      if (o) delivery = { zoneId: o.zoneId ? BigInt(o.zoneId) : null, code: o.code, name: o.name, fee: o.fee };
+      else if (shippingOptions.length) fail("The selected delivery option is not available for this address", "SHIPPING_UNAVAILABLE_FOR_ZONE");
+    } else if ("customFee" in input.delivery) {
+      delivery = { zoneId: null, code: "custom", name: input.delivery.name || "Delivery", fee: round2(input.delivery.customFee) };
+    } else {
+      delivery = { zoneId: null, code: "pickup", name: "Pickup / walk-in", fee: 0 };
     }
 
-    // Coupon
+    // Coupon, then the staff discount on what's left.
     let coupon: any = null;
-    let discountTotal = 0;
+    let couponDiscount = 0;
     let freeShipping = false;
-    const code = dto.couponCodes[0];
-    if (code) {
-      const r = await this.evaluateCoupon(code, lines, dto.email);
-      if (!r.ok) throw new BadRequestError(r.error, "COUPON_INVALID");
-      coupon = r.coupon;
-      discountTotal = r.discount;
-      freeShipping = r.freeShipping;
+    let couponError: string | null = null;
+    if (input.couponCode && lines.length) {
+      const r = await this.evaluateCoupon(input.couponCode, lines, input.email ?? undefined);
+      if (r.ok) {
+        coupon = r.coupon;
+        couponDiscount = r.discount;
+        freeShipping = r.freeShipping;
+      } else {
+        couponError = r.error;
+        fail(r.error, "COUPON_INVALID");
+      }
     }
-    const shippingTotal = freeShipping ? 0 : round2(option.finalRateBDT);
+    const afterCoupon = round2(itemsSubtotal - couponDiscount);
+    const manualDiscount = input.manualDiscount
+      ? round2(
+          Math.min(
+            afterCoupon,
+            input.manualDiscount.type === "percent"
+              ? (itemsSubtotal * input.manualDiscount.value) / 100
+              : input.manualDiscount.value,
+          ),
+        )
+      : 0;
+    const discountTotal = round2(couponDiscount + manualDiscount);
+    const shippingTotal = freeShipping ? 0 : round2(delivery?.fee ?? 0);
 
     // Tax on the discounted subtotal + shipping (same inputs the checkout page shows).
     const taxes = await this.shipping.resolveTaxes(this.ctx, {
@@ -672,13 +774,42 @@ export class StorefrontService {
       shippingTotal,
     });
     const taxTotal = round2(taxes.totalTax);
-    const feeTotal = round2(num(gateway.feeFixed) + ((itemsSubtotal - discountTotal) * num(gateway.feePercent)) / 100);
+    const feeTotal =
+      input.applyGatewayFee && gateway
+        ? round2(num(gateway.feeFixed) + ((itemsSubtotal - discountTotal) * num(gateway.feePercent)) / 100)
+        : 0;
     const grandTotal = round2(itemsSubtotal - discountTotal + shippingTotal + taxTotal + feeTotal);
 
-    const customerId = this.ctx.customer?.id ?? null;
-    const orderKey = newId("ok");
+    return {
+      problems,
+      gateway,
+      email: input.email ?? null,
+      lines,
+      quotedLines: quoted,
+      ship,
+      bill,
+      shippingOptions,
+      delivery,
+      coupon,
+      couponError,
+      totals: { itemsSubtotal, couponDiscount, manualDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal, qty, weightKG },
+    };
+  }
 
-    const order = await tx(async (t: Prisma.TransactionClient) => {
+  /**
+   * Saves a priced order in one transaction: stock (guarded against overselling), flash-sale
+   * limits, coupon usage and the order with its lines and first status entry.
+   */
+  async createOrder(q: OrderQuote, meta: OrderMeta) {
+    if (q.problems.length) throw new BadRequestError(q.problems[0]!, "CART_INVALID");
+    if (!q.gateway || !q.delivery) throw new BadRequestError("The order is missing a payment or delivery method", "CART_INVALID");
+    const storeId = this.storeId;
+    const { lines, ship, bill, coupon, delivery, gateway } = q;
+    const { itemsSubtotal, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal } = q.totals;
+    const orderKey = newId("ok");
+    const status = meta.status ?? "PENDING";
+
+    return tx(async (t: Prisma.TransactionClient) => {
       // Decrement stock atomically; the WHERE guard stops overselling under concurrency.
       for (const l of lines) {
         const row = l.variant ?? l.product;
@@ -688,7 +819,7 @@ export class StorefrontService {
           ? await t.productVariant.updateMany({ where, data: { stockQty: { decrement: l.qty } } })
           : await t.product.updateMany({ where, data: { stockQty: { decrement: l.qty } } });
         if (updated.count === 0) {
-          throw new BadRequestError(`"${l.product.name}" just sold out — please update your cart`, "INSUFFICIENT_STOCK");
+          throw new BadRequestError(`"${l.product.name}" just sold out — please update the order`, "INSUFFICIENT_STOCK");
         }
         await t.inventoryLog.create({
           data: {
@@ -711,7 +842,7 @@ export class StorefrontService {
           UPDATE "FlashSaleItem" SET "soldCount" = "soldCount" + ${l.qty}
           WHERE id = ${l.flash.itemId} AND ("stockLimit" IS NULL OR "soldCount" + ${l.qty} <= "stockLimit")`;
         if (bumped === 0) {
-          throw new BadRequestError(`The flash-sale price for "${l.product.name}" just sold out — please review your cart`, "INSUFFICIENT_STOCK");
+          throw new BadRequestError(`The flash-sale price for "${l.product.name}" just sold out — please review the order`, "INSUFFICIENT_STOCK");
         }
       }
 
@@ -736,12 +867,14 @@ export class StorefrontService {
           storeId,
           number: await this.nextOrderNumber(t),
           orderKey,
-          status: "PENDING",
+          status,
           currencyCode: "BDT",
-          customerId,
-          isGuest: customerId === null,
-          customerNote: dto.customerNote ?? null,
+          customerId: meta.customerId,
+          isGuest: meta.customerId === null,
+          customerNote: meta.customerNote ?? null,
           ipAddress: null,
+          source: meta.source,
+          createdByAdminId: meta.createdByAdminId ?? null,
           billingFirstName: bill.firstName,
           billingLastName: bill.lastName,
           billingCompany: bill.company ?? null,
@@ -752,7 +885,7 @@ export class StorefrontService {
           billingUpazila: bill.upazila || null,
           billingPostcode: bill.postcode || null,
           billingCountryCode: bill.country,
-          billingEmail: dto.email,
+          billingEmail: q.email,
           billingPhone: bill.phone,
           shippingSameAsBilling: bill === ship,
           shippingFirstName: ship.firstName,
@@ -767,9 +900,9 @@ export class StorefrontService {
           shippingPostcode: ship.postcode || null,
           shippingCountryCode: ship.country,
           shippingPhone: ship.phone,
-          shippingZoneId: option.zoneId ? BigInt(option.zoneId) : null,
-          shippingMethodCode: option.code,
-          shippingMethodName: option.name,
+          shippingZoneId: delivery.zoneId,
+          shippingMethodCode: delivery.code,
+          shippingMethodName: delivery.name,
           itemsSubtotal,
           discountTotal,
           shippingTotal,
@@ -777,9 +910,12 @@ export class StorefrontService {
           feeTotal,
           grandTotal,
           couponUsed: coupon?.code ?? null,
-          couponDiscountAmount: discountTotal,
-          paymentGatewayCode: dto.paymentGateway,
-          paymentStatus: "unpaid",
+          couponDiscountAmount: q.totals.couponDiscount,
+          manualDiscount: q.totals.manualDiscount,
+          paymentGatewayCode: gateway.code,
+          paymentStatus: meta.paid ? "paid" : "unpaid",
+          paidAt: meta.paid ? new Date() : null,
+          transactionId: meta.transactionId ?? null,
           items: {
             create: lines.map((l) => {
               const lineDiscount = round2(l.lineSubtotal * discountRatio);
@@ -804,14 +940,38 @@ export class StorefrontService {
             }),
           },
           statusHistory: {
-            create: { status: "PENDING", note: `Order placed on storefront (${gateway.name})`, notifyCustomer: true },
+            create: { status, note: meta.historyNote, notifyCustomer: meta.notifyCustomer ?? true, adminId: meta.createdByAdminId ?? null },
           },
         },
       });
     });
+  }
 
-    emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id) });
+  async placeOrder(dto: PlaceOrderDto) {
+    const quote = await this.quoteOrder({
+      strict: true,
+      items: dto.items,
+      email: dto.email,
+      shippingAddress: dto.shippingAddress,
+      billingAddress: dto.billingAddress,
+      billingSameAsShipping: dto.billingSameAsShipping,
+      delivery: { methodId: dto.shippingMethodId },
+      couponCode: dto.couponCodes[0],
+      paymentGateway: dto.paymentGateway,
+      requireEnabledGateway: true,
+      applyGatewayFee: true,
+    });
+    const order = await this.createOrder(quote, {
+      customerId: this.ctx.customer?.id ?? null,
+      customerNote: dto.customerNote,
+      source: "website",
+      historyNote: `Order placed on storefront (${quote.gateway!.name})`,
+    });
 
+    emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
+
+    const { grandTotal } = quote.totals;
+    const bill = quote.bill;
     let redirectPaymentURL: string | undefined;
     if (!OFFLINE_GATEWAYS.has(dto.paymentGateway)) {
       try {
@@ -826,7 +986,7 @@ export class StorefrontService {
           customerPhone: bill.phone,
           redirectUrl: "",
           ipnUrl: "",
-          metadata: { orderKey },
+          metadata: { orderKey: order.orderKey },
         } as any);
         redirectPaymentURL = init.redirectUrl;
       } catch {

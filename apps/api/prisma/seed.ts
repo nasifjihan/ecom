@@ -1,6 +1,6 @@
 import { PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
+import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
 import { syncLocations } from "../src/modules/locations/locations.data";
 
 const prisma = new PrismaClient();
@@ -1085,6 +1085,7 @@ async function seedDefaultRolesAndPerms(storeId: bigint) {
           slug,
           name: titleCased,
           isSystem: true,
+          maxManualDiscountPct: STORE_ROLE_MANUAL_DISCOUNT[slug] ?? 0,
         },
       });
       roleId = created.id;

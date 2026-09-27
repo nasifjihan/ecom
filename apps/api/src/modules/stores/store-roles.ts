@@ -20,6 +20,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     "orders.update",
     "orders.statusChange",
     "shipments.*",
+    "orders.create",
     "invoices.read",
     "invoices.create",
     "refunds.*",
@@ -32,6 +33,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     "customers.update",
     "customers.notes",
     "orders.read",
+    "orders.create",
     "reviews.*",
     "tickets.*",
     "returns.read",
@@ -87,3 +89,13 @@ export const roleNameFromSlug = (slug: string) =>
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+
+/**
+ * Largest discount (% of the items subtotal) each built-in role may give on an order entered by hand.
+ * Roles not listed get 0. Existing stores got the same values in the manual_orders migration.
+ */
+export const STORE_ROLE_MANUAL_DISCOUNT: Record<string, number> = {
+  owner: 100,
+  order_manager: 10,
+  customer_support: 5,
+};

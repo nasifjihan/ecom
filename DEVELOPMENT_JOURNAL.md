@@ -1470,3 +1470,35 @@ First batch from `FEATURE_COMPARISON.md`. Addresses and delivery prices now use 
 - Stores can switch areas off but can't add their own sub-areas (e.g. "Mirpur 10"). Chattogram and other city corporations have no thanas yet.
 - Courier area ids (Pathao, Steadfast, RedX) aren't mapped to these areas; that comes with courier integration.
 - Delivery time slots (reference spec §15) are not part of this batch.
+
+## ✅ BATCH #19 — Manual orders and order source (2026-09-27)
+Staff can now enter orders customers placed by phone, Facebook, WhatsApp, Messenger, Instagram or in the shop, and every order records where it came from.
+
+### 19.1 One pricing path for checkout and manual orders
+- `StorefrontService.placeOrder` is split into `quoteOrder` (prices lines with flash sales, delivery, coupon, staff discount, tax and gateway fee; with `strict` it throws on the first problem, otherwise it collects problems) and `createOrder` (the stock, flash-sale limit, coupon usage and order-row transaction). Storefront checkout and manual orders both use them, so they charge the same way. Checkout behaviour is unchanged (verified with a coupon order: website source, both emails sent).
+
+### 19.2 Schema (migrations `manual_orders`, `manual_order_permission`)
+- `Order.source` (default `website`; indexed with storeId), `Order.createdByAdminId` (→ AdminUser), `Order.manualDiscount` (part of `discountTotal`).
+- `Role.maxManualDiscountPct`: the most a role may knock off by hand, as % of the items subtotal. Defaults: owner 100, order manager 10, customer support 5, everyone else 0 (existing stores via the migration, new stores via `STORE_ROLE_MANUAL_DISCOUNT`). There's no roles screen yet (Batch 25); the value can be changed on the Role row.
+- `Customer.email` and `Order.billingEmail` are now optional, because phone and Facebook customers often have none. Emails to a customer without an address are skipped (`send()` drops blank recipients).
+- `orders.create` permission, granted to the order manager and customer support roles.
+
+### 19.3 API (`modules/orders/manual-order.ts`)
+- `POST /api/admin/orders/manual/quote`: prices a draft without saving; returns lines (with stock/flash problems), the zone's delivery options for the picked area, totals, the staff member's discount cap, the matched customer and the store's payment methods.
+- `POST /api/admin/orders/manual`: creates it. The customer is an existing one (by id), else found by phone (`+8801…`, `8801…` and `01…` are the same number) or email, else created without a login. Delivery is a zone method, a fee typed by staff, or pickup/walk-in (no address needed). Payment can be any method the store has set up (even ones not offered online); "already paid" needs a transaction ID for non-cash methods. Start as Pending or Processing. The staff discount is refused above the role's cap (`DISCOUNT_OVER_LIMIT`). The first history entry reads "Order entered by <name> (facebook order)" plus the staff note. The customer gets the confirmation email (optional); staff don't get a "new order" alert for orders they entered. The customer's order count and total spent go up.
+- `GET /api/admin/orders/manual/{products,products/:id/variants,customers,areas}`: the order form's own searches, gated by `orders.create`, so an order taker doesn't need full catalog or customer access.
+- Order list: `?source=phone,facebook` filter. **Fixed:** order search used a `shippingEmail` column that doesn't exist; it now searches number, email, phone and name. Order detail includes the creator.
+
+### 19.4 Store admin
+- **Orders → New order** (`/orders/new`): find a customer or type name/phone/email (a phone that matches an existing customer shows "This matches Jamal Uddin (8 orders)"); search products and pick options (sold-out options disabled); division/district/upazila picker; zone price, own price or pickup; % or ৳ discount showing the role's limit; coupon; payment method, "already paid" + transaction ID; source; "confirmed" (starts as Processing); customer and staff notes; live summary re-priced by the server on every change, with problems listed and Create disabled until they're fixed.
+- Orders list: **New order** button, source filter, "via Facebook · by <staff>" under the customer. Order detail: Source and Entered by in Payment Details, the staff discount on its own line, upazila in addresses. Unknown payment codes (e.g. bank transfer) no longer crash the payment badge.
+
+### 19.5 Verification
+- API: `tsc` clean; 94/94 tests with `RUN_DB_TESTS=1` (new `tests/unit/manual-order.test.ts`: phone normalisation and the order rules). Seed re-runs clean.
+- curl: new phone customer with no email (Facebook, 15% off, pickup); the same phone typed as `01819-000111` finds them; order manager refused at 12% ("at most 10% off (৳489 on this order)"), refused "paid by bKash" without a transaction ID, created at 10% with bKash BK8XY12 (paid, whatsapp, created by them); only the customer email went out; source filter and phone search on the order list.
+- Chromium: owner created an order (variable + simple product, Dhaka → Dhaka → Mirpur, 16 options, 5% off, Facebook) and landed on its detail page with the staff discount, source and creator; the list's Facebook filter shows it. Order manager: phone match banner, 20% blocked with Create disabled, then a Cumilla delivery order at 10% created.
+- All web apps typecheck clean (storefront-base keeps its 10 older errors).
+
+### 19.6 Known gaps
+- **RBAC (for Batch 25):** almost every admin route checks a wildcard (`orders.*`, `products.*`, `customers.*`, ...), while built-in roles hold specific codes (`orders.read`, ...), so only the owner can use most of the admin. An order manager can now create orders but can't open the orders list, an order's page (they land on an error after creating one) or the dashboard. The roles batch should make route checks and role codes agree, and add a screen for the discount cap.
+- A customer created here has no password; if they later register on the storefront with the same email, registration says the email is taken. Claiming such an account needs an email check (comes with OTP login, Batch 24).

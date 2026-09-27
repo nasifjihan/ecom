@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { ordersController } from "./orders.controller";
@@ -20,6 +21,8 @@ import {
   AddCartItemDto,
   InvoiceIdsQueryDto,
 } from "./orders.dto";
+import { ManualOrderDto, ManualOrderQuoteDto, ManualOrderService } from "./manual-order";
+import { publicLocations } from "../locations/locations.service";
 
 export const adminOrdersRouter = Router();
 
@@ -37,6 +40,68 @@ adminOrdersRouter.post(
   rbacMiddleware("orders.*"),
   validate({ body: CreateOrderFromCartDto }),
   ordersController.createOrderFromCart,
+);
+
+/** Manual orders (phone, Facebook, walk-in): price a draft, then create it. */
+adminOrdersRouter.post(
+  "/manual/quote",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  validate({ body: ManualOrderQuoteDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 200, data: await new ManualOrderService(req.ctx).quote(req.body as ManualOrderQuoteDto) });
+  }),
+);
+const PickQuery = z.object({ search: z.string().max(80).default("") });
+const PickVariantParams = z.object({ productId: z.coerce.bigint().positive() });
+adminOrdersRouter.get(
+  "/manual/products",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  validate({ query: PickQuery }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { search } = req.query as unknown as z.infer<typeof PickQuery>;
+    envelope(res, { status: 200, data: await new ManualOrderService(req.ctx).pickProducts(search) });
+  }),
+);
+adminOrdersRouter.get(
+  "/manual/products/:productId/variants",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  validate({ params: PickVariantParams }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { productId } = req.params as unknown as z.infer<typeof PickVariantParams>;
+    envelope(res, { status: 200, data: await new ManualOrderService(req.ctx).pickVariants(BigInt(productId)) });
+  }),
+);
+adminOrdersRouter.get(
+  "/manual/areas",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    if (req.ctx.storeId === undefined) throw new NotFoundError("Store");
+    // The areas the store delivers to (same list as the storefront's checkout).
+    envelope(res, { status: 200, data: await publicLocations(req.ctx.storeId) });
+  }),
+);
+adminOrdersRouter.get(
+  "/manual/customers",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  validate({ query: PickQuery }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { search } = req.query as unknown as z.infer<typeof PickQuery>;
+    envelope(res, { status: 200, data: await new ManualOrderService(req.ctx).pickCustomers(search) });
+  }),
+);
+adminOrdersRouter.post(
+  "/manual",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.create"),
+  validate({ body: ManualOrderDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 201, data: await new ManualOrderService(req.ctx).create(req.body as ManualOrderDto) });
+  }),
 );
 
 /** Invoices for several orders in one PDF: ?ids=1,2,3 (up to 100). */

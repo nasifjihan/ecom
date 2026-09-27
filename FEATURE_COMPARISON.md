@@ -53,8 +53,8 @@ These are our advantages. Keep them.
 |---|---|---|
 | Order list, detail, status change, invoice, email | ✅ | |
 | **Four separate statuses** (order / payment / shipment / return), each logged | 🟡 | We have one `OrderStatus` + payment status. Shipment and return statuses are missing |
-| Manual order by staff (`/orders/new`), discount capped by role | ❌ | Very important for BD shops (phone / Facebook orders) |
-| Order source (website / Facebook / WhatsApp / phone / walk-in) | ❌ | |
+| Manual order by staff (`/orders/new`), discount capped by role | ✅ | Batch 19 |
+| Order source (website / Facebook / WhatsApp / phone / walk-in) | ✅ | Batch 19: stored per order, filter on the list |
 | Payments to verify queue (bKash/Nagad transaction IDs) | ❌ | BD customers send money and type a TrxID |
 | Cash collections + courier COD settlements, shortfall flag | ❌ | Core BD COD workflow |
 | Courier assignment (bulk) | ❌ | |
@@ -189,7 +189,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | # | Batch | Why first | Size |
 |---|---|---|---|
 | 18 ✅ | **Bangladesh location tree + delivery rules**: division/district/upazila seed (bilingual), zones on the tree, weight and min-order rules, checkout address pickers | Every BD order needs it; unblocks couriers | M |
-| 19 | **Manual orders + order source**: staff create orders for phone/Facebook customers, discount capped by role | Most BD shops take many orders off-site | M |
+| 19 ✅ | **Manual orders + order source**: staff create orders for phone/Facebook customers, discount capped by role | Most BD shops take many orders off-site | M |
 | 20 | **Separate shipment and return statuses**: parcels, returns flow, status history per kind | Needed for couriers and COD | M |
 | 21 | **COD and payment verification**: verify bKash/Nagad TrxIDs, cash collections, courier settlements with shortfall | Money reconciliation | M |
 | 22 | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |

@@ -23,6 +23,7 @@ export class OrderRepository extends BaseRepository<"order"> {
         },
         refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        createdByAdmin: { select: { id: true, name: true } },
       },
     });
   }
@@ -90,11 +91,15 @@ export class OrderRepository extends BaseRepository<"order"> {
       where.grandTotal = { ...(where.grandTotal as object || {}), lte: filters.maxTotal };
     }
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
+    if (filters.source && filters.source.length > 0) where.source = { in: filters.source };
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: "insensitive" } },
         { billingEmail: { contains: filters.search, mode: "insensitive" } },
-        { shippingEmail: { contains: filters.search, mode: "insensitive" } },
+        { billingPhone: { contains: filters.search } },
+        { shippingPhone: { contains: filters.search } },
+        { billingFirstName: { contains: filters.search, mode: "insensitive" } },
+        { billingLastName: { contains: filters.search, mode: "insensitive" } },
       ];
     }
 

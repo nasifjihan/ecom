@@ -106,7 +106,7 @@ export class PasswordResetService {
       passwordHash: c.passwordHash,
     })
     inBackground("customer password reset", () =>
-      new EmailService(this.storeId).customerPasswordReset(c, token, RESET_TTL_MIN),
+      new EmailService(this.storeId).customerPasswordReset({ ...c, email }, token, RESET_TTL_MIN),
     )
   }
 

@@ -160,7 +160,7 @@ export class CustomersService extends BaseService {
     });
     if (!existing) throw new NotFoundError("customer", id);
 
-    if (dto.email !== undefined && dto.email.toLowerCase() !== existing.email.toLowerCase()) {
+    if (dto.email !== undefined && dto.email.toLowerCase() !== (existing.email ?? "").toLowerCase()) {
       await this.ensureUniqueEmail(storeId, dto.email, cid);
     }
 

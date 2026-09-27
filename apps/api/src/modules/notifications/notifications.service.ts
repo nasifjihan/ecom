@@ -24,7 +24,8 @@ import {
 } from "./email.templates"
 
 interface SendOptions {
-  to: string[]
+  /** Blank entries (customers without an email) are skipped. */
+  to: (string | null | undefined)[]
   vars?: Record<string, string>
   order?: OrderSummary | null
   tracking?: TrackingInfo | null
@@ -191,7 +192,11 @@ export class EmailService {
   /** Renders, logs and queues an email. Returns the log id, or null when it wasn't sent. */
   async send(key: TemplateKey, opts: SendOptions): Promise<bigint | null> {
     const to = [
-      ...new Set(opts.to.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))),
+      ...new Set(
+        opts.to
+          .map((e) => (e ?? "").trim())
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+      ),
     ]
     if (!to.length) return null
     if (!opts.force && !(await this.templateConfig(key)).enabled) return null
@@ -243,7 +248,7 @@ export class EmailService {
     const vars: Record<string, string> = {
       "customer.name": `${order.billingFirstName} ${order.billingLastName}`.trim(),
       "customer.first_name": first,
-      "customer.email": order.billingEmail,
+      "customer.email": order.billingEmail ?? "",
       "order.number": order.number,
       "order.date": order.createdAt.toLocaleDateString("en-GB", {
         day: "numeric",
@@ -312,18 +317,24 @@ export class EmailService {
   }
 
   /** Order confirmation to the customer and a new-order alert to the team. */
-  async orderPlaced(orderId: bigint, only?: "customer"): Promise<boolean> {
+  async orderPlaced(
+    orderId: bigint,
+    only?: "customer",
+    who: { customer: boolean; staff: boolean } = { customer: true, staff: true },
+  ): Promise<boolean> {
     const d = await this.orderDetails(orderId)
     if (!d) return false
     const common = { vars: d.vars, order: d.summary, orderId }
-    await this.send("order_new_customer", {
-      ...common,
-      to: [d.order.billingEmail],
-      recipientType: "customer",
-      recipientId: d.order.customerId,
-      force: only === "customer",
-    })
-    if (only) return true
+    if (who.customer) {
+      await this.send("order_new_customer", {
+        ...common,
+        to: [d.order.billingEmail],
+        recipientType: "customer",
+        recipientId: d.order.customerId,
+        force: only === "customer",
+      })
+    }
+    if (only || !who.staff) return true
     await this.send("order_new_admin", {
       ...common,
       to: await this.staffRecipients("order_new_admin"),
@@ -358,7 +369,7 @@ export class EmailService {
       vars: {
         "customer.name": `${c.firstName} ${c.lastName}`.trim(),
         "customer.first_name": c.firstName,
-        "customer.email": c.email,
+        "customer.email": c.email ?? "",
       },
       recipientType: "customer",
       recipientId: c.id,
@@ -376,7 +387,7 @@ export class EmailService {
       vars: {
         "customer.name": `${c.firstName} ${c.lastName}`.trim(),
         "customer.first_name": c.firstName,
-        "customer.email": c.email,
+        "customer.email": c.email ?? "",
         "reset.url": `${urls.storefront}/account/reset-password?token=${encodeURIComponent(token)}`,
         "reset.expires_minutes": String(minutes),
       },

@@ -62,10 +62,25 @@ export interface Address {
   country?: string;
   division?: string;
   district?: string;
+  upazila?: string;
   postcode?: string;
   phone?: string;
   email?: string;
 }
+
+/** Where an order came from (Order.source on the API). */
+export const ORDER_SOURCES = [
+  { value: "website", label: "Website" },
+  { value: "phone", label: "Phone call" },
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "messenger", label: "Messenger" },
+  { value: "walk_in", label: "Walk-in" },
+  { value: "other", label: "Other" },
+] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number]["value"];
+export const sourceLabel = (s?: string | null) => ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
 
 export interface OrderLine {
   id: string | number;
@@ -109,6 +124,10 @@ export interface Order {
   updatedAt: string;
   assignedToUserId?: string | number;
   itemsCount: number;
+  source: string;
+  /** Staff member who entered the order by hand. */
+  createdByName?: string;
+  manualDiscount: number;
 }
 
 export interface OrderListFilters {
@@ -122,6 +141,7 @@ export interface OrderListFilters {
   coupon?: boolean;
   shippingZone?: ShippingZone;
   search?: string;
+  source?: string;
   page?: number;
   limit?: number;
 }
@@ -520,6 +540,9 @@ interface ApiOrder {
   taxTotal: string;
   grandTotal: string;
   couponUsed: string | null;
+  source?: string;
+  manualDiscount?: string;
+  createdByAdmin?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -557,6 +580,7 @@ const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
     country: f("CountryCode"),
     division: f("State"),
     district: f("City"),
+    upazila: f("Upazila"),
     postcode: f("Postcode"),
     phone: f("Phone"),
     email: prefix === "billing" ? f("Email") : undefined,
@@ -607,6 +631,9 @@ export function fromApiOrder(o: ApiOrder): Order {
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
     itemsCount: lines.reduce((n, l) => n + l.quantity, 0),
+    source: o.source ?? "website",
+    createdByName: o.createdByAdmin?.name ?? undefined,
+    manualDiscount: Number(o.manualDiscount ?? 0),
   };
 }
 
@@ -625,6 +652,7 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.minTotal !== undefined) params.set("minTotal", String(filters.minTotal));
         if (filters.maxTotal !== undefined) params.set("maxTotal", String(filters.maxTotal));
         if (filters.search) params.set("search", filters.search);
+        if (filters.source) params.set("source", filters.source);
         if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
         params.set("page", String(filters.page ?? 1));
         params.set("perPage", String(filters.limit ?? 20));

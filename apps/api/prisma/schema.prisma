@@ -153,16 +153,18 @@ model PlatformAdmin {
 // ADMIN USERS, ROLES & PERMISSIONS (PER STORE)
 // ============================================================
 model Role {
-  id          BigInt                 @id @default(autoincrement())
-  storeId     BigInt
-  store       Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name        String
-  slug        String
-  isSystem    Boolean                @default(false)
-  permissions PermissionAssignment[]
-  admins      AdminUser[]
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                   BigInt                 @id @default(autoincrement())
+  storeId              BigInt
+  store                Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name                 String
+  slug                 String
+  isSystem             Boolean                @default(false)
+  /// Largest discount (% of the items subtotal) this role may give on an order it creates by hand.
+  maxManualDiscountPct Decimal                @default(0) @db.Decimal(5, 2)
+  permissions          PermissionAssignment[]
+  admins               AdminUser[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@unique([storeId, slug])
 }
@@ -194,6 +196,7 @@ model AdminUser {
   lastLoginIp     String?
   auditLogs       AuditLog[]
   orderStatusLogs OrderStatusLog[]
+  ordersCreated   Order[]          @relation("OrderCreatedBy")
   refunds         Refund[]
   authoredPosts   BlogPost[]
   createdAt       DateTime         @default(now())
@@ -901,7 +904,8 @@ model Customer {
   id                    BigInt                 @id @default(autoincrement())
   storeId               BigInt
   store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email                 String
+  /// Optional for customers a shop records by hand (phone, Facebook, walk-in); required to sign in.
+  email                 String?
   passwordHash          String?
   firstName             String
   lastName              String
@@ -1095,7 +1099,7 @@ model Order {
   billingUpazila         String?
   billingPostcode        String?
   billingCountryCode     String
-  billingEmail           String
+  billingEmail           String?
   billingPhone           String?
   shippingSameAsBilling  Boolean              @default(true)
   shippingFirstName      String?
@@ -1136,6 +1140,13 @@ model Order {
   orderKey               String               @unique
   couponUsed             String?
   couponDiscountAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  /// Discount a staff member gave on a manual order (part of discountTotal).
+  manualDiscount         Decimal              @default(0) @db.Decimal(12, 2)
+  /// Where the order came from: website, phone, facebook, instagram, whatsapp, messenger, walk_in, other.
+  source                 String               @default("website")
+  /// Staff member who created the order by hand (null for storefront orders).
+  createdByAdminId       BigInt?
+  createdByAdmin         AdminUser?           @relation("OrderCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
   giftCardUsed           String?
   giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
   supplierOrderId        String?
@@ -1157,6 +1168,7 @@ model Order {
   cancelledAt            DateTime?
 
   @@index([storeId, status])
+  @@index([storeId, source])
   @@index([storeId, createdAt])
   @@index([customerId])
   @@index([paymentStatus])

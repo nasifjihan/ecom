@@ -19,7 +19,7 @@ import type {
   StoreListQueryDto as StoreListQueryDtoType,
 } from "./stores.dto";
 import { PlatformService } from "../platform/platform.service";
-import { STORE_ROLE_PERMISSIONS, roleNameFromSlug } from "./store-roles";
+import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS, roleNameFromSlug } from "./store-roles";
 
 export class StoresService extends BaseService {
   private storeRepo: StoreRepository;
@@ -160,6 +160,7 @@ export class StoresService extends BaseService {
           slug,
           name: roleNameFromSlug(slug),
           isSystem: true,
+          maxManualDiscountPct: STORE_ROLE_MANUAL_DISCOUNT[slug] ?? 0,
           permissions: { create: perms.map((permission) => ({ permission })) },
         },
       });

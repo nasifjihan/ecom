@@ -178,7 +178,7 @@ export class InvoiceService {
       order.billingAddress2 ?? "",
       cityLine(order.billingUpazila, order.billingCity, order.billingPostcode),
       order.billingPhone ?? "",
-      order.billingEmail,
+      order.billingEmail ?? "",
     ]
     const shipTo =
       order.shippingSameAsBilling || !order.shippingAddress1
