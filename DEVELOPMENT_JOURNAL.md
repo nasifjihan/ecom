@@ -1998,3 +1998,88 @@ They were tested against a local mock (`pnpm --filter @ecom/api sms:mock`). **Se
 - Marketing SMS and campaigns.
 - WhatsApp.
 - A per-event × channel notification matrix.
+
+---
+
+## ✅ BATCH #26 — Storefront gaps: search, order tracking, wishlist, flash sale, reviews and questions, tags and specifications (2026-09-27)
+The storefront pages customers expected but didn't have. Staff get the matching screens: product questions to answer, what customers search for, and product tags and specifications.
+
+### 26.1 Schema (migration `storefront_gaps`)
+- **`Product`:**
+  - `tags`: lower-case words, with a GIN index;
+  - `specifications`: a list of `{group?, label, value}` rows;
+  - its questions.
+- **`SearchTerm`**: per store and term, with searches, products found last time, and when it was last searched. Counted per term, not per person.
+- **`ProductQuestion`**: product, asker's name, optional customer, question, answer, who answered and when, status (pending / published / hidden), and IP for rate limiting.
+- **Ratings:** product ratings and review counts were never kept up to date. The migration fills them from approved reviews; submitting and moderating reviews now keep them current (`refreshProductRating`).
+
+### 26.2 API
+- **Search:**
+  - The product list's `search` now also matches tags and brand names, and there's a new `tag` filter.
+  - The first page of a search is recorded as a search term (`engagement.rules.ts`):
+    - lower-cased, with punctuation removed but Bangla vowel signs kept (the tests caught those being stripped);
+    - phone and order numbers aren't recorded.
+  - `GET /api/storefront/search/suggest?q=` returns up to 6 products, matching categories, and terms other customers searched at least twice that found something. `GET /api/storefront/search/popular` returns the top terms.
+- **Order tracking:** `GET /api/storefront/track?number=&phone=`.
+  - The phone can be in any format.
+  - It returns the order's progress (placed → confirmed → handed to courier → out for delivery → delivered, with times), a closed state for cancelled, refunded or failed orders, parcels with courier and tracking link, and items.
+  - It never returns the address, email or payments. A wrong number and a wrong phone get the same answer.
+  - It is rate-limited like login (20 a minute per IP).
+- **Wishlist:** `GET|POST /api/storefront/account/wishlist`, `GET /wishlist/ids` and `DELETE /wishlist/:productId`. POST takes several ids, so a guest's saved list moves to the account on login. The product list takes `ids=` for guests' saved products.
+- **Flash-sale page:** `GET /api/storefront/flash-sales` lists running sales with their products (listed products, whole categories including subcategories, or the whole store). Only products currently getting that sale's price are shown.
+- **Reviews:** `POST /api/storefront/products/:id/reviews` (signed-in customers) and `GET /products/:id/my-review`.
+  - A customer with a delivered order containing the product is a verified buyer, and their review shows at once. Others wait for approval.
+  - One review per product per customer, and the product must allow reviews.
+- **Questions:** `POST /api/storefront/products/:id/questions` (anyone, 5 an hour per IP). The product page includes published answers.
+- **Admin:**
+  - `/api/admin/marketing/questions` (`reviews.*`): list with a count waiting for an answer, answer (which publishes), hide, delete. Publishing without an answer is refused.
+  - `/api/admin/marketing/search-terms` (`products.view`): a "found nothing" filter.
+- **Product save:** takes `tags` (trimmed, lower-cased, no duplicates, at most 30) and `specifications` (at most 60 rows).
+- **Checkout:** email is optional. Many customers here give only a phone number, and order emails are skipped without one.
+- **Product page data:** adds tags, specification rows (the shop's own first, then brand / SKU / attributes / weight), sales count, low-stock threshold, whether reviews are allowed, and published questions.
+
+### 26.3 Storefront
+- **Header search:** suggestions as you type (popular terms, categories, products with price, "See all results"), and a **`/search`** page with results, paging, and popular searches when empty or nothing matches. The mobile search icon and menu search go there too.
+- **`/track`:** order number + phone, then the progress steps, parcels with the courier's tracking link, and items. Linked from the thank-you page (order number pre-filled) and a new "Shop" footer column: Track your order, Flash sale, Wishlist, Search.
+- **Wishlist:**
+  - The hearts on product cards and the product page work, and the header shows the count.
+  - Guests' saved products are kept in the browser and move to their account when they log in.
+  - **`/wishlist`** shows them.
+- **`/flash-sale`:** each running sale with its banner, a live countdown and its products.
+- **Product page:**
+  - "Hurry, only N left" at the product's low-stock threshold, and "75+ sold" once it has sold 10;
+  - tag chips linking to `/products?tag=`;
+  - specifications grouped under headings;
+  - a review form with stars (or a login link), and a note when a review is waiting for approval;
+  - a new **Questions** tab with answered questions and an "Ask a question" form.
+- **Checkout:** "Email Address (optional)"; an email is still needed to create an account.
+
+### 26.4 Store admin
+- **Product editor:**
+  - The tags box already existed but **never saved**. It now loads and saves on both the new and edit pages.
+  - New **Specifications** card: group, label and value rows you can reorder.
+- **Marketing → Questions:** tabs for to answer / published / hidden / all, answer and publish, hide, delete, and a link to the product.
+- **Marketing → Search terms:** most searched first, "Only searches that found nothing" (what to stock or tag), and "See results" on the storefront.
+
+### 26.5 Checked
+- **Tests:** 337/337 API tests, including 26 new tests for search terms, tracking steps and public names.
+- **By API:**
+  - tags saved lower-cased and de-duplicated, and the tag filter works; search matches tags;
+  - searches were counted, phone and order numbers ignored; suggestions and popular terms work;
+  - tracking works with a wrong phone refused and the phone in "+880 1555-123456" form;
+  - wishlist add, list and remove;
+  - the flash-sale page, with a dev sale extended to run;
+  - a review went to pending, a second one was refused, and approving it moved the product to 5 reviews averaging 3.80;
+  - a question went pending, publishing it without an answer was refused, and answering published it.
+- **Chromium:**
+  - storefront: header suggestions, search results, a no-results page, the product page (tags, sold count, wishlist, Questions tab, review login prompt), guest wishlist page, flash sale, and tracking (wrong phone, then right phone);
+  - admin: answering the question (which then showed on the product page), search terms, and adding a tag and a specification row in the product editor and saving;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The three Next apps build.
+
+### 26.6 Not done
+- Bangla / Arabic language switch, data-saver mode, and wallet / "my coupons" pages.
+- Guests' wishlists live only in the browser until they log in.
+- Search is a simple "contains" match. There's no typo tolerance or ranking beyond sales count; a search engine can come later.
+- Review photos and "helpful" votes.
+- Answering a question doesn't notify the asker.

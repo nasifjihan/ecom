@@ -1,14 +1,19 @@
 import type { Request, Response } from "express";
 import { ctrl, envelope, type RequestContext } from "../../core";
 import { StorefrontService } from "./storefront.service";
-import type { CartPricesDto } from "./storefront.dto";
+import type { CartPricesDto, StorefrontProductsQueryDto } from "./storefront.dto";
+import { StorefrontEngagement } from "./engagement";
 
 type Req = Request & { ctx: RequestContext };
 const svc = (req: Req) => new StorefrontService(req.ctx);
 
 export const storefrontController = {
   listProducts: ctrl(async (req: Req, res: Response) => {
-    envelope(res, { data: await svc(req).listProducts(req.query as any) });
+    const q = req.query as unknown as StorefrontProductsQueryDto;
+    const data = await svc(req).listProducts(q);
+    // Search terms are counted on the first page, so paging through results counts once.
+    if (q.search && q.page === 1) await new StorefrontEngagement(req.ctx).recordSearch(q.search, data.total);
+    envelope(res, { data });
   }),
 
   getProductBySlug: ctrl(async (req: Req, res: Response) => {

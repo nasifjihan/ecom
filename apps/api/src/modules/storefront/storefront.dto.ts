@@ -17,6 +17,10 @@ export const StorefrontProductsQueryDto = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
   search: z.string().trim().max(120).optional(),
+  /** Products with this tag (lower-case). */
+  tag: z.string().trim().toLowerCase().max(40).optional(),
+  /** These products only (e.g. a guest's wishlist), comma-separated. */
+  ids: z.string().regex(/^\d+(,\d+){0,99}$/, "ids must be comma-separated product ids").optional(),
   featured: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   excludeId: z.coerce.bigint().positive().optional(),
 });
@@ -80,7 +84,8 @@ export type ApplyCouponDto = z.infer<typeof ApplyCouponDto>;
  * the server re-prices every line from the database.
  */
 export const PlaceOrderDto = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  /** Optional: many customers here shop with a phone number only (order emails are then skipped). */
+  email: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().trim().toLowerCase().email().max(254).optional()),
   phone: z.string().trim().min(7).max(20),
   isGuest: z.boolean().optional(),
   subscribeNewsletter: z.boolean().optional(),

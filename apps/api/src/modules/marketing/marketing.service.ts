@@ -1,4 +1,5 @@
 import { prisma, tx } from "../../config";
+import { refreshProductRating } from "../storefront/engagement";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, type RequestContext, type Paginated } from "../../core";
 import { CouponRepository, FlashSaleRepository, ReviewRepository } from "./marketing.repository";
 import { couponTypeToDiscountType } from "./marketing.dto";
@@ -355,7 +356,13 @@ export class MarketingService extends BaseService {
 
   async moderateReviews(dto: ReviewModerateDto): Promise<{ count: number; action: string }> {
     const bigIds = dto.ids.map((id) => BigInt(id));
+    // Ratings on the product pages follow what's approved, so re-count the products touched.
+    const touched = await prisma.review.findMany({
+      where: { id: { in: bigIds }, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) },
+      select: { productId: true },
+    });
     const result = await this.reviews.setStatus(this.ctx, bigIds, dto.action);
+    for (const productId of new Set(touched.map((t) => t.productId))) await refreshProductRating(productId);
     return { count: result.count, action: dto.action };
   }
 

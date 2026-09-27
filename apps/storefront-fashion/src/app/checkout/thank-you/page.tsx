@@ -397,13 +397,16 @@ export default function ThankYouPage() {
               <p className="text-xs text-muted-foreground mb-4">
                 We'll send you tracking updates via SMS & email once your order ships.
               </p>
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-background border">
+              <Link
+                href={`/track?order=${encodeURIComponent(order.orderRef)}`}
+                className="flex items-center gap-2 p-3 rounded-xl bg-background border hover:border-primary"
+              >
                 <Truck className="h-5 w-5 text-primary flex-shrink-0" />
                 <div className="text-xs">
                   <div className="font-semibold">Track Your Order</div>
-                  <div className="text-muted-foreground">Available after dispatch</div>
+                  <div className="text-muted-foreground">With the order number and your phone</div>
                 </div>
-              </div>
+              </Link>
             </CardContent>
           </Card>
 

@@ -128,8 +128,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const storeName = theme?.brand.storeName ?? "Fashion BD";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
   const announcement = theme?.announcement.enabled && theme.announcement.text ? theme.announcement : null;
+  // Shop pages every store has, next to the store's own footer menus.
+  const quickLinks = {
+    title: "Shop",
+    links: [
+      { label: "Track your order", href: "/track" },
+      { label: "Flash sale", href: "/flash-sale" },
+      { label: "Wishlist", href: "/wishlist" },
+      { label: "Search", href: "/search" },
+    ],
+  };
   const footerColumns = site
     ? [
+        quickLinks,
         ...site.footerMenus.map((m) => ({
           title: m.title,
           links: m.links.map((l) => ({ label: l.title, href: l.url, external: l.openInNewTab || /^https?:/i.test(l.url) })),

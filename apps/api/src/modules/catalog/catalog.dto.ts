@@ -68,6 +68,23 @@ export type CreateProductVariantDto = z.infer<typeof CreateProductVariantDto>;
 export const UpdateProductVariantDto = BaseProductVariantDto.partial();
 export type UpdateProductVariantDto = z.infer<typeof UpdateProductVariantDto>;
 
+/** Lower-case, trimmed, no duplicates: "Eid", " eid " and "EID" are one tag. */
+const ProductTags = z
+  .array(z.string().trim().min(1).max(40).refine(noXss, "No JavaScript injection allowed"))
+  .max(30)
+  .transform((tags) => [...new Set(tags.map((t) => t.toLowerCase().replace(/\s+/g, " ")))]);
+
+/** Rows of the product page's specifications table, e.g. { group: "Fabric", label: "Material", value: "Cotton" }. */
+const ProductSpecifications = z
+  .array(
+    z.object({
+      group: z.string().trim().max(60).refine(noXss, "No JavaScript injection allowed").optional().nullable(),
+      label: z.string().trim().min(1).max(80).refine(noXss, "No JavaScript injection allowed"),
+      value: z.string().trim().min(1).max(300).refine(noXss, "No JavaScript injection allowed"),
+    }),
+  )
+  .max(60);
+
 const BaseCreateProductDto = z.object({
   type: z.enum(["SIMPLE", "VARIABLE", "DIGITAL", "SUBSCRIPTION", "MADE_TO_ORDER"]).default("SIMPLE"),
   name: z.string().min(2).max(255),
@@ -112,10 +129,16 @@ const BaseCreateProductDto = z.object({
   supplierCost: z.coerce.number().nonnegative().optional().nullable(),
   supplierSku: z.string().max(100).optional().nullable(),
   fulfillmentType: z.string().default("own"),
+  tags: ProductTags.default([]),
+  specifications: ProductSpecifications.default([]),
 });
 export const CreateProductDto = BaseCreateProductDto.superRefine(priceStockRefine);
 export type CreateProductDto = z.infer<typeof CreateProductDto>;
-export const UpdateProductDto = BaseCreateProductDto.deepPartial();
+// Tags and specification rows keep their full rules on update (deepPartial would loosen each row).
+export const UpdateProductDto = BaseCreateProductDto.deepPartial().extend({
+  tags: ProductTags.optional(),
+  specifications: ProductSpecifications.optional(),
+});
 export type UpdateProductDto = z.infer<typeof UpdateProductDto>;
 
 export const BulkProductStatusDto = z.object({ ids: z.array(z.coerce.bigint()).min(1) });

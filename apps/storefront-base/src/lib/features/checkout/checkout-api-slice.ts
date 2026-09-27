@@ -167,7 +167,8 @@ export type AddressPayload = {
 };
 
 export type PlaceOrderBody = {
-  email: string;
+  /** Optional: a phone number is enough to order. */
+  email?: string;
   phone: string;
   isGuest: boolean;
   accountCreatePassword?: string;

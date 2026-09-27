@@ -26,6 +26,10 @@ export interface ProductVariant {
 
 export interface Product {
   id: string | number;
+  /** Lower-case search and filter words. */
+  tags?: string[];
+  /** Rows of the product page's specifications table. */
+  specifications?: { group?: string | null; label: string; value: string }[] | null;
   storeId?: string | number;
   type?: string;
   name: string;

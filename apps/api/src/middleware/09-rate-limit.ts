@@ -69,7 +69,8 @@ export default function rateLimitMiddleware(
     next();
     return;
   }
-  if (STRICT_PATHS.test(req.path)) {
+  // Public order tracking takes an order number + phone: limited like a login.
+  if (STRICT_PATHS.test(req.path) || (req.path === "/api/storefront/track" && req.method === "GET")) {
     strictLimiter(req, res, next);
     return;
   }

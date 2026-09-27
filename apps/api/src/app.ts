@@ -46,12 +46,12 @@ import {
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
-import { adminPromotionsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
+import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
-import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
+import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter, storefrontEngagementRouter, storefrontWishlistRouter } from "./modules/storefront";
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
@@ -157,6 +157,7 @@ export function buildApp(): Express {
   app.use("/api/admin/customers", adminCustomersRouter);
   app.use("/api/storefront/account", storefrontAccountPaymentsRouter);
   app.use("/api/storefront/account", storefrontReturnsRouter);
+  app.use("/api/storefront/account", storefrontWishlistRouter);
   app.use("/api/storefront/account", storefrontAccountRouter);
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
@@ -165,6 +166,8 @@ export function buildApp(): Express {
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);
   app.use("/api/admin/marketing/flash-sales", marketingFlashSalesRouter);
   app.use("/api/admin/marketing/reviews", marketingReviewsRouter);
+  app.use("/api/admin/marketing/questions", adminQuestionsRouter);
+  app.use("/api/admin/marketing/search-terms", adminSearchTermsRouter);
   app.use("/api/super/dashboard", superDashboardRouter);
   app.use("/api/admin/dashboard", storeDashboardRouter);
   app.use("/api/admin/settings", adminSettingsRouter);
@@ -176,6 +179,7 @@ export function buildApp(): Express {
   app.use("/api/admin/content", adminContentRouter);                 // pages, blog, FAQs, menus, theme, homepage
   app.use("/api/storefront/content", storefrontContentRouter);
   app.use("/api/storefront/promotions", storefrontPromotionsRouter);
+  app.use("/api/storefront", storefrontEngagementRouter);           // search suggestions, tracking, flash-sale page, reviews, questions
   app.use("/api/storefront", storefrontCatalogRouter);             // Batch #10: public catalog
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "uploads"), { maxAge: "1y", immutable: true }));
 

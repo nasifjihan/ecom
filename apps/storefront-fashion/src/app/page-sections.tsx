@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, CreditCard, Gift, Phone, Shield, ShoppingBag, Truck } from "lucide-react";
 import { Markdown } from "@ecom/ui";
 import {
@@ -12,15 +11,13 @@ import {
   ProductGrid,
   Button,
   ProductCardData,
-  useCart,
   useGetProductsQuery,
   useGetCategoriesTreeQuery,
-  type ProductSummary,
 } from "@ecom/storefront-base";
-import { toast } from "sonner";
 import type { Faq, HomepageSection } from "@/lib/content";
 import type { SlotPromotion } from "@/lib/promotions";
 import { PromoBanners, PromoOffers } from "./_components/promotions";
+import { useProductGridActions } from "./_components/product-actions";
 
 const CATEGORY_COLORS = [
   "from-pink-400 to-rose-500",
@@ -64,7 +61,11 @@ type SectionOf<T extends HomepageSection["type"]> = Extract<HomepageSection, { t
  * Renders blocks from the admin, for the homepage (Online Store > Homepage) and for pages built from
  * blocks (Content > Pages). FAQ blocks need the published FAQs, which the server page fetches.
  */
-type HomePromotions = { hero: SlotPromotion[]; belowCategories: SlotPromotion[]; offers: SlotPromotion[] };
+interface HomePromotions {
+  hero: SlotPromotion[];
+  belowCategories: SlotPromotion[];
+  offers: SlotPromotion[];
+}
 
 export function PageSections({
   sections,
@@ -88,51 +89,8 @@ export function PageSections({
     ...(promotions && i === categoriesAt ? [<PromoBanners key="promo-below-categories" promotions={promotions.belowCategories} />] : []),
     ...(promotions && i === (productsAt >= 0 ? productsAt : list.length - 1) ? [<PromoOffers key="promo-offers" promotions={promotions.offers} />] : []),
   ];
-  const { addItem } = useCart();
-  const router = useRouter();
-  const [wishlisted, setWishlisted] = React.useState<Set<string>>(new Set());
+  const productProps = useProductGridActions();
 
-  const handleAddToCart = React.useCallback(
-    (p: ProductCardData) => {
-      const summary = p as ProductSummary;
-      if (summary.hasVariants) {
-        router.push(`/products/${p.slug}`);
-        return;
-      }
-      addItem({
-        productId: p.id,
-        variantId: undefined,
-        title: p.title,
-        slug: p.slug,
-        image: p.image,
-        price: p.price,
-        weightKG: summary.weightKG,
-      });
-      toast.success("Added to cart", {
-        description: <span className="line-clamp-1">{p.title.slice(0, 40)}</span>,
-        action: {
-          label: "View Cart",
-          onClick: () => (window.location.href = "/cart"),
-        },
-      });
-    },
-    [addItem, router],
-  );
-
-  const toggleWishlist = React.useCallback(
-    (p: ProductCardData) => {
-      setWishlisted((prev) => {
-        const next = new Set(prev);
-        if (next.has(p.id)) next.delete(p.id);
-        else next.add(p.id);
-        return next;
-      });
-      toast.info(wishlisted.has(p.id) ? "Removed from wishlist" : "Added to wishlist");
-    },
-    [wishlisted],
-  );
-
-  const productProps = { onAddToCart: handleAddToCart, onToggleWishlist: toggleWishlist, wishlistedIds: wishlisted };
 
   return (
     <div className={`flex flex-col gap-10 md:gap-16 pb-10 md:pb-16 ${className ?? ""}`}>

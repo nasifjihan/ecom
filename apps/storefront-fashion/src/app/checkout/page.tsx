@@ -348,8 +348,11 @@ export default function CheckoutPage() {
   const validateStep = (stepId: string): boolean => {
     switch (stepId) {
       case "information":
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
-          toast.error("Valid email required", { description: "Please enter a valid contact email" });
+        // Email is optional (many customers only give a phone), but a new account needs one.
+        if ((contactEmail.trim() || createAccount) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
+          toast.error(createAccount ? "Email needed for an account" : "Check your email", {
+            description: createAccount ? "Enter your email to create an account, or untick it." : "That doesn't look like an email address. Leave it empty if you don't have one.",
+          });
           return false;
         }
         if (createAccount && !isAuthenticated && passwordProblem(accountPassword)) {
@@ -478,7 +481,7 @@ export default function CheckoutPage() {
               : undefined;
 
       const result = await placeOrder({
-        email: contactEmail || customerEmail || shippingPayload.email || "",
+        email: contactEmail.trim() || customerEmail || shippingPayload.email || undefined,
         phone: shippingPayload.phone,
         isGuest: !signedIn,
         subscribeNewsletter,
@@ -651,7 +654,7 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Email Address *</Label>
+                        <Label>Email Address (optional)</Label>
                         <Input
                           type="email"
                           placeholder="you@example.com"
@@ -660,7 +663,7 @@ export default function CheckoutPage() {
                           className={cn(!contactEmail && "border-muted")}
                         />
                         <p className="text-[11px] text-muted-foreground">
-                          We'll send your order confirmation and tracking updates to this email.
+                          For the order confirmation by email. Order updates also come by SMS to your phone.
                         </p>
                       </div>
                       <div className="flex items-start gap-3">

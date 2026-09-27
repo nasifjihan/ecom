@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { PromoSlotStrip } from "@/app/_components/promotions";
+import { useProductGridActions } from "@/app/_components/product-actions";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -87,6 +88,9 @@ export default function ProductsPage() {
 
   const perPage = 16;
   const categorySlug = searchParams.get("category") ?? undefined;
+  const rawTag = (searchParams.get("tag") ?? "").trim().toLowerCase();
+  const tag = rawTag.length ? rawTag : undefined;
+  const { onToggleWishlist, wishlistedIds } = useProductGridActions();
   const debouncedSearch = useDebounced(search.trim());
   const debouncedPrice = useDebounced(priceRange);
 
@@ -103,6 +107,7 @@ export default function ProductsPage() {
     minPrice: debouncedPrice[0]! > 0 ? debouncedPrice[0] : undefined,
     maxPrice: debouncedPrice[1]! < PRICE_MAX ? debouncedPrice[1] : undefined,
     rating: minRating || undefined,
+    tag,
   });
 
   const paged: ProductCardData[] = data?.items ?? [];
@@ -266,7 +271,7 @@ export default function ProductsPage() {
   return (
     <div className="container py-6 md:py-10">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">All Products</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{tag ? `Tagged “${tag}”` : "All Products"}</h1>
         <p className="text-muted-foreground">{total > 0 ? `Browse ${total} fashion item${total === 1 ? "" : "s"}` : "Browse our catalog"}</p>
       </div>
 
@@ -413,7 +418,7 @@ export default function ProductsPage() {
               </div>
             </motion.div>
           ) : viewMode === "grid" ? (
-            <ProductGrid products={paged} onAddToCart={handleAddToCart} />
+            <ProductGrid products={paged} onAddToCart={handleAddToCart} onToggleWishlist={onToggleWishlist} wishlistedIds={wishlistedIds} />
           ) : (
             <div className="space-y-3">
               {paged.map((p) => (

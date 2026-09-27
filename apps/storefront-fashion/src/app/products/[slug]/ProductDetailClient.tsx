@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { PromoSlotStrip } from "@/app/_components/promotions";
+import { useWishlist } from "@/lib/engagement";
+import { QuestionsSection, ReviewForm } from "./engagement-sections";
 import Link from "next/link";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Thumbs, FreeMode, Navigation } from "swiper/modules";
@@ -153,7 +155,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
   const [qty, setQty] = React.useState(1);
-  const [wishlisted, setWishlisted] = React.useState(false);
+  const wishlist = useWishlist();
+  const wishlisted = wishlist.has(product.id);
+  const toggleWishlist = () => void wishlist.toggle(product.id, product.title);
   const [reviewSort, setReviewSort] = React.useState<"latest" | "top">("latest");
 
   // Option axes (e.g. size, color) derived from the variants' attribute values.
@@ -296,7 +300,8 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
               <div className="absolute top-4 right-4 flex flex-col gap-1.5">
                 <button
-                  onClick={() => { setWishlisted(!wishlisted); toast.info(wishlisted ? "Removed from wishlist" : "Added to wishlist"); }}
+                  onClick={toggleWishlist}
+                  aria-pressed={wishlisted}
                   className={cn("h-10 w-10 rounded-full shadow-lg flex items-center justify-center transition-colors", wishlisted ? "bg-red-50 text-red-500" : "bg-white hover:bg-red-50 hover:text-red-500 text-slate-600")}
                   aria-label="Wishlist"
                 >
@@ -447,9 +452,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <div className="text-sm text-muted-foreground">
                 {!inStock ? (
                   <span className="text-destructive font-medium">Currently out of stock</span>
-                ) : stockLeft !== null && stockLeft <= 10 ? (
-                  <>Only <span className="font-semibold text-foreground">{stockLeft} pieces</span> left in stock</>
+                ) : stockLeft !== null && stockLeft <= (product.lowStockThreshold ?? 5) ? (
+                  <span className="font-medium text-amber-600">Hurry, only {stockLeft} left</span>
                 ) : null}
+                {(product.saleCount ?? 0) >= 10 && (
+                  <span className="ml-2 before:mr-2 before:content-['·'] first:ml-0 first:before:content-none">{product.saleCount}+ sold</span>
+                )}
               </div>
             </div>
 
@@ -461,13 +469,25 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <Button
                 size="lg"
                 variant="outline"
-                onClick={() => { setWishlisted(!wishlisted); toast.info(wishlisted ? "Removed from wishlist" : "Added to wishlist"); }}
+                onClick={toggleWishlist}
+                  aria-pressed={wishlisted}
                 className={cn("h-12 min-w-[130px]", wishlisted && "bg-red-50 text-red-500 border-red-200 hover:bg-red-100")}
               >
                 <Heart className={cn("h-5 w-5 mr-2", wishlisted && "fill-current")} />
                 Wishlist
               </Button>
             </div>
+
+            {!!product.tags?.length && (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">Tags:</span>
+                {product.tags.map((t) => (
+                  <Link key={t} href={`/products?tag=${encodeURIComponent(t)}`} className="rounded-full border px-2 py-0.5 hover:border-primary hover:text-primary">
+                    {t}
+                  </Link>
+                ))}
+              </div>
+            )}
 
             <div className="pt-2 text-xs text-muted-foreground space-y-1.5">
               <div className="flex items-center gap-2">
@@ -497,6 +517,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 <TabsTrigger value="reviews" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground" id="reviews">
                   Reviews <span className="ml-1 text-xs">({product.reviewCount})</span>
                 </TabsTrigger>
+                <TabsTrigger value="questions" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground">
+                  Questions <span className="ml-1 text-xs">({product.questions?.length ?? 0})</span>
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -506,11 +529,16 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
             <TabsContent value="specifications" className="mt-0">
               <div className="divide-y">
-                {product.specifications.map((row) => (
-                  <div key={row.name} className="grid grid-cols-[160px_1fr] md:grid-cols-[220px_1fr]">
+                {product.specifications.map((row, i) => (
+                  <React.Fragment key={`${row.group ?? ""}-${row.name}-${i}`}>
+                  {row.group && row.group !== product.specifications[i - 1]?.group && (
+                    <div className="px-6 md:px-8 pt-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{row.group}</div>
+                  )}
+                  <div className="grid grid-cols-[160px_1fr] md:grid-cols-[220px_1fr]">
                     <div className="px-6 md:px-8 py-3.5 bg-muted/50 text-sm font-medium text-muted-foreground">{row.name}</div>
                     <div className="px-6 md:px-8 py-3.5 text-sm">{row.value}</div>
                   </div>
+                  </React.Fragment>
                 ))}
               </div>
             </TabsContent>
@@ -625,6 +653,13 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 ))}
               </div>
 
+              <div className="mt-8">
+                <ReviewForm productId={product.id} slug={product.slug} allowReviews={product.allowReviews !== false} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="questions" className="mt-0 p-6 md:p-8">
+              <QuestionsSection productId={product.id} questions={product.questions ?? []} />
             </TabsContent>
           </Tabs>
         </CardContent>

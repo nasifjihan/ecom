@@ -69,10 +69,17 @@ export type ProductReview = {
 export type ProductDetail = ProductSummary & {
   images: string[];
   variants: ProductVariantOption[];
-  specifications: { name: string; value: string }[];
+  /** The shop's rows can carry a group (e.g. "Fabric"); the rest come from the product itself. */
+  specifications: { name: string; value: string; group?: string }[];
   reviews: ProductReview[];
   breadcrumbs: { id: string; slug: string; name: string }[];
   stockQty: number | null;
+  tags?: string[];
+  saleCount?: number;
+  lowStockThreshold?: number;
+  allowReviews?: boolean;
+  /** Answered questions from customers. */
+  questions?: { id: string; name: string; question: string; answer: string; askedAt: string }[];
   seo?: { title?: string; description?: string; ogImage?: string };
 };
 
@@ -109,6 +116,10 @@ export type ProductsQueryArgs = {
   maxPrice?: number;
   rating?: number;
   search?: string;
+  /** Products with this tag. */
+  tag?: string;
+  /** These products only, comma-separated ids. */
+  ids?: string;
 };
 
 export type Paginated<T> = {
@@ -138,6 +149,8 @@ export const catalogApi = api.injectEndpoints({
         if (args.maxPrice) params.set("maxPrice", String(args.maxPrice));
         if (args.rating) params.set("rating", String(args.rating));
         if (args.search) params.set("search", args.search);
+        if (args.tag) params.set("tag", args.tag);
+        if (args.ids) params.set("ids", args.ids);
         const qs = params.toString();
         return {
           url: qs ? `/storefront/products?${qs}` : `/storefront/products`,

@@ -134,6 +134,8 @@ export class CatalogService extends BaseService {
         barcode: dto.barcode ?? null,
         shortDescription: dto.shortDescription ?? null,
         description: dto.description ?? null,
+        tags: dto.tags,
+        specifications: dto.specifications.length ? dto.specifications : undefined,
         regularPrice: dto.regularPrice ?? null,
         salePrice: dto.salePrice ?? null,
         salePriceStartAt: dto.salePriceStartAt ?? null,

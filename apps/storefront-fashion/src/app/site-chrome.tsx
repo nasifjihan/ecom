@@ -5,6 +5,8 @@ import { Navbar, CartDrawer, useCart, useGetCategoriesTreeQuery } from "@ecom/st
 import { useAppSelector } from "@/lib/store";
 import { signOutAndLeave, useCustomerLogoutMutation } from "@/lib/account";
 import type { MenuLink } from "@/lib/content";
+import { useWishlist } from "@/lib/engagement";
+import { SearchBox } from "./_components/search-box";
 
 /** Used until the store saves a header menu in the admin (Online Store > Menus). */
 const DEFAULT_MENU: MenuLink[] = [
@@ -26,6 +28,7 @@ export function NavbarWithCartState({
   menu?: MenuLink[] | null;
 }) {
   const { itemCount, openCart } = useCart();
+  const wishlist = useWishlist();
   const { data: categories = [] } = useGetCategoriesTreeQuery();
   const auth = useAppSelector((s) => s.auth);
   const [logout] = useCustomerLogoutMutation();
@@ -49,7 +52,8 @@ export function NavbarWithCartState({
     <Navbar
       logo={{ name: storeName, image: logoUrl ?? undefined }}
       cartCount={itemCount}
-      wishlistCount={0}
+      wishlistCount={wishlist.count}
+      searchSlot={<SearchBox />}
       onCartClick={openCart}
       onWishlistClick={() => (window.location.href = "/wishlist")}
       account={auth.isAuthenticated ? { name: auth.customerName ?? "My Account", email: auth.customerEmail } : null}

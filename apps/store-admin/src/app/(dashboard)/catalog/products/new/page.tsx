@@ -63,6 +63,7 @@ import {
   type ProductVariant,
 } from "@/lib/features/catalog/catalog-api-slice";
 import { ProductStatus, ProductType } from "@ecom/shared-types";
+import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
 
 const ProductTypeValues = [
   { value: ProductType.SIMPLE, label: "Simple Product" },
@@ -199,6 +200,7 @@ export default function NewProductPage() {
   const slugValue = watch("slug");
   const typeValue = watch("type");
   const tags = watch("tagNames") || [];
+  const [specs, setSpecs] = useState<SpecRow[]>([]);
   const relatedIds = watch("relatedProductIds") || [];
 
   useEffect(() => {
@@ -332,6 +334,8 @@ export default function NewProductPage() {
         status: values.status,
         sku: values.sku,
         shortDescription: values.shortDescription || null,
+        tags: values.tagNames,
+        specifications: cleanSpecs(specs),
         description: values.description || null,
         regularPrice: values.regularPrice ?? null,
         salePrice: values.salePrice ?? null,
@@ -1063,6 +1067,9 @@ export default function NewProductPage() {
                       </div>
                     </CardContent>
                   </Card>
+                  <div className="mt-6">
+                    <SpecificationsEditor value={specs} onChange={setSpecs} />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="related">

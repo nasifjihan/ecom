@@ -255,12 +255,17 @@ export class StorefrontService {
     if (q.featured !== undefined) where.featured = q.featured;
     if (q.rating) where.averageRating = { gte: q.rating };
     if (q.excludeId) where.id = { not: q.excludeId };
+    if (q.tag) where.tags = { has: q.tag };
+    if (q.ids) where.id = { in: q.ids.split(",").map((s) => BigInt(s)) };
     if (q.search) {
+      const term = q.search.toLowerCase().trim();
       and.push({
         OR: [
           { name: { contains: q.search, mode: "insensitive" } },
           { sku: { contains: q.search, mode: "insensitive" } },
           { shortDescription: { contains: q.search, mode: "insensitive" } },
+          { tags: { has: term } },
+          { brand: { name: { contains: q.search, mode: "insensitive" } } },
         ],
       });
     }
@@ -319,6 +324,18 @@ export class StorefrontService {
     return this.page(rows.map((r) => this.toSummary(r, flash)), total, q);
   }
 
+  /** Product cards for these ids, in the order given (unpublished ones left out). */
+  async productSummaries(ids: bigint[]) {
+    if (!ids.length) return [];
+    const rows = await prisma.product.findMany({ where: { storeId: this.storeId, id: { in: ids }, status: "published" }, include: LIST_INCLUDE });
+    const flash = await FlashSales.load(this.storeId, rows.map((r) => r.id));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids.flatMap((id) => {
+      const r = byId.get(id);
+      return r ? [this.toSummary(r, flash)] : [];
+    });
+  }
+
   private page<T>(items: T[], total: number, q: { page: number; perPage: number }) {
     return { items, page: q.page, perPage: q.perPage, total, totalPages: Math.max(1, Math.ceil(total / q.perPage)) };
   }
@@ -338,6 +355,7 @@ export class StorefrontService {
           take: 20,
           include: { customer: { select: { firstName: true, lastName: true } } },
         },
+        questions: { where: { status: "published", answer: { not: null } }, orderBy: { answeredAt: "desc" }, take: 30 },
       },
     });
     if (!p) throw new NotFoundError("Product");
@@ -352,7 +370,14 @@ export class StorefrontService {
         })
       : null;
 
+    // The shop's own rows first (grouped as entered), then what we know from the product itself.
+    const custom = Array.isArray(p.specifications)
+      ? (p.specifications as { group?: string | null; label?: string; value?: string }[])
+          .filter((r) => r?.label && r.value)
+          .map((r) => ({ name: r.label!, value: r.value!, group: r.group ?? undefined }))
+      : [];
     const specifications = [
+      ...custom,
       ...(p.brand ? [{ name: "Brand", value: p.brand.name }] : []),
       ...(p.sku ? [{ name: "SKU", value: p.sku }] : []),
       ...p.attributes.map((a) => ({ name: a.attribute.name, value: a.terms.map((t) => t.term.name).join(", ") })),
@@ -380,6 +405,18 @@ export class StorefrontService {
         .filter((c): c is { id: bigint; name: string; slug: string; parentId?: bigint | null } => Boolean(c))
         .map((c) => ({ id: String(c.id), name: c.name, slug: c.slug })),
       specifications,
+      tags: p.tags,
+      /** Orders that included it (shown as "N sold" once it's worth showing). */
+      saleCount: p.saleCount,
+      lowStockThreshold: p.lowStockThreshold ?? 5,
+      allowReviews: p.allowReviews,
+      questions: p.questions.map((q) => ({
+        id: String(q.id),
+        name: q.name,
+        question: q.question,
+        answer: q.answer ?? "",
+        askedAt: q.createdAt.toISOString(),
+      })),
       reviews,
       variants: p.variants.map((v) => {
         const vp = pricedWith(flash, p, v.id, variantPriceRow(p, v));
@@ -1241,7 +1278,7 @@ export class StorefrontService {
           orderNumber: order.number,
           amount: grandTotal,
           currencyCode: "BDT",
-          customerEmail: dto.email,
+          customerEmail: dto.email ?? "",
           customerName: `${bill.firstName} ${bill.lastName}`,
           customerPhone: bill.phone,
           redirectUrl: "",

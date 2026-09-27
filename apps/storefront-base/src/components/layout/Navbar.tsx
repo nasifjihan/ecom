@@ -53,6 +53,8 @@ export type NavbarProps = {
   className?: string;
   searchPlaceholder?: string;
   storeId?: string;
+  /** Replaces the plain search box on wide screens (e.g. one with suggestions). */
+  searchSlot?: React.ReactNode;
   /** The signed-in customer, or null for a guest. */
   account?: { name: string; email?: string | null } | null;
   onLogout?: () => void;
@@ -82,6 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onWishlistClick,
   className,
   searchPlaceholder = "Search products...",
+  searchSlot,
   account = null,
   onLogout,
 }) => {
@@ -183,6 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           <div className="flex-1 hidden md:flex max-w-md mx-4">
+            {searchSlot ?? (
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -192,21 +196,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (e.key === "Enter") {
                     const val = (e.target as HTMLInputElement).value;
                     if (val) {
-                      window.location.href = `/products?search=${encodeURIComponent(val)}`;
+                      window.location.href = `/search?q=${encodeURIComponent(val)}`;
                     }
                   }
                 }}
               />
             </div>
+            )}
           </div>
 
           <div className="ml-auto flex items-center gap-1">
-            <button
-              className="p-2 rounded-md hover:bg-accent md:hidden"
-              aria-label="Search"
-            >
+            <Link href="/search" className="p-2 rounded-md hover:bg-accent md:hidden" aria-label="Search">
               <Search className="h-5 w-5" />
-            </button>
+            </Link>
 
             <button
               className="p-2 rounded-md hover:bg-accent relative"
@@ -292,7 +294,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="mt-2 mb-4">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder={searchPlaceholder} className="pl-10" />
+              <Input
+                placeholder={searchPlaceholder}
+                className="pl-10"
+                enterKeyHint="search"
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                  const val = (e.target as HTMLInputElement).value.trim();
+                  if (e.key === "Enter" && val) window.location.href = `/search?q=${encodeURIComponent(val)}`;
+                }}
+              />
             </div>
           </div>
           <nav className="flex flex-col gap-1">

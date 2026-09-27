@@ -38,8 +38,8 @@ These are our advantages. Keep them.
 | Feature | Status | Note |
 |---|---|---|
 | Products, variants, categories, brands, attributes, media | ✅ | |
-| Product tags (EN/BN) | ❌ | Needed for gift-box sections and filtering |
-| Specifications table (group / label / value) | ❌ | Only free-text description today |
+| Product tags (EN/BN) | ✅ | Batch 26: tags saved, searched and filterable (`/products?tag=`); one language |
+| Specifications table (group / label / value) | ✅ | Batch 26 |
 | Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ❌ | Variants are added one by one today |
 | Per-storefront price override on a variant | ❌ | Needs multi-storefront |
 | Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
@@ -75,7 +75,7 @@ These are our advantages. Keep them.
 | Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ✅ | Batch 23 (fixed home positions; no page-builder block yet) |
 | Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ❌ | |
 | Newsletter subscribers | 🟡 | Storefront shows a signup block; nothing stores subscribers and there's no admin list |
-| Search terms analytics (what customers search) | ❌ | |
+| Search terms analytics (what customers search) | ✅ | Batch 26: Marketing → Search terms, "found nothing" filter, suggestions |
 
 ### Content (reference 13)
 | Feature | Status | Note |
@@ -94,8 +94,8 @@ These are our advantages. Keep them.
 | CRM leads (Facebook/Instagram handle, salesperson, tags) | ❌ | |
 | Loyalty levels (Bronze/Silver/Gold, auto discount by lifetime spend) | ❌ | We have points, not levels |
 | Referrals + payout sweep | 🟡 | Affiliate models exist, no screens |
-| Product questions (Q&A) | ❌ | |
-| Reviews: public submit form, reported / hidden tabs | 🟡 | Moderation ✅, storefront submit ❌ |
+| Product questions (Q&A) | ✅ | Batch 26: ask on product page, answer in Marketing → Questions |
+| Reviews: public submit form, reported / hidden tabs | ✅ | Batch 26: storefront form, verified buyers auto-approved, ratings kept current |
 | Wallet + cashback % | 🟡 | `storeCredit` exists; no cashback or wallet page |
 
 ### Shipping (reference 15, 07.9)
@@ -159,12 +159,12 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Feature | Status |
 |---|---|
 | Home, listing, product, cart, checkout, account, blog, pages, FAQ, sitemap | ✅ |
-| `/search` page + suggestions | ❌ |
-| `/track` order by code + phone | ❌ |
-| `/flash-sale` listing page | ❌ |
-| Wishlist page, wallet page, "my coupons" | ❌ (models exist) |
+| `/search` page + suggestions | ✅ Batch 26 |
+| `/track` order by code + phone | ✅ Batch 26 |
+| `/flash-sale` listing page | ✅ Batch 26 |
+| Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; wallet / my coupons not yet |
 | Bangla / Arabic language switch | ❌ |
-| Low-stock label, sales count, Q&A on product page | ❌ |
+| Low-stock label, sales count, Q&A on product page | ✅ Batch 26 |
 | Data-saver mode (lighter images) | ❌ |
 
 ### Engineering (reference 08, 23, 25)
@@ -196,7 +196,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 23 ✅ | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
 | 24 ✅ | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
-| 26 | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
+| 26 ✅ | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
 | 27 | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
 | 28 | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
 | 29 | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
