@@ -36,6 +36,9 @@ export interface CustomerAddress {
   address2: string | null;
   city: string;
   state: string | null;
+  upazila?: string | null;
+  /** Deepest area picked (upazila/thana, else district). */
+  locationId?: string | null;
   postcode: string | null;
   countryCode: string;
   phone: string | null;
@@ -66,7 +69,7 @@ export interface MyOrder {
   email: string;
   phone: string | null;
   shippingMethodName: string | null;
-  shipping: { name: string; address: string; city: string | null; division: string | null; postcode: string | null; country: string | null };
+  shipping: { name: string; address: string; city: string | null; upazila?: string | null; division: string | null; postcode: string | null; country: string | null };
   items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
   itemsSubtotal: number;
   discountTotal: number;

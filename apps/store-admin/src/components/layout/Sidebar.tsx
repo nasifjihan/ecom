@@ -13,6 +13,7 @@ import {
   Image,
   ShoppingCart,
   Truck,
+  MapPin,
   RefreshCcw,
   User2,
   Gift,
@@ -131,7 +132,7 @@ const navSections: NavSection[] = [
     title: "Shipping",
     items: [
       { href: "/shipping/zones", label: "Zones", icon: Map },
-      { href: "/shipping/rates", label: "Rates", icon: Truck },
+      { href: "/shipping/locations", label: "Delivery areas", icon: MapPin },
       { href: "/shipping/taxes", label: "Taxes", icon: Receipt },
     ],
   },

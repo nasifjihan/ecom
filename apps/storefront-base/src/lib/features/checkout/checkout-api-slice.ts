@@ -74,9 +74,19 @@ export type OrderAddressSummary = {
   name: string;
   address: string;
   city?: string | null;
+  upazila?: string | null;
   division?: string | null;
   postcode?: string | null;
   country?: string | null;
+};
+
+/** A Bangladesh delivery area the store serves (GET /storefront/locations). */
+export type StoreLocation = {
+  id: string;
+  parentId: string | null;
+  type: "DIVISION" | "DISTRICT" | "UPAZILA" | "THANA";
+  en: string;
+  bn: string;
 };
 
 export type TaxBreakdown = {
@@ -118,6 +128,9 @@ export type AddressPayload = {
   country: string;
   division: string;
   district: string;
+  upazila?: string;
+  /** Deepest area picked (upazila/thana, else district); the API fills the names from it. */
+  locationId?: string | null;
   postcode: string;
   addressLine1: string;
   addressLine2?: string;
@@ -171,12 +184,19 @@ export type OrderResult = {
 
 export const checkoutApi = api.injectEndpoints({
   endpoints: (builder) => ({
+    getLocations: builder.query<StoreLocation[], void>({
+      query: () => "/storefront/locations",
+      keepUnusedDataFor: 3600,
+    }),
+
     getShippingRates: builder.query<
       ShippingRate[],
       {
         countryCode?: string;
         division?: string;
         district?: string;
+        upazila?: string;
+        locationId?: string | null;
         subtotal?: number;
         weightKG?: number;
         qty?: number;
@@ -188,6 +208,8 @@ export const checkoutApi = api.injectEndpoints({
         if (args.countryCode) params.set("countryCode", args.countryCode);
         if (args.division) params.set("division", args.division);
         if (args.district) params.set("district", args.district);
+        if (args.upazila) params.set("upazila", args.upazila);
+        if (args.locationId) params.set("locationId", args.locationId);
         if (args.subtotal) params.set("subtotal", String(args.subtotal));
         if (args.weightKG) params.set("weightKG", String(args.weightKG));
         if (args.qty) params.set("qty", String(args.qty));
@@ -294,6 +316,7 @@ export const checkoutApi = api.injectEndpoints({
 });
 
 export const {
+  useGetLocationsQuery,
   useGetShippingRatesQuery,
   useLazyGetShippingRatesQuery,
   useGetTaxesQuery,

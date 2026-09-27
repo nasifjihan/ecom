@@ -169,14 +169,14 @@ export class InvoiceService {
 
     const name = (first: string | null, last: string | null) =>
       `${first ?? ""} ${last ?? ""}`.trim()
-    const cityLine = (city: string | null, postcode: string | null) =>
-      [city, postcode].filter(Boolean).join(" ")
+    const cityLine = (upazila: string | null, city: string | null, postcode: string | null) =>
+      [[upazila, city].filter(Boolean).join(", "), postcode].filter(Boolean).join(" ")
     const billTo = [
       name(order.billingFirstName, order.billingLastName),
       order.billingCompany ?? "",
       order.billingAddress1,
       order.billingAddress2 ?? "",
-      cityLine(order.billingCity, order.billingPostcode),
+      cityLine(order.billingUpazila, order.billingCity, order.billingPostcode),
       order.billingPhone ?? "",
       order.billingEmail,
     ]
@@ -188,7 +188,7 @@ export class InvoiceService {
             order.shippingCompany ?? "",
             order.shippingAddress1,
             order.shippingAddress2 ?? "",
-            cityLine(order.shippingCity, order.shippingPostcode),
+            cityLine(order.shippingUpazila, order.shippingCity, order.shippingPostcode),
             order.shippingPhone ?? "",
           ]
 

@@ -125,7 +125,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
           <CardContent className="text-sm space-y-1">
             <p className="font-medium">{o.shipping.name}</p>
             <p>{o.shipping.address}</p>
-            <p>{[o.shipping.city, o.shipping.division, o.shipping.postcode].filter(Boolean).join(", ")}</p>
+            <p>{[o.shipping.upazila, o.shipping.city, o.shipping.division, o.shipping.postcode].filter(Boolean).join(", ")}</p>
             {o.phone && <p>{o.phone}</p>}
             {o.shippingMethodName && <p className="text-muted-foreground pt-2">{o.shippingMethodName}</p>}
           </CardContent>

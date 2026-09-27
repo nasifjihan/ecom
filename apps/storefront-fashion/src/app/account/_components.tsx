@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, MapPin, Package, User } from "lucide-react";
-import { Badge, Button, Input, Label, cn, formatMoney } from "@ecom/storefront-base";
+import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import {
   hasStoredToken,
@@ -141,8 +141,6 @@ export function Field({
   );
 }
 
-export const BD_DIVISIONS = ["Dhaka", "Chattogram", "Rajshahi", "Khulna", "Barishal", "Sylhet", "Rangpur", "Mymensingh"];
-
 export const emptyAddress = (): AddressInput => ({
   type: "shipping",
   label: "",
@@ -152,7 +150,9 @@ export const emptyAddress = (): AddressInput => ({
   address1: "",
   address2: "",
   city: "",
-  state: "Dhaka",
+  state: "",
+  upazila: "",
+  locationId: null,
   postcode: "",
   countryCode: "BD",
   phone: "",
@@ -161,7 +161,17 @@ export const emptyAddress = (): AddressInput => ({
 
 export function toAddressInput(a: CustomerAddress): AddressInput {
   const { id: _id, ...rest } = a;
-  return { ...rest, label: rest.label ?? "", company: rest.company ?? "", address2: rest.address2 ?? "", state: rest.state ?? "", postcode: rest.postcode ?? "", phone: rest.phone ?? "" };
+  return {
+    ...rest,
+    label: rest.label ?? "",
+    company: rest.company ?? "",
+    address2: rest.address2 ?? "",
+    state: rest.state ?? "",
+    upazila: rest.upazila ?? "",
+    locationId: rest.locationId ?? null,
+    postcode: rest.postcode ?? "",
+    phone: rest.phone ?? "",
+  };
 }
 
 export function AddressForm({
@@ -197,19 +207,19 @@ export function AddressForm({
       </div>
       <Field id="address1" label="Address" required minLength={2} placeholder="House, road, area" value={a.address1} onChange={set("address1")} autoComplete="address-line1" />
       <Field id="address2" label="Apartment, landmark (optional)" value={a.address2 ?? ""} onChange={set("address2")} autoComplete="address-line2" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field id="city" label="District / City" required value={a.city} onChange={set("city")} autoComplete="address-level2" />
-        <div className="space-y-1.5">
-          <Label htmlFor="state">Division</Label>
-          <select id="state" value={a.state ?? ""} onChange={set("state")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-            {BD_DIVISIONS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Field id="postcode" label="Postcode" value={a.postcode ?? ""} onChange={set("postcode")} autoComplete="postal-code" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <LocationSelects
+          idPrefix="addr"
+          value={{ division: a.state ?? "", district: a.city, upazila: a.upazila ?? "", locationId: a.locationId ?? null }}
+          onChange={(v) => setA((p) => ({ ...p, state: v.division, city: v.district, upazila: v.upazila, locationId: v.locationId }))}
+          renderField={(label, control, id) => (
+            <div className="space-y-1.5">
+              <Label htmlFor={id}>{label}</Label>
+              {control}
+            </div>
+          )}
+        />
+        <Field id="postcode" label="Postcode (optional)" value={a.postcode ?? ""} onChange={set("postcode")} autoComplete="postal-code" />
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={!!a.isDefault} onChange={(e) => setA((p) => ({ ...p, isDefault: e.target.checked }))} />

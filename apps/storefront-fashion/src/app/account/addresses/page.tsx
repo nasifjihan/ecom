@@ -95,7 +95,7 @@ function AddressBook() {
                 </div>
                 <div className="text-muted-foreground">
                   <p>{[a.address1, a.address2].filter(Boolean).join(", ")}</p>
-                  <p>{[a.city, a.state, a.postcode].filter(Boolean).join(", ")}</p>
+                  <p>{[a.upazila, a.city, a.state, a.postcode].filter(Boolean).join(", ")}</p>
                   {a.phone && <p>{a.phone}</p>}
                 </div>
                 <div className="flex gap-2 flex-wrap">

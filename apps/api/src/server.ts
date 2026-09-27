@@ -7,9 +7,10 @@
  */
 import { env } from "./config/env";
 import { buildApp } from "./app";
-import { logger, disconnectPrisma, disconnectRedis, redis } from "./config";
+import { logger, disconnectPrisma, disconnectRedis, redis, prisma } from "./config";
 import { ensureBucket } from "./config/s3";
 import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/notifications";
+import { syncLocations } from "./modules/locations";
 
 async function bootstrap() {
   const app = buildApp();
@@ -25,6 +26,11 @@ async function bootstrap() {
 
   // Emails go through the Redis queue; this process sends them unless EMAIL_WORKER=off
   // (then `pnpm worker` runs the sender on its own).
+  // Bangladesh divisions/districts/upazilas: fill in anything missing from the bundled list.
+  await syncLocations(prisma)
+    .then((r) => { if (r.created || r.updated) logger.info(r, "Locations synced"); })
+    .catch((e) => logger.warn({ err: e?.message }, "Location sync skipped"));
+
   initEmailQueue();
   if (env.EMAIL_WORKER === "on") startEmailWorker();
 

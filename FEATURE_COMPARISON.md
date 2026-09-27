@@ -102,8 +102,8 @@ These are our advantages. Keep them.
 | Feature | Status | Note |
 |---|---|---|
 | Zones, rates, tax rules | ✅ | |
-| **Bangladesh location tree** (8 divisions → 64 districts → upazilas), bilingual | ❌ | Checkout has the 8 divisions hard-coded; district and upazila are free text |
-| Rules by weight range / min order / free delivery; most specific zone wins | 🟡 | Weight and min-order rules exist in the shipping service; the first matching zone wins, not the most specific |
+| **Bangladesh location tree** (8 divisions → 64 districts → upazilas), bilingual | ✅ | Batch 18: 616 areas incl. Dhaka thanas, per-store on/off, checkout pickers |
+| Rules by weight range / min order / free delivery; most specific zone wins | ✅ | Batch 18: weight rows, minimum order, most-specific zone with cheaper tie-break |
 | Delivery time slots (window, cutoff, surcharge, same-day) | ❌ | |
 | Courier adapters: Steadfast, Pathao, RedX (book, track, label) | ❌ | Seeded as names only |
 | Customer picks courier at checkout (toggle) | ❌ | |
@@ -188,7 +188,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 
 | # | Batch | Why first | Size |
 |---|---|---|---|
-| 18 | **Bangladesh location tree + delivery rules**: division/district/upazila seed (bilingual), zones on the tree, weight and min-order rules, checkout address pickers | Every BD order needs it; unblocks couriers | M |
+| 18 ✅ | **Bangladesh location tree + delivery rules**: division/district/upazila seed (bilingual), zones on the tree, weight and min-order rules, checkout address pickers | Every BD order needs it; unblocks couriers | M |
 | 19 | **Manual orders + order source**: staff create orders for phone/Facebook customers, discount capped by role | Most BD shops take many orders off-site | M |
 | 20 | **Separate shipment and return statuses**: parcels, returns flow, status history per kind | Needed for couriers and COD | M |
 | 21 | **COD and payment verification**: verify bKash/Nagad TrxIDs, cash collections, courier settlements with shortfall | Money reconciliation | M |

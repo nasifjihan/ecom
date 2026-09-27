@@ -26,6 +26,7 @@ import type {
 } from "./storefront.dto";
 import { emitOrderPlaced } from "../notifications";
 import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
+import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -599,6 +600,18 @@ export class StorefrontService {
     return `${datePart}${String(count + 1).padStart(6, "0")}`;
   }
 
+  /** A checkout address with its division/district/upazila names taken from the picked area. */
+  private async withLocation(a: StorefrontAddressDto) {
+    const r = await addressWithLocation({
+      countryCode: a.country,
+      locationId: a.locationId,
+      division: a.division,
+      district: a.district,
+      upazila: a.upazila,
+    });
+    return { ...a, division: r.division ?? "", district: r.district ?? a.district, upazila: r.upazila ?? "", locationId: r.locationId, chain: r.chain };
+  }
+
   async placeOrder(dto: PlaceOrderDto) {
     const storeId = this.storeId;
 
@@ -611,14 +624,20 @@ export class StorefrontService {
     const itemsSubtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal, 0));
     const qty = lines.reduce((s, l) => s + l.qty, 0);
     const weightKG = lines.reduce((s, l) => s + l.weightKG, 0);
-    const ship = dto.shippingAddress;
-    const bill: StorefrontAddressDto = dto.billingSameAsShipping || !dto.billingAddress ? ship : dto.billingAddress;
+    const ship = await this.withLocation(dto.shippingAddress);
+    const bill = dto.billingSameAsShipping || !dto.billingAddress ? ship : await this.withLocation(dto.billingAddress);
+    if (ship.chain.length) {
+      const off = offInChain(ship.chain, await storeLocationsOff(storeId));
+      if (off) throw new BadRequestError(`Sorry, we don't deliver to ${off.nameEn} yet.`, "LOCATION_NOT_SERVED");
+    }
 
     // Shipping: the chosen method must be one the zone matcher offers for this address.
     const rates: any = await this.shipping.computeShippingOptions(this.ctx, {
       countryCode: ship.country,
       division: ship.division || undefined,
       district: ship.district,
+      upazila: ship.upazila || undefined,
+      locationId: ship.locationId ?? undefined,
       postcode: ship.postcode || undefined,
       subtotal: itemsSubtotal,
       weightKG,
@@ -730,6 +749,7 @@ export class StorefrontService {
           billingAddress2: bill.addressLine2 || null,
           billingCity: bill.district,
           billingState: bill.division || null,
+          billingUpazila: bill.upazila || null,
           billingPostcode: bill.postcode || null,
           billingCountryCode: bill.country,
           billingEmail: dto.email,
@@ -742,6 +762,8 @@ export class StorefrontService {
           shippingAddress2: ship.addressLine2 || null,
           shippingCity: ship.district,
           shippingState: ship.division || null,
+          shippingUpazila: ship.upazila || null,
+          shippingLocationId: ship.locationId,
           shippingPostcode: ship.postcode || null,
           shippingCountryCode: ship.country,
           shippingPhone: ship.phone,
@@ -941,6 +963,7 @@ function orderView(o: OrderWithItems) {
       name: `${o.shippingFirstName ?? o.billingFirstName} ${o.shippingLastName ?? o.billingLastName}`,
       address: [o.shippingAddress1, o.shippingAddress2].filter(Boolean).join(", "),
       city: o.shippingCity ?? o.billingCity,
+      upazila: o.shippingCity ? o.shippingUpazila : o.billingUpazila,
       division: o.shippingState ?? o.billingState,
       postcode: o.shippingPostcode ?? o.billingPostcode,
       country: o.shippingCountryCode ?? o.billingCountryCode,
@@ -949,6 +972,7 @@ function orderView(o: OrderWithItems) {
       name: `${o.billingFirstName} ${o.billingLastName}`,
       address: [o.billingAddress1, o.billingAddress2].filter(Boolean).join(", "),
       city: o.billingCity,
+      upazila: o.billingUpazila,
       division: o.billingState,
       postcode: o.billingPostcode,
       country: o.billingCountryCode,

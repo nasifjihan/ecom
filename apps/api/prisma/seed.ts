@@ -1,6 +1,7 @@
 import { PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
+import { syncLocations } from "../src/modules/locations/locations.data";
 
 const prisma = new PrismaClient();
 
@@ -754,15 +755,6 @@ async function seedFashionBDStore() {
       }
     }
   }
-  // The storefront's division picker uses the current official spellings (Chattogram, Barishal).
-  const robZone = await prisma.shippingZone.findFirst({ where: { storeId: catalogStoreId, name: "Rest of Bangladesh" } });
-  if (robZone) {
-    const states = Array.isArray(robZone.states) ? (robZone.states as string[]) : [];
-    const missing = ["Chattogram", "Barishal"].filter((d) => !states.includes(d));
-    if (missing.length) {
-      await prisma.shippingZone.update({ where: { id: robZone.id }, data: { states: [...states, ...missing] } });
-    }
-  }
   console.log(`  ✅ Storefront demo catalog ready (${demoProducts.length} products, ${demoCreated} newly created)`);
 
   // ===== BATCH #8 BASELINE: Customer Groups, 20 demo customers, 2 coupons, 1 flash sale, 30 reviews =====
@@ -1282,6 +1274,36 @@ async function seedContent(storeId: bigint) {
   console.log("  ✅ Pages, FAQs, blog posts and menus ready");
 }
 
+/** Bangladesh divisions, districts, upazilas and Dhaka thanas (prisma/data/bd-locations.json). */
+async function seedLocations() {
+  const r = await syncLocations(prisma);
+  const total = await prisma.location.count();
+  console.log(`  ✅ Locations: ${total} (${r.created} added, ${r.updated} renamed)`);
+}
+
+/**
+ * Point the demo zones at locations instead of free-text names. The most specific zone wins,
+ * so Dhaka district uses "Dhaka Metro" and the rest of the country uses "Rest of Bangladesh".
+ * Zones that already have locations (e.g. edited in the admin) are left alone.
+ */
+async function seedZoneLocations(storeId: bigint) {
+  const links: Record<string, string[]> = {
+    "Dhaka Metro": ["dhaka/dhaka"],
+    "Rest of Bangladesh": ["barishal", "chattogram", "dhaka", "khulna", "mymensingh", "rajshahi", "rangpur", "sylhet"],
+  };
+  for (const [name, codes] of Object.entries(links)) {
+    const zone = await prisma.shippingZone.findFirst({ where: { storeId, name }, include: { _count: { select: { locations: true } } } });
+    if (!zone || zone._count.locations > 0) continue;
+    const locs = await prisma.location.findMany({ where: { code: { in: codes } }, select: { id: true } });
+    await prisma.shippingZoneLocation.createMany({
+      data: locs.map((l) => ({ zoneId: zone.id, locationId: l.id })),
+      skipDuplicates: true,
+    });
+    await prisma.shippingZone.update({ where: { id: zone.id }, data: { states: [] } });
+    console.log(`  ✅ Zone "${name}" linked to ${locs.length} location(s)`);
+  }
+}
+
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
   console.log("║      E-Commerce Platform — Database Seed     ║");
@@ -1289,7 +1311,9 @@ async function main() {
 
   try {
     await seedPlatformSuperAdmin();
+    await seedLocations();
     const store = await seedFashionBDStore();
+    await seedZoneLocations(store.id);
     const ownerRole = await seedDefaultRolesAndPerms(store.id);
     await seedStoreOwner(store.id, ownerRole.id);
     await seedContent(store.id);

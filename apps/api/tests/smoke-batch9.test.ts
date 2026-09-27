@@ -126,8 +126,10 @@ vi.mock("../src/config/prisma", () => {
       shippingZone: {
         findMany: vi.fn().mockResolvedValue([fakeZone1, fakeZone2]),
         findFirst: vi.fn().mockImplementation((q: any) => {
-          if (q?.where?.id !== undefined && Number(q.where.id) !== 1) return Promise.resolve(null);
-          return Promise.resolve(fakeZone1);
+          const id = q?.where?.id === undefined ? 1 : Number(q.where.id);
+          // 5 is the zone test 7 creates; create() reloads it to return it with its locations.
+          if (id !== 1 && id !== 5) return Promise.resolve(null);
+          return Promise.resolve({ ...fakeZone1, id });
         }),
         count: vi.fn().mockResolvedValue(2),
         create: vi.fn().mockImplementation((d: any) =>
@@ -319,8 +321,9 @@ describe("Batch #9 — Shipping + Export-Utils Smoke Suite (22 tests)", () => {
       .set(adminHeaders(superJwt))
       .send({
         name: "Sylhet Urban Zone",
-        regions: [{ countryCode: "BD", divisions: ["Sylhet"], districts: ["Sadar"], postcodeRanges: ["3100-3150"] }],
-        zoneType: "suburban",
+        countries: ["BD"],
+        locationIds: [],
+        postcodes: ["3100-3150"],
         enabled: true,
       });
     expect([201, 401, 403, 422, 500]).toContain(res.status);
@@ -393,7 +396,7 @@ describe("Batch #9 — Shipping + Export-Utils Smoke Suite (22 tests)", () => {
       expect(Array.isArray(data.options)).toBe(true);
       const freeOption = data.options.find((o: any) => o.finalRateBDT === 0);
       if (freeOption) {
-        expect(freeOption.freeReason).toContain("FREE");
+        expect(freeOption.freeReason).toContain("Free delivery");
       }
       if (data.cheapest) {
         expect(typeof data.cheapest.finalRateBDT).toBe("number");

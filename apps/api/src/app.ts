@@ -56,6 +56,7 @@ import { adminShippingRouter, storefrontShippingRouter } from "./modules/shippin
 import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
+import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -139,6 +140,8 @@ export function buildApp(): Express {
   app.use("/api/admin/settings", adminSettingsRouter);
   app.use("/api/admin/shipping", adminShippingRouter);
   app.use("/api/storefront/shipping", storefrontShippingRouter);
+  app.use("/api/admin/locations", adminLocationsRouter);             // BD divisions/districts/upazilas + delivery on/off
+  app.use("/api/storefront/locations", storefrontLocationsRouter);
   app.use("/api/admin/emails", adminEmailsRouter);                   // email templates, preview, test send, sent log
   app.use("/api/admin/content", adminContentRouter);                 // pages, blog, FAQs, menus, theme, homepage
   app.use("/api/storefront/content", storefrontContentRouter);

@@ -81,6 +81,9 @@ export type {
   CouponAppliedState,
 } from "./components/checkout/CouponApplyInput";
 
+export { LocationSelects } from "./components/checkout/LocationSelects";
+export type { LocationSelectsProps, LocationValue } from "./components/checkout/LocationSelects";
+
 export {
   OrderSummaryCard,
   default as OrderSummaryCardDefault,

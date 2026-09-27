@@ -288,7 +288,12 @@ export class EmailService {
         `${order.shippingFirstName ?? order.billingFirstName} ${order.shippingLastName ?? order.billingLastName}`.trim(),
         order.shippingAddress1 ?? order.billingAddress1,
         order.shippingAddress2 ?? "",
-        [order.shippingCity ?? order.billingCity, order.shippingPostcode ?? order.billingPostcode]
+        [
+          [order.shippingCity ? order.shippingUpazila : order.billingUpazila, order.shippingCity ?? order.billingCity]
+            .filter(Boolean)
+            .join(", "),
+          order.shippingPostcode ?? order.billingPostcode,
+        ]
           .filter(Boolean)
           .join(" "),
         order.shippingPhone ?? order.billingPhone ?? "",

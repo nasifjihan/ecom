@@ -1434,3 +1434,39 @@ Order invoice PDF, order email, order notes, shipping tracking update, refunds U
 - **Store admin:** Marketing > Flash Sales create/edit rebuilt: search and add products (each with an optional sale price and stock limit), or pick categories, or apply to everything; times are entered in the admin's own time zone. The list shows what each sale applies to and real units sold and revenue (from order lines stamped with the sale, cancelled orders left out); a stopped sale shows as Stopped under Ended. Removed the settings that did nothing (min/max quantity, per-customer limit) and the dead Duplicate, View Stats and Shop Now buttons.
 - **Admin API:** `rules`, nullable discounts (switching between % and fixed clears the other), items optional for category and store-wide sales, checks that a sale has a discount and something to apply to. Editing a sale keeps the sold counts of products that stay in it. `GET /flash-sales/:id` includes product names and prices; the list includes `stats { unitsSold, revenue }`.
 - Verified in Chromium: created a product sale with the picker (own price on one product, a 3-unit limit on another) and a category sale; the listing and product page show the sale prices and countdown; stopping a sale while its product sat in the cart re-priced the cart with a toast; going over the 3-unit limit blocked checkout; a guest COD order charged the flash prices and stamped the sales; the product returned to its normal price after the 3 units sold; cancelling the order gave them back. New unit tests (`tests/unit/flash-pricing.test.ts`); API tests pass (41 passed, 7 skipped); `next build --no-lint` passes for the storefront and store admin.
+
+## ✅ BATCH #18 — Bangladesh delivery areas and zone rules (2026-09-27)
+First batch from `FEATURE_COMPARISON.md`. Addresses and delivery prices now use Bangladesh's real divisions, districts and upazilas instead of free text.
+
+### 18.1 Locations
+- **Data:** `apps/api/prisma/data/bd-locations.json` holds 616 areas: 8 divisions, 64 districts, 494 upazilas (from github.com/nuhil/bangladesh-geocode, MIT) and 50 Dhaka metro thanas added by hand (the dataset's Dhaka district only has Savar, Dhamrai, Keraniganj, Nawabganj and Dohar). Every area has an English and a Bangla name. Spellings follow the 2018 official forms (Chattogram, Barishal, Cumilla, Cox's Bazar, Jhalokati); older spellings (Chittagong, Barisal, Comilla, Jessore, Bogra…) are still understood when matching saved names.
+- **Schema (migration `20260927053859_bd_locations`, additive only):** `Location` (platform-wide tree with a stable `code` such as `dhaka/dhaka/dhanmondi`), `StoreLocationOff` (areas a store doesn't deliver to), `ShippingZoneLocation` (zone ↔ area), `ShippingZone.enabled`, `upazila` + `locationId` on `CustomerAddress`, `billingUpazila`, `shippingUpazila` + `shippingLocationId` on `Order`.
+- **Loading:** `syncLocations()` adds missing areas and fixes renamed ones, never deletes. It runs in the seed and on every API start, so a fresh database (including Docker, where the seed is manual) gets the areas without extra steps.
+- **API:** `GET /api/storefront/locations` (the store's open areas, flat, parents first), `GET /api/admin/locations` (every area with its delivery switch and the zones that name it), `PUT /api/admin/locations/:id/delivery {enabled}`. Switching an area off switches off everything under it.
+
+### 18.2 Zones and delivery prices
+- A zone names countries plus optional areas (division, district or upazila/thana) and postcodes. **The most specific zone wins**: thana/upazila beats district beats division beats a whole-country zone; ties go to the zone with the cheaper option. A zone with nothing for this cart (e.g. every option needs a bigger order) steps aside for the next one. Zones saved before areas existed still match by their place names.
+- Delivery options gained **weight rows** (`weightTiers`: up to N kg costs ৳X; each extra kg above the last row), and **"only for orders from ৳"** (`minSubtotal`); both live in `costRules`, no schema change. Free-from, per-item, per-kg and minimum price work as before.
+- Rules are pure functions in `modules/shipping/shipping.rules.ts` with table tests (`tests/unit/shipping-rules.test.ts`, 32 cases).
+- **Fixed:** creating or editing a zone or delivery option always failed, because the DTOs and repository wrote `zoneType`, `enabled`, `provider` and `methodType` columns that don't exist (Batch 10 known gap). Method updates also reset unsent fields to their defaults (`.partial()` keeps zod defaults); they now change only what's sent.
+- Demo data: "Dhaka Metro" now covers Dhaka district and "Rest of Bangladesh" the 8 divisions, so Dhanmondi gets Dhaka rates and Gazipur (Dhaka division, outside Dhaka district) gets the rest-of-country rates. Before, both zones listed "Dhaka" and the first one won.
+
+### 18.3 Checkout and addresses
+- The checkout and the account address book use a Division → District → Upazila/Thana picker (`LocationSelects` in storefront-base), showing "Dhanmondi · ধানমন্ডি". District is required, upazila optional, postcode now optional (the API never needed it). Areas a store switched off aren't listed. Other countries keep plain text fields.
+- The API trusts the picked area over typed text: orders and saved addresses store the area's own names and its id, and an order to a switched-off area is refused ("Sorry, we don't deliver to Sylhet yet.").
+- Upazila shows on the order page, thank-you page, invoice PDF and order emails.
+
+### 18.4 Store admin
+- **Shipping → Zones** (was a "coming soon" page): each zone with its areas, countries and delivery options; add/edit zones with a searchable area tree (English or Bangla, picking a division covers everything in it); add/edit options with weight rows, free-from, minimum order and delivery days; switch zones and options on or off.
+- **Shipping → Delivery areas** (new; replaces the dead "Rates" link): the whole tree with a delivery switch per area and the zones covering it.
+
+### 18.5 Verification
+- API: `tsc` clean; 80/80 tests with `RUN_DB_TESTS=1` (new rule tests; the Batch 9 smoke test updated for the new zone body and free-delivery wording).
+- curl against Postgres 16: area resolution by id, by name and by old spelling; most-specific zone; weight rows (0.8 kg ৳70, 2 kg ৳110, 4.2 kg ৳160); fall-through when the thana zone has nothing for a ৳200 order; switching Sylhet off (45 areas hidden, rates and checkout refused); bad area id refused; option update keeps its rules.
+- Chromium: admin Delivery areas (Bangla search), created a zone for Chattogram district and a weight-row option through the dialogs; storefront checkout picked Dhaka → Dhaka → Dhanmondi and got that thana's option, Cumilla got rest-of-country options, changing division clears the district, a COD order stored Dhaka / Dhaka / Dhanmondi with its area id; a new customer saved "Adamdighi, Bogura, Rajshahi" with its area id.
+- `store-admin`, `storefront-fashion` and `super-admin` typecheck clean.
+
+### 18.6 Not done / next
+- Stores can switch areas off but can't add their own sub-areas (e.g. "Mirpur 10"). Chattogram and other city corporations have no thanas yet.
+- Courier area ids (Pathao, Steadfast, RedX) aren't mapped to these areas; that comes with courier integration.
+- Delivery time slots (reference spec §15) are not part of this batch.

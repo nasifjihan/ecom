@@ -152,7 +152,7 @@ export default function ThankYouPage() {
   const addressLines = (a: OrderAddressSummary) => ({
     name: a.name,
     address: a.address,
-    city: [a.city, a.division].filter(Boolean).join(", "),
+    city: [a.upazila, a.city, a.division].filter(Boolean).join(", "),
     postcode: a.postcode ?? "",
     country: a.country === "BD" ? "Bangladesh" : a.country ?? "",
   });

@@ -45,6 +45,9 @@ const StorefrontAddressDto = z.object({
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, "country must be a 2-letter code"),
   division: safeText(64).optional().default(""),
   district: safeText(64).pipe(z.string().min(1)),
+  upazila: safeText(64).optional().default(""),
+  /** Deepest area picked (upazila/thana or district); its names replace the typed ones. */
+  locationId: z.coerce.bigint().positive().optional().nullable(),
   postcode: safeText(12).optional().default(""),
   addressLine1: safeText(200).pipe(z.string().min(3)),
   addressLine2: safeText(200).optional(),

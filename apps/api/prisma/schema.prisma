@@ -65,6 +65,7 @@ model Store {
   layoutSettings       StoreLayoutSetting?
   paymentSettings      PaymentGatewayConfig[]
   shippingZones        ShippingZone[]
+  locationsOff         StoreLocationOff[]
   taxClasses           TaxClass[]
   emailSettings        StoreEmailSetting?
   seoSettings          StoreSeoSetting?
@@ -447,17 +448,19 @@ model PaymentGatewayConfig {
 }
 
 model ShippingZone {
-  id        BigInt           @id @default(autoincrement())
+  id        BigInt                 @id @default(autoincrement())
   storeId   BigInt
-  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store     Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
   countries Json
   states    Json?
   postcodes Json?
+  enabled   Boolean                @default(true)
+  locations ShippingZoneLocation[]
   methods   ShippingMethod[]
   orders    Order[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
 }
 
 model ShippingMethod {
@@ -480,6 +483,54 @@ model ShippingMethod {
   deliveryEstimateMaxDays Int?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
+}
+
+/// Bangladesh administrative areas, shared by every store: division -> district -> upazila,
+/// plus the Dhaka metro thanas under Dhaka district. Stores can switch delivery off per location.
+enum LocationType {
+  DIVISION
+  DISTRICT
+  UPAZILA
+  THANA
+}
+
+model Location {
+  id        BigInt                 @id @default(autoincrement())
+  /// Stable key such as "dhaka/dhaka/dhanmondi"; the seed upserts by it.
+  code      String                 @unique
+  type      LocationType
+  nameEn    String
+  nameBn    String
+  parentId  BigInt?
+  parent    Location?              @relation("LocationTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Location[]             @relation("LocationTree")
+  sortOrder Int                    @default(0)
+  zones     ShippingZoneLocation[]
+  storesOff StoreLocationOff[]
+
+  @@index([parentId])
+  @@index([type])
+}
+
+/// A store doesn't deliver to this location (or anywhere under it).
+model StoreLocationOff {
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  locationId BigInt
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([storeId, locationId])
+}
+
+model ShippingZoneLocation {
+  zoneId     BigInt
+  zone       ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  locationId BigInt
+  location   Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([zoneId, locationId])
+  @@index([locationId])
 }
 
 model TaxClass {
@@ -904,6 +955,9 @@ model CustomerAddress {
   address2    String?
   city        String
   state       String?
+  upazila     String?
+  /// Deepest Location picked (upazila/thana, else district).
+  locationId  BigInt?
   postcode    String?
   countryCode String
   phone       String?
@@ -1038,6 +1092,7 @@ model Order {
   billingAddress2        String?
   billingCity            String
   billingState           String?
+  billingUpazila         String?
   billingPostcode        String?
   billingCountryCode     String
   billingEmail           String
@@ -1050,6 +1105,9 @@ model Order {
   shippingAddress2       String?
   shippingCity           String?
   shippingState          String?
+  shippingUpazila        String?
+  /// Deepest Location picked for delivery (upazila/thana, else district).
+  shippingLocationId     BigInt?
   shippingPostcode       String?
   shippingCountryCode    String?
   shippingPhone          String?

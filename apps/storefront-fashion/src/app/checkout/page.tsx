@@ -17,6 +17,7 @@ import {
   FileText,
   CreditCard,
   AlertCircle,
+  MapPin,
   Check,
   Clock,
   Zap,
@@ -42,6 +43,8 @@ import {
   CheckoutStepper,
   DEFAULT_CHECKOUT_STEPS,
   useGetShippingRatesQuery,
+  LocationSelects,
+  type LocationValue,
   useGetTaxesQuery,
   useApplyCouponMutation,
   usePlaceOrderMutation,
@@ -92,10 +95,12 @@ export default function CheckoutPage() {
   const [createAccount, setCreateAccount] = React.useState(false);
   const [accountPassword, setAccountPassword] = React.useState("");
 
-  const [shippingAddress, setShippingAddress] = React.useState<Partial<AddressFormData>>({
+  const [shippingAddress, setShippingAddress] = React.useState<Partial<AddressFormData> & LocationValue>({
     country: "BD",
-    division: "Dhaka",
+    division: "",
     district: "",
+    upazila: "",
+    locationId: null,
   });
   const [billingSameAsShipping, setBillingSameAsShipping] = React.useState(true);
   const [billingAddress, setBillingAddress] = React.useState<Partial<AddressFormData>>({});
@@ -136,6 +141,8 @@ export default function CheckoutPage() {
       country: a.countryCode || s.country,
       division: a.state || s.division,
       district: s.district || a.city,
+      upazila: s.upazila || a.upazila || "",
+      locationId: s.locationId ?? a.locationId ?? null,
       postcode: s.postcode || a.postcode || "",
       addressLine1: s.addressLine1 || a.address1,
       addressLine2: s.addressLine2 || a.address2 || "",
@@ -148,11 +155,22 @@ export default function CheckoutPage() {
       countryCode: shippingAddress.country ?? "BD",
       division: shippingAddress.division,
       district: shippingAddress.district,
+      upazila: shippingAddress.upazila,
+      locationId: shippingAddress.locationId,
       subtotal,
       weightKG: totalWeightKG,
       qty: itemCount,
     }),
-    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, totalWeightKG, itemCount],
+    [
+      shippingAddress.country,
+      shippingAddress.division,
+      shippingAddress.district,
+      shippingAddress.upazila,
+      shippingAddress.locationId,
+      subtotal,
+      totalWeightKG,
+      itemCount,
+    ],
   );
 
   const {
@@ -160,7 +178,8 @@ export default function CheckoutPage() {
     isLoading: ratesLoading,
     isError: ratesError,
   } = useGetShippingRatesQuery(shippingQueryArgs, {
-    skip: !mounted || itemCount === 0,
+    // Bangladesh rates need a district first; other countries match on the country alone.
+    skip: !mounted || itemCount === 0 || (shippingQueryArgs.countryCode === "BD" && !shippingQueryArgs.district),
     refetchOnMountOrArgChange: true,
   });
 
@@ -315,7 +334,7 @@ export default function CheckoutPage() {
         }
         if (!shippingAddress.firstName || !shippingAddress.lastName ||
             !shippingAddress.addressLine1 || !shippingAddress.phone ||
-            !shippingAddress.district || !shippingAddress.postcode) {
+            !shippingAddress.district) {
           toast.error("Fill shipping address", { description: "All required fields in shipping address are required" });
           return false;
         }
@@ -387,6 +406,8 @@ export default function CheckoutPage() {
         country: shippingAddress.country ?? "BD",
         division: shippingAddress.division ?? "",
         district: shippingAddress.district ?? "",
+        upazila: shippingAddress.upazila ?? "",
+        locationId: shippingAddress.country === "BD" ? shippingAddress.locationId ?? null : null,
         postcode: shippingAddress.postcode ?? "",
         addressLine1: shippingAddress.addressLine1 ?? "",
         addressLine2: shippingAddress.addressLine2 ?? "",
@@ -706,46 +727,58 @@ export default function CheckoutPage() {
                         <option value="IN">🇮🇳 India</option>
                       </select>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>Division / State *</Label>
-                      <select
-                        value={shippingAddress.division ?? "Dhaka"}
-                        onChange={(e) =>
-                          setShippingAddress((s) => ({ ...s, division: e.target.value }))
-                        }
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      >
-                        {[
-                          "Dhaka", "Chattogram", "Rajshahi", "Khulna", "Barishal",
-                          "Sylhet", "Rangpur", "Mymensingh",
-                        ].map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>District / City *</Label>
-                      <Input
-                        placeholder="e.g. Dhanmondi, Dhaka"
-                        value={shippingAddress.district ?? ""}
-                        onChange={(e) =>
-                          setShippingAddress((s) => ({ ...s, district: e.target.value }))
-                        }
+                  {(shippingAddress.country ?? "BD") === "BD" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <LocationSelects
+                        idPrefix="ship"
+                        value={shippingAddress}
+                        onChange={(v) => setShippingAddress((s) => ({ ...s, ...v }))}
+                        renderField={(label, control, id) => (
+                          <div className="space-y-1.5">
+                            <Label htmlFor={id}>{label}</Label>
+                            {control}
+                          </div>
+                        )}
                       />
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ship-postcode">Postcode (optional)</Label>
+                        <Input
+                          id="ship-postcode"
+                          placeholder="e.g. 1205"
+                          value={shippingAddress.postcode ?? ""}
+                          onChange={(e) => setShippingAddress((s) => ({ ...s, postcode: e.target.value }))}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>Postcode / ZIP *</Label>
-                      <Input
-                        placeholder="e.g. 1205"
-                        value={shippingAddress.postcode ?? ""}
-                        onChange={(e) =>
-                          setShippingAddress((s) => ({ ...s, postcode: e.target.value }))
-                        }
-                      />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ship-state">State / Region</Label>
+                        <Input
+                          id="ship-state"
+                          value={shippingAddress.division ?? ""}
+                          onChange={(e) => setShippingAddress((s) => ({ ...s, division: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ship-city">City *</Label>
+                        <Input
+                          id="ship-city"
+                          value={shippingAddress.district ?? ""}
+                          onChange={(e) => setShippingAddress((s) => ({ ...s, district: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ship-postcode">Postcode / ZIP</Label>
+                        <Input
+                          id="ship-postcode"
+                          value={shippingAddress.postcode ?? ""}
+                          onChange={(e) => setShippingAddress((s) => ({ ...s, postcode: e.target.value }))}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label>Address Line 1 *</Label>
                     <Input
@@ -823,6 +856,11 @@ export default function CheckoutPage() {
                       {[0, 1, 2].map((i) => (
                         <Skeleton key={i} className="h-24 w-full rounded-xl" />
                       ))}
+                    </div>
+                  ) : shippingQueryArgs.countryCode === "BD" && !shippingQueryArgs.district ? (
+                    <div className="p-6 rounded-xl border border-dashed text-center text-sm text-muted-foreground">
+                      <MapPin className="h-6 w-6 mx-auto mb-2" />
+                      Pick your division and district above to see delivery options and prices.
                     </div>
                   ) : rates.length === 0 ? (
                     <div className="p-6 rounded-xl bg-amber-50 border border-amber-200 text-center">

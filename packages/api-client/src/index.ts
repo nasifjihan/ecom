@@ -165,6 +165,8 @@ export const api = createApi({
     "Homepage",
     "EmailTemplate",
     "EmailLog",
+    "ShippingZone",
+    "Location",
   ],
   endpoints: () => ({}),
 });
