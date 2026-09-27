@@ -57,7 +57,7 @@ These are our advantages. Keep them.
 | Order source (website / Facebook / WhatsApp / phone / walk-in) | ✅ | Batch 19: stored per order, filter on the list |
 | Payments to verify queue (bKash/Nagad transaction IDs) | ✅ | Batch 21: TrxID at checkout or later, duplicate-ID check, verify (with actual amount) / reject with a reason the customer sees |
 | Cash collections + courier COD settlements, shortfall flag | ✅ | Batch 21: Cash & couriers page, owed by courier, payouts with charges and shortfall, cash in hand confirmation |
-| Courier assignment (bulk) | ❌ | |
+| Courier assignment (bulk) | ✅ | Batch 22: select orders → "Book courier"; per-order results (area matching for Pathao/RedX) |
 | Shipments/parcels screen (ready → picked up → in transit → delivered / failed / returned) | ✅ | Batch 20: parcels per order (split shipments, COD per parcel), Shipments page with status tabs. Courier APIs: Batch 22 |
 | Returns screen (request → received → approved → refunded / rejected) | ✅ | Batch 20: customer requests on the storefront (7-day window), staff approve / receive (restock) / reject / refund; Returns page |
 | Invoice by SMS | ❌ | Needs SMS adapter |
@@ -105,7 +105,7 @@ These are our advantages. Keep them.
 | **Bangladesh location tree** (8 divisions → 64 districts → upazilas), bilingual | ✅ | Batch 18: 616 areas incl. Dhaka thanas, per-store on/off, checkout pickers |
 | Rules by weight range / min order / free delivery; most specific zone wins | ✅ | Batch 18: weight rows, minimum order, most-specific zone with cheaper tie-break |
 | Delivery time slots (window, cutoff, surcharge, same-day) | ❌ | |
-| Courier adapters: Steadfast, Pathao, RedX (book, track, label) | ❌ | Seeded as names only |
+| Courier adapters: Steadfast, Pathao, RedX (book, track, label) | ✅ | Batch 22: booking, webhooks + scheduled sync, 4x6 labels with barcode. Built to the couriers' published API shapes and a local mock; not yet run against the live APIs |
 | Customer picks courier at checkout (toggle) | ❌ | |
 
 ### Wholesale / B2B (reference 16) — all ❌
@@ -173,11 +173,11 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Money and stock in DB transactions, server re-prices | ✅ |
 | Idempotency key on order create and webhooks | ❌ |
 | Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 (classes exist, untested) |
-| Encrypted secrets for gateway/courier/SMS keys | ❌ |
+| Encrypted secrets for gateway/courier/SMS keys | 🟡 | Batch 22: courier keys, webhook secrets and tokens encrypted (AES-256-GCM). Payment gateway keys still come from env |
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing only) |
 | OpenAPI docs at `/api/docs` | ❌ |
 | Audit row on every admin change | ✅ |
-| Background jobs: courier sync, COD, exports, imports | 🟡 (email only) |
+| Background jobs: courier sync, COD, exports, imports | 🟡 (email, courier sync) |
 | Product CSV/XLSX import | ❌ |
 
 ---
@@ -192,7 +192,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 19 ✅ | **Manual orders + order source**: staff create orders for phone/Facebook customers, discount capped by role | Most BD shops take many orders off-site | M |
 | 20 ✅ | **Separate shipment and return statuses**: parcels, returns flow, status history per kind | Needed for couriers and COD | M |
 | 21 ✅ | **COD and payment verification**: verify bKash/Nagad TrxIDs, cash collections, courier settlements with shortfall | Money reconciliation | M |
-| 22 | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |
+| 22 ✅ | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |
 | 23 | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
 | 24 | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |

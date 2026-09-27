@@ -55,6 +55,7 @@ import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
 import { adminOrderFulfilmentRouter, adminReturnsRouter, adminShipmentsRouter, storefrontReturnsRouter } from "./modules/fulfilment";
+import { adminCouriersRouter, adminOrderCourierRouter, adminShipmentCourierRouter, courierWebhooksRouter } from "./modules/couriers";
 import {
   adminCodRouter,
   adminOrderPaymentsRouter,
@@ -134,9 +135,12 @@ export function buildApp(): Express {
   app.use("/api/admin/brands", adminBrandsRouter);
   app.use("/api/admin/attributes", adminAttributesRouter);
   app.use("/api/admin/media", productUploadRouter);
+  app.use("/api/admin/orders", adminOrderCourierRouter);            // book many orders with a courier
   app.use("/api/admin/orders", adminOrderPaymentsRouter);           // payments of an order
   app.use("/api/admin/orders", adminOrderFulfilmentRouter);         // parcels, returns, refunds of an order
+  app.use("/api/admin/shipments", adminShipmentCourierRouter);     // book, sync, labels
   app.use("/api/admin/shipments", adminShipmentsRouter);
+  app.use("/api/admin/couriers", adminCouriersRouter);              // Steadfast / Pathao / RedX accounts
   app.use("/api/admin/returns", adminReturnsRouter);
   app.use("/api/admin/orders", adminOrdersRouter);
   app.use("/api/admin/payments", adminPaymentRecordsRouter);       // transfers to verify, COD cash
@@ -146,6 +150,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/checkout", storefrontCheckoutRouter); // Batch #10: POST / , /coupons/apply, GET /orders/:orderKey
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);
+  app.use("/api/webhooks/couriers", courierWebhooksRouter);        // courier status webhooks
   app.use("/api/admin/customers", adminCustomersRouter);
   app.use("/api/storefront/account", storefrontAccountPaymentsRouter);
   app.use("/api/storefront/account", storefrontReturnsRouter);

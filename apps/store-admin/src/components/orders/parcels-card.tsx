@@ -3,7 +3,8 @@
 /** Order page: the order's parcels, their courier status history, and packing a new parcel. */
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ExternalLink, Package, Pencil, Plus, Truck } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Package, Pencil, Plus, Printer, RefreshCw, Send, Truck } from "lucide-react";
+import { openFile } from "@ecom/api-client";
 import {
   Badge,
   Button,
@@ -39,6 +40,7 @@ import {
   PARCEL_NEXT,
   PARCEL_STYLES,
   apiError,
+  courierStatusText,
   useCreateParcelMutation,
   useMoveParcelMutation,
   useUpdateParcelMutation,
@@ -46,6 +48,8 @@ import {
   type ParcelStatus,
 } from "@/lib/features/operations/fulfilment-api-slice";
 import type { OrderLine } from "@/lib/features/operations/operations-api-slice";
+import { useParcelLabelsMutation, useSyncParcelMutation } from "@/lib/features/operations/couriers-api-slice";
+import { BookCourierDialog } from "./book-courier-dialog";
 
 const money = (n: number) => `৳ ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const when = (iso: string) =>
@@ -70,6 +74,27 @@ export function ParcelsCard({ order, canEdit }: Props) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Parcel | null>(null);
   const [failing, setFailing] = useState<Parcel | null>(null);
+  const [booking, setBooking] = useState<Parcel | null>(null);
+  const [syncParcel, { isLoading: syncing }] = useSyncParcelMutation();
+  const [loadLabels] = useParcelLabelsMutation();
+
+  async function sync(p: Parcel) {
+    try {
+      const r = await syncParcel({ parcelId: p.id, orderId: order.id }).unwrap();
+      if (!r.ok) toast.error(r.error ?? "The courier didn't answer");
+      else toast.success(r.moved?.length ? `${p.code}: ${PARCEL_LABELS[r.moved[r.moved.length - 1] as ParcelStatus]}` : `${p.code}: no change (${courierStatusText(r.courierStatus ?? null)})`);
+    } catch (e) {
+      toast.error(apiError(e, "Couldn't check with the courier"));
+    }
+  }
+
+  async function label(p: Parcel) {
+    try {
+      await openFile(() => loadLabels([p.id]).unwrap(), { filename: `label-${p.code}.pdf`, mode: "open" });
+    } catch {
+      toast.error("Couldn't make the label");
+    }
+  }
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [moveParcel, { isLoading: moving }] = useMoveParcelMutation();
 
@@ -151,6 +176,14 @@ export function ParcelsCard({ order, canEdit }: Props) {
                     </>
                   )}
                 </div>
+                {p.consignmentId && (
+                  <div>
+                    Courier says: <span className="font-medium text-slate-800 dark:text-slate-200">{courierStatusText(p.courierStatus) ?? "—"}</span>
+                    {p.lastSyncedAt && <span className="text-slate-400"> · checked {when(p.lastSyncedAt)}</span>}
+                    {p.deliveryFee != null && <span className="text-slate-400"> · charge {money(p.deliveryFee)}</span>}
+                  </div>
+                )}
+                {p.courierMessage && <div className="text-amber-600">{p.courierMessage}</div>}
                 {p.codAmount > 0 && <div>Collect on delivery: <span className="font-semibold text-slate-800 dark:text-slate-200">{money(p.codAmount)}</span></div>}
                 <div>{p.items.map((i) => `${i.quantity} × ${names.get(i.orderItemId) ?? "Item"}`).join(", ")}</div>
                 {p.failedReason && p.status === "failed" && <div className="text-red-600">Failed: {p.failedReason}</div>}
@@ -166,7 +199,20 @@ export function ParcelsCard({ order, canEdit }: Props) {
                 </button>
                 {canEdit && (
                   <div className="flex items-center gap-1">
-                    {!["delivered", "returned", "cancelled"].includes(p.status) && (
+                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => void label(p)} aria-label="Print label" title="Label">
+                      <Printer className="h-3.5 w-3.5" />
+                    </Button>
+                    {p.consignmentId && !["delivered", "returned", "cancelled"].includes(p.status) && (
+                      <Button size="sm" variant="ghost" className="h-7 px-2" disabled={syncing} onClick={() => void sync(p)} aria-label="Check with the courier" title="Check with the courier">
+                        <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+                      </Button>
+                    )}
+                    {!p.consignmentId && p.status === "ready" && (
+                      <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => setBooking(p)}>
+                        <Send className="h-3 w-3" /> Book
+                      </Button>
+                    )}
+                    {!p.consignmentId && !["delivered", "returned", "cancelled"].includes(p.status) && (
                       <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditing(p)} aria-label="Edit courier details">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -217,6 +263,12 @@ export function ParcelsCard({ order, canEdit }: Props) {
         />
       )}
       {editing && <EditParcelDialog orderId={order.id} parcel={editing} onClose={() => setEditing(null)} />}
+      {booking && (
+        <BookCourierDialog
+          parcel={{ id: booking.id, orderId: order.id, code: booking.code, weightKg: booking.weightKg }}
+          onClose={() => setBooking(null)}
+        />
+      )}
       {failing && (
         <NoteDialog
           title={`Delivery failed: ${failing.code}`}

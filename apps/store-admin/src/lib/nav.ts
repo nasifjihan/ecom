@@ -127,6 +127,7 @@ export const SETTINGS_SECTIONS: NavSection[] = [
     items: [
       { href: "/settings/general", label: "Store details", icon: Store, perm: "settings.view" },
       { href: "/settings/payments", label: "Payment methods", icon: Wallet, perm: "settings.view" },
+      { href: "/settings/couriers", label: "Couriers", icon: Truck, perm: "settings.view" },
       { href: "/settings/emails", label: "Emails", icon: Mail, perm: "emails.view" },
     ],
   },

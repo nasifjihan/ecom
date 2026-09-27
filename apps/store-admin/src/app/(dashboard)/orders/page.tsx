@@ -23,6 +23,7 @@ import {
   Inbox,
   SlidersHorizontal,
   Plus,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { openFile } from "@ecom/api-client";
@@ -93,6 +94,8 @@ import {
   sourceLabel,
 } from "@/lib/features/operations/operations-api-slice";
 import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
+import { BulkBookDialog } from "@/components/orders/bulk-book-dialog";
+import { useCan } from "@/lib/permissions";
 import { cn } from "@/components/ui";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
@@ -193,6 +196,8 @@ export default function OrdersPage() {
   const [cancelDialogOrder, setCancelDialogOrder] = useState<Order | null>(null);
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | null>(null);
   const [showBulkStatus, setShowBulkStatus] = useState(false);
+  const [bulkBooking, setBulkBooking] = useState(false);
+  const { can } = useCan();
 
   const { data, isLoading } = useGetOrderListQuery({
     status: activeTab === "ALL" ? undefined : activeTab,
@@ -741,16 +746,12 @@ export default function OrdersPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={selectedCount === 0}
-                onClick={() => toast.success(`Marked ${selectedCount} order(s) as paid`)}
-              >
-                <CheckSquare className="h-4 w-4" />
-                Mark as Paid
-              </Button>
+              {can("orders.edit") && (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={selectedCount === 0} onClick={() => setBulkBooking(true)}>
+                  <Truck className="h-4 w-4" />
+                  Book courier
+                </Button>
+              )}
 
               <Button
                 variant="outline"
@@ -943,6 +944,7 @@ export default function OrdersPage() {
           </DialogContent>
         </Dialog>
       )}
+      {bulkBooking && <BulkBookDialog orderIds={selectedIds} onClose={() => { setBulkBooking(false); setRowSelection({}); }} />}
     </div>
   );
 }

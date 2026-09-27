@@ -1715,3 +1715,117 @@ Neither could be tracked before. There was also no screen to set payment methods
 - Importing a courier's payout statement (CSV) to match parcels automatically. That comes with the courier integrations in Batch 22.
 - Payment slips (photos) with a bank transfer, and matching transfers against an SMS or statement feed.
 - COD refunds after delivery still use the Batch 20 refund flow; nothing links them to cash that is still with the courier.
+
+## ✅ BATCH #22 — Courier integrations: Steadfast, Pathao, RedX (2026-09-27)
+Parcels can now be booked with a courier from the admin. Statuses then come back on their own, and every parcel gets a printable label. Couriers without an API (Paperfly, Sundarban, own riders…) still work by hand as in Batch 20.
+
+**Important:** this container can't reach the couriers' servers. The adapters follow each courier's published API. I checked what I could from open-source clients (Steadfast packages, Pathao's own WooCommerce plugin, RedX packages). They were tested against a local mock of all three APIs, but **not yet against a real sandbox or live account**. Before relying on them, connect a sandbox account for each courier and book one test parcel.
+
+### 22.1 Schema (migration `courier_accounts`)
+- **`CourierAccount`** (per store):
+  - courier (steadfast / pathao / redx), name, on/off, sandbox or live;
+  - credentials as encrypted JSON (AES-256-GCM, `config/encryption.ts`);
+  - non-secret settings: Pathao pickup store, delivery type, item type; RedX pickup store; default weight;
+  - a webhook URL token, an encrypted webhook secret, and encrypted Pathao access/refresh tokens;
+  - last test time and error.
+- **`Shipment`** gains: courier account, consignment id, the courier's own status word and message, booked / last-checked times, and the courier's delivery charge.
+
+### 22.2 Adapters (`modules/couriers/couriers.adapters.ts`)
+- **Steadfast** (`portal.packzy.com/api/v1`, headers `Api-Key` / `Secret-Key`):
+  - `create_order` sends the invoice (our parcel code), recipient, phone, address, COD, note, items and home delivery;
+  - status comes from `status_by_cid`; the connection test reads `get_balance`.
+- **Pathao** (`api-hermes.pathao.com`, sandbox `courier-api-sandbox.pathao.com`):
+  - logs in with the OAuth password grant and caches the tokens encrypted; it refreshes them, logs in again on expiry, and retries once after a 401;
+  - booking sends store, merchant order id, recipient, city / zone (area optional), delivery and item type, weight (0.5–10 kg) and amount to collect;
+  - status comes from `orders/{id}/info`; city, zone and area lists are used for matching.
+- **RedX** (`openapi.redx.com.bd/v1.0.0-beta`, sandbox `sandbox.redx.com.bd`, header `API-ACCESS-TOKEN: Bearer …`):
+  - books with `/parcel` (delivery area id and name, COD, weight in grams, invoice);
+  - status comes from `/parcel/info/{id}`; areas come from `/areas?district_name=`.
+- Each adapter has a 20-second timeout and turns the courier's validation messages into readable errors. `fetch` is injectable for tests.
+- `STEADFAST_BASE_URL`, `PATHAO_API_URL` and `REDX_API_URL` point the adapters at a test server; blank means the real API.
+
+### 22.3 Rules (`couriers.rules.ts`, 56 tests with the adapter tests)
+- Each courier's status words map to our parcel statuses. Unknown words and on-hold/payment events don't move the parcel. A cancellation before pickup cancels the parcel; after pickup it counts as returned.
+- **Steadfast:** in_review → ready; pending → in transit; delivered and partial_delivered, including the "approval pending" forms → delivered.
+- **Pathao:** Pickup_Requested / Assigned_for_Pickup → ready; Picked → picked up; sorting hub, in transit and last-mile hub → in transit; Assigned_for_Delivery → out for delivery; Delivered / Partial_Delivery → delivered; Delivery_Failed → failed; Return / paid_return → returned. `order.*` webhook names are handled too.
+- **RedX:** ready-for-delivery → in transit; delivery-in-progress → out for delivery; delivered; agent-returning → failed; returned.
+- A parcel is walked to the courier's status along the allowed parcel moves (`parcelPath`; e.g. ready → picked up → delivered). The order status follows, the COD cash is recorded "with courier" (Batch 21), and emails go out as before.
+- **Area matching** (`matchArea`) turns our district and upazila into the courier's city/zone or area:
+  - it handles old and new spellings (Chittagong/Chattogram, Comilla/Cumilla…) and ignores "Sadar", "City" and similar words;
+  - it keeps numbers, so "Mirpur 1" and "Mirpur 10" stay distinct, and it never guesses between two close matches.
+- Tracking links for each courier, Bangladeshi mobile number clean-up, and a Code 128 barcode encoder for labels.
+
+### 22.4 API
+- **Accounts**
+  - `GET|POST /api/admin/couriers`, `PATCH|DELETE /:id`, `POST /:id/test`, `POST /:id/rotate-webhook`: `settings.view` / `settings.edit`.
+  - Credentials are never returned (only the last 4 characters), and the activity log hides them.
+  - An account with parcels still on the way can't be deleted, only turned off.
+- **Booking**
+  - `POST /api/admin/shipments/:id/book` books a ready parcel. Pathao and RedX areas are matched from the address, or given by staff.
+  - `GET /api/admin/shipments/:id/courier-area` returns the suggested area. `GET /api/admin/couriers/active`, plus Pathao cities/zones/areas and RedX areas for the dialog.
+- **Bulk**
+  - `POST /api/admin/orders/book-courier` handles up to 100 orders. It uses each order's ready parcel, or packs everything not yet in a parcel, then books it.
+  - Each order gets its own result, so one failing doesn't stop the others. An order that's already booked says so.
+- **Status**
+  - `POST /api/admin/shipments/:id/sync` re-checks one parcel; `POST /api/admin/shipments/sync` re-checks every booked parcel still on the way.
+  - A BullMQ job scheduler (`couriers.sync.ts`) runs every `COURIER_SYNC_MINUTES` (default 30) in the process that sends emails, or in `pnpm worker`. Only one process runs it; without Redis nothing is scheduled.
+- **Webhooks:** `POST /api/webhooks/couriers/:courier/:token`
+  - The token in the URL picks the account. Steadfast must also send the account's secret as a Bearer token, and Pathao as `X-PATHAO-Signature`. RedX has no documented signature, so its unguessable URL is the secret.
+  - The body only names the parcel: its status is always read again from the courier's API before anything changes. (Pathao's integration secret is one public constant for every merchant, so a webhook body alone proves nothing.)
+  - Replies are what each courier expects: Pathao gets 202 with its integration header; Steadfast gets `{status:"success"}`.
+- **Labels:** `GET /api/admin/shipments/labels?ids=…` makes a 4×6 in PDF with one page per parcel:
+  - shop name and phone, courier, "COLLECT Tk X" or "PAID";
+  - a Code 128 barcode of the tracking or consignment code;
+  - recipient name, phone and address, order and parcel codes, items, and weight.
+- **Fixed on the way:** everything under `/api/webhooks` arrives as raw bytes (for payment signature checks), so courier webhook bodies are now parsed in the route (JSON or form-encoded).
+- **Mock couriers:** `pnpm --filter @ecom/api couriers:mock` (`apps/api/scripts/mock-couriers.mjs`) serves all three APIs on :4010 for local testing. `POST /__advance` moves a parcel and fires the courier's webhook with the right headers. `.env.example` explains the base-URL variables.
+
+### 22.5 Store admin
+- **Settings → Couriers:**
+  - add, edit, test, turn on/off and remove accounts;
+  - the fields each courier needs, with where to find them;
+  - sandbox/live; Pathao store, delivery and item type; RedX pickup store; default weight;
+  - the webhook URL and secret with copy buttons, instructions per courier, and "make a new URL and secret".
+- **Order page → Parcels:**
+  - **Book** opens a dialog with the courier and, pre-filled from the address, the Pathao city/zone/area or the RedX area (with a warning when there's no clear match), plus weight;
+  - once booked, the parcel shows "Courier says …", when it was last checked and the courier's charge, with a refresh button;
+  - a label button on every parcel; the manual courier/tracking edit is hidden for booked parcels.
+- **Shipments:**
+  - "Sync statuses";
+  - checkboxes with "Print N labels" (one PDF);
+  - the courier's own status under ours;
+  - **Book** on parcels ready to go.
+- **Orders list:** a **Book courier** bulk action with per-order results. It replaces a "Mark as paid" button that only showed a success message and changed nothing.
+
+### 22.6 Verification
+- **Tests:**
+  - API `tsc` clean; 229/229 tests with `RUN_DB_TESTS=1` (56 new courier tests). The two vitest "errors" are the existing Batch 9 Redis-mock ones.
+  - The new courier module lints clean.
+  - The tests clear the courier base-URL variables so a local `.env` can't change what they check.
+- **Against the mock (curl):**
+  - Missing keys are refused. Each account's test connection reports the balance, the pickup store, or the areas.
+  - Credentials are stored encrypted, never in plain text.
+  - Bookings with each courier: Pathao was matched to Dhaka / Dhanmondi, RedX to Dhanmondi. Double booking is refused.
+  - **Steadfast webhook:** a wrong secret gets 404. Pending moved the parcel to in transit and the order to Shipped; delivered_approval_pending moved them to delivered and Delivered, marked the order paid and recorded the cash "with Steadfast".
+  - **Pathao webhook:** a failed delivery took the parcel ready → picked up → failed, then Return → returned. A bad signature gets 404. Replies are 202 with the integration header.
+  - **RedX:** a manual sync moved the parcel to out for delivery; "agent-hold" only added a history line; a webhook moved it to delivered.
+  - A webhook with an unknown token, or the wrong courier in the URL, gets 404.
+  - Bulk booking with Pathao worked; running it again said "Already booked". Bulk with RedX flagged a Bogura order as needing its area chosen.
+  - Labels PDF: 5 pages, checked visually (rendered with pdf.js).
+  - With `COURIER_SYNC_MINUTES=1` the scheduled job ran by itself ("checked 5").
+- **Chromium:**
+  - Settings → Couriers with three accounts and a test result.
+  - Booking from the order page with Pathao city/zone pre-filled.
+  - Bulk booking three orders with RedX (two booked, one flagged).
+  - Shipments "Sync statuses" and print-all.
+  - No failed requests or page errors.
+- **Typecheck:** every app and package except `storefront-base`, which fails as before on its self-imports. Production builds of the three Next apps pass (`next build --no-lint`, as in earlier batches: the apps have older lint errors, and the files added in this batch lint clean).
+
+### 22.7 Not done
+- **Real sandbox runs.** Pathao city/zone ids and RedX area names need a real account to check the matching against real data.
+- Cancelling a booking with the courier. Cancel the parcel with the courier's panel, then mark it cancelled here.
+- Steadfast's bulk endpoint: bulk booking books one parcel at a time, which is slower but simpler to report on.
+- Couriers' own PDF labels (their APIs don't offer them); our label carries their tracking code instead.
+- Paperfly, eCourier, Sundarban and other APIs.
+- Customers choosing a courier at checkout, and courier reports (Batch 28).
+- Payment-gateway keys per store are still environment variables (only courier keys are stored encrypted per store).

@@ -68,6 +68,7 @@ model Store {
   shipments            Shipment[]
   paymentRecords       PaymentRecord[]
   courierSettlements   CourierSettlement[]
+  courierAccounts      CourierAccount[]
   locationsOff         StoreLocationOff[]
   taxClasses           TaxClass[]
   emailSettings        StoreEmailSetting?
@@ -1232,38 +1233,80 @@ model OrderItem {
 
 /// A parcel handed to a courier (an order can go out in several).
 model Shipment {
-  id             BigInt          @id @default(autoincrement())
-  storeId        BigInt
-  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  orderId        BigInt
-  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id               BigInt          @id @default(autoincrement())
+  storeId          BigInt
+  store            Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId          BigInt
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   /// "<order number>-P1", "-P2", ...
-  code           String
+  code             String
   /// ready | picked_up | in_transit | out_for_delivery | delivered | failed | returned | cancelled
-  status         String          @default("ready")
-  providerCode   String
-  providerName   String
-  trackingNumber String?
-  trackingUrl    String?
-  labelUrl       String?
+  status           String          @default("ready")
+  providerCode     String
+  providerName     String
+  trackingNumber   String?
+  trackingUrl      String?
+  labelUrl         String?
   /// Cash the courier collects for this parcel.
-  codAmount      Decimal         @default(0) @db.Decimal(14, 2)
-  weightKg       Decimal?        @db.Decimal(8, 3)
-  items          ShipmentItem[]
-  events         ShipmentEvent[]
-  paymentRecords PaymentRecord[]
-  notes          String?
-  failedReason   String?
-  adminId        BigInt?
-  shippedAt      DateTime?
-  deliveredAt    DateTime?
-  returnedAt     DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  codAmount        Decimal         @default(0) @db.Decimal(14, 2)
+  weightKg         Decimal?        @db.Decimal(8, 3)
+  items            ShipmentItem[]
+  events           ShipmentEvent[]
+  paymentRecords   PaymentRecord[]
+  /// Set once the parcel is booked with a courier through its API.
+  courierAccountId BigInt?
+  courierAccount   CourierAccount? @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  consignmentId    String?
+  /// The courier's own status word (e.g. "in_review", "Assigned_for_Delivery") and latest message.
+  courierStatus    String?
+  courierMessage   String?
+  bookedAt         DateTime?
+  lastSyncedAt     DateTime?
+  /// What the courier charges for this parcel, when it says.
+  deliveryFee      Decimal?        @db.Decimal(12, 2)
+  notes            String?
+  failedReason     String?
+  adminId          BigInt?
+  shippedAt        DateTime?
+  deliveredAt      DateTime?
+  returnedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@unique([storeId, code])
   @@index([storeId, status])
   @@index([orderId])
+  @@index([courierAccountId, consignmentId])
+}
+
+/// A store's account with a courier that has an API (Steadfast, Pathao, RedX).
+model CourierAccount {
+  id            BigInt     @id @default(autoincrement())
+  storeId       BigInt
+  store         Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// steadfast | pathao | redx
+  courier       String
+  label         String
+  enabled       Boolean    @default(true)
+  /// sandbox | live
+  mode          String     @default("live")
+  /// API keys and passwords as encrypted JSON (config/encryption.ts); never sent to the browser.
+  credentials   String
+  /// Non-secret options: Pathao store id, delivery type, item type; RedX pickup store; default weight.
+  settings      Json?
+  /// Part of the webhook URL given to the courier; identifies the account.
+  webhookToken  String     @unique
+  /// Encrypted secret the courier sends back (Steadfast Bearer token, Pathao X-PATHAO-Signature).
+  webhookSecret String
+  /// Encrypted access / refresh tokens (Pathao) and their expiry.
+  tokenCache    String?
+  lastCheckedAt DateTime?
+  lastError     String?
+  shipments     Shipment[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([storeId, courier])
 }
 
 /// Money for an order that staff must check: a bKash/Nagad/bank transfer the customer reports

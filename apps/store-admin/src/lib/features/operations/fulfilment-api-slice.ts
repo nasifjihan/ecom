@@ -164,6 +164,14 @@ export interface Parcel {
   createdAt: string;
   items: { orderItemId: string; quantity: number; name?: string }[];
   events: StatusEvent[];
+  /** Set once booked with a courier through its API. */
+  courierAccountId: string | null;
+  consignmentId: string | null;
+  courierStatus: string | null;
+  courierMessage: string | null;
+  bookedAt: string | null;
+  lastSyncedAt: string | null;
+  deliveryFee: number | null;
 }
 
 export interface ReturnRequest {
@@ -259,6 +267,13 @@ export interface ApiParcel {
   items?: ApiItem[];
   events?: StatusEvent[];
   order?: ApiOrderRef;
+  courierAccountId?: string | null;
+  consignmentId?: string | null;
+  courierStatus?: string | null;
+  courierMessage?: string | null;
+  bookedAt?: string | null;
+  lastSyncedAt?: string | null;
+  deliveryFee?: Dec | null;
 }
 
 export interface ApiReturn {
@@ -311,8 +326,22 @@ export function fromApiParcel(p: ApiParcel): Parcel {
     createdAt: p.createdAt,
     items: (p.items ?? []).map((i) => ({ orderItemId: i.orderItemId, quantity: i.quantity, name: itemName(i) })),
     events: p.events ?? [],
+    courierAccountId: p.courierAccountId ?? null,
+    consignmentId: p.consignmentId ?? null,
+    courierStatus: p.courierStatus ?? null,
+    courierMessage: p.courierMessage ?? null,
+    bookedAt: p.bookedAt ?? null,
+    lastSyncedAt: p.lastSyncedAt ?? null,
+    deliveryFee: p.deliveryFee == null ? null : Number(p.deliveryFee),
   };
 }
+
+/** "Assigned_for_Delivery" / "in_review" -> "Assigned for delivery" / "In review" */
+export const courierStatusText = (s: string | null) => {
+  if (!s) return null;
+  const t = s.replace(/^order\./i, "").replace(/[_-]+/g, " ").toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 export function fromApiReturn(r: ApiReturn): ReturnRequest {
   return {
