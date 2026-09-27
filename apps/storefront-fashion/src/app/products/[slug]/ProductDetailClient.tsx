@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   MessageSquare,
   Send,
+  Zap,
 } from "lucide-react";
 import {
   Card,
@@ -58,6 +59,49 @@ const COLOR_SWATCHES: Record<string, string> = {
 
 function swatch(color: string): string {
   return COLOR_SWATCHES[color.toLowerCase()] ?? "#cbd5e1";
+}
+
+/** Flash-sale strip with a live countdown. Rendered after mount so server and browser clocks can't disagree. */
+function FlashSaleStrip({ sale }: { sale: NonNullable<ProductDetail["flashSale"]> }) {
+  const [now, setNow] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = now === null ? null : Math.max(0, new Date(sale.endsAt).getTime() - now);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const parts =
+    left === null
+      ? null
+      : {
+          d: Math.floor(left / 86_400_000),
+          h: Math.floor(left / 3_600_000) % 24,
+          m: Math.floor(left / 60_000) % 60,
+          s: Math.floor(left / 1000) % 60,
+        };
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl bg-gradient-to-r from-orange-500 via-rose-500 to-pink-600 px-4 py-2.5 text-white shadow-sm">
+      <span className="flex items-center gap-1.5 font-bold tracking-wide">
+        <Zap className="h-4 w-4 fill-current" /> {sale.name}
+      </span>
+      {left === 0 ? (
+        <span className="text-sm font-medium">This sale has ended</span>
+      ) : (
+        <span className="flex items-center gap-1.5 text-sm" aria-live="off">
+          Ends in
+          <span className="font-mono font-bold tabular-nums">
+            {parts ? `${parts.d > 0 ? `${parts.d}d ` : ""}${pad(parts.h)}:${pad(parts.m)}:${pad(parts.s)}` : "--:--:--"}
+          </span>
+        </span>
+      )}
+      {sale.remaining !== null && left !== 0 && (
+        <span className="ml-auto text-xs font-semibold rounded-full bg-white/20 px-2 py-0.5">
+          Only {sale.remaining} left at this price
+        </span>
+      )}
+    </div>
+  );
 }
 
 function formatReviewDate(iso: string): string {
@@ -138,11 +182,13 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const hasVariants = product.variants.length > 0;
   const price = selectedVariant?.price ?? product.price;
   const compareAtPrice = selectedVariant ? selectedVariant.compareAtPrice ?? null : product.compareAtPrice ?? null;
+  const flashSale = (hasVariants ? selectedVariant?.flashSale : product.flashSale) ?? null;
   const stockLeft = hasVariants ? selectedVariant?.stockQty ?? null : product.stockQty;
   const inStock = hasVariants ? Boolean(selectedVariant?.inStock) : !product.isOutOfStock;
   const images = product.images.length ? product.images : [product.image].filter(Boolean);
   const discountPct = compareAtPrice ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : 0;
-  const maxQty = stockLeft ?? 99;
+  // A flash sale with a stock limit only sells that many at the sale price.
+  const maxQty = Math.min(stockLeft ?? 99, flashSale?.remaining ?? 99);
 
   const handleAddToCart = () => {
     if (hasVariants && !selectedVariant) {
@@ -160,6 +206,8 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       slug: product.slug,
       image: selectedVariant?.image ?? images[0] ?? "",
       price,
+      compareAtPrice,
+      flashSale: flashSale ? { name: flashSale.name, endsAt: flashSale.endsAt } : null,
       qty,
       weightKG: product.weightKG,
       variantLabel: selectedVariant?.label,
@@ -311,12 +359,13 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             <span className="text-sm text-muted-foreground">SKU: <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
           </div>
 
-          <div className="flex items-baseline gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-secondary/5 border">
+          {flashSale && <FlashSaleStrip sale={flashSale} />}
+          <div className="flex flex-wrap items-baseline gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-secondary/5 border">
             <span className="text-3xl md:text-4xl font-black text-primary">{formatMoney(price)}</span>
             {compareAtPrice && (
               <>
                 <span className="text-lg text-muted-foreground line-through">{formatMoney(compareAtPrice)}</span>
-                <Badge variant="destructive" className="text-xs px-2 py-0.5">Save ৳{compareAtPrice - price}</Badge>
+                <Badge variant="destructive" className="text-xs px-2 py-0.5">Save {formatMoney(compareAtPrice - price)}</Badge>
               </>
             )}
             <div className="ml-auto text-right">

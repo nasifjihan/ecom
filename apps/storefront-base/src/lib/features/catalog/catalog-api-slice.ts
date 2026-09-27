@@ -1,5 +1,14 @@
 import { api } from "@ecom/api-client";
 
+/** A running flash sale that sets the price (see the API's storefront/flash-sales.ts). */
+export type FlashSaleInfo = {
+  name: string;
+  slug: string;
+  endsAt: string;
+  /** Units left at the sale price, or null when unlimited. */
+  remaining: number | null;
+};
+
 export type ProductSummary = {
   id: string;
   slug: string;
@@ -12,6 +21,7 @@ export type ProductSummary = {
   reviewCount: number;
   isOnSale: boolean;
   discountPercent?: number;
+  flashSale?: FlashSaleInfo | null;
   categoryId?: string;
   category?: { id: string; slug: string; name: string };
   brandId?: string;
@@ -38,6 +48,7 @@ export type ProductVariantOption = {
   label: string;
   price: number;
   compareAtPrice?: number | null;
+  flashSale?: FlashSaleInfo | null;
   image?: string;
   sku?: string;
   inStock: boolean;

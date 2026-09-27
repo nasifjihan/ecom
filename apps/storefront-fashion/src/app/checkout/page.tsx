@@ -61,6 +61,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
 import { passwordProblem } from "@/app/account/_components";
+import { useCartPriceCheck } from "@/lib/cart-prices";
 
 const CURRENCY = "BDT";
 
@@ -78,6 +79,7 @@ const TRUST_BADGES = [
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
+  const { problems: cartProblems, hasProblems: cartHasProblems, recheck: recheckCart } = useCartPriceCheck();
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   const customerName = useAppSelector((s) => s.auth.customerName);
   const customerEmail = useAppSelector((s) => s.auth.customerEmail);
@@ -344,6 +346,10 @@ export default function CheckoutPage() {
       toast.error("Your cart is empty");
       return;
     }
+    if (cartHasProblems) {
+      toast.error("Some items can't be ordered", { description: Object.values(cartProblems)[0] });
+      return;
+    }
     if (!validateStep("information") || !validateStep("shipping") || !validateStep("payment")) return;
     if (!termsChecked) {
       toast.error("Accept terms first", { description: "Please read and agree to Terms & Conditions" });
@@ -451,6 +457,8 @@ export default function CheckoutPage() {
     } catch (err: any) {
       const msg = apiErrorMessage(err, "Could not place order. Please try again.");
       toast.error("Order failed", { description: msg });
+      // Stock or a flash-sale price may have run out: refresh the cart so it shows what changed.
+      recheckCart();
     }
   };
 
@@ -970,7 +978,7 @@ export default function CheckoutPage() {
                 <Button variant="outline" size="lg" asChild>
                   <Link href="/cart">← Back to Cart</Link>
                 </Button>
-                <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder} className="h-12">
+                <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12">
                   {placingOrder ? "Placing Order..." : `Place Order • ${formatBDT(grandTotal)}`}
                 </Button>
               </div>
@@ -978,7 +986,22 @@ export default function CheckoutPage() {
           </AnimatePresence>
         </section>
 
-        <aside>
+        <aside className="space-y-4">
+          {cartHasProblems && (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <div className="flex items-center gap-2 font-semibold text-destructive">
+                <AlertCircle className="h-4 w-4" /> Some items can&apos;t be ordered
+              </div>
+              <ul className="mt-2 space-y-1 text-destructive/90">
+                {Object.values(cartProblems).map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+              <Link href="/cart" className="mt-2 inline-block font-medium underline">
+                Update your cart
+              </Link>
+            </div>
+          )}
           <OrderSummaryCard
             subtotal={subtotal}
             shippingAmount={shippingAmount}
@@ -1008,7 +1031,7 @@ export default function CheckoutPage() {
             applyingCoupon={applyingCoupon}
             couponError={couponError}
             grandTotal={grandTotal}
-            placeOrderDisabled={placingOrder}
+            placeOrderDisabled={placingOrder || cartHasProblems}
             placeOrderLoading={placingOrder}
             placeOrderLabel={`Place Order • ${formatBDT(grandTotal)}`}
             onPlaceOrder={handlePlaceOrder}

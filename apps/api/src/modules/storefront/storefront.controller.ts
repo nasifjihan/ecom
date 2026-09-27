@@ -22,6 +22,10 @@ export const storefrontController = {
     envelope(res, { data: await svc(req).brands() });
   }),
 
+  cartPrices: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).cartPrices(req.body.items) });
+  }),
+
   applyCoupon: ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).applyCoupon(req.body) });
   }),

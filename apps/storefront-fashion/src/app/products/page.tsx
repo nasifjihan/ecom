@@ -444,6 +444,11 @@ export default function ProductsPage() {
                         {p.isOnSale && p.discountPercent && (
                           <Badge variant="destructive" className="text-[10px]">-{p.discountPercent}%</Badge>
                         )}
+                        {p.flashSale && (
+                          <Badge variant="destructive" className="text-[10px] bg-gradient-to-r from-orange-500 to-rose-600 border-0">
+                            ⚡ Flash sale
+                          </Badge>
+                        )}
                       </div>
                       <Button
                         size="sm"

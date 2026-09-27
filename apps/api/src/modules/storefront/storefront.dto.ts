@@ -53,6 +53,12 @@ const StorefrontAddressDto = z.object({
 });
 export type StorefrontAddressDto = z.infer<typeof StorefrontAddressDto>;
 
+/** The cart page asks for current prices (flash sales start and end while a cart sits in the browser). */
+export const CartPricesDto = z.object({
+  items: z.array(CartLineDto.passthrough()).min(1).max(100),
+});
+export type CartPricesDto = z.infer<typeof CartPricesDto>;
+
 export const ApplyCouponDto = z.object({
   code: z.string().trim().toUpperCase().min(3).max(40).regex(/^[A-Z0-9_-]+$/, "Invalid coupon code"),
   items: z.array(CartLineDto.extend({ price: z.coerce.number().optional() })).min(1).max(100),

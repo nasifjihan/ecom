@@ -2,7 +2,7 @@
  * PUBLIC STOREFRONT ROUTES (Batch #10).
  * Paths match what storefront-base's RTK slices call (baseUrl = /api):
  *   GET  /api/storefront/products, /products/:slug, /categories/tree, /brands
- *   POST /api/storefront/checkout, /checkout/coupons/apply
+ *   POST /api/storefront/checkout, /checkout/coupons/apply, /checkout/cart/prices
  *   GET  /api/storefront/checkout/payment-methods    (enabled gateways)
  *   GET  /api/storefront/checkout/orders/:orderKey   (thank-you page)
  *   GET  /api/storefront/checkout/orders/:orderKey/invoice, /account/orders/:orderRef/invoice   (PDF)
@@ -18,6 +18,7 @@ import {
   StorefrontSlugParamDto,
   StorefrontOrderKeyParamDto,
   ApplyCouponDto,
+  CartPricesDto,
   PlaceOrderDto,
   MyOrdersQueryDto,
   OrderRefParamDto,
@@ -48,6 +49,12 @@ storefrontCheckoutRouter.post(
   authMiddleware("optional"),
   validate({ body: PlaceOrderDto }),
   storefrontController.placeOrder,
+);
+
+storefrontCheckoutRouter.post(
+  "/cart/prices",
+  validate({ body: CartPricesDto }),
+  storefrontController.cartPrices,
 );
 
 storefrontCheckoutRouter.post(

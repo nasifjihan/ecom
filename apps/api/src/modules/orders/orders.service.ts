@@ -21,6 +21,19 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   FAILED: ["PENDING"],
 };
 
+/** A cancelled order gives its flash-sale units back, so others can buy them at the sale price. */
+async function releaseFlashSaleUnits(t: Prisma.TransactionClient, items: { quantity: number; meta: Prisma.JsonValue }[]) {
+  for (const oi of items) {
+    const meta = oi.meta as { flashSale?: { itemId?: string | null } } | null;
+    const itemId = meta?.flashSale?.itemId;
+    if (!itemId) continue;
+    await t.flashSaleItem.updateMany({
+      where: { id: BigInt(itemId), soldCount: { gte: oi.quantity } },
+      data: { soldCount: { decrement: oi.quantity } },
+    });
+  }
+}
+
 export class OrdersService extends BaseService {
   private orders: OrderRepository;
   private carts: CartRepository;
@@ -383,6 +396,7 @@ export class OrdersService extends BaseService {
             this.ctx,
           );
         }
+        if (newStatus === "CANCELLED") await releaseFlashSaleUnits(t, orderItems);
       }
 
       const updateData: Record<string, unknown> = { status: newStatus };

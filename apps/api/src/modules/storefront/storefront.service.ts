@@ -25,6 +25,7 @@ import type {
   StorefrontAddressDto,
 } from "./storefront.dto";
 import { emitOrderPlaced } from "../notifications";
+import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -51,6 +52,33 @@ function priceOf(row: {
     return { price: num(row.salePrice), compareAtPrice: regular };
   }
   return { price: regular, compareAtPrice: null };
+}
+
+type PriceRow = Parameters<typeof priceOf>[0];
+
+/** A variant's price row: its own prices, falling back to the product's. */
+function variantPriceRow(
+  p: PriceRow,
+  v: { regularPrice: Num; salePrice: Num; salePriceStartAt: Date | null; salePriceEndAt: Date | null },
+): PriceRow {
+  return {
+    regularPrice: v.regularPrice ?? p.regularPrice,
+    salePrice: v.salePrice ?? (v.regularPrice ? null : p.salePrice),
+    salePriceStartAt: v.salePriceStartAt,
+    salePriceEndAt: v.salePriceEndAt,
+  };
+}
+
+/** priceOf with running flash sales applied. */
+function pricedWith(
+  flash: FlashSales,
+  p: PricedProduct,
+  variantId: bigint | null,
+  row: PriceRow,
+): { price: number; compareAtPrice: number | null; flash: FlashDeal | null } {
+  const base = priceOf(row);
+  const deal = flash.best(p, variantId, num(row.regularPrice), base.price, base.compareAtPrice !== null);
+  return deal ? { price: deal.price, compareAtPrice: num(row.regularPrice), flash: deal } : { ...base, flash: null };
 }
 
 function available(row: { manageStock: boolean; stockQty: number | null; reservedStock: number; allowBackorder: boolean }): number {
@@ -92,8 +120,8 @@ export class StorefrontService {
 
   // ------------------------------------------------------------------ catalog
 
-  private toSummary(p: any) {
-    const { price, compareAtPrice } = priceOf(p);
+  private toSummary(p: any, flashSales: FlashSales) {
+    const { price, compareAtPrice, flash } = pricedWith(flashSales, p, null, p);
     const primary = p.categories?.find((c: any) => c.primary) ?? p.categories?.[0];
     const variants: any[] = p.variants ?? [];
     const qty = variants.length > 0
@@ -111,6 +139,7 @@ export class StorefrontService {
       compareAtPrice,
       isOnSale: compareAtPrice !== null,
       discountPercent: compareAtPrice ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : undefined,
+      flashSale: flashView(flash),
       rating: num(p.averageRating),
       reviewCount: p.reviewCount ?? 0,
       isNew: createdAt ? Date.now() - createdAt.getTime() < 30 * 86_400_000 : false,
@@ -190,17 +219,25 @@ export class StorefrontService {
       // orderBy cannot express, so rank the matching ids in memory and load one page.
       const candidates = await prisma.product.findMany({
         where,
-        select: { id: true, regularPrice: true, salePrice: true, salePriceStartAt: true, salePriceEndAt: true },
+        select: {
+          id: true,
+          regularPrice: true,
+          salePrice: true,
+          salePriceStartAt: true,
+          salePriceEndAt: true,
+          categories: { select: { categoryId: true } },
+        },
       });
+      const flash = await FlashSales.load(this.storeId, candidates.map((c) => c.id));
       const dir = q.sort === "price_asc" ? 1 : -1;
       const ranked = candidates
-        .map((c) => ({ id: c.id, price: priceOf(c).price }))
+        .map((c) => ({ id: c.id, price: pricedWith(flash, c, null, c).price }))
         .sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
       const pageIds = ranked.slice((q.page - 1) * q.perPage, q.page * q.perPage).map((r) => r.id);
       const rows = await prisma.product.findMany({ where: { id: { in: pageIds } }, include: LIST_INCLUDE });
       const byId = new Map(rows.map((r) => [r.id, r]));
       const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
-      return this.page(ordered.map((r) => this.toSummary(r)), ranked.length, q);
+      return this.page(ordered.map((r) => this.toSummary(r, flash)), ranked.length, q);
     }
 
     const orderBy: Prisma.ProductOrderByWithRelationInput[] =
@@ -219,7 +256,8 @@ export class StorefrontService {
         include: LIST_INCLUDE,
       }),
     ]);
-    return this.page(rows.map((r) => this.toSummary(r)), total, q);
+    const flash = await FlashSales.load(this.storeId, rows.map((r) => r.id));
+    return this.page(rows.map((r) => this.toSummary(r, flash)), total, q);
   }
 
   private page<T>(items: T[], total: number, q: { page: number; perPage: number }) {
@@ -245,7 +283,8 @@ export class StorefrontService {
     });
     if (!p) throw new NotFoundError("Product");
 
-    const summary = this.toSummary(p);
+    const flash = await FlashSales.load(this.storeId, [p.id]);
+    const summary = this.toSummary(p, flash);
     const primary = p.categories.find((c) => c.primary) ?? p.categories[0];
     const parent = primary?.category.parentId
       ? await prisma.category.findFirst({
@@ -284,12 +323,7 @@ export class StorefrontService {
       specifications,
       reviews,
       variants: p.variants.map((v) => {
-        const vp = priceOf({
-          regularPrice: v.regularPrice ?? p.regularPrice,
-          salePrice: v.salePrice ?? (v.regularPrice ? null : p.salePrice),
-          salePriceStartAt: v.salePriceStartAt,
-          salePriceEndAt: v.salePriceEndAt,
-        });
+        const vp = pricedWith(flash, p, v.id, variantPriceRow(p, v));
         const values = (v.attributeValues ?? {}) as Record<string, unknown>;
         const qty = available(v);
         return {
@@ -300,6 +334,7 @@ export class StorefrontService {
           label: variantLabel(values),
           price: vp.price,
           compareAtPrice: vp.compareAtPrice,
+          flashSale: flashView(vp.flash),
           image: v.imageUrl ?? undefined,
           sku: v.sku ?? undefined,
           inStock: qty > 0,
@@ -363,53 +398,93 @@ export class StorefrontService {
 
   // ------------------------------------------------------------------ pricing
 
-  /** Loads and re-prices cart lines from the DB. Throws on unknown / unavailable items. */
-  private async priceLines(lines: CartLineDto[]) {
+  /**
+   * Re-prices cart lines from the DB, flash sales included. Never throws for a bad line: each
+   * line carries its `problem` (gone, out of stock, too few left) for the cart page to show.
+   */
+  private async quoteLines(lines: CartLineDto[]) {
     const productIds = [...new Set(lines.map((l) => l.productId))];
-    const products = await prisma.product.findMany({
-      where: { storeId: this.storeId, id: { in: productIds }, status: "published" },
-      include: {
-        variants: { where: { status: "active" } },
-        images: { orderBy: { sortOrder: "asc" }, take: 1 },
-        categories: { select: { categoryId: true } },
-      },
-    });
+    const [products, flashSales] = await Promise.all([
+      prisma.product.findMany({
+        where: { storeId: this.storeId, id: { in: productIds }, status: "published" },
+        include: {
+          variants: { where: { status: "active" } },
+          images: { orderBy: { sortOrder: "asc" }, take: 1 },
+          categories: { select: { categoryId: true } },
+        },
+      }),
+      FlashSales.load(this.storeId, productIds),
+    ]);
     const byId = new Map(products.map((p) => [p.id, p]));
 
     return lines.map((line) => {
       const p = byId.get(line.productId);
-      if (!p) throw new BadRequestError(`A product in your cart is no longer available (id=${line.productId})`, "CART_INVALID");
+      if (!p) {
+        return { line, problem: { message: "This product is no longer available", code: "CART_INVALID" as const } };
+      }
       let variant: (typeof p.variants)[number] | null = null;
       if (line.variantId) {
         variant = p.variants.find((v) => v.id === line.variantId) ?? null;
-        if (!variant) throw new BadRequestError(`The selected option of "${p.name}" is no longer available`, "CART_INVALID");
+        if (!variant) {
+          return { line, problem: { message: `The selected option of "${p.name}" is no longer available`, code: "CART_INVALID" as const } };
+        }
       } else if (p.variants.length > 0) {
-        throw new BadRequestError(`Please choose an option for "${p.name}"`, "CART_INVALID");
+        return { line, problem: { message: `Please choose an option for "${p.name}"`, code: "CART_INVALID" as const } };
       }
-      const priced = variant
-        ? priceOf({
-            regularPrice: variant.regularPrice ?? p.regularPrice,
-            salePrice: variant.salePrice ?? (variant.regularPrice ? null : p.salePrice),
-            salePriceStartAt: variant.salePriceStartAt,
-            salePriceEndAt: variant.salePriceEndAt,
-          })
-        : priceOf(p);
+      const priced = pricedWith(flashSales, p, variant?.id ?? null, variant ? variantPriceRow(p, variant) : p);
       const stockRow = variant ?? p;
-      if (available(stockRow) < line.qty) {
-        const left = Math.max(0, available(stockRow));
-        const what = `"${p.name}"${variant ? ` (${variantLabel(variant.attributeValues)})` : ""}`;
-        throw new BadRequestError(left === 0 ? `${what} is out of stock` : `Only ${left} left of ${what}`, "INSUFFICIENT_STOCK");
-      }
+      const what = `"${p.name}"${variant ? ` (${variantLabel(variant.attributeValues)})` : ""}`;
+      const left = available(stockRow);
+      const flashLeft = priced.flash?.remaining ?? null;
+      const problem =
+        left < line.qty
+          ? { message: left <= 0 ? `${what} is out of stock` : `Only ${left} left of ${what}`, code: "INSUFFICIENT_STOCK" as const }
+          : flashLeft !== null && flashLeft < line.qty
+            ? { message: `Only ${flashLeft} of ${what} left at the flash-sale price`, code: "INSUFFICIENT_STOCK" as const }
+            : null;
       return {
-        product: p,
-        variant,
-        qty: line.qty,
-        unitPrice: priced.price,
-        onSale: priced.compareAtPrice !== null,
-        lineSubtotal: round2(priced.price * line.qty),
-        weightKG: num(variant?.weight ?? p.weight) * line.qty,
+        line,
+        problem,
+        priced: {
+          product: p,
+          variant,
+          qty: line.qty,
+          unitPrice: priced.price,
+          compareAtPrice: priced.compareAtPrice,
+          flash: priced.flash,
+          onSale: priced.compareAtPrice !== null,
+          lineSubtotal: round2(priced.price * line.qty),
+          weightKG: num(variant?.weight ?? p.weight) * line.qty,
+        },
       };
     });
+  }
+
+  /** Re-prices cart lines from the DB. Throws on the first unknown / unavailable item. */
+  private async priceLines(lines: CartLineDto[]) {
+    const quoted = await this.quoteLines(lines);
+    return quoted.map((q) => {
+      if (q.problem || !q.priced) {
+        throw new BadRequestError(q.problem?.message ?? "A product in your cart is no longer available", q.problem?.code ?? "CART_INVALID");
+      }
+      return q.priced;
+    });
+  }
+
+  /** Current prices for the cart page, so a cart saved earlier shows what checkout will charge. */
+  async cartPrices(lines: CartLineDto[]) {
+    const quoted = await this.quoteLines(lines);
+    return {
+      items: quoted.map((q) => ({
+        productId: String(q.line.productId),
+        variantId: q.line.variantId ? String(q.line.variantId) : null,
+        qty: q.line.qty,
+        price: q.priced ? q.priced.unitPrice : null,
+        compareAtPrice: q.priced?.compareAtPrice ?? null,
+        flashSale: flashView(q.priced?.flash ?? null),
+        problem: q.problem?.message ?? null,
+      })),
+    };
   }
 
   /**
@@ -610,6 +685,17 @@ export class StorefrontService {
       }
       await t.product.updateMany({ where: { id: { in: lines.map((l) => l.product.id) } }, data: { saleCount: { increment: 1 } } });
 
+      // Units bought at a flash-sale price count against that item's stock limit.
+      for (const l of lines) {
+        if (!l.flash?.itemId) continue;
+        const bumped = await t.$executeRaw`
+          UPDATE "FlashSaleItem" SET "soldCount" = "soldCount" + ${l.qty}
+          WHERE id = ${l.flash.itemId} AND ("stockLimit" IS NULL OR "soldCount" + ${l.qty} <= "stockLimit")`;
+        if (bumped === 0) {
+          throw new BadRequestError(`The flash-sale price for "${l.product.name}" just sold out — please review your cart`, "INSUFFICIENT_STOCK");
+        }
+      }
+
       if (coupon) {
         const bumped = await t.coupon.updateMany({
           where: {
@@ -689,6 +775,9 @@ export class StorefrontService {
                 lineDiscount,
                 lineTax,
                 lineTotal: round2(l.lineSubtotal - lineDiscount + lineTax),
+                meta: l.flash
+                  ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } }
+                  : undefined,
               };
             }),
           },
