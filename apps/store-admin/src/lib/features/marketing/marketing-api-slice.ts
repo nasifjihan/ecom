@@ -72,6 +72,20 @@ export interface ExportCouponsDto extends CouponListFilters {
   format: ExportFormat;
 }
 
+/** A product in a product-list flash sale, with its optional own price and stock limit. */
+export interface FlashSaleProduct {
+  productId: string;
+  name?: string;
+  sku?: string | null;
+  image?: string | null;
+  regularPrice?: number | null;
+  /** Fixed sale price for this product; empty uses the sale's discount. */
+  salePrice?: number | null;
+  /** Units that can be sold at the sale price; empty means no limit. */
+  stockLimit?: number | null;
+  soldCount?: number;
+}
+
 export interface FlashSale {
   id: string | number;
   title: string;
@@ -81,17 +95,15 @@ export interface FlashSale {
   discountType: "percentage" | "fixed";
   discountValue: number;
   applyTo: "all" | "products" | "categories";
-  productIds?: (string | number)[];
-  categoryIds?: (string | number)[];
-  excludeOnSale?: boolean;
-  minQtyPerOrder?: number;
-  maxQtyPerOrder?: number;
-  perUserLimit?: number;
-  visibility?: boolean;
-  priority?: number;
-  currentSalesCount?: number;
-  revenueGenerated?: number;
+  products: FlashSaleProduct[];
+  categoryIds: string[];
+  excludeOnSale: boolean;
+  visibility: boolean;
+  priority: number;
   productsIncludedCount?: number;
+  /** Units sold at the sale price and their value, from orders that weren't cancelled. */
+  unitsSold: number;
+  revenue: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -107,7 +119,8 @@ export interface FlashSaleListResponse {
   perPage: number;
 }
 
-export interface CreateFlashSaleDto extends Omit<FlashSale, "id" | "currentSalesCount" | "revenueGenerated" | "productsIncludedCount" | "createdAt" | "updatedAt"> {}
+export interface CreateFlashSaleDto
+  extends Omit<FlashSale, "id" | "unitsSold" | "revenue" | "productsIncludedCount" | "createdAt" | "updatedAt"> {}
 
 export interface UpdateFlashSaleDto extends Partial<CreateFlashSaleDto> {}
 
@@ -243,7 +256,9 @@ function toApiCoupon(c: Partial<Coupon>): ApiRow {
 
 export function fromApiFlashSale(f: ApiRow): FlashSale {
   const items: ApiRow[] = f.items ?? [];
+  const rules: ApiRow = f.rules && typeof f.rules === "object" ? f.rules : {};
   const isPercent = f.discountPercent !== null && f.discountPercent !== undefined;
+  const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return {
     id: f.id,
     title: f.name,
@@ -252,11 +267,24 @@ export function fromApiFlashSale(f: ApiRow): FlashSale {
     endDate: f.endsAt,
     discountType: isPercent ? "percentage" : "fixed",
     discountValue: Number(isPercent ? f.discountPercent : f.discountFixed ?? 0),
-    applyTo: "products",
-    productIds: items.map((i) => i.productId),
+    applyTo: rules.appliesTo === "all" || rules.appliesTo === "categories" ? rules.appliesTo : "products",
+    products: items.map((i) => ({
+      productId: String(i.productId),
+      name: i.product?.name,
+      sku: i.product?.sku ?? null,
+      image: i.product?.images?.[0]?.imageUrl ?? null,
+      regularPrice: numOrNull(i.product?.regularPrice),
+      salePrice: numOrNull(i.salePrice),
+      stockLimit: numOrNull(i.stockLimit),
+      soldCount: i.soldCount ?? 0,
+    })),
+    categoryIds: Array.isArray(rules.categoryIds) ? rules.categoryIds.map(String) : [],
+    excludeOnSale: rules.excludeOnSale === true,
     visibility: f.isActive,
-    priority: f.position,
+    priority: f.position ?? 0,
     productsIncludedCount: f._count?.items ?? items.length,
+    unitsSold: Number(f.stats?.unitsSold ?? 0),
+    revenue: Number(f.stats?.revenue ?? 0),
     createdAt: f.createdAt,
     updatedAt: f.updatedAt,
   };
@@ -265,19 +293,30 @@ export function fromApiFlashSale(f: ApiRow): FlashSale {
 const slugify = (s: string) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 200);
 
-/** Admin flash-sale form → API body. The API prices sales per product, so "all" / "categories" can't be sent. */
+/** Admin flash-sale form → API body. Only the fields present are sent, so a partial update stays partial. */
 function toApiFlashSale(f: Partial<FlashSale>): ApiRow {
+  const hasDiscount = f.discountType !== undefined && f.discountValue !== undefined;
   const body: ApiRow = {
     name: f.title,
     slug: f.title ? slugify(f.title) : undefined,
     startsAt: f.startDate,
     endsAt: f.endDate,
-    discountPercent: f.discountType === "percentage" ? f.discountValue : undefined,
-    discountFixed: f.discountType === "fixed" ? f.discountValue : undefined,
-    bannerImageUrl: f.bannerImage || undefined,
+    // Send both so switching between % and a fixed amount clears the other one.
+    discountPercent: hasDiscount ? (f.discountType === "percentage" ? f.discountValue : null) : undefined,
+    discountFixed: hasDiscount ? (f.discountType === "fixed" ? f.discountValue : null) : undefined,
+    bannerImageUrl: f.bannerImage !== undefined ? f.bannerImage || null : undefined,
     isActive: f.visibility,
     position: f.priority,
-    items: f.productIds?.map((productId) => ({ productId: String(productId) })),
+    rules:
+      f.applyTo !== undefined
+        ? { appliesTo: f.applyTo, categoryIds: f.applyTo === "categories" ? f.categoryIds ?? [] : [], excludeOnSale: !!f.excludeOnSale }
+        : undefined,
+    items:
+      f.applyTo === undefined
+        ? undefined
+        : f.applyTo === "products"
+          ? (f.products ?? []).map((p) => ({ productId: p.productId, salePrice: p.salePrice ?? null, stockLimit: p.stockLimit ?? null }))
+          : [],
   };
   return Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
 }

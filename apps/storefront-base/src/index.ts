@@ -31,6 +31,8 @@ export type {
   CartProviderProps,
   CartState,
   CartItem,
+  CartPriceQuote,
+  CartPriceChange,
 } from "./components/cart/CartProvider";
 
 export {

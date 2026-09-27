@@ -1148,6 +1148,140 @@ async function seedStoreOwner(storeId: bigint, ownerRoleId: bigint) {
   console.log("  ✅ Store Owner created:", email, "(pass: Owner@123!)");
 }
 
+/**
+ * 5. Starter content for Fashion BD: policy pages, FAQs, a blog post or two and the
+ * header/footer menus. Each piece is only created when missing, so re-running is safe
+ * and never overwrites what the owner has edited.
+ */
+async function seedContent(storeId: bigint) {
+  console.log("📝 Seeding CMS content...");
+  const pages = [
+    {
+      slug: "shipping-policy",
+      title: "Shipping Policy",
+      content:
+        "## Delivery areas\nWe deliver to all 64 districts of Bangladesh.\n\n## Delivery time\n- Inside Dhaka: 1 to 2 working days\n- Outside Dhaka: 2 to 5 working days\n\n## Charges\nDelivery is **free on orders above ৳1000**. Otherwise the charge is shown at checkout before you place the order.",
+    },
+    {
+      slug: "return-policy",
+      title: "Return & Refund Policy",
+      content:
+        "## 7-day returns\nIf something is not right, you can return it within **7 days** of delivery.\n\n## Conditions\n- Items must be unused, with tags attached\n- Sale items can be exchanged but not refunded\n\n## Refunds\nRefunds go back to your original payment method, or by bKash for cash on delivery orders, within 5 working days of us receiving the item.",
+    },
+    {
+      slug: "privacy-policy",
+      title: "Privacy Policy",
+      content:
+        "We collect only what we need to deliver your order: your name, phone number, email and address.\n\n## How we use it\n- To process and deliver your orders\n- To send order updates\n- To send offers, only if you opt in\n\nWe never sell your personal information.",
+    },
+    {
+      slug: "terms-of-service",
+      title: "Terms of Service",
+      content:
+        "By using this website you agree to these terms.\n\n## Orders\nAn order is confirmed once we call or message you to verify it. Prices are in Bangladeshi Taka (৳) and include VAT where applicable.\n\n## Cancellations\nYou can cancel an order from **My Account** until it is shipped.",
+    },
+    {
+      slug: "contact",
+      title: "Contact Us",
+      content:
+        "We are happy to help, Saturday to Thursday, 10am to 8pm.\n\n- **Phone:** +880 1700-000000\n- **Email:** support@fashionbd.local\n- **Address:** House 12, Road 5, Dhanmondi, Dhaka 1205",
+    },
+  ];
+  for (const [i, p] of pages.entries()) {
+    const ex = await prisma.cmsPage.findUnique({ where: { storeId_slug: { storeId, slug: p.slug } } });
+    if (!ex) await prisma.cmsPage.create({ data: { storeId, ...p, sortOrder: i, isPublished: true, showInFooterMenu: false } });
+  }
+
+  if ((await prisma.faq.count({ where: { storeId } })) === 0) {
+    const faqs = [
+      ["Orders", "How do I place an order?", "Add items to your cart, go to checkout, enter your address and choose a payment method. You will get an order number straight away."],
+      ["Orders", "Can I cancel my order?", "Yes. Open **My Account > Orders** and cancel it any time before it is shipped."],
+      ["Delivery", "How long does delivery take?", "1 to 2 working days inside Dhaka and 2 to 5 working days elsewhere in Bangladesh."],
+      ["Delivery", "How much is delivery?", "Delivery is free on orders above ৳1000. Otherwise the charge is shown at checkout."],
+      ["Payment", "Which payment methods do you accept?", "Cash on delivery everywhere, plus bKash, Nagad and cards where enabled."],
+      ["Returns", "What is your return policy?", "You can return unused items with tags within 7 days of delivery. See our [return policy](/return-policy)."],
+    ];
+    await prisma.faq.createMany({
+      data: faqs.map(([category, question, answer], i) => ({ storeId, category: category!, question: question!, answer: answer!, sortOrder: i })),
+    });
+  }
+
+  let cat = await prisma.blogCategory.findUnique({ where: { storeId_slug: { storeId, slug: "style-guide" } } });
+  if (!cat) cat = await prisma.blogCategory.create({ data: { storeId, name: "Style Guide", slug: "style-guide" } });
+  const posts = [
+    {
+      slug: "eid-outfit-ideas",
+      title: "5 Eid outfit ideas for the whole family",
+      excerpt: "Coordinated looks for Eid, from classic panjabis to festive kurtis.",
+      content:
+        "Eid is the perfect time to dress up together. Here are five easy ideas.\n\n## 1. Matching colours\nPick one colour family, like cream and gold, and let everyone wear their own style in it.\n\n## 2. Classic panjabi\nA well-cut cotton panjabi never goes out of style.\n\n## 3. Festive kurtis\nEmbroidered kurtis with palazzo pants are comfortable for a long day of visiting.\n\n## 4. Kids in comfort\nChoose soft fabrics so the little ones can play.\n\n## 5. Finish with accessories\nA watch, a clutch or a pair of juttis completes the look.\n\n[Shop the collection](/products)",
+      tags: ["eid", "family"],
+    },
+    {
+      slug: "care-guide-cotton",
+      title: "How to keep your cotton clothes looking new",
+      excerpt: "Simple washing and drying habits that make cotton last longer in our climate.",
+      content:
+        "Cotton is perfect for Bangladesh weather, and a little care keeps it fresh.\n\n- Wash in cold water, inside out\n- Dry in the shade to stop colours fading\n- Iron while slightly damp\n- Store folded, not on thin hangers\n\nFollow these and your favourite shirts will last many seasons.",
+      tags: ["care"],
+    },
+  ];
+  for (const p of posts) {
+    const ex = await prisma.blogPost.findUnique({ where: { storeId_slug: { storeId, slug: p.slug } } });
+    if (!ex) {
+      await prisma.blogPost.create({ data: { storeId, categoryId: cat.id, ...p, status: "published", publishedAt: new Date() } });
+    }
+  }
+
+  const menus: { name: string; location: string; items: { title: string; url: string }[] }[] = [
+    {
+      name: "Main menu",
+      location: "header",
+      items: [
+        { title: "Home", url: "/" },
+        { title: "Shop", url: "/products" },
+        { title: "Categories", url: "/categories" },
+        { title: "New In", url: "/products?sort=newest" },
+        { title: "Blog", url: "/blog" },
+        { title: "FAQ", url: "/faq" },
+      ],
+    },
+    {
+      name: "Company",
+      location: "footer",
+      items: [
+        { title: "About Us", url: "/about" },
+        { title: "Blog", url: "/blog" },
+        { title: "Contact Us", url: "/contact" },
+      ],
+    },
+    {
+      name: "Help",
+      location: "footer",
+      items: [
+        { title: "Shipping Info", url: "/shipping-policy" },
+        { title: "Returns & Refunds", url: "/return-policy" },
+        { title: "FAQs", url: "/faq" },
+        { title: "Terms of Service", url: "/terms-of-service" },
+        { title: "Privacy Policy", url: "/privacy-policy" },
+      ],
+    },
+  ];
+  for (const m of menus) {
+    const ex = await prisma.menu.findFirst({ where: { storeId, location: m.location, ...(m.location === "footer" ? { name: m.name } : {}) } });
+    if (ex) continue;
+    await prisma.menu.create({
+      data: {
+        storeId,
+        name: m.name,
+        location: m.location,
+        items: { create: m.items.map((it, i) => ({ type: "link", title: it.title, url: it.url, sortOrder: i })) },
+      },
+    });
+  }
+  console.log("  ✅ Pages, FAQs, blog posts and menus ready");
+}
+
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
   console.log("║      E-Commerce Platform — Database Seed     ║");
@@ -1158,6 +1292,7 @@ async function main() {
     const store = await seedFashionBDStore();
     const ownerRole = await seedDefaultRolesAndPerms(store.id);
     await seedStoreOwner(store.id, ownerRole.id);
+    await seedContent(store.id);
 
     console.log("\n✅ All seed operations completed successfully!");
     console.log("");

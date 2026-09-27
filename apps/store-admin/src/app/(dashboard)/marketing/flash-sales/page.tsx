@@ -9,8 +9,6 @@ import {
   Plus,
   MoreHorizontal,
   Pencil,
-  Layers,
-  BarChart3,
   StopCircle,
   Loader2,
   ShoppingBag,
@@ -51,13 +49,24 @@ import {
 
 type FlashStatus = "active" | "scheduled" | "expired";
 
+/** Stopped sales count as ended: they no longer change prices. */
 function computeFlashStatus(fs: FlashSale): FlashStatus {
   const now = new Date();
   const start = new Date(fs.startDate);
   const end = new Date(fs.endDate);
+  if (now > end || !fs.visibility) return "expired";
   if (now < start) return "scheduled";
-  if (now > end) return "expired";
   return "active";
+}
+
+function appliesText(s: FlashSale): string {
+  if (s.applyTo === "all") return "All products";
+  if (s.applyTo === "categories") {
+    const n = s.categoryIds.length;
+    return `${n} ${n === 1 ? "category" : "categories"}`;
+  }
+  const n = s.productsIncludedCount ?? s.products.length;
+  return `${n} ${n === 1 ? "product" : "products"}`;
 }
 
 function useCountdown(target: string | Date) {
@@ -121,15 +130,13 @@ export default function FlashSalesPage() {
   );
 
   const stats = useMemo(() => {
-    const all = (listData?.items ?? sales).length > 0 ? listData?.items ?? sales : undefined;
-    // Fall back to counting current page results
     const allSales = listData?.items ?? [];
     return {
       active: allSales.filter((s) => computeFlashStatus(s) === "active").length,
       scheduled: allSales.filter((s) => computeFlashStatus(s) === "scheduled").length,
       expired: allSales.filter((s) => computeFlashStatus(s) === "expired").length,
     };
-  }, [listData, sales]);
+  }, [listData]);
 
   const handleStop = async (s: FlashSale) => {
     try {
@@ -186,7 +193,7 @@ export default function FlashSalesPage() {
                 </Badge>
                 <span className="text-sm">
                   <ShoppingBag className="h-3.5 w-3.5 inline mr-1" />
-                  {activeSale.productsIncludedCount ?? 0} products
+                  {appliesText(activeSale)}
                 </span>
                 <span className="text-sm">
                   <Clock3 className="h-3.5 w-3.5 inline mr-1" />
@@ -196,31 +203,15 @@ export default function FlashSalesPage() {
             </div>
             <div className="flex flex-col items-end gap-3">
               <CountdownTimer target={activeSale.endDate} />
-              <a href="#" onClick={(e) => e.preventDefault()}>
-                <Button className="bg-white text-rose-600 hover:bg-white/90 shadow-lg">
-                  Shop Now
-                </Button>
-              </a>
             </div>
           </div>
           <div className="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MiniStat label="Items Sold" value={activeSale.unitsSold.toLocaleString()} />
+            <MiniStat label="Revenue" value={formatMoney(activeSale.revenue)} />
+            <MiniStat label="Applies To" value={appliesText(activeSale)} />
             <MiniStat
-              label="Items Sold"
-              value={(activeSale.currentSalesCount ?? 0).toLocaleString()}
-            />
-            <MiniStat
-              label="Revenue"
-              value={formatMoney(activeSale.revenueGenerated ?? 0)}
-            />
-            <MiniStat
-              label="Per User Limit"
-              value={
-                activeSale.perUserLimit ? `${activeSale.perUserLimit}x` : "Unlimited"
-              }
-            />
-            <MiniStat
-              label="Max/Order"
-              value={activeSale.maxQtyPerOrder ? `${activeSale.maxQtyPerOrder} units` : "—"}
+              label="Started"
+              value={new Date(activeSale.startDate).toLocaleDateString()}
             />
           </div>
         </motion.div>
@@ -253,7 +244,7 @@ export default function FlashSalesPage() {
                 onClick={() => setTab("expired")}
                 className="data-[active=true]:!bg-background data-[active=true]:!text-foreground"
               >
-                Expired
+                Ended
                 <Badge variant="secondary" className="ml-2 !h-5 !px-1.5 text-[10px]">
                   {stats.expired}
                 </Badge>
@@ -269,10 +260,8 @@ export default function FlashSalesPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Campaign Period</TableHead>
                 <TableHead>Discount</TableHead>
-                <TableHead>Products</TableHead>
-                <TableHead>Qty Limits</TableHead>
-                <TableHead>Per User</TableHead>
-                <TableHead>Sales</TableHead>
+                <TableHead>Applies To</TableHead>
+                <TableHead>Sold</TableHead>
                 <TableHead>Revenue</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -281,7 +270,7 @@ export default function FlashSalesPage() {
               {isLoading &&
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 10 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -291,11 +280,11 @@ export default function FlashSalesPage() {
               {!isLoading && sales.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={10}
+                    colSpan={8}
                     className="text-center py-12 text-slate-500"
                   >
                     <Zap className="h-10 w-10 mx-auto opacity-40 mb-2" />
-                    No {tab} flash sales. Create one to drive traffic!
+                    No {tab === "expired" ? "ended" : tab} flash sales.
                   </TableCell>
                 </TableRow>
               )}
@@ -317,8 +306,10 @@ export default function FlashSalesPage() {
                           <Badge variant="success">Active</Badge>
                         ) : st === "scheduled" ? (
                           <Badge variant="secondary">Scheduled</Badge>
+                        ) : !s.visibility && new Date(s.endDate) > new Date() ? (
+                          <Badge variant="outline">Stopped</Badge>
                         ) : (
-                          <Badge variant="destructive">Expired</Badge>
+                          <Badge variant="destructive">Ended</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 whitespace-nowrap">
@@ -332,26 +323,19 @@ export default function FlashSalesPage() {
                             ? `${s.discountValue}%`
                             : formatMoney(s.discountValue)}
                         </span>
-                        <span className="text-xs text-slate-500 ml-1">
-                          {s.discountType === "percentage" ? "OFF" : "OFF"}
-                        </span>
+                        <span className="text-xs text-slate-500 ml-1">OFF</span>
                       </TableCell>
-                      <TableCell>{s.productsIncludedCount ?? 0}</TableCell>
-                      <TableCell className="text-xs">
-                        {s.minQtyPerOrder ? `Min ${s.minQtyPerOrder}` : "—"} /{" "}
-                        {s.maxQtyPerOrder ? `Max ${s.maxQtyPerOrder}` : "∞"}
-                      </TableCell>
-                      <TableCell>{s.perUserLimit ?? "∞"}</TableCell>
+                      <TableCell className="whitespace-nowrap">{appliesText(s)}</TableCell>
                       <TableCell>
                         <span className="flex items-center gap-1">
                           <ShoppingBag className="h-3.5 w-3.5 text-slate-400" />
-                          {s.currentSalesCount ?? 0}
+                          {s.unitsSold}
                         </span>
                       </TableCell>
                       <TableCell>
                         <span className="flex items-center gap-1">
                           <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                          {formatMoney(s.revenueGenerated ?? 0)}
+                          {formatMoney(s.revenue)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -371,12 +355,6 @@ export default function FlashSalesPage() {
                                 <Pencil className="h-4 w-4 mr-2" /> Edit
                               </DropdownMenuItem>
                             </Link>
-                            <DropdownMenuItem>
-                              <Layers className="h-4 w-4 mr-2" /> Duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <BarChart3 className="h-4 w-4 mr-2" /> View Stats
-                            </DropdownMenuItem>
                             {st === "active" && (
                               <>
                                 <DropdownMenuSeparator />

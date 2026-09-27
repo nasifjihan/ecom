@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
+import { openFile } from "@ecom/api-client";
 import {
   ColumnDef,
   flexRender,
@@ -79,7 +80,8 @@ import {
 import {
   useGetOrderListQuery,
   useBulkUpdateOrderStatusMutation,
-  useLazyGenerateOrderInvoicePdfQuery,
+  useOrderInvoiceMutation,
+  useOrderInvoicesMutation,
   VALID_STATUS_TRANSITIONS,
   type Order,
   type OrderStatus,
@@ -186,7 +188,6 @@ export default function OrdersPage() {
   const [cancelDialogOrder, setCancelDialogOrder] = useState<Order | null>(null);
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | null>(null);
   const [showBulkStatus, setShowBulkStatus] = useState(false);
-  const printRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data, isLoading } = useGetOrderListQuery({
     status: activeTab === "ALL" ? undefined : activeTab,
@@ -196,7 +197,8 @@ export default function OrdersPage() {
   });
 
   const [bulkUpdateStatus] = useBulkUpdateOrderStatusMutation();
-  const [triggerInvoicePdf] = useLazyGenerateOrderInvoicePdfQuery();
+  const [loadInvoice] = useOrderInvoiceMutation();
+  const [loadInvoices] = useOrderInvoicesMutation();
 
   const orders = data?.items ?? [];
   const statusCounts: Record<string, number> = data?.statusCounts ?? {};
@@ -381,15 +383,6 @@ export default function OrdersPage() {
               >
                 <XCircle className="h-4 w-4" />
               </Button>
-              <div
-                ref={(el) => {
-                  printRefs.current[String(o.id)] = el;
-                }}
-                className="hidden"
-                aria-hidden="true"
-              >
-                <InvoicePrintTemplate order={o} />
-              </div>
             </div>
           );
         },
@@ -406,45 +399,13 @@ export default function OrdersPage() {
     state: { rowSelection },
   });
 
-  function handlePrint(order: Order) {
-    const el = printRefs.current[String(order.id)];
-    if (!el) return;
-    const printWindow = window.open("", "_blank", "width=900,height=700");
-    if (!printWindow) {
-      toast.error("Pop-up blocked. Please allow pop-ups.");
-      return;
+  /** Opens the order's invoice PDF in a new tab, where it can be printed. */
+  async function handlePrint(order: Order) {
+    try {
+      await openFile(() => loadInvoice(order.id).unwrap(), { filename: `invoice-INV-${order.orderNumber}.pdf`, mode: "open" });
+    } catch {
+      toast.error("Couldn't load the invoice. Please try again.");
     }
-    printWindow.document.write(`
-      <!DOCTYPE html><html><head><title>Invoice ${order.orderNumber}</title>
-      <style>
-        * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; margin: 0; padding: 40px; color: #0f172a; }
-        .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 32px; }
-        .company h1 { margin: 0; font-size: 24px; color: #4f46e5; }
-        .company p { margin: 4px 0; color: #64748b; font-size: 13px; }
-        .invoice-meta { text-align: right; }
-        .invoice-meta h2 { margin: 0 0 8px 0; font-size: 20px; }
-        .invoice-meta p { margin: 2px 0; font-size: 13px; color: #64748b; }
-        .section-title { font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; }
-        .addr-block { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; }
-        .addr p { margin: 2px 0; font-size: 13px; color: #475569; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        th { background: #f1f5f9; text-align: left; padding: 12px; font-size: 13px; color: #334155; border-bottom: 1px solid #cbd5e1; }
-        td { padding: 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
-        .totals { margin-left: auto; width: 320px; border-top: 2px solid #e2e8f0; padding-top: 16px; }
-        .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #475569; }
-        .totals-row.grand { font-size: 18px; font-weight: bold; color: #0f172a; padding-top: 12px; border-top: 1px solid #e2e8f0; margin-top: 8px; }
-        .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 80px; padding-top: 40px; }
-        .sig-line { border-top: 1px solid #94a3b8; padding-top: 8px; text-align: center; font-size: 13px; color: #64748b; }
-        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8; }
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #dcfce7; color: #15803d; }
-        @media print { body { padding: 20px; } }
-      </style></head><body>${el.innerHTML}</body></html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 300);
   }
 
   async function handleBulkStatusChange(status: OrderStatus) {
@@ -465,9 +426,16 @@ export default function OrdersPage() {
     toast.info(`Exporting ${selectedCount || "all"} orders as ${format}...`);
   }
 
-  function handleBulkInvoice() {
-    toast.info(`Generating ${selectedCount || "all"} invoice(s)...`);
+  /** One PDF with the invoices of every selected order, one after another. */
+  async function handleBulkInvoice() {
+    if (selectedIds.length === 0) return;
+    try {
+      await openFile(() => loadInvoices(selectedIds).unwrap(), { filename: "invoices.pdf", mode: "open" });
+    } catch {
+      toast.error("Couldn't load the invoices. Please try again.");
+    }
   }
+
 
   function handleBulkEmail() {
     toast.info("Order emails are not available yet (no email queue on the API).");
@@ -741,7 +709,7 @@ export default function OrdersPage() {
                 disabled={selectedCount === 0}
               >
                 <FileText className="h-4 w-4" />
-                Generate Invoice
+                Print Invoices
               </Button>
 
               <DropdownMenu>
@@ -924,117 +892,6 @@ export default function OrdersPage() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
-  );
-}
-
-function InvoicePrintTemplate({ order }: { order: Order }) {
-  const subtotal = order.subtotal ?? Math.round(order.grandTotal * 0.85);
-  const shipping = order.shippingCost ?? 60;
-  const vat = order.vatAmount ?? Math.round(order.grandTotal * 0.15);
-  const discount = order.discountAmount ?? 0;
-  const lineItems = order.lines.length > 0 ? order.lines : [
-    {
-      id: 1,
-      productVariantId: 1,
-      productName: "Sample Product",
-      sku: "SKU-001",
-      quantity: 1,
-      unitPrice: subtotal,
-      lineTotal: subtotal,
-    },
-  ];
-  return (
-    <div className="invoice-print-root">
-      <div className="invoice-header">
-        <div className="company">
-          <h1>ShopName BD</h1>
-          <p>House 42, Road 11, Banani, Dhaka 1213</p>
-          <p>Phone: +880 2-555-1234 | Email: billing@shopname.bd</p>
-          <p>Trade License: 2024-12345 | VAT Reg: 1234567890</p>
-        </div>
-        <div className="invoice-meta">
-          <h2>INVOICE</h2>
-          <p><strong>{order.orderNumber}</strong></p>
-          <p>Date: {new Date(order.createdAt).toLocaleDateString()}</p>
-          <p>Due: On Receipt</p>
-          <span className="status-badge">{order.status.replace(/_/g, " ")}</span>
-        </div>
-      </div>
-
-      <div className="addr-block">
-        <div>
-          <div className="section-title">Bill To</div>
-          <p><strong>{order.customerName}</strong></p>
-          {order.billingAddress?.address1 && <p>{order.billingAddress.address1}</p>}
-          {order.billingAddress && (
-            <p>{[order.billingAddress.district, order.billingAddress.division, order.billingAddress.postcode].filter(Boolean).join(", ")}</p>
-          )}
-          {order.customerPhone && <p>Phone: {order.customerPhone}</p>}
-          {order.customerEmail && <p>Email: {order.customerEmail}</p>}
-        </div>
-        <div>
-          <div className="section-title">Ship To</div>
-          <p><strong>{order.customerName}</strong></p>
-          {order.shippingAddress?.address1 && <p>{order.shippingAddress.address1}</p>}
-          {order.shippingAddress && (
-            <p>{[order.shippingAddress.district, order.shippingAddress.division, order.shippingAddress.postcode].filter(Boolean).join(", ")}</p>
-          )}
-          {order.shippingMethod && <p>Method: {order.shippingMethod}</p>}
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: "60px" }}>#</th>
-            <th>Item</th>
-            <th>SKU</th>
-            <th style={{ width: "80px", textAlign: "right" }}>Qty</th>
-            <th style={{ width: "120px", textAlign: "right" }}>Unit Price</th>
-            <th style={{ width: "120px", textAlign: "right" }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lineItems.map((li, i) => (
-            <tr key={li.id}>
-              <td>{i + 1}</td>
-              <td>{li.productName}</td>
-              <td>{li.sku}</td>
-              <td style={{ textAlign: "right" }}>{li.quantity}</td>
-              <td style={{ textAlign: "right" }}>৳ {li.unitPrice.toLocaleString()}</td>
-              <td style={{ textAlign: "right" }}>৳ {li.lineTotal.toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="totals">
-        <div className="totals-row"><span>Subtotal</span><span>৳ {subtotal.toLocaleString()}</span></div>
-        <div className="totals-row"><span>Shipping</span><span>৳ {shipping.toLocaleString()}</span></div>
-        <div className="totals-row"><span>VAT (15%)</span><span>৳ {vat.toLocaleString()}</span></div>
-        {discount > 0 && (
-          <div className="totals-row">
-            <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}</span>
-            <span>-৳ {discount.toLocaleString()}</span>
-          </div>
-        )}
-        <div className="totals-row grand"><span>Grand Total</span><span>৳ {order.grandTotal.toLocaleString()}</span></div>
-      </div>
-
-      <div className="signatures">
-        <div>
-          <div className="sig-line">Customer Signature / Stamp</div>
-        </div>
-        <div>
-          <div className="sig-line">Authorized Signature — ShopName BD</div>
-        </div>
-      </div>
-
-      <div className="footer">
-        <p>Thank you for your business! For inquiries, contact support@shopname.bd</p>
-        <p>This is a computer-generated invoice. No signature required.</p>
-      </div>
     </div>
   );
 }

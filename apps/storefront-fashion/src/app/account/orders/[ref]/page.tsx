@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
+import { openFile } from "@ecom/api-client";
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, Skeleton, apiErrorMessage, toast } from "@ecom/storefront-base";
-import { useCancelMyOrderMutation, useGetMyOrderQuery } from "@/lib/account";
+import { useCancelMyOrderMutation, useGetMyOrderQuery, useMyOrderInvoiceMutation } from "@/lib/account";
 import { AccountShell, OrderStatusBadge, formatBDT, formatDate } from "../../_components";
 
 export default function OrderDetailPage() {
@@ -20,6 +21,7 @@ export default function OrderDetailPage() {
 function OrderDetail({ orderRef }: { orderRef: string }) {
   const { data: o, isLoading, isError } = useGetMyOrderQuery(orderRef);
   const [cancel, { isLoading: cancelling }] = useCancelMyOrderMutation();
+  const [loadInvoice, { isLoading: loadingInvoice }] = useMyOrderInvoiceMutation();
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (isError || !o) {
@@ -43,6 +45,14 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
     }
   };
 
+  const onInvoice = async () => {
+    try {
+      await openFile(() => loadInvoice(o.orderRef).unwrap(), { filename: `invoice-INV-${o.orderRef}.pdf`, mode: "download" });
+    } catch (err) {
+      toast.error("Couldn't download the invoice", { description: apiErrorMessage(err) });
+    }
+  };
+
   const rows: [string, number][] = [
     ["Items", o.itemsSubtotal],
     ...(o.discountTotal > 0 ? ([[`Discount${o.couponUsed ? ` (${o.couponUsed})` : ""}`, -o.discountTotal]] as [string, number][]) : []),
@@ -59,6 +69,9 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         </Link>
         <div className="flex items-center gap-3">
           <OrderStatusBadge status={o.status} />
+          <Button variant="outline" size="sm" disabled={loadingInvoice} onClick={onInvoice}>
+            <FileDown className="h-4 w-4 mr-1.5" /> {loadingInvoice ? "Preparing..." : "Invoice"}
+          </Button>
           {o.canCancel && (
             <Button variant="outline" size="sm" disabled={cancelling} onClick={onCancel}>
               {cancelling ? "Cancelling..." : "Cancel order"}

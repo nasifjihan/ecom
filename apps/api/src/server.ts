@@ -9,6 +9,7 @@ import { env } from "./config/env";
 import { buildApp } from "./app";
 import { logger, disconnectPrisma, disconnectRedis, redis } from "./config";
 import { ensureBucket } from "./config/s3";
+import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/notifications";
 
 async function bootstrap() {
   const app = buildApp();
@@ -21,6 +22,11 @@ async function bootstrap() {
   try {
     await ensureBucket().catch((e) => logger.warn({ err: e?.message }, "S3 bucket ensure skipped"));
   } catch { /* ignore */ }
+
+  // Emails go through the Redis queue; this process sends them unless EMAIL_WORKER=off
+  // (then `pnpm worker` runs the sender on its own).
+  initEmailQueue();
+  if (env.EMAIL_WORKER === "on") startEmailWorker();
 
   const server = app.listen(env.API_PORT, () => {
     // eslint-disable-next-line no-console
@@ -43,6 +49,7 @@ async function bootstrap() {
       console.log("✅ HTTP server closed");
     });
     await Promise.allSettled([
+      stopEmailQueue(),
       disconnectPrisma(),
       disconnectRedis(),
     ]);

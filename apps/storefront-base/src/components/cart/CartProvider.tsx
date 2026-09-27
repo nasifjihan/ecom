@@ -13,7 +13,22 @@ export type CartItem = {
   qty: number;
   weightKG?: number;
   variantLabel?: string;
+  /** Regular price when the item is discounted. */
+  compareAtPrice?: number | null;
+  /** The running flash sale that sets `price`, if any. */
+  flashSale?: { name: string; endsAt: string } | null;
 };
+
+/** The server's current price for a cart line (see syncPrices). */
+export type CartPriceQuote = {
+  productId: string;
+  variantId?: string | null;
+  price: number;
+  compareAtPrice?: number | null;
+  flashSale?: { name: string; endsAt: string } | null;
+};
+
+export type CartPriceChange = { item: CartItem; oldPrice: number; newPrice: number };
 
 export type CartState = {
   items: CartItem[];
@@ -32,12 +47,16 @@ type CartContextValue = CartState & {
   removeItem: (productId: string, variantId: string | undefined) => void;
   clearCart: () => void;
   hasItem: (productId: string, variantId?: string) => boolean;
+  /** Applies current server prices to the cart and returns the lines whose price changed. */
+  syncPrices: (quotes: CartPriceQuote[]) => CartPriceChange[];
 };
 
 const CartContext = React.createContext<CartContextValue | null>(null);
 
 const CART_STORAGE_PREFIX = "cart_";
 const DEFAULT_STORE_ID = "default";
+
+const lineKey = (productId: string, variantId?: string | null) => `${productId}:${variantId ?? ""}`;
 
 function deriveState(items: CartItem[]): CartState {
   let subtotal = 0;
@@ -103,6 +122,35 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
   }, [items]);
 
   const derived = React.useMemo(() => deriveState(items), [items]);
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+
+  const syncPrices: CartContextValue["syncPrices"] = React.useCallback((quotes) => {
+    const byKey = new Map(quotes.map((q) => [lineKey(q.productId, q.variantId), q]));
+    const changes: CartPriceChange[] = [];
+    for (const it of itemsRef.current) {
+      const q = byKey.get(lineKey(it.productId, it.variantId));
+      if (q && q.price !== it.price) changes.push({ item: it, oldPrice: it.price, newPrice: q.price });
+    }
+    setItems((prev) => {
+      let touched = false;
+      const next = prev.map((it) => {
+        const q = byKey.get(lineKey(it.productId, it.variantId));
+        if (!q) return it;
+        const flashSale = q.flashSale ? { name: q.flashSale.name, endsAt: q.flashSale.endsAt } : null;
+        const same =
+          it.price === q.price &&
+          (it.compareAtPrice ?? null) === (q.compareAtPrice ?? null) &&
+          (it.flashSale?.name ?? null) === (flashSale?.name ?? null) &&
+          (it.flashSale?.endsAt ?? null) === (flashSale?.endsAt ?? null);
+        if (same) return it;
+        touched = true;
+        return { ...it, price: q.price, compareAtPrice: q.compareAtPrice ?? null, flashSale };
+      });
+      return touched ? next : prev;
+    });
+    return changes;
+  }, []);
 
   const addItem: CartContextValue["addItem"] = React.useCallback((raw) => {
     const incoming: CartItem = { qty: 1, weightKG: 0, ...raw };
@@ -162,8 +210,9 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
       removeItem,
       clearCart,
       hasItem,
+      syncPrices,
     }),
-    [derived, isOpen, addItem, updateQty, removeItem, clearCart, hasItem],
+    [derived, isOpen, addItem, updateQty, removeItem, clearCart, hasItem, syncPrices],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

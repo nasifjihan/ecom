@@ -12,8 +12,87 @@ import type {
   ListReviewsQueryDto,
   ReviewModerateDto,
 } from "./marketing.dto";
+import { Prisma } from "@prisma/client";
 import { CouponType } from "@ecom/shared-types";
 import { OrderStatus } from "@ecom/shared-types";
+
+type FlashItemInput = CreateFlashSaleDto["items"][number];
+interface FlashRulesInput {
+  appliesTo?: string;
+  categoryIds?: (bigint | string)[];
+  excludeOnSale?: boolean;
+}
+
+const rulesJson = (r: NonNullable<CreateFlashSaleDto["rules"]>): Prisma.InputJsonObject => ({
+  appliesTo: r.appliesTo,
+  categoryIds: r.categoryIds.map(String),
+  excludeOnSale: r.excludeOnSale,
+});
+
+/** A sale must say what it covers and how much it takes off. */
+function checkFlashSale(s: {
+  startsAt: Date;
+  endsAt: Date;
+  discountPercent?: number | null;
+  discountFixed?: number | null;
+  rules: FlashRulesInput | null;
+  items: { productId: bigint; salePrice?: number | null; discountPct?: number | null }[];
+}) {
+  if (s.startsAt >= s.endsAt) throw new BadRequestError("The sale must end after it starts", "BAD_REQUEST");
+  const scope = s.rules?.appliesTo ?? "products";
+  const saleWide = s.discountPercent != null || s.discountFixed != null;
+  if (scope === "products") {
+    if (!s.items.length) throw new BadRequestError("Add at least one product to the sale", "BAD_REQUEST");
+    if (!saleWide && s.items.some((i) => i.salePrice == null && i.discountPct == null)) {
+      throw new BadRequestError("Set a discount for the sale, or a sale price for every product", "BAD_REQUEST");
+    }
+  } else {
+    if (scope === "categories" && !s.rules?.categoryIds?.length) {
+      throw new BadRequestError("Choose at least one category", "BAD_REQUEST");
+    }
+    if (!saleWide) throw new BadRequestError("Set the discount for the sale", "BAD_REQUEST");
+  }
+}
+
+/** Replaces a sale's products while keeping the units already sold for the ones that stay. */
+async function syncFlashItems(t: Prisma.TransactionClient, flashSaleId: bigint, items: FlashItemInput[]) {
+  const existing = await t.flashSaleItem.findMany({ where: { flashSaleId } });
+  const key = (productId: bigint, variantId: bigint | null | undefined) => `${productId}:${variantId ?? ""}`;
+  const byKey = new Map(existing.map((i) => [key(i.productId, i.variantId), i]));
+  const keep = new Set<bigint>();
+  for (const [idx, item] of items.entries()) {
+    const data = {
+      salePrice: item.salePrice ?? null,
+      discountPct: item.discountPct ?? null,
+      stockLimit: item.stockLimit ?? null,
+      sortOrder: idx,
+    };
+    const found = byKey.get(key(item.productId, item.variantId));
+    if (found) {
+      if (keep.has(found.id)) continue;
+      keep.add(found.id);
+      await t.flashSaleItem.update({ where: { id: found.id }, data });
+    } else {
+      const created = await t.flashSaleItem.create({
+        data: { ...data, flashSaleId, productId: item.productId, variantId: item.variantId ?? null },
+      });
+      keep.add(created.id);
+      byKey.set(key(item.productId, item.variantId), created);
+    }
+  }
+  await t.flashSaleItem.deleteMany({ where: { flashSaleId, id: { notIn: [...keep] } } });
+}
+
+/** Units sold and revenue per sale, from order lines stamped with the sale at checkout (cancelled orders left out). */
+async function flashSaleStats(ids: bigint[]): Promise<Map<string, { unitsSold: number; revenue: number }>> {
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw<{ id: string; units: bigint | null; revenue: Prisma.Decimal | null }[]>`
+    SELECT oi.meta->'flashSale'->>'id' AS id, SUM(oi.quantity) AS units, SUM(oi."lineSubtotal") AS revenue
+    FROM "OrderItem" oi JOIN "Order" o ON o.id = oi."orderId"
+    WHERE o.status <> 'CANCELLED' AND oi.meta->'flashSale'->>'id' IN (${Prisma.join(ids.map(String))})
+    GROUP BY 1`;
+  return new Map(rows.map((r) => [r.id, { unitsSold: Number(r.units ?? 0), revenue: Number(r.revenue ?? 0) }]));
+}
 
 export class MarketingService extends BaseService {
   private coupons: CouponRepository;
@@ -94,89 +173,101 @@ export class MarketingService extends BaseService {
     const storeId = this.ctx.storeId;
     const existing = await this.flashSales.findBySlug(this.ctx, dto.slug);
     if (existing) throw new ConflictError(`Flash sale slug already exists: ${dto.slug}`, "DUPLICATE_SLUG");
+    checkFlashSale({ ...dto, rules: dto.rules ?? null });
 
-    return tx(async (t: any) => {
-      const saleData: Record<string, unknown> = {
-        name: dto.name,
-        slug: dto.slug,
-        description: dto.description ?? null,
-        startsAt: dto.startsAt,
-        endsAt: dto.endsAt,
-        discountPercent: dto.discountPercent ?? null,
-        discountFixed: dto.discountFixed ?? null,
-        bannerImageUrl: dto.bannerImageUrl ?? null,
-        bannerTitle: dto.bannerTitle ?? null,
-        bannerSubtitle: dto.bannerSubtitle ?? null,
-        bannerCtaText: dto.bannerCtaText ?? null,
-        bannerCtaUrl: dto.bannerCtaUrl ?? null,
-        position: dto.position,
-        isActive: dto.isActive,
-      };
-      if (storeId !== undefined) saleData.storeId = storeId;
-
-      const flashSale = await t.flashSale.create({ data: saleData });
-
-      const itemsData = dto.items.map((item, idx) => ({
-        flashSaleId: flashSale.id,
-        productId: BigInt(item.productId),
-        variantId: item.variantId ? BigInt(item.variantId) : null,
-        salePrice: item.salePrice ?? null,
-        discountPct: item.discountPct ?? null,
-        stockLimit: item.stockLimit ?? null,
-        sortOrder: idx,
-      }));
-      if (itemsData.length > 0) {
-        await t.flashSaleItem.createMany({ data: itemsData, skipDuplicates: true });
-      }
-      return t.flashSale.findFirst({
-        where: { id: flashSale.id },
-        include: { items: true },
+    return tx(async (t: Prisma.TransactionClient) => {
+      const flashSale = await t.flashSale.create({
+        data: {
+          storeId: storeId as bigint,
+          name: dto.name,
+          slug: dto.slug,
+          description: dto.description ?? null,
+          startsAt: dto.startsAt,
+          endsAt: dto.endsAt,
+          discountPercent: dto.discountPercent ?? null,
+          discountFixed: dto.discountFixed ?? null,
+          rules: dto.rules ? rulesJson(dto.rules) : Prisma.JsonNull,
+          bannerImageUrl: dto.bannerImageUrl ?? null,
+          bannerTitle: dto.bannerTitle ?? null,
+          bannerSubtitle: dto.bannerSubtitle ?? null,
+          bannerCtaText: dto.bannerCtaText ?? null,
+          bannerCtaUrl: dto.bannerCtaUrl ?? null,
+          position: dto.position,
+          isActive: dto.isActive,
+        },
       });
+      await syncFlashItems(t, flashSale.id, dto.items);
+      return t.flashSale.findFirst({ where: { id: flashSale.id }, include: { items: true } });
     });
   }
 
   async listFlashSales(filters: { page: number; perPage: number; sortBy?: string; sortOrder?: "asc" | "desc"; search?: string }): Promise<Paginated<unknown>> {
-    return this.flashSales.listPaginated(this.ctx, filters);
+    const page = await this.flashSales.listPaginated(this.ctx, filters);
+    const rows = page.data as { id: bigint }[];
+    const stats = await flashSaleStats(rows.map((s) => s.id));
+    return { ...page, data: rows.map((s) => ({ ...s, stats: stats.get(String(s.id)) ?? { unitsSold: 0, revenue: 0 } })) };
   }
 
   async getFlashSale(id: bigint | number): Promise<unknown> {
     const fid = BigInt(id);
     const row = await prisma.flashSale.findFirst({
       where: { id: fid, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) },
-      include: { items: true },
+      include: {
+        items: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            product: {
+              select: {
+                name: true,
+                sku: true,
+                regularPrice: true,
+                salePrice: true,
+                images: { orderBy: { sortOrder: "asc" }, take: 1, select: { imageUrl: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!row) throw new NotFoundError("flashSale", fid);
-    return row;
+    const stats = await flashSaleStats([fid]);
+    return { ...row, stats: stats.get(String(fid)) ?? { unitsSold: 0, revenue: 0 } };
   }
 
   async updateFlashSale(id: bigint | number, dto: UpdateFlashSaleDto): Promise<unknown> {
     const fid = BigInt(id);
-    return tx(async (t: any) => {
-      const data: Record<string, unknown> = {};
-      for (const key of Object.keys(dto)) {
-        if (key === "items") continue;
-        (data as any)[key] = (dto as any)[key];
-      }
-      if (Object.keys(data).length > 0) {
-        await t.flashSale.update({ where: { id: fid }, data });
-      }
-      if (dto.items && dto.items.length > 0) {
-        await t.flashSaleItem.deleteMany({ where: { flashSaleId: fid } });
-        const itemsData = dto.items.map((item, idx) => ({
-          flashSaleId: fid,
-          productId: BigInt(item.productId),
-          variantId: item.variantId ? BigInt(item.variantId) : null,
-          salePrice: item.salePrice ?? null,
-          discountPct: item.discountPct ?? null,
-          stockLimit: item.stockLimit ?? null,
-          sortOrder: idx,
-        }));
-        await t.flashSaleItem.createMany({ data: itemsData });
-      }
-      return t.flashSale.findFirst({
-        where: { id: fid },
-        include: { items: true },
-      });
+    const current = await prisma.flashSale.findFirst({
+      where: { id: fid, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) },
+      include: { items: true },
+    });
+    if (!current) throw new NotFoundError("flashSale", fid);
+    if (dto.slug && dto.slug !== current.slug) {
+      const clash = await this.flashSales.findBySlug(this.ctx, dto.slug);
+      if (clash) throw new ConflictError(`Flash sale slug already exists: ${dto.slug}`, "DUPLICATE_SLUG");
+    }
+    const num = (v: Prisma.Decimal | null) => (v === null ? null : Number(v));
+    // Pausing or renaming a sale doesn't re-check what it covers.
+    const touchesPricing = ["startsAt", "endsAt", "discountPercent", "discountFixed", "rules", "items"].some(
+      (k) => (dto as Record<string, unknown>)[k] !== undefined,
+    );
+    if (touchesPricing) checkFlashSale({
+      startsAt: dto.startsAt ?? current.startsAt,
+      endsAt: dto.endsAt ?? current.endsAt,
+      discountPercent: dto.discountPercent !== undefined ? dto.discountPercent : num(current.discountPercent),
+      discountFixed: dto.discountFixed !== undefined ? dto.discountFixed : num(current.discountFixed),
+      rules: dto.rules ?? (current.rules as FlashRulesInput | null),
+      items:
+        dto.items ??
+        current.items.map((i) => ({ productId: i.productId, salePrice: num(i.salePrice), discountPct: num(i.discountPct) })),
+    });
+
+    return tx(async (t: Prisma.TransactionClient) => {
+      const { items, rules, ...rest } = dto;
+      const data: Prisma.FlashSaleUpdateInput = { ...rest };
+      if (rules) data.rules = rulesJson(rules);
+      if (Object.keys(data).length > 0) await t.flashSale.update({ where: { id: fid }, data });
+      if (items) await syncFlashItems(t, fid, items);
+      return t.flashSale.findFirst({ where: { id: fid }, include: { items: true } });
     });
   }
 

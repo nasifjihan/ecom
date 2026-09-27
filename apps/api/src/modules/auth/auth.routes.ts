@@ -8,7 +8,13 @@ import {
   CustomerRegisterDto,
   AdminOwnerRegisterFirstDto,
   RefreshTokenDto,
+  ForgotPasswordDto,
+  CustomerResetPasswordDto,
+  AdminResetPasswordDto,
 } from "./auth.dto";
+import { PasswordResetService } from "./password-reset";
+import { UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core";
+import type { Request, Response } from "express";
 
 const router = Router();
 
@@ -34,6 +40,51 @@ router.post(
   "/customer/register",
   validate({ body: CustomerRegisterDto }),
   authController.postCustomerRegister,
+);
+
+// ---- forgot / reset password (store comes from the request Origin)
+
+type Req = Request & { ctx: RequestContext };
+const resets = (req: Req) => {
+  if (!req.ctx.storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+  return new PasswordResetService(BigInt(req.ctx.storeId));
+};
+const SENT = "If an account uses that email, we've sent a link to reset the password.";
+
+router.post(
+  "/customer/forgot-password",
+  validate({ body: ForgotPasswordDto }),
+  ctrl(async (req: Req, res: Response) => {
+    await resets(req).requestCustomer((req.body as ForgotPasswordDto).email);
+    envelope(res, { status: 200, message: SENT, data: { sent: true } });
+  }),
+);
+
+router.post(
+  "/customer/reset-password",
+  validate({ body: CustomerResetPasswordDto }),
+  ctrl(async (req: Req, res: Response) => {
+    const b = req.body as CustomerResetPasswordDto;
+    envelope(res, { status: 200, message: "Password changed", data: await resets(req).resetCustomer(b.token, b.password) });
+  }),
+);
+
+router.post(
+  "/admin/forgot-password",
+  validate({ body: ForgotPasswordDto }),
+  ctrl(async (req: Req, res: Response) => {
+    await resets(req).requestAdmin((req.body as ForgotPasswordDto).email);
+    envelope(res, { status: 200, message: SENT, data: { sent: true } });
+  }),
+);
+
+router.post(
+  "/admin/reset-password",
+  validate({ body: AdminResetPasswordDto }),
+  ctrl(async (req: Req, res: Response) => {
+    const b = req.body as AdminResetPasswordDto;
+    envelope(res, { status: 200, message: "Password changed", data: await resets(req).resetAdmin(b.token, b.password) });
+  }),
 );
 
 router.post(

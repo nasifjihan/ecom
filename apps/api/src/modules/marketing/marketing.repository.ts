@@ -205,7 +205,7 @@ export class FlashSaleRepository extends BaseRepository<"flashSale"> {
         orderBy,
         skip,
         take: filters.perPage,
-        include: { _count: { select: { items: true } } },
+        include: { _count: { select: { items: true } }, items: { select: { productId: true, soldCount: true } } },
       }),
     ]);
 

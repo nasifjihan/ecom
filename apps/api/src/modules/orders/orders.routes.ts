@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { ordersController } from "./orders.controller";
+import type { Request, Response } from "express";
+import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
+import { EmailService } from "../notifications";
+import { InvoiceService, sendInvoice } from "../invoices";
 import {
   OrderSearchQueryDto,
   CreateOrderFromCartDto,
@@ -14,6 +18,7 @@ import {
   IpnProviderParamDto,
   CreateCartDto,
   AddCartItemDto,
+  InvoiceIdsQueryDto,
 } from "./orders.dto";
 
 export const adminOrdersRouter = Router();
@@ -32,6 +37,18 @@ adminOrdersRouter.post(
   rbacMiddleware("orders.*"),
   validate({ body: CreateOrderFromCartDto }),
   ordersController.createOrderFromCart,
+);
+
+/** Invoices for several orders in one PDF: ?ids=1,2,3 (up to 100). */
+adminOrdersRouter.get(
+  "/invoices",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.*"),
+  validate({ query: InvoiceIdsQueryDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { ids } = req.query as unknown as { ids: bigint[] };
+    sendInvoice(req, res, await InvoiceService.forContext(req.ctx).forOrderIds(ids));
+  }),
 );
 
 adminOrdersRouter.get(
@@ -56,6 +73,31 @@ adminOrdersRouter.post(
   rbacMiddleware("orders.*"),
   validate({ params: OrderIdParamDto, body: TransitionStatusDto }),
   ordersController.transitionStatus,
+);
+
+/** The order's invoice as a PDF (?download=1 to save it as a file). */
+adminOrdersRouter.get(
+  "/:id/invoice",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.*"),
+  validate({ params: OrderIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const file = await InvoiceService.forContext(req.ctx).forOrderId(BigInt((req.params as { id: string }).id));
+    sendInvoice(req, res, file);
+  }),
+);
+
+/** Sends the order confirmation email to the customer again (the order page's "Send email" button). */
+adminOrdersRouter.post(
+  "/:id/send-email",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.*"),
+  validate({ params: OrderIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const sent = await EmailService.forContext(req.ctx).orderPlaced(BigInt((req.params as { id: string }).id), "customer");
+    if (!sent) throw new NotFoundError("order");
+    envelope(res, { status: 200, message: "Order email sent", data: { success: true } });
+  }),
 );
 
 adminOrdersRouter.post(

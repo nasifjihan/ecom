@@ -25,6 +25,8 @@ export type ProductCardData = {
   reviewCount?: number;
   isOnSale?: boolean;
   discountPercent?: number;
+  /** Set while a flash sale sets the price. */
+  flashSale?: { name: string; endsAt: string } | null;
   badge?: string;
   badgeVariant?: "default" | "secondary" | "destructive" | "outline" | "success";
   isNew?: boolean;
@@ -106,7 +108,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               )}
             />
 
-            <div className="absolute top-2 left-2 flex flex-col gap-1">
+            <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+              {product.flashSale && (
+                <Badge
+                  variant="destructive"
+                  className="text-[10px] font-semibold bg-gradient-to-r from-orange-500 to-rose-600 border-0"
+                  title={product.flashSale.name}
+                >
+                  ⚡ FLASH SALE
+                </Badge>
+              )}
               {isOnSale && discountPercent && (
                 <Badge variant="destructive" className="text-[10px] font-semibold">
                   -{discountPercent}%

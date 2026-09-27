@@ -1,6 +1,6 @@
 "use client";
 
-import { api, toPaginated } from "@ecom/api-client";
+import { api, fileResponse, toPaginated } from "@ecom/api-client";
 
 /** Mirrors the API OrderStatus enum (prisma/schema.prisma). */
 export type OrderStatus =
@@ -730,12 +730,13 @@ export const operationsApiSlice = api.injectEndpoints({
       invalidatesTags: [{ type: "Order", id: "LIST" }],
     }),
 
-    generateOrderInvoicePdf: builder.query<Blob, string | number>({
-      query: (id) => ({
-        url: `/admin/orders/${id}/invoice`,
-        method: "GET",
-        responseHandler: async (response) => await response.blob(),
-      }),
+    /** The order's invoice PDF, as an object URL (see openFile in @ecom/api-client). */
+    orderInvoice: builder.mutation<string, string | number>({
+      query: (id) => ({ url: `/admin/orders/${id}/invoice`, responseHandler: fileResponse }),
+    }),
+    /** Invoices for several orders in one PDF, one after another. */
+    orderInvoices: builder.mutation<string, (string | number)[]>({
+      query: (ids) => ({ url: "/admin/orders/invoices", params: { ids: ids.join(",") }, responseHandler: fileResponse }),
     }),
 
     sendOrderEmail: builder.mutation<{ success: boolean }, string | number>({
@@ -1020,7 +1021,8 @@ export const {
   useGetOrderQuery,
   useUpdateOrderStatusMutation,
   useBulkUpdateOrderStatusMutation,
-  useLazyGenerateOrderInvoicePdfQuery,
+  useOrderInvoiceMutation,
+  useOrderInvoicesMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
   useCreateRefundMutation,

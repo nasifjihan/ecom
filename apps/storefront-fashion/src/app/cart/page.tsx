@@ -17,6 +17,7 @@ import {
   Shield,
   X,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import {
   Card,
@@ -35,6 +36,7 @@ import {
   formatMoney,
   toast,
 } from "@ecom/storefront-base";
+import { cartLineKey, useCartPriceCheck } from "@/lib/cart-prices";
 
 function formatBDT(n: number) {
   return formatMoney(n, "BDT");
@@ -43,6 +45,7 @@ function formatBDT(n: number) {
 export default function CartPage() {
   const { items, subtotal, itemCount, updateQty, removeItem, clearCart } = useCart();
   const [mounted, setMounted] = React.useState(false);
+  const { problems, hasProblems } = useCartPriceCheck();
 
   React.useEffect(() => setMounted(true), []);
 
@@ -147,6 +150,7 @@ export default function CartPage() {
               <div className={cn("divide-y border rounded-2xl bg-card", "md:rounded-t-none")}>
                 {items.map((item) => {
                   const lineTotal = Math.round(item.price * item.qty * 100) / 100;
+                  const problem = problems[cartLineKey(item.productId, item.variantId)];
                   return (
                     <div key={`${item.productId}-${item.variantId ?? "none"}`} className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr_auto] gap-3 md:gap-4 p-4 hover:bg-muted/20 transition-colors">
                       <Link href={`/products/${item.slug}`} className="h-20 md:h-24 w-20 md:w-24 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 border">
@@ -159,10 +163,28 @@ export default function CartPage() {
                             <h3 className="font-medium md:text-sm leading-snug line-clamp-2 hover:text-primary transition-colors">{item.title}</h3>
                           </Link>
                           {item.variantLabel && <div className="text-xs text-muted-foreground mt-1">{item.variantLabel}</div>}
-                          <div className="text-xs text-muted-foreground mt-1 md:hidden">Unit: {formatBDT(item.price)}</div>
+                          {item.flashSale && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10">
+                              <Zap className="h-3 w-3" /> {item.flashSale.name}
+                            </div>
+                          )}
+                          {problem && (
+                            <div className="mt-1 flex items-start gap-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 mt-px flex-shrink-0" /> {problem}
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground mt-1 md:hidden">
+                            Unit: {formatBDT(item.price)}
+                            {item.compareAtPrice ? <span className="ml-1 line-through">{formatBDT(item.compareAtPrice)}</span> : null}
+                          </div>
                         </div>
 
-                        <div className="hidden md:block text-sm font-medium">{formatBDT(item.price)}</div>
+                        <div className="hidden md:block text-sm font-medium">
+                          {formatBDT(item.price)}
+                          {item.compareAtPrice ? (
+                            <div className="text-xs font-normal text-muted-foreground line-through">{formatBDT(item.compareAtPrice)}</div>
+                          ) : null}
+                        </div>
 
                         <div className="mb-3 md:mb-0">
                           <div className="inline-flex items-center border rounded-lg overflow-hidden">
@@ -289,12 +311,18 @@ export default function CartPage() {
               </div>
 
               <div className="space-y-2.5">
+                {hasProblems && (
+                  <p className="flex items-start gap-1.5 text-xs font-medium text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-px flex-shrink-0" />
+                    Some items can&apos;t be ordered as they are. Change or remove them to continue.
+                  </p>
+                )}
                 <Button
                   size="lg"
                   className="w-full h-12 text-base shadow-hover"
-                  disabled={items.length === 0}
+                  disabled={items.length === 0 || hasProblems}
                   onClick={() => {
-                    if (items.length === 0) return;
+                    if (items.length === 0 || hasProblems) return;
                     window.location.href = "/checkout";
                   }}
                 >

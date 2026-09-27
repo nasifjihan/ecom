@@ -101,6 +101,9 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
   }
 
   if (res.error) return { error: res.error };
+  // Files (e.g. invoice PDFs) aren't wrapped in an envelope: pass them through as-is.
+  const type = res.meta?.response?.headers.get("content-type") ?? "";
+  if (type && !type.includes("json")) return { data: res.data };
   const envelope = res.data as ApiEnvelope<unknown>;
   if (!envelope?.success) {
     return {
@@ -156,8 +159,49 @@ export const api = createApi({
     "Plan",
     "Subscription",
     "Domain",
+    "Faq",
+    "Menu",
+    "Theme",
+    "Homepage",
+    "EmailTemplate",
+    "EmailLog",
   ],
   endpoints: () => ({}),
 });
+
+/**
+ * `responseHandler` for endpoints that return a file: the result is an object URL for it
+ * (a string, so it can sit in the Redux store), and API errors still come back as JSON.
+ */
+export const fileResponse = async (r: Response): Promise<unknown> =>
+  r.ok ? URL.createObjectURL(await r.blob()) : r.json();
+
+/**
+ * Shows or saves a file fetched with `fileResponse`. Call it straight from a click handler:
+ * the new tab opens before the file loads, so pop-up blockers allow it.
+ */
+export async function openFile(
+  load: () => Promise<string>,
+  { filename, mode }: { filename: string; mode: "open" | "download" },
+): Promise<void> {
+  const tab = mode === "open" ? window.open("", "_blank") : null;
+  try {
+    const url = await load();
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
 
 export const useLazyQuery = (api as any).useLazyQuery;

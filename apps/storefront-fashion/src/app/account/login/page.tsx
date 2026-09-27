@@ -46,7 +46,14 @@ export default function LoginPage() {
           </div>
           <form onSubmit={submit} className="space-y-4">
             <Field id="email" label="Email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Field id="password" label="Password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="space-y-1">
+              <Field id="password" label="Password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <div className="text-right">
+                <Link href={`/account/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`} className="text-xs font-medium text-primary hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
             {error && (
               <p role="alert" className="text-sm text-destructive">
                 {error}

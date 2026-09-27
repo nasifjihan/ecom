@@ -54,6 +54,8 @@ import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
 import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter } from "./modules/storefront";
+import { adminContentRouter, storefrontContentRouter } from "./modules/content";
+import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -102,6 +104,9 @@ export function buildApp(): Express {
     envelope(res, { message: "E-Commerce Platform API — see /healthz", data: { version: "0.1.0" } });
   }));
 
+  // Order and account events turn into queued emails.
+  registerEmailListeners();
+
   // =============== MODULE ROUTES (Batch #5 wired) ===============
   app.use("/api/auth", authRoutes);
   app.use("/api/super", superPlatformRouter);                      // overview, plans, subscriptions, reports, audit logs
@@ -134,6 +139,9 @@ export function buildApp(): Express {
   app.use("/api/admin/settings", adminSettingsRouter);
   app.use("/api/admin/shipping", adminShippingRouter);
   app.use("/api/storefront/shipping", storefrontShippingRouter);
+  app.use("/api/admin/emails", adminEmailsRouter);                   // email templates, preview, test send, sent log
+  app.use("/api/admin/content", adminContentRouter);                 // pages, blog, FAQs, menus, theme, homepage
+  app.use("/api/storefront/content", storefrontContentRouter);
   app.use("/api/storefront", storefrontCatalogRouter);             // Batch #10: public catalog
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "uploads"), { maxAge: "1y", immutable: true }));
 

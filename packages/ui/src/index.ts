@@ -5,5 +5,6 @@
  * DO NOT hand-write UI primitives — always use `pnpm ui:add <component>` inside packages/ui.
  */
 export * from "./components/primitives";
+export { Markdown, markdownToText } from "./components/markdown";
 export { cn } from "@ecom/utils";
 export type { ClassValue } from "clsx";

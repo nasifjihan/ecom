@@ -71,6 +71,10 @@ const envSchema = z.object({
   SMTP_ENCRYPTION: z.enum(["tls", "ssl", "none"]).default("none"),
   MAIL_FROM_ADDRESS: z.string().email().default("no-reply@localhost"),
   MAIL_FROM_NAME: z.string().default("Local Ecom Store"),
+  /** "bullmq" queues emails in Redis with retries; "inline" sends them straight away (used by tests). */
+  EMAIL_QUEUE: z.enum(["bullmq", "inline"]).default("bullmq"),
+  /** Set to "off" when a separate `pnpm worker` process sends the queued emails. */
+  EMAIL_WORKER: z.enum(["on", "off"]).default("on"),
 
   SMS_DRIVER: z.enum(["none", "twilio", "sslwireless"]).default("none"),
   TWILIO_ACCOUNT_SID: z.string().optional(),

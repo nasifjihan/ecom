@@ -19,6 +19,7 @@ import type { RequestContext } from "../../core/base.repository";
 import type { TokenAudience, TokenPayload } from "../../config/jwt";
 import { UserType, AdminRole } from "@ecom/shared-types";
 import { AuthService } from "./auth.service";
+import { emitCustomerRegistered } from "../notifications";
 import type {
   SuperLoginDto,
   AdminLoginDto,
@@ -137,6 +138,7 @@ export class AuthController extends BaseController {
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
     const svc = this.service(req.ctx);
     const customer = await svc.customerRegister(dto, storeId);
+    emitCustomerRegistered({ storeId: String(storeId), customerId: String(customer.id) });
     const tokens = await svc.issueTokens(customer, "customer");
     this.setCookie(res, "customer", tokens.refreshToken);
     envelope(res, {

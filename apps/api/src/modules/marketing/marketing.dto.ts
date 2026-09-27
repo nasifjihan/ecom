@@ -127,10 +127,17 @@ export type FlashSaleIdParamDto = z.infer<typeof FlashSaleIdParamDto>;
 
 const FlashSaleItemDto = z.object({
   productId: z.coerce.bigint().positive(),
-  variantId: z.coerce.bigint().positive().optional(),
-  salePrice: z.coerce.number().nonnegative().optional(),
-  discountPct: z.coerce.number().nonnegative().lte(100).optional(),
-  stockLimit: z.coerce.number().int().nonnegative().optional(),
+  variantId: z.coerce.bigint().positive().optional().nullable(),
+  salePrice: z.number().nonnegative().optional().nullable(),
+  discountPct: z.number().nonnegative().lte(100).optional().nullable(),
+  stockLimit: z.number().int().nonnegative().optional().nullable(),
+});
+
+/** Which products a sale covers; stored in FlashSale.rules. */
+const FlashSaleRulesDto = z.object({
+  appliesTo: z.enum(["products", "categories", "all"]).default("products"),
+  categoryIds: z.array(z.coerce.bigint().positive()).max(200).default([]),
+  excludeOnSale: z.boolean().default(false),
 });
 
 const BaseFlashSaleDto = z.object({
@@ -139,16 +146,18 @@ const BaseFlashSaleDto = z.object({
   description: z.string().max(1000).optional().refine(noXss, noXssMessage),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date(),
-  discountPercent: z.coerce.number().nonnegative().lte(100).optional(),
-  discountFixed: z.coerce.number().nonnegative().optional(),
-  bannerImageUrl: z.string().max(500).optional(),
+  // null clears the other kind of discount when a sale switches between % and fixed.
+  discountPercent: z.number().nonnegative().lte(100).optional().nullable(),
+  discountFixed: z.number().nonnegative().optional().nullable(),
+  rules: FlashSaleRulesDto.optional(),
+  bannerImageUrl: z.string().max(500).optional().nullable(),
   bannerTitle: z.string().max(200).optional().refine(noXss, noXssMessage),
   bannerSubtitle: z.string().max(300).optional().refine(noXss, noXssMessage),
   bannerCtaText: z.string().max(100).optional().refine(noXss, noXssMessage),
   bannerCtaUrl: z.string().max(500).optional(),
   position: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
-  items: z.array(FlashSaleItemDto).min(1),
+  items: z.array(FlashSaleItemDto).max(500).default([]),
 });
 
 export const CreateFlashSaleDto = BaseFlashSaleDto.superRefine((v, ctx) => {

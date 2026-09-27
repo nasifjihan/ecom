@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import type { CategoryNode, Paginated, ProductSummary } from "@ecom/storefront-base";
 import { serverApi } from "@/lib/server-api";
+import { getBlogPosts, getCmsPages } from "@/lib/content";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -22,12 +23,8 @@ const STATIC_PAGES = [
   { path: "/", priority: 1, changeFrequency: "daily" as const },
   { path: "/products", priority: 0.9, changeFrequency: "daily" as const },
   { path: "/about", priority: 0.5, changeFrequency: "yearly" as const },
-  { path: "/contact", priority: 0.5, changeFrequency: "yearly" as const },
   { path: "/faq", priority: 0.6, changeFrequency: "monthly" as const },
-  { path: "/shipping-policy", priority: 0.4, changeFrequency: "yearly" as const },
-  { path: "/return-policy", priority: 0.4, changeFrequency: "yearly" as const },
-  { path: "/privacy-policy", priority: 0.3, changeFrequency: "yearly" as const },
-  { path: "/terms-of-service", priority: 0.3, changeFrequency: "yearly" as const },
+  { path: "/blog", priority: 0.6, changeFrequency: "weekly" as const },
 ];
 
 function buildUrl(path: string): string {
@@ -50,6 +47,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: page.changeFrequency,
       priority: page.priority,
     });
+  }
+
+  // Pages and blog posts written in the admin.
+  for (const page of (await getCmsPages()) ?? []) {
+    entries.push({ url: buildUrl(`/${page.slug}`), lastModified: page.updatedAt, changeFrequency: "monthly", priority: 0.4 });
+  }
+  for (let page = 1; page <= 20; page++) {
+    const res = await getBlogPosts(page, undefined, 100);
+    if (!res) break;
+    for (const post of res.data) {
+      entries.push({ url: buildUrl(`/blog/${post.slug}`), lastModified: post.updatedAt, changeFrequency: "monthly", priority: 0.5 });
+    }
+    if (page >= res.meta.totalPages) break;
   }
 
   const tree = (await serverApi<CategoryNode[]>("/storefront/categories/tree", 3600)) ?? [];
