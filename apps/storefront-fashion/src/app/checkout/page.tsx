@@ -65,6 +65,8 @@ import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
 import { passwordProblem } from "@/app/account/_components";
 import { useCartPriceCheck } from "@/lib/cart-prices";
+import { useAvailableCouponsQuery } from "@/lib/promotions";
+import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
 
 const CURRENCY = "BDT";
 
@@ -82,7 +84,6 @@ const TRUST_BADGES = [
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
-  const { problems: cartProblems, hasProblems: cartHasProblems, recheck: recheckCart } = useCartPriceCheck();
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   const customerName = useAppSelector((s) => s.auth.customerName);
   const customerEmail = useAppSelector((s) => s.auth.customerEmail);
@@ -112,6 +113,15 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = React.useState("");
   const [appliedCoupon, setAppliedCoupon] = React.useState<CouponAppliedState | null>(null);
   const [couponError, setCouponError] = React.useState<string | null>(null);
+  // Re-prices the cart on the server; with the applied coupon, so promotions it can't be combined with drop off.
+  const {
+    problems: cartProblems,
+    hasProblems: cartHasProblems,
+    recheck: recheckCart,
+    promotions,
+  } = useCartPriceCheck({ couponCode: appliedCoupon?.valid ? appliedCoupon.couponCode : undefined, email: contactEmail || undefined });
+  const promoDiscount = promotions && !promotions.droppedForCoupon ? promotions.total : 0;
+  const { data: availableCoupons = [] } = useAvailableCouponsQuery();
 
   const [termsChecked, setTermsChecked] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
@@ -199,7 +209,9 @@ export default function CheckoutPage() {
 
   const selectedRate = rates.find((r) => r.methodId === selectedShippingRateId);
   const couponDiscount = appliedCoupon?.discountAmount ?? 0;
-  const isShippingFree = selectedRate ? selectedRate.cost === 0 || Boolean(appliedCoupon?.freeShipping) : false;
+  const isShippingFree = selectedRate
+    ? selectedRate.cost === 0 || Boolean(appliedCoupon?.freeShipping) || Boolean(promotions?.freeDelivery && !promotions.droppedForCoupon)
+    : false;
   const shippingAmount = selectedRate && !isShippingFree ? selectedRate.cost : 0;
 
   const { data: enabledGateways } = useGetPaymentMethodsQuery(undefined, { skip: !mounted });
@@ -225,10 +237,10 @@ export default function CheckoutPage() {
       countryCode: shippingAddress.country ?? "BD",
       division: shippingAddress.division,
       district: shippingAddress.district,
-      subtotal: Math.max(0, subtotal - couponDiscount),
+      subtotal: Math.max(0, subtotal - couponDiscount - promoDiscount),
       shipping: shippingAmount,
     }),
-    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, shippingAmount],
+    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, promoDiscount, shippingAmount],
   );
 
   const {
@@ -244,10 +256,16 @@ export default function CheckoutPage() {
 
   const gatewayFee = selectedGatewayConfig
     ? Math.round(
-        (selectedGatewayConfig.feeFixed + ((subtotal - couponDiscount) * selectedGatewayConfig.feePercent) / 100) * 100,
+        (selectedGatewayConfig.feeFixed + ((subtotal - couponDiscount - promoDiscount) * selectedGatewayConfig.feePercent) / 100) * 100,
       ) / 100
     : 0;
-  const discountsArr: OrderSummaryLineItem[] = [];
+  const discountsArr: OrderSummaryLineItem[] = promotionLines(promotions).map((l) => ({
+    id: l.id,
+    label: l.label,
+    amount: l.amount,
+    isDiscount: true,
+    color: "text-green-600 font-medium",
+  }));
   if (couponDiscount > 0) {
     discountsArr.push({
       id: "coupon",
@@ -259,17 +277,21 @@ export default function CheckoutPage() {
     });
   }
 
-  const grandTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount);
+  const grandTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount - promoDiscount);
 
   const [applyCoupon, { isLoading: applyingCoupon }] = useApplyCouponMutation();
   const [placeOrder, { isLoading: placingOrder }] = usePlaceOrderMutation();
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!couponCode.trim()) return;
+    await applyCode(couponCode);
+  };
+
+  const applyCode = async (raw: string) => {
+    if (!raw.trim()) return;
     setCouponError(null);
     try {
-      const code = couponCode.trim().toUpperCase();
+      const code = raw.trim().toUpperCase();
       const result = await applyCoupon({
         code,
         subtotal,
@@ -297,7 +319,10 @@ export default function CheckoutPage() {
         });
         setCouponCode("");
         toast.success("Coupon applied!", {
-          description: `-৳${result.discountAmount} OFF with ${result.couponCode}`,
+          description:
+            result.worksWithPromotions === false && promoDiscount > 0
+              ? `-৳${result.discountAmount} with ${result.couponCode}. It can't be combined with other offers, so they're removed.`
+              : `-৳${result.discountAmount} OFF with ${result.couponCode}`,
         });
       } else {
         setCouponError(result.errorMessage ?? "Invalid or expired coupon code");
@@ -479,7 +504,7 @@ export default function CheckoutPage() {
         subtotal,
         shippingTotal: shippingAmount,
         taxTotal: actualTaxTotal,
-        discountTotal: couponDiscount,
+        discountTotal: couponDiscount + promoDiscount,
         grandTotal,
         currency: CURRENCY,
         termsAgreed: true,
@@ -1059,6 +1084,31 @@ export default function CheckoutPage() {
               <Link href="/cart" className="mt-2 inline-block font-medium underline">
                 Update your cart
               </Link>
+            </div>
+          )}
+          <CartPromotionSummary promotions={promotions} className="mb-4" />
+          <PromoSlotStrip slot="checkout" className="mb-4" />
+          {!appliedCoupon?.valid && availableCoupons.length > 0 && (
+            <div className="mb-4 rounded-xl border p-4">
+              <p className="mb-2 text-sm font-semibold">Coupons you can use</p>
+              <ul className="space-y-2">
+                {availableCoupons.slice(0, 5).map((c) => (
+                  <li key={c.code} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="font-mono font-semibold">{c.code}</span>
+                      {c.forYou && <span className="ml-2 rounded bg-primary/10 px-1.5 text-[11px] font-medium text-primary">For you</span>}
+                      <span className="block text-xs text-muted-foreground">
+                        {c.summary}
+                        {c.minSubtotal ? ` on orders over ${formatBDT(c.minSubtotal)}` : ""}
+                        {c.worksWithPromotions ? "" : " · not with other offers"}
+                      </span>
+                    </span>
+                    <Button type="button" size="sm" variant="outline" disabled={applyingCoupon} onClick={() => void applyCode(c.code)}>
+                      Apply
+                    </Button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <OrderSummaryCard

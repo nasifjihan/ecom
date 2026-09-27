@@ -133,6 +133,8 @@ export class MarketingService extends BaseService {
       expiresAt: dto.expiresAt ?? null,
       isActive: dto.isActive,
       autoApply: dto.autoApply,
+      audience: dto.audience,
+      worksWithPromotions: dto.worksWithPromotions,
     };
     if (storeId !== undefined) data.storeId = storeId;
 

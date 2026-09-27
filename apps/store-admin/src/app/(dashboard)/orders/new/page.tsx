@@ -196,6 +196,7 @@ export default function NewOrderPage() {
   const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
   const [discountValue, setDiscountValue] = useState("");
   const [coupon, setCoupon] = useState("");
+  const [applyPromotions, setApplyPromotions] = useState(true);
   const [gateway, setGateway] = useState("cod");
   const [paid, setPaid] = useState(false);
   const [trx, setTrx] = useState("");
@@ -226,6 +227,7 @@ export default function NewOrderPage() {
               ? { type: "method", methodId }
               : { type: "pickup" },
       couponCode: coupon.trim() || undefined,
+      applyPromotions,
       discount: Number(discountValue) > 0 ? { type: discountType, value: Number(discountValue) } : null,
       paymentGateway: gateway,
       paid,
@@ -236,7 +238,7 @@ export default function NewOrderPage() {
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, discountType, discountValue, gateway, paid, trx, source, confirmed, customerNote, staffNote, notify],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, discountType, discountValue, gateway, paid, trx, source, confirmed, customerNote, staffNote, notify],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -538,6 +540,12 @@ export default function NewOrderPage() {
                   </select>
                 </Field>
               </div>
+              <Toggle
+                checked={applyPromotions}
+                onChange={setApplyPromotions}
+                label="Apply the store's promotions"
+                hint="Automatic discounts, free gifts and free delivery, as on the website."
+              />
               <Toggle checked={paid} onChange={setPaid} label="Already paid" hint={gateway === "cod" ? "Cash received now (e.g. walk-in)." : "The customer has sent the money."} />
               {paid && gateway !== "cod" && (
                 <Field label="Transaction ID" htmlFor="trx" hint="From the bKash / Nagad / bank message.">
@@ -566,6 +574,8 @@ export default function NewOrderPage() {
             <CardContent className="space-y-3 text-sm">
               {[
                 ["Items", t ? `${taka(t.itemsSubtotal)} (${t.qty})` : "—"],
+                ...(result?.promotions.discount ? [[result.promotions.discount.name, `−${taka(result.promotions.discount.amount)}`]] : []),
+                ...(result?.promotions.bxgy ?? []).map((b) => [`${b.name}: ${b.freeUnits} free`, `−${taka(b.amount)}`]),
                 ...(t?.couponDiscount ? [["Coupon", `−${taka(t.couponDiscount)}`]] : []),
                 ...(t?.manualDiscount ? [["Discount", `−${taka(t.manualDiscount)}`]] : []),
                 [
@@ -589,6 +599,22 @@ export default function NewOrderPage() {
                 <span>Total</span>
                 <span>{t ? taka(t.grandTotal) : "—"}</span>
               </div>
+              {result?.promotions.gifts.map((g) => (
+                <p key={g.promotionId} className="rounded-md bg-pink-50 p-2 text-pink-800 dark:bg-pink-500/10 dark:text-pink-300">
+                  Free gift: {g.qty} × {g.title} ({g.promotionName})
+                </p>
+              ))}
+              {result?.promotions.freeDelivery && deliveryType === "method" && (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">Free delivery: {result.promotions.freeDelivery.name}</p>
+              )}
+              {result?.promotions.droppedForCoupon && (
+                <p className="text-xs text-amber-700">This coupon doesn't work with promotions, so they're off for this order.</p>
+              )}
+              {[...(result?.promotions.nudges ?? []).map((n) => n.message), ...(result?.promotions.notes ?? [])].map((m) => (
+                <p key={m} className="text-xs text-slate-500">
+                  {m}
+                </p>
+              ))}
               {result?.problems.length ? (
                 <ul className="space-y-1 rounded-md bg-rose-50 p-3 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
                   {result.problems.map((p) => (

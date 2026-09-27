@@ -3,6 +3,7 @@
  * and homepage sections. Server-side only; pages re-fetch at most once a minute.
  */
 import { serverApi } from "@/lib/server-api";
+import type { SlotPromotion } from "@/lib/promotions";
 
 export interface ThemeSettings {
   brand: { storeName: string; tagline: string; logoUrl: string | null };
@@ -154,3 +155,8 @@ export function hexToHslVar(hex: string): string | null {
 
 export const formatDate = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+
+/** Live promotions for a display slot (Marketing > Promotions in the admin). */
+export async function getSlotPromotions(slot: SlotPromotion["slots"][number]) {
+  return (await serverApi<SlotPromotion[]>(`/storefront/promotions?slot=${encodeURIComponent(slot)}`)) ?? [];
+}

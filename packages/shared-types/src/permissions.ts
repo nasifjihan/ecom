@@ -33,6 +33,7 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { key: "customers", group: "Customers", label: "Customers", actions: ALL },
   { key: "reviews", group: "Customers", label: "Reviews", help: "Edit = approve, mark as spam", actions: ["view", "edit", "delete"] },
 
+  { key: "promotions", group: "Marketing", label: "Promotions", help: "Automatic offers: discounts, free gifts, buy X get Y, free delivery", actions: ALL },
   { key: "coupons", group: "Marketing", label: "Coupons", actions: ALL },
   { key: "flash_sales", group: "Marketing", label: "Flash sales", actions: ALL },
 

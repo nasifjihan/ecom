@@ -1829,3 +1829,94 @@ Parcels can now be booked with a courier from the admin. Statuses then come back
 - Paperfly, eCourier, Sundarban and other APIs.
 - Customers choosing a courier at checkout, and courier reports (Batch 28).
 - Payment-gateway keys per store are still environment variables (only courier keys are stored encrypted per store).
+
+---
+
+## ✅ BATCH #23 — Automatic promotions (2026-09-27)
+The store can now run offers that apply by themselves at checkout, with no code: money off, a free gift above a spend, buy X get Y free, and free delivery. Each can be shown in storefront "slots" (announcement bar, home, product page, cart, checkout, a pop-up). Coupons gain "who can use it" and a "works with promotions" switch.
+
+### 23.1 Schema (migration `promotions`)
+- **`Promotion`** (per store): name, type (`discount` / `free_gift` / `bxgy` / `free_delivery`); percentage or fixed value with an optional cap; minimum order and minimum quantity; scope by products or categories (both empty = whole store); "also discount items already on sale"; buy / get quantities; the gift product, option and quantity; display slots with headline, message, image and link; start / end; active; how many orders used it.
+- **`Coupon`** gains `audience` (`private` / `public` / `given`) and `worksWithPromotions` (default on). Existing coupons limited to customer emails became `given`.
+- **`Order`** gains `promotionDiscount` (part of `discountTotal`) and `promotions` (what applied, gifts included). Gift lines are ordinary order items at ৳0 with `meta.gift`.
+- New permission area **`promotions`** (view/create/edit/delete). The Marketing role gets all of it and Viewer can view. Custom roles get the same actions they already had on coupons.
+
+### 23.2 Rules (`modules/marketing/promotions.rules.ts`, 42 table tests)
+- **One discount per order:** of the discount-type promotions that qualify, the one worth most applies.
+- **Buy X get Y** stacks with it and is worked out first. It applies per product, with all its options counted together, and the cheapest units are the free ones. When two such offers cover a product, the better one wins. The discount then comes off what's left to pay.
+- **Free gifts:** every gift whose threshold is reached is added. **Free delivery** applies when any qualifying offer gives it.
+- **Scope:** minimum order and quantity are measured on the items in scope. By default, items already on a flash sale or marked down neither get a discount nor count toward its minimum, but they do count toward free-gift and free-delivery thresholds.
+- Choosing a category covers its subcategories: an offer on "Men" covers "Men > Shirts".
+- **Nudges** tell the customer how close the next offer is, closest first, three at most. Examples: "Add ৳500 more for free delivery", "Add 1 more Satin Shirt: it's free (Buy 2 get 1 free)". There are none for a smaller discount than the one already applied, or for a scoped offer with nothing in the cart.
+- The discount is split over the lines it covers, and the last line takes the rounding.
+
+### 23.3 Checkout and orders (`StorefrontService`)
+- **Order of discounts:** prices (flash sales included), then promotions, then one coupon on what's left, then the staff discount on manual orders, then VAT on the rest.
+- **A coupon with "works with promotions" off** removes the automatic promotions from the order, is worked out on full prices, and doesn't count flash-sale items. The customer is told why.
+- **Gifts** come out of stock like a sale, with the same oversell guard. A gift that has run out is left off with a note, and the order still goes through.
+- **Free delivery** zeroes the zone's delivery price. A delivery fee typed by staff is left alone.
+- Each order line stores its share of the promotion discount, and each promotion counts the orders it was used on.
+- The storefront's `POST /cart/prices` now also returns `promotions`: what applies, gifts, free delivery, nudges and notes. It takes the applied coupon, so the cart and checkout show what checkout will charge.
+- `POST /coupons/apply` takes promotions into account and reports `worksWithPromotions`.
+- **Manual orders** (Batch 19) get the same promotions, with a switch to leave them off.
+- **Coupon form:** the Buy X Get Y coupon type, which checkout never supported, is hidden from new coupons, with a pointer to Promotions.
+
+### 23.4 API
+- **Admin** (`/api/admin/marketing/promotions`, `promotions.*` permissions):
+  - `GET` (filter by state/type/search), `POST`, `GET|PATCH|DELETE /:id`, and `POST /:id/end` to end it now;
+  - the form's own product, option and category pickers under `/pick/*`, so marketing staff don't need catalog or order permissions.
+- **Validation per type:** a discount needs a value (percentages ≤ 100); buy X get Y needs both quantities; a gift needs a product, and its option when the product has options; the end must be after the start. Products, categories and gifts must belong to the store. Fields another type used are cleared on save.
+- **Storefront:**
+  - `GET /api/storefront/promotions?slot=&productId=&categorySlug=` lists live promotions for a slot. The product page only gets offers that cover the product; the category page gets offers for it, a parent of it, or the whole store. Customers see the headline, or the offer itself ("Free delivery over ৳1,500"), never the internal name.
+  - `GET /api/storefront/checkout/coupons/available` lists public coupons and, for a signed-in customer, coupons given to them. Private codes are never listed.
+
+### 23.5 Store admin
+- **Marketing → Promotions:**
+  - a list with what each offer does, what it applies to, where it shows, dates, orders and status (live / scheduled / paused / ended);
+  - tabs by status; pause/resume, end now, edit and delete;
+  - quick-start templates: Eid Sale, Pohela Boishakh, Durga Puja, Winter Sale.
+- **The promotion form:**
+  - type cards and per-type fields;
+  - a gift product search with an option chooser;
+  - scope as whole store, chosen products or a category tree;
+  - slot checkboxes with headline, message, link and image;
+  - dates and an active switch.
+- **Coupons:** "Who can use it" (private code / public / given to customers with their emails), "Works with promotions and flash sale prices", and a column for both in the list.
+- **Order page:** each promotion's discount, free-delivery note and "Free gift" badge on gift lines.
+- **New order form:** promotion lines, gifts and nudges in the summary, and a switch to leave promotions off.
+
+### 23.6 Storefront
+- **Announcement bar:** promotions in that slot show under the theme's announcement.
+- **Home:** home-hero banners after the hero, below-categories banners after categories, and an "Offers" section after the first product section.
+- **Product and category pages:** the product page lists offers that cover the product; the product list filtered by a category shows that category's banner.
+- **Pop-up:** shown once per visit, a second after arriving. It closes with Esc or a click outside.
+- **Cart:** each promotion's discount, gifts with pictures, free delivery, nudges, the cart slot, and an "After offers" total.
+- **Checkout:**
+  - promotion lines in the summary; VAT and payment fee worked out after them; free delivery;
+  - gifts and the checkout slot;
+  - "Coupons you can use" with an Apply button, and a note when a coupon replaced the promotions.
+- **Thank-you and account order pages:** each promotion and gift lines.
+
+### 23.7 Checked
+- **Tests:** 271/271 API tests, including 42 new promotion tests.
+- **By API:**
+  - A manual order of 3 × Satin Shirt + a Jamdani Saree with coupon STACK5 got:
+    - buy 2 get 1 −৳3,990 and 10% off capped at −৳1,500 (৳5,490 from promotions);
+    - the coupon on what was left, −৳949;
+    - a free Salwar Kameez, which took one from stock, with every promotion counted once.
+  - Line discounts add up to the total, and VAT was charged on the reduced amount.
+  - A coupon not working with promotions dropped them and was worked out on full prices.
+  - A promotion on "Men" applied to a product in "Men > Shirts" and showed on the Shirts category page.
+  - Bad input was refused: a 150% discount, and a gift product with options but none chosen.
+- **Chromium:**
+  - admin list, a festival template turned into a free-gift promotion (gift option chosen, category ticked), the coupon form's audience section, and the order page with the gift badge;
+  - storefront pop-up, home, product page slot, the cart at 2 items (the "it's free" nudge) and 3 items (1 free, 10% on the rest, gifts, free delivery), and checkout with a public coupon that removed the promotions;
+  - no failed requests or page errors.
+- **Typecheck and lint:** clean except `storefront-base`, which fails as before on its self-imports. New files lint clean. Edited files have no new lint errors: `storefront.service.ts` went from 107 to 94 once the coupon was properly typed. Production builds of the three Next apps pass (`next build --no-lint`).
+
+### 23.8 Not done
+- Returns don't claw back a gift or re-check a threshold when a returned item drops the order below it; staff decide case by case.
+- A promotion per storefront (we have one storefront per store).
+- Limits per promotion (total uses, per customer) and "first order only".
+- Promotion ROI in reports (Batch 28).
+- A page-builder "Promotion slot" block; the home slots sit at fixed places for now.

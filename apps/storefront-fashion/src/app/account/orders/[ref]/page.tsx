@@ -65,7 +65,10 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
 
   const rows: [string, number][] = [
     ["Items", o.itemsSubtotal],
-    ...(o.discountTotal > 0 ? ([[`Discount${o.couponUsed ? ` (${o.couponUsed})` : ""}`, -o.discountTotal]] as [string, number][]) : []),
+    ...(o.promotions ?? []).filter((p) => p.amount > 0).map((p) => [p.name, -p.amount] as [string, number]),
+    ...(o.discountTotal - (o.promotionDiscount ?? 0) > 0.004
+      ? ([[`Discount${o.couponUsed ? ` (${o.couponUsed})` : ""}`, -(o.discountTotal - (o.promotionDiscount ?? 0))]] as [string, number][])
+      : []),
     ["Delivery", o.shippingTotal],
     ...(o.taxTotal > 0 ? ([["Tax", o.taxTotal]] as [string, number][]) : []),
     ...(o.feeTotal > 0 ? ([["Payment fee", o.feeTotal]] as [string, number][]) : []),
@@ -104,6 +107,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{i.title}</p>
                 {i.variantLabel && <p className="text-xs text-muted-foreground">{i.variantLabel}</p>}
+                {i.giftFrom && <p className="text-xs font-semibold text-pink-600">Free gift · {i.giftFrom}</p>}
                 <p className="text-xs text-muted-foreground">
                   {i.qty} × {formatBDT(i.price, o.currency)}
                 </p>

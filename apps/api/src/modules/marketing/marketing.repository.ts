@@ -27,6 +27,7 @@ export class CouponRepository extends BaseRepository<"coupon"> {
     ctx: RequestContext,
     filters: CouponSearchQueryDto & {
       status?: string;
+      audience?: string;
       type?: CouponType;
       minAmount?: number;
       maxAmount?: number;
@@ -36,6 +37,7 @@ export class CouponRepository extends BaseRepository<"coupon"> {
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
     // Filter arrives as the admin CouponType; the column stores the DiscountType enum.
     if (filters.type) where.type = couponTypeToDiscountType(filters.type);
+    if (filters.audience) where.audience = filters.audience;
     if (filters.status === "active") where.isActive = true;
     if (filters.status === "inactive") where.isActive = false;
     if (filters.status === "expired") {

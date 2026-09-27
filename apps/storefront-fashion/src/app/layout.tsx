@@ -4,7 +4,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Footer } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
-import { getSite, hexToHslVar } from "@/lib/content";
+import { getSite, getSlotPromotions, hexToHslVar } from "@/lib/content";
+import { EntryPopup } from "./_components/promotions";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -122,7 +123,7 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const site = await getSite();
+  const [site, barPromos] = await Promise.all([getSite(), getSlotPromotions("announcement_bar")]);
   const theme = site?.theme;
   const storeName = theme?.brand.storeName ?? "Fashion BD";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
@@ -157,6 +158,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               )}
             </div>
           )}
+          {barPromos.length > 0 && (
+            <div className="bg-foreground text-background text-center text-xs sm:text-sm font-medium px-4 py-2" aria-label="Offers">
+              {barPromos.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && <span className="mx-2 opacity-50" aria-hidden="true">·</span>}
+                  {p.linkUrl ? (
+                    <a href={p.linkUrl} className="hover:underline">
+                      {p.headline}
+                    </a>
+                  ) : (
+                    p.headline
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
           <NavbarWithCartState storeName={storeName} logoUrl={theme?.brand.logoUrl} menu={site?.headerMenu} />
           {/* Pages that read useSearchParams need a Suspense boundary to prerender. */}
           <main className="flex-1">
@@ -172,6 +189,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             columns={footerColumns?.length ? footerColumns : undefined}
           />
           <CartDrawerSlot storeName={storeName} />
+          <EntryPopup />
         </Providers>
       </body>
     </html>

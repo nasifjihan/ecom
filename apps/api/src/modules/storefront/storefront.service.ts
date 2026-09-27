@@ -9,7 +9,7 @@
  * comes from ShippingService, tax from the TaxRate table, and coupon discounts are
  * recomputed here.
  */
-import { Prisma } from "@prisma/client";
+import { Prisma, type Coupon } from "@prisma/client";
 import { prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext } from "../../core";
 import { OrdersService } from "../orders/orders.service";
@@ -31,6 +31,8 @@ import { FulfilmentService } from "../fulfilment/fulfilment.service";
 import { PaymentsService } from "../payments/payments.service";
 import { recordPaidAtEntry } from "../payments/payments.records";
 import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
+import { categoryLineage, livePromotionRules } from "../marketing/promotions.service";
+import { evaluatePromotions, type PromoResult } from "../marketing/promotions.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -138,6 +140,8 @@ export type OrderDraft = {
   /** Also list the zone's delivery options (for the admin form) when delivery isn't a zone method. */
   listShippingOptions?: boolean;
   couponCode?: string;
+  /** Automatic promotions (default on); staff can leave them off a manual order. */
+  applyPromotions?: boolean;
   manualDiscount?: { type: "percent" | "fixed"; value: number };
   paymentGateway: string;
   requireEnabledGateway: boolean;
@@ -527,9 +531,14 @@ export class StorefrontService {
   }
 
   /** Current prices for the cart page, so a cart saved earlier shows what checkout will charge. */
-  async cartPrices(lines: CartLineDto[]) {
+  async cartPrices(lines: CartLineDto[], couponCode?: string, email?: string) {
     const quoted = await this.quoteLines(lines);
+    const priced = quoted.filter((q) => !q.problem && q.priced).map((q) => q.priced!);
+    const promo = await this.promotionQuote(priced);
+    const coupon = couponCode ? await this.evaluateCoupon(couponCode, priced, email, promo.lineOff) : null;
+    const dropped = !!coupon?.ok && !coupon.coupon.worksWithPromotions;
     return {
+      promotions: this.promotionsView(promo, dropped),
       items: quoted.map((q) => ({
         productId: String(q.line.productId),
         variantId: q.line.variantId ? String(q.line.variantId) : null,
@@ -550,11 +559,13 @@ export class StorefrontService {
     code: string,
     lines: Awaited<ReturnType<StorefrontService["priceLines"]>>,
     email: string | undefined,
+    /** What automatic promotions already take off each line (same order as `lines`). */
+    promoOff: number[] = [],
   ): Promise<
-    | { ok: true; coupon: any; discount: number; freeShipping: boolean; subtotal: number }
+    | { ok: true; coupon: Coupon; discount: number; freeShipping: boolean; subtotal: number }
     | { ok: false; error: string }
   > {
-    const coupon = await prisma.coupon.findFirst({ where: { storeId: this.storeId, code } });
+    const coupon = await prisma.coupon.findFirst({ where: { storeId: this.storeId, code: code.trim().toUpperCase() } });
     const subtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal, 0));
     if (!coupon || !coupon.isActive) return { ok: false, error: "This coupon code is not valid" };
     const now = new Date();
@@ -590,10 +601,14 @@ export class StorefrontService {
     const include = ids(coupon.productIds);
     const exclude = ids(coupon.excludeProductIds);
     const cats = ids(coupon.categoryIds);
-    const eligible = lines.filter((l) => {
+    // A coupon that doesn't work with promotions doesn't count flash-sale items either, and is
+    // worked out on full prices (the promotions are dropped when it's used).
+    const off = coupon.worksWithPromotions ? promoOff : [];
+    const eligible = lines.map((l, i) => ({ ...l, lineSubtotal: round2(l.lineSubtotal - (off[i] ?? 0)) })).filter((l) => {
       const pid = String(l.product.id);
       if (exclude.includes(pid)) return false;
       if (coupon.excludeSales && l.onSale) return false;
+      if (!coupon.worksWithPromotions && l.flash) return false;
       if (include.length && !include.includes(pid)) return false;
       if (cats.length && !l.product.categories.some((c) => cats.includes(String(c.categoryId)))) return false;
       return true;
@@ -611,7 +626,7 @@ export class StorefrontService {
         discount = eligible.length ? amount : 0;
         break;
       case "FIXED_PRODUCT":
-        discount = eligible.reduce((s, l) => s + Math.min(l.unitPrice, amount) * l.qty, 0);
+        discount = eligible.reduce((s, l) => s + Math.min(l.lineSubtotal, Math.min(l.unitPrice, amount) * l.qty), 0);
         break;
       case "FREE_SHIPPING":
         freeShipping = true;
@@ -626,9 +641,142 @@ export class StorefrontService {
     return { ok: true, coupon, discount, freeShipping, subtotal };
   }
 
+  /**
+   * Automatic promotions on priced lines (rules: marketing/promotions.rules.ts): what comes off each
+   * line, the free gifts that are in stock, free delivery and nudges ("Add ৳300 more for …").
+   */
+  private async promotionQuote(lines: PricedLine[]) {
+    const [rules, lineage] = lines.length
+      ? await Promise.all([livePromotionRules(this.storeId), categoryLineage(this.storeId)])
+      : [[], () => []];
+    const result = evaluatePromotions(
+      lines.map((l, i) => ({
+        key: String(i),
+        productId: String(l.product.id),
+        name: l.product.name,
+        // With parent categories, so an offer on "Men" covers "Men > Shirts".
+        categoryIds: lineage(l.product.categories.map((c) => c.categoryId)),
+        unitPrice: l.unitPrice,
+        qty: l.qty,
+        onSale: l.onSale,
+      })),
+      rules,
+    );
+    const lineOff = lines.map((_, i) => result.lineDiscounts[String(i)] ?? 0);
+    const { gifts, notes } = await this.resolveGifts(result.gifts, lines);
+    return { result, lineOff, gifts, notes };
+  }
+
+  /** Gift products that exist and have stock left after what the order itself buys. */
+  private async resolveGifts(want: PromoResult["gifts"], lines: PricedLine[]) {
+    const gifts: {
+      promotionId: string;
+      promotionName: string;
+      product: Prisma.ProductGetPayload<{ include: { variants: true; images: true } }>;
+      variant: Prisma.ProductVariantGetPayload<object> | null;
+      qty: number;
+      title: string;
+      imageUrl: string | null;
+    }[] = [];
+    const notes: string[] = [];
+    if (!want.length) return { gifts, notes };
+    const products = await prisma.product.findMany({
+      where: { storeId: this.storeId, id: { in: want.map((g) => BigInt(g.productId)) } },
+      include: { variants: { where: { status: "active" } }, images: { orderBy: { sortOrder: "asc" }, take: 1 } },
+    });
+    for (const g of want) {
+      const p = products.find((x) => String(x.id) === g.productId);
+      const v = g.variantId ? (p?.variants.find((x) => String(x.id) === g.variantId) ?? null) : null;
+      if (!p || (g.variantId && !v)) {
+        notes.push(`The free gift from "${g.name}" is no longer available`);
+        continue;
+      }
+      const bought = lines.filter((l) => l.product.id === p.id && (l.variant?.id ?? null) === (v?.id ?? null)).reduce((s, l) => s + l.qty, 0);
+      if (available(v ?? p) - bought < g.qty) {
+        notes.push(`The free gift from "${g.name}" has run out`);
+        continue;
+      }
+      gifts.push({
+        promotionId: g.id,
+        promotionName: g.name,
+        product: p,
+        variant: v,
+        qty: g.qty,
+        title: v ? `${p.name} (${variantLabel(v.attributeValues)})` : p.name,
+        imageUrl: v?.imageUrl ?? p.images[0]?.imageUrl ?? null,
+      });
+    }
+    return { gifts, notes };
+  }
+
+  /** Promotions as the cart, checkout and admin order form show them. */
+  private promotionsView(promo: Awaited<ReturnType<StorefrontService["promotionQuote"]>>, droppedForCoupon = false) {
+    const r = promo.result;
+    return {
+      droppedForCoupon,
+      total: droppedForCoupon ? 0 : r.total,
+      discount: droppedForCoupon ? null : r.discount,
+      bxgy: droppedForCoupon ? [] : r.bxgy,
+      gifts: droppedForCoupon
+        ? []
+        : promo.gifts.map((g) => ({
+            promotionId: g.promotionId,
+            promotionName: g.promotionName,
+            productId: String(g.product.id),
+            variantId: g.variant ? String(g.variant.id) : null,
+            title: g.title,
+            qty: g.qty,
+            imageUrl: g.imageUrl,
+          })),
+      freeDelivery: droppedForCoupon ? null : r.freeDelivery,
+      nudges: droppedForCoupon ? [] : r.nudges,
+      notes: droppedForCoupon ? [] : promo.notes,
+    };
+  }
+
+  /**
+   * Coupons the cart can offer: public ones anyone may use, plus ones given to the signed-in
+   * customer. Private codes are never listed. Limits are checked again when one is applied.
+   */
+  async availableCoupons() {
+    const now = new Date();
+    const customerId = this.ctx.customer?.id;
+    const email = customerId
+      ? (await prisma.customer.findFirst({ where: { id: customerId, storeId: this.storeId }, select: { email: true } }))?.email?.toLowerCase()
+      : undefined;
+    const rows = await prisma.coupon.findMany({
+      where: {
+        storeId: this.storeId,
+        isActive: true,
+        audience: { in: email ? ["public", "given"] : ["public"] },
+        AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
+      },
+      orderBy: [{ expiresAt: "asc" }, { id: "desc" }],
+      take: 50,
+    });
+    return rows
+      .filter((c) => c.totalUsageLimit === null || c.usageCount < c.totalUsageLimit)
+      .filter((c) => c.audience !== "given" || (Array.isArray(c.customerEmails) && (c.customerEmails as string[]).some((e) => e.toLowerCase() === email)))
+      .map((c) => {
+        const amount = num(c.amount);
+        const summary =
+          c.type === "PERCENTAGE" ? `${amount}% off` : c.type === "FREE_SHIPPING" ? "Free delivery" : `৳${amount} off`;
+        return {
+          code: c.code,
+          summary: c.freeShipping && c.type !== "FREE_SHIPPING" ? `${summary} + free delivery` : summary,
+          description: c.description,
+          minSubtotal: c.minSubtotal === null ? null : num(c.minSubtotal),
+          expiresAt: c.expiresAt?.toISOString() ?? null,
+          forYou: c.audience === "given",
+          worksWithPromotions: c.worksWithPromotions,
+        };
+      });
+  }
+
   async applyCoupon(dto: ApplyCouponDto) {
     const lines = await this.priceLines(dto.items);
-    const result = await this.evaluateCoupon(dto.code, lines, dto.email);
+    const promo = await this.promotionQuote(lines);
+    const result = await this.evaluateCoupon(dto.code, lines, dto.email, promo.lineOff);
     if (!result.ok) {
       return { valid: false, couponCode: dto.code, discountAmount: 0, errorMessage: result.error };
     }
@@ -641,7 +789,9 @@ export class StorefrontService {
       freeShipping: result.freeShipping,
       shippingDiscount,
       message: result.coupon.description ?? undefined,
-      newSubtotal: round2(result.subtotal - result.discount),
+      newSubtotal: round2(result.subtotal - result.discount - (result.coupon.worksWithPromotions ? promo.result.total : 0)),
+      /** False: the automatic promotions come off the order while this coupon is on it. */
+      worksWithPromotions: result.coupon.worksWithPromotions,
     };
   }
 
@@ -740,13 +890,14 @@ export class StorefrontService {
       delivery = { zoneId: null, code: "pickup", name: "Pickup / walk-in", fee: 0 };
     }
 
-    // Coupon, then the staff discount on what's left.
-    let coupon: any = null;
+    // Automatic promotions, then the coupon, then the staff discount on what's left.
+    const promo = await this.promotionQuote(input.applyPromotions === false ? [] : lines);
+    let coupon: Coupon | null = null;
     let couponDiscount = 0;
     let freeShipping = false;
     let couponError: string | null = null;
     if (input.couponCode && lines.length) {
-      const r = await this.evaluateCoupon(input.couponCode, lines, input.email ?? undefined);
+      const r = await this.evaluateCoupon(input.couponCode, lines, input.email ?? undefined, promo.lineOff);
       if (r.ok) {
         coupon = r.coupon;
         couponDiscount = r.discount;
@@ -756,7 +907,15 @@ export class StorefrontService {
         fail(r.error, "COUPON_INVALID");
       }
     }
-    const afterCoupon = round2(itemsSubtotal - couponDiscount);
+    const promotionsOff = !!coupon && !coupon.worksWithPromotions;
+    const promotions = this.promotionsView(promo, promotionsOff);
+    const promotionDiscount = promotions.total;
+    const promoLineOff = promotionsOff ? lines.map(() => 0) : promo.lineOff;
+    const gifts = promotionsOff ? [] : promo.gifts;
+    // Free delivery from a promotion applies to the store's delivery options, not a fee staff typed.
+    const freeDeliveryApplied = !!promotions.freeDelivery && "methodId" in input.delivery && (delivery?.fee ?? 0) > 0;
+    if (freeDeliveryApplied) freeShipping = true;
+    const afterCoupon = round2(itemsSubtotal - promotionDiscount - couponDiscount);
     const manualDiscount = input.manualDiscount
       ? round2(
           Math.min(
@@ -767,7 +926,7 @@ export class StorefrontService {
           ),
         )
       : 0;
-    const discountTotal = round2(couponDiscount + manualDiscount);
+    const discountTotal = round2(promotionDiscount + couponDiscount + manualDiscount);
     const shippingTotal = freeShipping ? 0 : round2(delivery?.fee ?? 0);
 
     // Tax on the discounted subtotal + shipping (same inputs the checkout page shows).
@@ -798,7 +957,11 @@ export class StorefrontService {
       delivery,
       coupon,
       couponError,
-      totals: { itemsSubtotal, couponDiscount, manualDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal, qty, weightKG },
+      promotions,
+      freeDeliveryApplied,
+      promoLineOff,
+      gifts,
+      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal, qty, weightKG },
     };
   }
 
@@ -863,7 +1026,61 @@ export class StorefrontService {
         if (bumped.count === 0) throw new BadRequestError("This coupon has reached its usage limit", "COUPON_ALREADY_USED");
       }
 
-      const discountRatio = discountTotal > 0 && itemsSubtotal > 0 ? discountTotal / itemsSubtotal : 0;
+      // Free gifts: taken from stock like any line; one that sold out meanwhile is left out.
+      const giftItems: Prisma.OrderItemUncheckedCreateWithoutOrderInput[] = [];
+      for (const g of q.gifts) {
+        const row = g.variant ?? g.product;
+        if (row.manageStock) {
+          const where = { id: row.id, ...(row.allowBackorder ? {} : { stockQty: { gte: g.qty + row.reservedStock } }) };
+          const updated = g.variant
+            ? await t.productVariant.updateMany({ where, data: { stockQty: { decrement: g.qty } } })
+            : await t.product.updateMany({ where, data: { stockQty: { decrement: g.qty } } });
+          if (updated.count === 0) continue;
+          await t.inventoryLog.create({
+            data: {
+              productId: g.product.id,
+              variantId: g.variant?.id ?? null,
+              changeQty: -g.qty,
+              reason: "ORDER_CREATE",
+              referenceId: orderKey,
+              qtyBefore: row.stockQty ?? 0,
+              qtyAfter: (row.stockQty ?? 0) - g.qty,
+            },
+          });
+        }
+        giftItems.push({
+          productId: g.product.id,
+          variantId: g.variant?.id ?? null,
+          productName: g.product.name,
+          productSku: g.variant?.sku ?? g.product.sku,
+          variantValues: (g.variant?.attributeValues as Prisma.InputJsonValue) ?? undefined,
+          imageUrl: g.imageUrl,
+          quantity: g.qty,
+          unitPrice: 0,
+          lineSubtotal: 0,
+          lineDiscount: 0,
+          lineTax: 0,
+          lineTotal: 0,
+          meta: { gift: { promotionId: g.promotionId, promotionName: g.promotionName } },
+        });
+      }
+      const applied = [
+        ...(q.promotions.discount ? [{ id: q.promotions.discount.id, name: q.promotions.discount.name, type: "discount", amount: q.promotions.discount.amount }] : []),
+        ...q.promotions.bxgy.map((b) => ({ id: b.id, name: b.name, type: "bxgy", amount: b.amount, productName: b.productName, freeUnits: b.freeUnits })),
+        ...(q.promotions.freeDelivery && q.freeDeliveryApplied ? [{ id: q.promotions.freeDelivery.id, name: q.promotions.freeDelivery.name, type: "free_delivery", amount: 0 }] : []),
+        ...giftItems.map((g) => {
+          const m = (g.meta as { gift: { promotionId: string; promotionName: string } }).gift;
+          return { id: m.promotionId, name: m.promotionName, type: "free_gift", amount: 0, gift: g.productName, qty: g.quantity };
+        }),
+      ];
+      const usedIds = [...new Set(applied.map((a) => BigInt(a.id)))];
+      if (usedIds.length) await t.promotion.updateMany({ where: { id: { in: usedIds }, storeId }, data: { usedCount: { increment: 1 } } });
+
+      // Promotions come off the lines they apply to; the coupon and staff discount spread over what's left.
+      const promoOff = q.promoLineOff;
+      const promotionDiscount = q.totals.promotionDiscount;
+      const restDiscount = round2(discountTotal - promotionDiscount);
+      const restRatio = restDiscount > 0 && itemsSubtotal - promotionDiscount > 0 ? restDiscount / (itemsSubtotal - promotionDiscount) : 0;
       // Spread the item share of the tax (tax total minus the shipping share) across lines.
       const taxable = itemsSubtotal - discountTotal;
       const itemTaxRatio = taxable > 0 ? (taxTotal * (taxable / (taxable + shippingTotal))) / taxable : 0;
@@ -917,14 +1134,17 @@ export class StorefrontService {
           grandTotal,
           couponUsed: coupon?.code ?? null,
           couponDiscountAmount: q.totals.couponDiscount,
+          promotionDiscount,
+          promotions: applied.length ? (applied as Prisma.InputJsonValue) : undefined,
           manualDiscount: q.totals.manualDiscount,
           paymentGatewayCode: gateway.code,
           paymentStatus: meta.paid ? "paid" : "unpaid",
           paidAt: meta.paid ? new Date() : null,
           transactionId: meta.transactionId ?? null,
           items: {
-            create: lines.map((l) => {
-              const lineDiscount = round2(l.lineSubtotal * discountRatio);
+            create: [
+              ...lines.map((l, i) => {
+              const lineDiscount = round2((promoOff[i] ?? 0) + (l.lineSubtotal - (promoOff[i] ?? 0)) * restRatio);
               const lineTax = round2((l.lineSubtotal - lineDiscount) * itemTaxRatio);
               return {
                 productId: l.product.id,
@@ -944,6 +1164,8 @@ export class StorefrontService {
                   : undefined,
               };
             }),
+              ...giftItems,
+            ],
           },
           statusHistory: {
             create: { status, note: meta.historyNote, notifyCustomer: meta.notifyCustomer ?? true, adminId: meta.createdByAdminId ?? null },
@@ -1257,9 +1479,13 @@ function orderView(o: OrderWithItems) {
       qty: i.quantity,
       price: num(i.unitPrice),
       lineTotal: num(i.lineSubtotal),
+      /** A free gift from a promotion (price 0). */
+      giftFrom: ((i.meta as { gift?: { promotionName?: string } } | null)?.gift?.promotionName) ?? null,
     })),
     itemsSubtotal: num(o.itemsSubtotal),
     discountTotal: num(o.discountTotal),
+    promotionDiscount: num(o.promotionDiscount),
+    promotions: (o.promotions as { name: string; type: string; amount: number }[] | null) ?? [],
     couponUsed: o.couponUsed,
     shippingTotal: num(o.shippingTotal),
     taxTotal: num(o.taxTotal),

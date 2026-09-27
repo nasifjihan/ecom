@@ -71,9 +71,11 @@ export interface MyOrder {
   phone: string | null;
   shippingMethodName: string | null;
   shipping: { name: string; address: string; city: string | null; upazila?: string | null; division: string | null; postcode: string | null; country: string | null };
-  items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
+  items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
   itemsSubtotal: number;
   discountTotal: number;
+  promotionDiscount?: number;
+  promotions?: { name: string; type: string; amount: number }[];
   couponUsed: string | null;
   shippingTotal: number;
   taxTotal: number;

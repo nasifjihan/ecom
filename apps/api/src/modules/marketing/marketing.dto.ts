@@ -61,9 +61,20 @@ const BaseCouponDto = z.object({
   expiresAt: z.coerce.date().optional(),
   isActive: z.boolean().default(true),
   autoApply: z.boolean().default(false),
+  /** private = typed code; public = listed in the cart for anyone; given = only customerEmails. */
+  audience: z.enum(["private", "public", "given"]).default("private"),
+  /** Off: no automatic promotion on the order, and flash-sale items don't count toward the coupon. */
+  worksWithPromotions: z.boolean().default(true),
 });
 
 export const CreateCouponDto = BaseCouponDto.superRefine((v, ctx) => {
+  if (v.audience === "given" && !v.customerEmails?.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Add the email of at least one customer to give this coupon to",
+      path: ["customerEmails"],
+    });
+  }
   if (v.minSubtotal !== undefined && v.maxSubtotal !== undefined && v.minSubtotal > v.maxSubtotal) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -100,6 +111,7 @@ export type UpdateCouponDto = z.infer<typeof UpdateCouponDto>;
 
 const BaseCouponSearchQueryDto = PaginationSchema.extend({
   status: z.enum(["active", "inactive", "expired"]).optional(),
+  audience: z.enum(["private", "public", "given"]).optional(),
   type: z.nativeEnum(CouponType).optional(),
   minAmount: z.coerce.number().nonnegative().optional(),
   maxAmount: z.coerce.number().nonnegative().optional(),

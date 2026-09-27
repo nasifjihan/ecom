@@ -81,9 +81,12 @@ export type OrderDetail = {
   shippingMethodName: string;
   shipping: OrderAddressSummary;
   billing: OrderAddressSummary;
-  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
+  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
   itemsSubtotal: number;
   discountTotal: number;
+  /** Part of discountTotal from automatic promotions, listed in `promotions`. */
+  promotionDiscount?: number;
+  promotions?: { name: string; type: string; amount: number }[];
   couponUsed?: string | null;
   shippingTotal: number;
   taxTotal: number;
@@ -127,6 +130,8 @@ export type CouponApplyResult = {
   message?: string;
   newCartTotal?: number;
   newSubtotal?: number;
+  /** False: the store's automatic promotions come off the order while this coupon is on it. */
+  worksWithPromotions?: boolean;
   /** Shipping amount waived by a free-shipping coupon (0 otherwise). */
   shippingDiscount?: number;
   errorMessage?: string;

@@ -45,7 +45,7 @@ import {
 } from "./modules/orders";
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
-import { marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter } from "./modules/marketing";
+import { adminPromotionsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
@@ -157,6 +157,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/account", storefrontAccountRouter);
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
+  app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);
   app.use("/api/admin/marketing/flash-sales", marketingFlashSalesRouter);
   app.use("/api/admin/marketing/reviews", marketingReviewsRouter);
@@ -170,6 +171,7 @@ export function buildApp(): Express {
   app.use("/api/admin/emails", adminEmailsRouter);                   // email templates, preview, test send, sent log
   app.use("/api/admin/content", adminContentRouter);                 // pages, blog, FAQs, menus, theme, homepage
   app.use("/api/storefront/content", storefrontContentRouter);
+  app.use("/api/storefront/promotions", storefrontPromotionsRouter);
   app.use("/api/storefront", storefrontCatalogRouter);             // Batch #10: public catalog
   app.use("/uploads", express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "uploads"), { maxAge: "1y", immutable: true }));
 

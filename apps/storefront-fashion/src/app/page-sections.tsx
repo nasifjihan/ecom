@@ -19,6 +19,8 @@ import {
 } from "@ecom/storefront-base";
 import { toast } from "sonner";
 import type { Faq, HomepageSection } from "@/lib/content";
+import type { SlotPromotion } from "@/lib/promotions";
+import { PromoBanners, PromoOffers } from "./_components/promotions";
 
 const CATEGORY_COLORS = [
   "from-pink-400 to-rose-500",
@@ -62,8 +64,30 @@ type SectionOf<T extends HomepageSection["type"]> = Extract<HomepageSection, { t
  * Renders blocks from the admin, for the homepage (Online Store > Homepage) and for pages built from
  * blocks (Content > Pages). FAQ blocks need the published FAQs, which the server page fetches.
  */
-export function PageSections({ sections, faqs = [], className }: { sections: HomepageSection[] | null; faqs?: Faq[]; className?: string }) {
+type HomePromotions = { hero: SlotPromotion[]; belowCategories: SlotPromotion[]; offers: SlotPromotion[] };
+
+export function PageSections({
+  sections,
+  faqs = [],
+  className,
+  promotions,
+}: {
+  sections: HomepageSection[] | null;
+  faqs?: Faq[];
+  className?: string;
+  /** Home only: promotions for the slots under the hero, below categories and the offers section. */
+  promotions?: HomePromotions;
+}) {
   const list = sections ?? FALLBACK;
+  // Where each promotion slot goes: after the section it names, or at the top / end without one.
+  const heroAt = list.findIndex((s) => s.type === "hero");
+  const categoriesAt = list.findIndex((s) => s.type === "categories");
+  const productsAt = list.findIndex((s) => s.type === "featured_products" || s.type === "new_arrivals");
+  const after = (i: number) => [
+    ...(promotions && i === heroAt ? [<PromoBanners key="promo-hero" promotions={promotions.hero} />] : []),
+    ...(promotions && i === categoriesAt ? [<PromoBanners key="promo-below-categories" promotions={promotions.belowCategories} />] : []),
+    ...(promotions && i === (productsAt >= 0 ? productsAt : list.length - 1) ? [<PromoOffers key="promo-offers" promotions={promotions.offers} />] : []),
+  ];
   const { addItem } = useCart();
   const router = useRouter();
   const [wishlisted, setWishlisted] = React.useState<Set<string>>(new Set());
@@ -112,8 +136,23 @@ export function PageSections({ sections, faqs = [], className }: { sections: Hom
 
   return (
     <div className={`flex flex-col gap-10 md:gap-16 pb-10 md:pb-16 ${className ?? ""}`}>
+      {promotions && heroAt < 0 && <PromoBanners promotions={promotions.hero} />}
+      {promotions && categoriesAt < 0 && <PromoBanners promotions={promotions.belowCategories} />}
       {list.map((s, i) => {
         const key = s.id ?? `${s.type}-${i}`;
+        const extras = after(i);
+        if (!extras.length) return renderSection(s, key);
+        return (
+          <React.Fragment key={key}>
+            {renderSection(s, key)}
+            {extras}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
+  function renderSection(s: HomepageSection, key: string) {
         switch (s.type) {
           case "hero":
             return <Hero key={key} section={s} />;
@@ -138,9 +177,7 @@ export function PageSections({ sections, faqs = [], className }: { sections: Hom
           default:
             return null;
         }
-      })}
-    </div>
-  );
+  }
 }
 
 function Hero({ section }: { section: SectionOf<"hero"> }) {

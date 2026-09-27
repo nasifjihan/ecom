@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PromoSlotStrip } from "@/app/_components/promotions";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -268,6 +269,8 @@ export default function ProductsPage() {
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">All Products</h1>
         <p className="text-muted-foreground">{total > 0 ? `Browse ${total} fashion item${total === 1 ? "" : "s"}` : "Browse our catalog"}</p>
       </div>
+
+      {categorySlug && <PromoSlotStrip slot="category_banner" categorySlug={categorySlug} className="mb-6" />}
 
       <div className="flex flex-col md:flex-row gap-6 md:gap-8">
         <aside className="hidden md:block w-64 lg:w-72 flex-shrink-0">

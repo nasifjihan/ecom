@@ -279,6 +279,7 @@ export default function ThankYouPage() {
                           {it.title}
                         </p>
                         {it.variantLabel && <p className="text-xs text-muted-foreground">{it.variantLabel}</p>}
+                        {it.giftFrom && <p className="text-xs font-semibold text-pink-600">Free gift · {it.giftFrom}</p>}
                       </div>
                       <div className="text-right py-0.5 flex-shrink-0">
                         <p className="font-bold">{formatBDT(lineTotal)}</p>
@@ -296,10 +297,18 @@ export default function ThankYouPage() {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-medium">{formatBDT(order.itemsSubtotal)}</span>
                 </div>
-                {order.discountTotal > 0 && (
+                {(order.promotions ?? [])
+                  .filter((p) => p.amount > 0)
+                  .map((p) => (
+                    <div key={`${p.type}-${p.name}`} className="flex justify-between text-green-600">
+                      <span>{p.name}</span>
+                      <span className="font-medium">-{formatBDT(p.amount)}</span>
+                    </div>
+                  ))}
+                {order.discountTotal - (order.promotionDiscount ?? 0) > 0.004 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Coupon{order.couponUsed ? ` "${order.couponUsed}"` : ""}</span>
-                    <span className="font-medium">-{formatBDT(order.discountTotal)}</span>
+                    <span>{order.couponUsed ? `Coupon "${order.couponUsed}"` : "Discount"}</span>
+                    <span className="font-medium">-{formatBDT(order.discountTotal - (order.promotionDiscount ?? 0))}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

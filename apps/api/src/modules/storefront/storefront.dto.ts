@@ -59,6 +59,9 @@ export type StorefrontAddressDto = z.infer<typeof StorefrontAddressDto>;
 /** The cart page asks for current prices (flash sales start and end while a cart sits in the browser). */
 export const CartPricesDto = z.object({
   items: z.array(CartLineDto.passthrough()).min(1).max(100),
+  /** The coupon the customer applied: one that doesn't work with promotions switches them off. */
+  couponCode: z.string().trim().toUpperCase().max(40).optional(),
+  email: z.string().trim().toLowerCase().email().optional(),
 });
 export type CartPricesDto = z.infer<typeof CartPricesDto>;
 

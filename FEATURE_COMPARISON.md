@@ -69,10 +69,10 @@ These are our advantages. Keep them.
 | Feature | Status | Note |
 |---|---|---|
 | Coupons (%, fixed, free shipping, limits, first order, include/exclude) | ✅ | |
-| Coupon audience: private / public "collectable" / given to customer | ❌ | |
-| Coupon "works with promotions" toggle | ❌ | |
-| **Automatic promotions** (no code): discount, free gift over spend, buy X get Y, free delivery | ❌ | BOGO is currently rejected |
-| Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ❌ | Fits our page builder |
+| Coupon audience: private / public "collectable" / given to customer | ✅ | Batch 23: public and given coupons listed at checkout |
+| Coupon "works with promotions" toggle | ✅ | Batch 23 |
+| **Automatic promotions** (no code): discount, free gift over spend, buy X get Y, free delivery | ✅ | Batch 23: one best discount + stacking buy X get Y, gifts from stock, nudges |
+| Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ✅ | Batch 23 (fixed home positions; no page-builder block yet) |
 | Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ❌ | |
 | Newsletter subscribers | 🟡 | Storefront shows a signup block; nothing stores subscribers and there's no admin list |
 | Search terms analytics (what customers search) | ❌ | |
@@ -174,7 +174,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Idempotency key on order create and webhooks | ❌ |
 | Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 (classes exist, untested) |
 | Encrypted secrets for gateway/courier/SMS keys | 🟡 | Batch 22: courier keys, webhook secrets and tokens encrypted (AES-256-GCM). Payment gateway keys still come from env |
-| Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing only) |
+| Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
 | OpenAPI docs at `/api/docs` | ❌ |
 | Audit row on every admin change | ✅ |
 | Background jobs: courier sync, COD, exports, imports | 🟡 (email, courier sync) |
@@ -193,7 +193,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 20 ✅ | **Separate shipment and return statuses**: parcels, returns flow, status history per kind | Needed for couriers and COD | M |
 | 21 ✅ | **COD and payment verification**: verify bKash/Nagad TrxIDs, cash collections, courier settlements with shortfall | Money reconciliation | M |
 | 22 ✅ | **Courier integrations**: Steadfast, Pathao, RedX adapters (book, track, label), bulk courier assignment, encrypted credentials | Saves hours per day | L |
-| 23 | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
+| 23 ✅ | **Automatic promotions**: discount, free gift, buy X get Y, free delivery, display slots; coupon audience + "works with promotions" | Big sales driver, Eid campaigns | L |
 | 24 | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
 | 26 | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |

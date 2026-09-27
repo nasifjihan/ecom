@@ -26,6 +26,8 @@ export interface ManualOrderInput {
   };
   delivery: ManualDelivery;
   couponCode?: string;
+  /** The store's automatic promotions; on unless staff switch them off. */
+  applyPromotions?: boolean;
   discount?: { type: "percent" | "fixed"; value: number } | null;
   paymentGateway: string;
   paid: boolean;
@@ -35,6 +37,18 @@ export interface ManualOrderInput {
   customerNote?: string;
   staffNote?: string;
   notifyCustomer: boolean;
+}
+
+/** Automatic promotions on a priced order (StorefrontService.promotionsView). */
+export interface OrderPromotions {
+  droppedForCoupon: boolean;
+  total: number;
+  discount: { id: string; name: string; amount: number } | null;
+  bxgy: { id: string; name: string; productName: string; freeUnits: number; amount: number }[];
+  gifts: { promotionId: string; promotionName: string; title: string; qty: number; imageUrl: string | null }[];
+  freeDelivery: { id: string; name: string } | null;
+  nudges: { id: string; message: string }[];
+  notes: string[];
 }
 
 export interface ManualOrderQuote {
@@ -56,9 +70,11 @@ export interface ManualOrderQuote {
   delivery: { code: string; name: string; fee: number } | null;
   coupon: { code: string } | null;
   couponError: string | null;
+  promotions: OrderPromotions;
   discountCapPct: number;
   totals: {
     itemsSubtotal: number;
+    promotionDiscount: number;
     couponDiscount: number;
     manualDiscount: number;
     discountTotal: number;

@@ -63,6 +63,8 @@ storefrontCheckoutRouter.post(
   storefrontController.applyCoupon,
 );
 
+storefrontCheckoutRouter.get("/coupons/available", authMiddleware("optional"), storefrontController.availableCoupons);
+
 storefrontCheckoutRouter.get("/payment-methods", storefrontController.paymentMethods);
 
 storefrontCheckoutRouter.get(

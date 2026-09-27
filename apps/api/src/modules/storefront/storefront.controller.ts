@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { ctrl, envelope, type RequestContext } from "../../core";
 import { StorefrontService } from "./storefront.service";
+import type { CartPricesDto } from "./storefront.dto";
 
 type Req = Request & { ctx: RequestContext };
 const svc = (req: Req) => new StorefrontService(req.ctx);
@@ -23,7 +24,12 @@ export const storefrontController = {
   }),
 
   cartPrices: ctrl(async (req: Req, res: Response) => {
-    envelope(res, { data: await svc(req).cartPrices(req.body.items) });
+    const body = req.body as CartPricesDto;
+    envelope(res, { data: await svc(req).cartPrices(body.items, body.couponCode, body.email) });
+  }),
+
+  availableCoupons: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).availableCoupons() });
   }),
 
   applyCoupon: ctrl(async (req: Req, res: Response) => {

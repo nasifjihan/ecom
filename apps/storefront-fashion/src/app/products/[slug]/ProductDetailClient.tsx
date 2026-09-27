@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PromoSlotStrip } from "@/app/_components/promotions";
 import Link from "next/link";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Thumbs, FreeMode, Navigation } from "swiper/modules";
@@ -360,6 +361,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
           </div>
 
           {flashSale && <FlashSaleStrip sale={flashSale} />}
+          <PromoSlotStrip slot="product_detail" productId={product.id} className="mb-4" />
           <div className="flex flex-wrap items-baseline gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-secondary/5 border">
             <span className="text-3xl md:text-4xl font-black text-primary">{formatMoney(price)}</span>
             {compareAtPrice && (

@@ -65,6 +65,8 @@ const Base = z.object({
   address: Address.default({}),
   delivery: Delivery.default({ type: "pickup" }),
   couponCode: z.string().trim().toUpperCase().max(40).optional().or(z.literal("")),
+  /** The store's automatic promotions (discounts, free gifts, free delivery); on unless staff turn them off. */
+  applyPromotions: z.boolean().default(true),
   discount: Discount.optional().nullable(),
   paymentGateway: z.string().trim().toLowerCase().min(2).max(32).default("cod"),
   paid: z.boolean().default(false),
@@ -192,6 +194,7 @@ export class ManualOrderService {
       // The form shows the zone's options as soon as an area is picked, whatever is selected yet.
       listShippingOptions: !!dto.address.locationId || !!dto.address.district,
       couponCode: dto.couponCode || undefined,
+      applyPromotions: dto.applyPromotions,
       manualDiscount: dto.discount && dto.discount.value > 0 ? dto.discount : undefined,
       paymentGateway: dto.paymentGateway,
       // Staff may record any payment method the store has set up, even ones not offered online.
@@ -246,6 +249,7 @@ export class ManualOrderService {
       delivery: quote.delivery,
       coupon: quote.coupon ? { code: quote.coupon.code as string } : null,
       couponError: quote.couponError,
+      promotions: quote.promotions,
       discountCapPct: cap,
       totals: quote.totals,
       problems: quote.problems,

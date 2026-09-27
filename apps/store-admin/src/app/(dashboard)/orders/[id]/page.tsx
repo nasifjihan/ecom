@@ -84,6 +84,7 @@ import {
   type Order,
   type OrderStatus,
   type OrderNote,
+  type AppliedPromotion,
   type OrderLine,
 } from "@/lib/features/operations/operations-api-slice";
 import { FULFILLMENT_LABELS, FULFILLMENT_STYLES, RETURN_LABELS, RETURN_STYLES, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
@@ -396,6 +397,11 @@ export default function OrderDetailPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="font-medium text-slate-900 dark:text-white text-sm leading-tight">{l.productName}</div>
+                            {l.giftFrom && (
+                              <span className="mt-0.5 inline-block rounded bg-pink-100 px-1.5 text-[11px] font-medium text-pink-800 dark:bg-pink-500/15 dark:text-pink-300">
+                                Free gift · {l.giftFrom}
+                              </span>
+                            )}
                             <div className="text-xs text-slate-500 font-mono">{l.sku}</div>
                           </div>
                         </div>
@@ -410,18 +416,34 @@ export default function OrderDetailPage() {
             </ScrollArea>
             <div className="p-4 space-y-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Subtotal</span><span className="font-medium">{formatCurrency(order.subtotal)}</span></div>
-              {order.discountAmount - order.manualDiscount > 0 && (
+              {order.promotions
+                .filter((p: AppliedPromotion) => p.amount > 0)
+                .map((p: AppliedPromotion) => (
+                  <div key={`${p.id}-${p.type}`} className="flex justify-between text-sm">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      {p.name}
+                      {p.type === "bxgy" && p.freeUnits ? <span className="ml-1 text-xs">({p.freeUnits} free)</span> : null}
+                    </span>
+                    <span className="font-medium text-red-600">-{formatCurrency(p.amount)}</span>
+                  </div>
+                ))}
+              {order.discountAmount - order.manualDiscount - order.promotionDiscount > 0.004 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">
                     Discount {order.couponCode && <span className="text-indigo-600 dark:text-indigo-400 font-mono text-xs ml-1">({order.couponCode})</span>}
                   </span>
-                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount - order.manualDiscount)}</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount - order.manualDiscount - order.promotionDiscount)}</span>
                 </div>
               )}
               {order.manualDiscount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">Staff discount</span>
                   <span className="font-medium text-red-600">-{formatCurrency(order.manualDiscount)}</span>
+                </div>
+              )}
+              {order.promotions.some((p: AppliedPromotion) => p.type === "free_delivery") && (
+                <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                  Free delivery: {order.promotions.find((p: AppliedPromotion) => p.type === "free_delivery")!.name}
                 </div>
               )}
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Shipping ({order.shippingMethod})</span><span className="font-medium">{formatCurrency(order.shippingCost)}</span></div>

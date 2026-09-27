@@ -88,6 +88,7 @@ model Store {
   refunds              Refund[]
   returns              ReturnRequest[]
   coupons              Coupon[]
+  promotions           Promotion[]
   flashSales           FlashSale[]
   giftCards            GiftCard[]
   banners              Banner[]
@@ -1155,6 +1156,9 @@ model Order {
   orderKey               String               @unique
   couponUsed             String?
   couponDiscountAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  /// Automatic promotions: their discount (part of discountTotal) and what applied, gifts included.
+  promotionDiscount      Decimal              @default(0) @db.Decimal(12, 2)
+  promotions             Json?
   /// Discount a staff member gave on a manual order (part of discountTotal).
   manualDiscount         Decimal              @default(0) @db.Decimal(12, 2)
   /// Where the order came from: website, phone, facebook, instagram, whatsapp, messenger, walk_in, other.
@@ -1569,11 +1573,60 @@ model Coupon {
   autoApply         Boolean      @default(false)
   rewardType        String?
   rewardValue       Json?
+  /// private = typed code; public = listed in the cart for anyone to use; given = only the customerEmails.
+  audience          String       @default("private")
+  /// Off: no automatic promotion on the order and flash-sale items don't count toward this coupon.
+  worksWithPromotions Boolean    @default(true)
   appliedCarts      Cart[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
   @@unique([storeId, code])
+  @@index([storeId, isActive])
+}
+
+/// Automatic (code-free) offers: discount, free gift over a spend, buy X get Y free, free delivery.
+/// Rules live in modules/marketing/promotions.rules.ts.
+model Promotion {
+  id               BigInt    @id @default(autoincrement())
+  storeId          BigInt
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name             String
+  /// discount | free_gift | bxgy | free_delivery
+  type             String
+  /// percentage | fixed (discount only)
+  discountType     String?
+  discountValue    Decimal?  @db.Decimal(12, 2)
+  /// Largest discount for a percentage offer.
+  maxDiscount      Decimal?  @db.Decimal(12, 2)
+  minOrder         Decimal?  @db.Decimal(12, 2)
+  minQty           Int?
+  /// Scope: products or whole categories; both empty = the whole cart.
+  productIds       BigInt[]  @default([])
+  categoryIds      BigInt[]  @default([])
+  /// Flash-sale / marked-down items count and get discounted too.
+  includeSaleItems Boolean   @default(false)
+  /// bxgy: buy `buyQty` of one product, get `getQty` more of it free.
+  buyQty           Int?
+  getQty           Int?
+  /// free_gift: the product (and option) added at no charge.
+  giftProductId    BigInt?
+  giftVariantId    BigInt?
+  giftQty          Int       @default(1)
+  /// Where the storefront shows it (announcement_bar, home_hero, cart, …) and what it says.
+  slots            String[]  @default([])
+  headline         String?
+  message          String?
+  imageUrl         String?
+  linkUrl          String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean   @default(true)
+  /// Orders it applied to (counted when the order is placed).
+  usedCount        Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
   @@index([storeId, isActive])
 }
 

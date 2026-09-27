@@ -102,6 +102,20 @@ export interface OrderLine {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  /** A free gift from this promotion. */
+  giftFrom?: string;
+}
+
+/** An automatic promotion the order got (Order.promotions). */
+export interface AppliedPromotion {
+  id: string;
+  name: string;
+  type: "discount" | "bxgy" | "free_gift" | "free_delivery";
+  amount: number;
+  productName?: string;
+  freeUnits?: number;
+  gift?: string;
+  qty?: number;
 }
 
 export interface Order {
@@ -139,6 +153,8 @@ export interface Order {
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
+  promotionDiscount: number;
+  promotions: AppliedPromotion[];
   /** From the order's parcels: unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned. */
   fulfillmentStatus: string;
   /** From the newest return: none, requested, approved, received, refunded, rejected. */
@@ -541,6 +557,8 @@ interface ApiOrder {
   couponUsed: string | null;
   source?: string;
   manualDiscount?: string;
+  promotionDiscount?: string;
+  promotions?: AppliedPromotion[] | null;
   createdByAdmin?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -557,6 +575,7 @@ interface ApiOrder {
     unitPrice: string;
     lineTotal: string;
     variantValues: Record<string, string> | null;
+    meta?: { gift?: { promotionName?: string } } | null;
   }[];
   statusHistory?: {
     id: string;
@@ -607,6 +626,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     quantity: i.quantity,
     unitPrice: Number(i.unitPrice),
     lineTotal: Number(i.lineTotal),
+    giftFrom: i.meta?.gift?.promotionName,
   }));
   return {
     id: o.id,
@@ -638,6 +658,8 @@ export function fromApiOrder(o: ApiOrder): Order {
     source: o.source ?? "website",
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
+    promotionDiscount: Number(o.promotionDiscount ?? 0),
+    promotions: o.promotions ?? [],
     fulfillmentStatus: o.fulfillmentStatus ?? "unfulfilled",
     returnStatus: o.returnStatus ?? "none",
     refundedTotal: Number(o.refundedTotal ?? 0),

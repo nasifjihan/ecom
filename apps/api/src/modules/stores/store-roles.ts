@@ -40,6 +40,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   marketing: [
     ...g("dashboard"),
+    ...g("promotions"),
     ...g("coupons"),
     ...g("flash_sales"),
     ...g("reviews"),

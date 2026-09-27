@@ -37,6 +37,7 @@ import {
   toast,
 } from "@ecom/storefront-base";
 import { cartLineKey, useCartPriceCheck } from "@/lib/cart-prices";
+import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
 
 function formatBDT(n: number) {
   return formatMoney(n, "BDT");
@@ -45,7 +46,9 @@ function formatBDT(n: number) {
 export default function CartPage() {
   const { items, subtotal, itemCount, updateQty, removeItem, clearCart } = useCart();
   const [mounted, setMounted] = React.useState(false);
-  const { problems, hasProblems } = useCartPriceCheck();
+  const { problems, hasProblems, promotions } = useCartPriceCheck();
+  const promoLines = promotionLines(promotions);
+  const afterOffers = Math.max(0, Math.round((subtotal - (promotions?.droppedForCoupon ? 0 : promotions?.total ?? 0)) * 100) / 100);
 
   React.useEffect(() => setMounted(true), []);
 
@@ -292,6 +295,15 @@ export default function CartPage() {
                   </span>
                   <span className="font-medium">{formatBDT(subtotal)}</span>
                 </div>
+                {promoLines.map((l) => (
+                  <div key={l.id} className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5" /> {l.label}
+                    </span>
+                    <span className="font-medium">−{formatBDT(l.amount)}</span>
+                  </div>
+                ))}
+                <CartPromotionSummary promotions={promotions} />
 
                 <p className="text-xs text-muted-foreground pt-2 border-t">
                   Delivery charge, VAT and promo codes are calculated at checkout from your address.
@@ -302,13 +314,15 @@ export default function CartPage() {
 
               <div className="bg-muted/30 rounded-xl p-4 flex flex-col gap-2">
                 <div className="flex justify-between items-baseline">
-                  <span className="font-semibold text-sm">Subtotal</span>
+                  <span className="font-semibold text-sm">{promoLines.length ? "After offers" : "Subtotal"}</span>
                   <div className="text-right">
-                    <div className="text-2xl font-black text-primary">{formatBDT(subtotal)}</div>
+                    <div className="text-2xl font-black text-primary">{formatBDT(afterOffers)}</div>
                     <div className="text-[11px] text-muted-foreground">Before delivery and VAT</div>
                   </div>
                 </div>
               </div>
+
+              <PromoSlotStrip slot="cart" />
 
               <div className="space-y-2.5">
                 {hasProblems && (
