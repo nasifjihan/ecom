@@ -10,6 +10,8 @@ export interface ProductVariant {
   barcode?: string | null;
   regularPrice?: number | null;
   salePrice?: number | null;
+  /** What one unit cost the shop (purchases set it to the average). */
+  costPrice?: number | null;
   salePriceStartAt?: string | null;
   salePriceEndAt?: string | null;
   manageStock?: boolean;
@@ -40,6 +42,8 @@ export interface Product {
   description?: string | null;
   regularPrice?: number | null;
   salePrice?: number | null;
+  /** What one unit cost the shop (purchases set it to the average). */
+  costPrice?: number | null;
   salePriceStartAt?: string | null;
   salePriceEndAt?: string | null;
   manageStock?: boolean;
@@ -226,6 +230,7 @@ function fromApiVariant(v: ApiRow): ProductVariant {
     ...(v as ProductVariant),
     regularPrice: num(v.regularPrice),
     salePrice: num(v.salePrice),
+    costPrice: num(v.costPrice),
     weight: num(v.weight),
     length: num(v.length),
     width: num(v.width),
@@ -242,6 +247,7 @@ export function fromApiProduct(p: ApiRow): Product {
     status: String(p.status ?? "draft").toUpperCase(),
     regularPrice: num(p.regularPrice),
     salePrice: num(p.salePrice),
+    costPrice: num(p.costPrice),
     weight: num(p.weight),
     length: num(p.length),
     width: num(p.width),

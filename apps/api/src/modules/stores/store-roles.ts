@@ -22,6 +22,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     ...g("media"),
     ...g("inventory"),
     ...g("reviews", "view"),
+    ...g("purchasing", "view", "create"),
   ],
   order_manager: [
     ...g("payments"),
@@ -61,6 +62,8 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   finance: [
     ...g("payments"),
+    ...g("purchasing"),
+    ...g("money_accounts"),
     ...g("dashboard"),
     ...g("orders", "view", "edit"),
     ...g("customers", "view"),
@@ -74,7 +77,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     ...g("shipping", "view"),
     ...g("inventory", "view"),
   ],
-  reports: [...g("dashboard"), ...g("orders", "view"), ...g("payments", "view"), ...g("customers", "view"), ...g("products", "view"), ...g("inventory", "view")],
+  reports: [...g("dashboard"), ...g("orders", "view"), ...g("payments", "view"), ...g("purchasing", "view"), ...g("money_accounts", "view"), ...g("customers", "view"), ...g("products", "view"), ...g("inventory", "view")],
   viewer: PERMISSION_AREAS.filter((a) => a.actions.includes("view") && !["audit_logs", "staff", "roles"].includes(a.key)).map((a) => perm(a.key, "view")),
 };
 

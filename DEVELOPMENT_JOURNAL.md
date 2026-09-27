@@ -2083,3 +2083,117 @@ The storefront pages customers expected but didn't have. Staff get the matching 
 - Search is a simple "contains" match. There's no typo tolerance or ranking beyond sales count; a search engine can come later.
 - Review photos and "helpful" votes.
 - Answering a question doesn't notify the asker.
+
+---
+
+## ✅ BATCH #27 — Purchasing: suppliers, purchases, supplier payments and money accounts (2026-09-27)
+Staff can now record the stock they buy. A purchase adds the stock, sets each product's cost price (including shipping, customs and other charges), and tracks what the shop owes each supplier. Money is paid out of named accounts (cash box, bank, bKash) that keep a ledger. Every new order line now saves its cost, which Batch 28's profit reports will use.
+
+### 27.1 Schema (migration `purchasing`)
+- **Cost prices:**
+  - `Product.costPrice` and `ProductVariant.costPrice`; the product's is filled from the old `supplierCost`;
+  - `OrderItem.unitCost`, saved when an order is placed (option's cost, else the product's).
+- **`Supplier`:**
+  - email is now optional;
+  - adds opening balance and notes.
+- **`Purchase`:**
+  - number `PUR-000001`, supplier;
+  - local / import, country of origin, where it was bought, invoice reference, date;
+  - items subtotal, shipping, customs, other charges, discount, total;
+  - payment term, status received / cancelled, notes.
+- **`PurchaseItem`:** product and option, name, quality grade, qty, unit cost, discount % and ৳, line total, landed unit cost.
+- **`SupplierPayment`:** supplier, optional purchase, account, amount, method, date, reference.
+- **`MoneyAccount`:** name, type (bank / cash / mobile), details, opening balance, in use.
+- **`MoneyTransaction`:** signed amount, kind, what it refers to, note and date. An account's balance is its opening balance plus its transactions and is never edited directly.
+- **`QualityGrade`:** six are seeded per store.
+- **Permissions:**
+  - new areas `purchasing` (view / create / edit / delete) and `money_accounts` (view / create / edit);
+  - finance gets both in full; product managers can view and record purchases; reports and viewer roles can view;
+  - custom roles that could edit stock get purchasing view and create.
+
+### 27.2 Rules (`purchasing.rules.ts`, 37 table tests)
+- **Line total:** qty × unit cost, less the discount %, then less the discount amount. A discount bigger than the line is refused.
+- **Landed cost:**
+  - shipping, customs and other charges, less the purchase discount, are shared over the lines by value, or by quantity when every line is free;
+  - the last line takes the rounding, so the lines always add up to the total.
+- **Cost price:** becomes the weighted average of the stock on hand and what was bought. Stock at zero or below takes the new cost.
+- **Payment terms:**
+  - paid in full now;
+  - part paid (must be above 0 and below the total);
+  - credit, with nothing paid now;
+  - advance, already paid, so nothing now.
+- **Supplier balance:** opening balance + received purchases − payments. A negative balance means paid ahead.
+
+### 27.3 API (`/api/admin/purchasing`)
+- **Suppliers:**
+  - the list comes with balances;
+  - a detail view shows their purchases and payments;
+  - add and edit are available; delete is refused once they have history (turn them off instead).
+- **Purchases:**
+  - `POST /purchases`, all in one transaction:
+    - checks every line (products with options must name one);
+    - adds the stock and moves the cost price to the average;
+    - writes a stock log line (`PURCHASE`, with the purchase number);
+    - records any payment made now.
+  - `POST /purchases/:id/cancel`:
+    - takes the stock back out, and is refused if some was already sold;
+    - logs `PURCHASE_CANCELLED`;
+    - keeps payments on the supplier's account;
+    - leaves cost prices as they are.
+- **Payments:**
+  - Record takes the money out of the account and refuses to take an account below zero or pay from one not in use.
+  - Undo puts the money back as a reversal line.
+- **Accounts:**
+  - list, add, edit;
+  - a ledger with the balance after each line;
+  - `POST /accounts/move` for deposit, withdrawal, transfer (two lines) or correction (can be negative).
+- **Other:**
+  - quality grades (list / add / delete);
+  - a product picker for purchase lines (drafts included, with stock and cost for each option).
+- **Product save:** takes `costPrice`. An option's cost is only changed when it's sent, so saving a product doesn't wipe the cost a purchase set.
+- **Stock value:** now uses the cost price.
+
+### 27.4 Store admin (new "Purchasing" menu)
+- **Purchases:**
+  - the list can be filtered by search, supplier, status and dates, and shows the total received;
+  - **Record purchase** form:
+    - supplier, with an inline "add supplier";
+    - date, invoice number, local / import, and where it was bought;
+    - a product search that adds lines, each with an option choice, grade (with "+ Add grade…"), qty, unit cost, and discount % / ৳;
+    - line totals and **landed cost per unit** as you type;
+    - charges and total;
+    - payment term, the amount paid now, account and method.
+  - The detail page shows items with landed cost, charges, and payments against the purchase, with **Pay supplier** (pre-filled with what's left) and **Cancel purchase**.
+- **Suppliers:** each supplier shows what you owe them (red), have paid ahead (green) or settled. Opening one shows a statement (opening balance, bought, paid, balance, purchases, payments) with Pay, Edit and Delete.
+- **Supplier payments:** a list filtered by supplier, **Pay**, and **Undo**.
+- **Accounts:** account cards with balances, a ledger (in / out / balance), **Move money** (deposit, withdraw, transfer, correct), and add / edit.
+- **Product editor:** the "COGS" box had never been connected to anything. It is now **Cost price**: it saves, and shows the margin against the selling price.
+
+### 27.5 Checked
+- **Tests:** 374/374 API tests, including 37 new purchasing tests.
+  - Vitest also reports 2 unhandled errors from the old batch-9 smoke test: its mocked database has no audit log. They happen on the previous commit too.
+- **By API:**
+  - landed cost (35,000 of items + 500 of charges gave 1,927.14 and 8,114.29 a unit);
+  - stock added and average cost applied;
+  - supplier balance 20,500 (opening balance 5,000 + 35,500 − 20,000);
+  - these were refused: paying more than the cash box held, a missing option, and part-paying without an account;
+  - a transfer, and ledger balances after each line;
+  - undoing a payment returned the money;
+  - cancelling took the stock back out; cancelling twice and deleting a supplier with history were refused.
+- **Chromium:**
+  - recorded an import purchase:
+    - two items, one with an option, and a new grade added from the form;
+    - 10% line discount; shipping, customs and a purchase discount;
+    - part paid; landed costs ৳1,521.43 and ৳1,014.29;
+  - paid the rest from its page (pre-filled 25,500);
+  - the supplier then showed Settled;
+  - moved ৳5,000 between accounts, and the ledger showed it;
+  - the product's cost price showed 1,014.29 with its margin;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The Next apps build.
+
+### 27.6 Not done
+- Purchase orders before the goods arrive, part-received deliveries, and returns to a supplier.
+- Cancelling a purchase doesn't reverse the cost price change (reversing an average after later sales isn't exact).
+- Sales money isn't posted into accounts automatically yet (COD settlements and gateway payments stay in the Batch 21 screens).
+- Editing a recorded purchase isn't possible: cancel it and record it again.

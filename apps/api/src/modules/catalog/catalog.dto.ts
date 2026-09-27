@@ -39,6 +39,8 @@ const BaseProductVariantDto = z.object({
   barcode: z.string().max(100).optional().nullable(),
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** What one unit cost the shop; purchases update it. */
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePriceStartAt: z.coerce.date().optional().nullable(),
   salePriceEndAt: z.coerce.date().optional().nullable(),
   manageStock: z.boolean().default(true),
@@ -95,6 +97,8 @@ const BaseCreateProductDto = z.object({
   description: z.string().max(20000).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** What one unit cost the shop; purchases update it. */
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePriceStartAt: z.coerce.date().optional().nullable(),
   salePriceEndAt: z.coerce.date().optional().nullable(),
   manageStock: z.boolean().default(true),

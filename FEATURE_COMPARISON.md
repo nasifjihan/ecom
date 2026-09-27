@@ -111,8 +111,19 @@ These are our advantages. Keep them.
 ### Wholesale / B2B (reference 16) — all ❌
 Business accounts (approve/reject/suspend), quotations (draft → sent → became order), bulk price tiers per variant, cost + margin → sale price screen.
 
-### Purchasing (reference 17) — all ❌
-Suppliers (balance owed), purchases that receive stock and update cost (landed cost: shipping, customs, other), quality grades, supplier payments, bank/cash/mobile accounts with a transaction ledger. (`Supplier` model exists.)
+### Purchasing (reference 17)
+| Feature | Status | Notes |
+|---|---|---|
+| Suppliers with balance owed (opening balance, bought, paid) and a statement | ✅ | Batch 27: Purchasing → Suppliers |
+| Purchases that receive stock and update cost (weighted average) | ✅ | Batch 27: stock log reason `PURCHASE`; cancelling takes the stock back out |
+| Landed cost: shipping, customs, other charges, purchase discount | ✅ | Batch 27: shared over lines by value |
+| Local / import sourcing, country of origin, source, invoice reference | ✅ | Batch 27 |
+| Quality grades on purchase lines | ✅ | Batch 27: 6 seeded per store, add more from the form |
+| Payment terms: advance, paid in full, part paid, credit | ✅ | Batch 27 |
+| Supplier payments (against a purchase or on account), undo | ✅ | Batch 27 |
+| Bank / cash / mobile accounts with a ledger, deposits, withdrawals, transfers, corrections | ✅ | Batch 27: Purchasing → Accounts; balances can't go below zero |
+| Cost price on products and options; cost saved on each order line | ✅ | Batch 27: margin shown in the product editor; `OrderItem.unitCost` feeds Batch 28's profit reports |
+| Purchase returns to supplier, purchase orders before goods arrive | ❌ | |
 
 ### Sales team (reference 18) — all ❌
 Commission rates (product > category > salesperson extra), monthly targets, "my commission" page; earned when delivered and paid.
@@ -197,7 +208,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 24 ✅ | **Phone OTP login + SMS adapter** (BD SMS providers), order SMS | BD customers use phone, not email | M |
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
 | 26 ✅ | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
-| 27 | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
+| 27 ✅ | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
 | 28 | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
 | 29 | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 | **Loyalty levels, wallet cashback, referrals** | Retention | M |

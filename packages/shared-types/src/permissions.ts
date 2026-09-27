@@ -29,6 +29,8 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { key: "attributes", group: "Catalog", label: "Attributes", actions: ALL },
   { key: "media", group: "Catalog", label: "Media library", actions: ALL },
   { key: "inventory", group: "Catalog", label: "Stock", help: "Edit = adjust stock and low-stock alerts", actions: ["view", "edit"] },
+  { key: "purchasing", group: "Purchasing", label: "Purchases, suppliers and supplier payments", help: "Create = record purchases (adds stock, sets cost prices) and pay suppliers", actions: ALL },
+  { key: "money_accounts", group: "Purchasing", label: "Bank, cash and mobile accounts", help: "Edit = record deposits, withdrawals and transfers", actions: ["view", "create", "edit"] },
 
   { key: "customers", group: "Customers", label: "Customers", actions: ALL },
   { key: "reviews", group: "Customers", label: "Reviews", help: "Edit = approve, mark as spam", actions: ["view", "edit", "delete"] },

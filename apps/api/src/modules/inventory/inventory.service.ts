@@ -132,8 +132,8 @@ export class InventoryService extends BaseService {
           reservedQty: reserved,
           availableQty: Math.max(0, physical - reserved),
           lowStockThreshold: (v ? v.lowStockThreshold : null) ?? p.lowStockThreshold ?? 5,
-          // Supplier cost when known, otherwise the selling price (so value is at retail).
-          unitCost: Number(p.supplierCost ?? v?.regularPrice ?? p.regularPrice ?? 0),
+          // Cost price when known (purchases keep it up to date), otherwise the selling price (value at retail).
+          unitCost: Number(v?.costPrice ?? p.costPrice ?? p.supplierCost ?? v?.regularPrice ?? p.regularPrice ?? 0),
           lastAdjustedAt: lastAt.get(`${p.id}:${v ? v.id : ""}`) ?? null,
         };
       };

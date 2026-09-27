@@ -109,6 +109,7 @@ const productEditSchema = z.object({
     .min(0, { message: "Sale price cannot be negative" })
     .nullable()
     .optional(),
+  costPrice: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0, { message: "Cost can't be negative" }).nullable()),
   salePriceStartAt: z.string().optional().or(z.literal("")),
   salePriceEndAt: z.string().optional().or(z.literal("")),
   stockQty: z.coerce.number().int().min(0, { message: "Stock cannot be negative" }).optional(),
@@ -180,6 +181,7 @@ export default function EditProductPage() {
       description: "",
       regularPrice: null,
       salePrice: null,
+      costPrice: null,
       salePriceStartAt: "",
       salePriceEndAt: "",
       stockQty: 0,
@@ -215,6 +217,7 @@ export default function EditProductPage() {
         description: product.description || "",
         regularPrice: product.regularPrice ?? null,
         salePrice: product.salePrice ?? null,
+        costPrice: product.costPrice ?? null,
         salePriceStartAt: product.salePriceStartAt || "",
         salePriceEndAt: product.salePriceEndAt || "",
         stockQty: product.stockQty ?? 0,
@@ -384,6 +387,7 @@ export default function EditProductPage() {
           description: values.description || null,
           regularPrice: values.regularPrice ?? null,
           salePrice: values.salePrice ?? null,
+          costPrice: values.costPrice ?? null,
           salePriceStartAt: values.salePriceStartAt || null,
           salePriceEndAt: values.salePriceEndAt || null,
           manageStock: values.manageStock,
@@ -893,10 +897,20 @@ export default function EditProductPage() {
 
                       <Separator />
 
-                      <div className="space-y-1">
-                        <Label>Cost of Goods Sold (COGS)</Label>
-                        <Input type="number" min={0} step="0.01" placeholder="Optional — for profit tracking" />
-                      </div>
+                      <FormField
+                        control={control}
+                        name="costPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cost price (৳)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={0} step="0.01" placeholder="What one unit costs you" {...field} value={watch("costPrice") ?? ""} />
+                            </FormControl>
+                            <FormMessage>{methods.formState.errors.costPrice?.message}</FormMessage>
+                            <CostMargin cost={watch("costPrice")} price={watch("salePrice") ?? watch("regularPrice")} />
+                          </FormItem>
+                        )}
+                      />
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -1402,5 +1416,20 @@ export default function EditProductPage() {
         </div>
       </Form>
     </FormProvider>
+  );
+}
+
+/** "Margin ৳X (Y%)" from the cost and the selling price; recording a purchase updates the cost. */
+function CostMargin({ cost, price }: { cost: unknown; price: number | null | undefined }) {
+  const c = cost === "" || cost == null ? null : Number(cost);
+  const p = price == null ? null : Number(price);
+  if (c === null || !p || Number.isNaN(c)) {
+    return <p className="text-xs text-muted-foreground">Used for profit reports; not shown to customers. Recording a purchase sets it to the average cost.</p>;
+  }
+  const m = Math.round((p - c) * 100) / 100;
+  return (
+    <p className={m < 0 ? "text-xs text-red-600" : "text-xs text-muted-foreground"}>
+      Margin ৳{m.toLocaleString("en-IN")} ({Math.round((m / p) * 1000) / 10}% of the selling price). Recording a purchase updates the cost.
+    </p>
   );
 }

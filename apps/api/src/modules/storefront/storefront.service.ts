@@ -1094,6 +1094,8 @@ export class StorefrontService {
           imageUrl: g.imageUrl,
           quantity: g.qty,
           unitPrice: 0,
+          // A free gift still cost the shop something.
+          unitCost: g.variant?.costPrice ?? g.product.costPrice ?? null,
           lineSubtotal: 0,
           lineDiscount: 0,
           lineTax: 0,
@@ -1192,6 +1194,7 @@ export class StorefrontService {
                 imageUrl: l.variant?.imageUrl ?? l.product.images[0]?.imageUrl ?? null,
                 quantity: l.qty,
                 unitPrice: l.unitPrice,
+                unitCost: l.variant?.costPrice ?? l.product.costPrice ?? null,
                 lineSubtotal: l.lineSubtotal,
                 lineDiscount,
                 lineTax,

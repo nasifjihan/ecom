@@ -168,6 +168,7 @@ export const api = createApi({
     "ShippingZone",
     "Location",
     "AuditLog",
+    "Purchasing",
   ],
   endpoints: () => ({}),
 });
