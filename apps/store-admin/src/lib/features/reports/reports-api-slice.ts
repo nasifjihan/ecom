@@ -8,6 +8,8 @@ export interface RangeArgs {
   from?: string;
   to?: string;
   basis?: Basis;
+  /** One storefront only. */
+  storefrontId?: string;
 }
 
 interface Head {
@@ -43,6 +45,8 @@ export interface SalesReport extends Head {
   series: (Figures & { period: string })[];
   bySource: (Figures & { key: string; share: number | null })[];
   byPayment: (Figures & { key: string; share: number | null })[];
+  /** Keyed by storefront name. */
+  byStorefront: (Figures & { key: string; share: number | null })[];
 }
 
 export interface ProductsReport extends Head {

@@ -8,6 +8,7 @@
  *  - returnStatus, from its newest return (none, requested, approved, received, refunded, rejected).
  * Every parcel and return keeps its own history (ShipmentEvent / ReturnEvent).
  */
+import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
@@ -285,6 +286,8 @@ export class FulfilmentService {
     const search = q.search?.trim();
     const where: Prisma.ShipmentWhereInput = {
       storeId: this.storeId,
+      // Staff limited to some storefronts see only their orders' rows.
+      ...(staffStorefronts(this.ctx) ? { order: staffOrderScope(this.ctx) } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(search
         ? {
@@ -447,6 +450,8 @@ export class FulfilmentService {
     const search = q.search?.trim();
     const where: Prisma.ReturnRequestWhereInput = {
       storeId: this.storeId,
+      // Staff limited to some storefronts see only their orders' rows.
+      ...(staffStorefronts(this.ctx) ? { order: staffOrderScope(this.ctx) } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(search
         ? {

@@ -4,6 +4,7 @@
  * services read the storefront's settings through storefrontInfo(), kept for a minute.
  */
 import { prisma } from "../../config"
+import { BadRequestError, ForbiddenError } from "../../core"
 
 export interface StorefrontInfo {
   id: bigint
@@ -12,6 +13,9 @@ export interface StorefrontInfo {
   isDefault: boolean
   priceAdjustPercent: number
   includeNewProducts: boolean
+  /** Payment methods offered here (empty: every enabled one). */
+  paymentGateways: string[]
+  courierAccountId: bigint | null
 }
 
 const TTL = 60_000
@@ -25,6 +29,8 @@ const info = (r: {
   isDefault: boolean
   priceAdjustPercent: { toString(): string }
   includeNewProducts: boolean
+  paymentGateways: string[]
+  courierAccountId: bigint | null
 }): StorefrontInfo => ({
   id: r.id,
   code: r.code,
@@ -32,6 +38,8 @@ const info = (r: {
   isDefault: r.isDefault,
   priceAdjustPercent: Number(r.priceAdjustPercent),
   includeNewProducts: r.isDefault ? true : r.includeNewProducts,
+  paymentGateways: r.paymentGateways,
+  courierAccountId: r.courierAccountId,
 })
 
 /** Settings changed: drop what's kept for this store. */
@@ -95,4 +103,30 @@ export async function storefrontInfo(storeId: bigint, id: bigint | undefined): P
   const sf = (await loadInfo(storeId, sfId, false)) ?? (await loadInfo(storeId, await defaultStorefrontId(storeId), false))
   if (!sf) throw new Error("storefront missing")
   return sf
+}
+
+/** Refuses storefront ids that aren't this store's (for "only on these storefronts" lists). */
+export async function checkStorefrontIds(storeId: bigint, ids: readonly bigint[] | undefined | null) {
+  if (!ids?.length) return
+  const found = await prisma.storefront.count({ where: { storeId, id: { in: [...ids] } } })
+  if (found !== new Set(ids.map(String)).size) throw new BadRequestError("One or more storefronts don't exist", "BAD_REQUEST")
+}
+
+/** The storefronts a staff member is limited to, or null for all (owners, unlimited staff, super admins). */
+export function staffStorefronts(ctx: { admin?: { storefrontIds?: bigint[] }; super?: unknown }): bigint[] | null {
+  if (ctx.super) return null
+  const ids = ctx.admin?.storefrontIds
+  return ids?.length ? ids : null
+}
+
+/** An order filter keeping staff to their storefronts ({} when they see every storefront). */
+export function staffOrderScope(ctx: Parameters<typeof staffStorefronts>[0]): { storefrontId?: { in: bigint[] } } {
+  const ids = staffStorefronts(ctx)
+  return ids ? { storefrontId: { in: ids } } : {}
+}
+
+/** Refuses a storefront the staff member isn't allowed to work on. */
+export function assertStaffStorefront(ctx: Parameters<typeof staffStorefronts>[0], storefrontId: bigint) {
+  const ids = staffStorefronts(ctx)
+  if (ids && !ids.includes(storefrontId)) throw new ForbiddenError("You don't work on this storefront", "AUTH_FORBIDDEN")
 }

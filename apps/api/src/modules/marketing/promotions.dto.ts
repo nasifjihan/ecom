@@ -35,6 +35,8 @@ const Base = z.object({
   giftVariantId: z.coerce.bigint().positive().nullish(),
   giftQty: z.coerce.number().int().min(1).max(20).default(1),
   slots: z.array(z.enum(PROMOTION_SLOTS)).max(PROMOTION_SLOTS.length).default([]),
+  /** Only on these storefronts (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).default([]),
   headline: text(120).nullish(),
   message: text(300).nullish(),
   imageUrl: url.nullish(),

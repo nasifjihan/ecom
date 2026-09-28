@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import { toast } from "sonner";
 import { KeyRound, Pencil, UserPlus, Users } from "lucide-react";
 import {
@@ -52,15 +54,17 @@ export default function StaffPage() {
 
   const [editing, setEditing] = useState<StaffMember | "new" | null>(null);
   const [pwFor, setPwFor] = useState<StaffMember | null>(null);
-  const [f, setF] = useState({ name: "", email: "", phone: "", password: "", roleId: "" });
+  const [f, setF] = useState({ name: "", email: "", phone: "", password: "", roleId: "", storefrontIds: [] as string[] });
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
+  const isOwnerRole = roles.find((r) => r.id === f.roleId)?.isOwner ?? false;
   const [pw, setPw] = useState("");
 
   const open = (s: StaffMember | "new") => {
     setEditing(s);
     setF(
       s === "new"
-        ? { name: "", email: "", phone: "", password: "", roleId: roles.find((r) => !r.isOwner)?.id ?? "" }
-        : { name: s.name, email: s.email, phone: s.phone ?? "", password: "", roleId: s.role.id },
+        ? { name: "", email: "", phone: "", password: "", roleId: roles.find((r) => !r.isOwner)?.id ?? "", storefrontIds: [] }
+        : { name: s.name, email: s.email, phone: s.phone ?? "", password: "", roleId: s.role.id, storefrontIds: s.storefrontIds },
     );
   };
   // Only owners may make owners.
@@ -71,10 +75,22 @@ export default function StaffPage() {
     e.preventDefault();
     try {
       if (editing === "new") {
-        await createStaff({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim() || undefined, password: f.password, roleId: f.roleId }).unwrap();
+        await createStaff({
+          name: f.name.trim(),
+          email: f.email.trim(),
+          phone: f.phone.trim() || undefined,
+          password: f.password,
+          roleId: f.roleId,
+          ...(isOwnerRole ? {} : { storefrontIds: f.storefrontIds }),
+        }).unwrap();
         toast.success(`${f.name.trim()} can now sign in with ${f.email.trim()}`);
       } else if (editing) {
-        await updateStaff({ id: editing.id, name: f.name.trim(), phone: f.phone.trim(), ...(editing.isYou ? {} : { roleId: f.roleId }) }).unwrap();
+        await updateStaff({
+          id: editing.id,
+          name: f.name.trim(),
+          phone: f.phone.trim(),
+          ...(editing.isYou ? {} : { roleId: f.roleId, ...(isOwnerRole ? {} : { storefrontIds: f.storefrontIds }) }),
+        }).unwrap();
         toast.success("Saved");
       }
       setEditing(null);
@@ -149,7 +165,14 @@ export default function StaffPage() {
                         </div>
                         <div className="text-xs text-slate-500">{[s.email, s.phone].filter(Boolean).join(" · ")}</div>
                       </TableCell>
-                      <TableCell>{s.role.name}</TableCell>
+                      <TableCell>
+                        {s.role.name}
+                        {storefronts.length > 1 && s.storefrontIds.length > 0 && (
+                          <div className="text-xs text-slate-500">
+                            {s.storefrontIds.map((id) => storefronts.find((x) => x.id === id)?.name ?? `#${id}`).join(", ")} only
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={s.status === "active" ? "default" : "outline"}>{s.status === "active" ? "Active" : "Deactivated"}</Badge>
                       </TableCell>
@@ -204,6 +227,14 @@ export default function StaffPage() {
                 ))}
               </select>
             </Field>
+            {!isOwnerRole && !(editing && editing !== "new" && editing.isYou) && (
+              <StorefrontMultiSelect
+                value={f.storefrontIds}
+                onChange={(ids) => setF({ ...f, storefrontIds: ids })}
+                label="Works on"
+                hint="They see only these storefronts' orders, reports and content."
+              />
+            )}
             {editing === "new" && (
               <Field label="Starting password" htmlFor="s-pw" hint="At least 10 characters with a number. Share it with them privately; they can change it under Settings → Password." error={f.password && passwordProblem(f.password)}>
                 <Input id="s-pw" type="text" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />

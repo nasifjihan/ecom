@@ -5,6 +5,7 @@
  * reloaded), summary tiles, tables with "Download CSV", and number formatting.
  */
 import * as React from "react";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Download, Info } from "lucide-react";
@@ -69,19 +70,24 @@ export function useReportRange() {
   const from = params.get("from") ?? fallback.from;
   const to = params.get("to") ?? fallback.to;
   const basis: Basis = params.get("basis") === "delivered" ? "delivered" : "placed";
-  const set = (next: Partial<{ from: string; to: string; basis: Basis }>) => {
+  const storefrontId = params.get("storefront") ?? "";
+  const set = (next: Partial<{ from: string; to: string; basis: Basis; storefront: string }>) => {
     const q = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(next)) if (v) q.set(k, v);
+    for (const [k, v] of Object.entries(next)) {
+      if (v) q.set(k, v);
+      else q.delete(k);
+    }
     if (q.get("basis") === "placed") q.delete("basis");
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
-  const args: RangeArgs = { from, to, basis };
-  return { from, to, basis, args, set, query: params.toString() };
+  const args: RangeArgs = { from, to, basis, ...(storefrontId ? { storefrontId } : {}) };
+  return { from, to, basis, storefrontId, args, set, query: params.toString() };
 }
 
 /** Presets, custom from / to, and "placed" vs "delivered only". */
 export function RangeBar({ showBasis = true }: { showBasis?: boolean }) {
-  const { from, to, basis, set } = useReportRange();
+  const { from, to, basis, storefrontId, set } = useReportRange();
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
   const active = PRESETS.find((p) => {
     const r = p.range();
     return r.from === from && r.to === to;
@@ -117,6 +123,21 @@ export function RangeBar({ showBasis = true }: { showBasis?: boolean }) {
         >
           <option value="placed">All placed orders</option>
           <option value="delivered">Delivered orders only</option>
+        </select>
+      )}
+      {storefronts.length > 1 && (
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={storefrontId}
+          onChange={(e) => set({ storefront: e.target.value })}
+          aria-label="Storefront"
+        >
+          <option value="">All storefronts</option>
+          {storefronts.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
         </select>
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
 import { toast } from "sonner";
 import { Plus, Trash2, X } from "lucide-react";
 import {
@@ -43,6 +44,7 @@ export function ZoneDialog({ zone, onClose }: { zone: ShippingZone | "new" | nul
   const [countries, setCountries] = useState("BD");
   const [postcodes, setPostcodes] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [fronts, setFronts] = useState<string[]>([]);
 
   useEffect(() => {
     if (zone === null) return;
@@ -52,6 +54,7 @@ export function ZoneDialog({ zone, onClose }: { zone: ShippingZone | "new" | nul
     setCountries((z?.countries ?? ["BD"]).join(", "));
     setPostcodes((z?.postcodes ?? []).join(", "));
     setPicked(z?.locationIds ?? []);
+    setFronts((z?.storefrontIds ?? []).map(String));
   }, [zone]);
 
   const pickedSet = new Set(picked);
@@ -72,6 +75,7 @@ export function ZoneDialog({ zone, onClose }: { zone: ShippingZone | "new" | nul
       countries: list(countries).map((c) => c.toUpperCase()),
       postcodes: list(postcodes),
       locationIds: picked,
+      storefrontIds: fronts,
     };
     try {
       if (zone === "new") await create(body).unwrap();
@@ -147,6 +151,11 @@ export function ZoneDialog({ zone, onClose }: { zone: ShippingZone | "new" | nul
           <Field label="Postcodes (optional)" htmlFor="zone-postcodes" hint="Narrow the zone further, e.g. 1205, 1209 or 1200-1230.">
             <Input id="zone-postcodes" value={postcodes} onChange={(e) => setPostcodes(e.target.value)} />
           </Field>
+          <StorefrontMultiSelect
+            value={fronts}
+            onChange={setFronts}
+            hint="Only for the ticked storefronts. Where a storefront has its own zone for an address, it's used instead of shared zones."
+          />
           <Toggle checked={enabled} onChange={setEnabled} label="Zone is active" hint="Inactive zones aren't offered at checkout." />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>

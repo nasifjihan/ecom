@@ -17,6 +17,8 @@ const CountryCode = z.string().trim().toUpperCase().refine((v) => v === "*" || /
 const BaseShippingZoneDto = z.object({
   name: z.string().trim().min(2).max(80).superRefine((v, ctx) => noXss(v, ["name"], ctx)),
   enabled: z.boolean().default(true),
+  /** Only for these storefronts (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).default([]),
   countries: z.array(CountryCode).min(1, "Pick at least one country").max(50).default(["BD"]),
   locationIds: z.array(z.coerce.bigint().positive()).max(700).default([]),
   postcodes: z.array(z.string().trim().max(32)).max(200).default([]).refine(
@@ -28,6 +30,7 @@ export const CreateShippingZoneDto = BaseShippingZoneDto;
 export const UpdateShippingZoneDto = z.object({
   name: BaseShippingZoneDto.shape.name.optional(),
   enabled: z.boolean().optional(),
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).optional(),
   countries: z.array(CountryCode).min(1).max(50).optional(),
   locationIds: z.array(z.coerce.bigint().positive()).max(700).optional(),
   postcodes: BaseShippingZoneDto.shape.postcodes.optional(),

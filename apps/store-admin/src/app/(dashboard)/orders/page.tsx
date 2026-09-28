@@ -98,7 +98,7 @@ import { BulkBookDialog } from "@/components/orders/bulk-book-dialog";
 import { useCan } from "@/lib/permissions";
 import { cn } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
-import { useStorefrontsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -196,7 +196,7 @@ export default function OrdersPage() {
   // Storefront filter (the Storefronts page links here with ?storefrontId=); shown with 2+ storefronts.
   const searchParams = useSearchParams();
   const [filterStorefront, setFilterStorefront] = useState<string>(searchParams.get("storefrontId") ?? "");
-  const { data: storefronts = [] } = useStorefrontsQuery();
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
   const severalFronts = storefronts.length > 1;
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [page, setPage] = useState(1);

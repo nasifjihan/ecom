@@ -151,7 +151,7 @@ export interface Order {
   itemsCount: number;
   source: string;
   /** The storefront it was placed on. */
-  storefront?: { id: string; name: string; code: string };
+  storefront?: { id: string; name: string; code: string; courierAccountId?: string | null };
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
@@ -575,7 +575,7 @@ interface ApiOrder {
   grandTotal: string;
   couponUsed: string | null;
   source?: string;
-  storefront?: { id: string; name: string; code: string } | null;
+  storefront?: { id: string; name: string; code: string; courierAccountId?: string | null } | null;
   manualDiscount?: string;
   memberDiscount?: string;
   memberLevel?: string | null;
@@ -680,7 +680,14 @@ export function fromApiOrder(o: ApiOrder): Order {
     updatedAt: o.updatedAt,
     itemsCount: lines.reduce((n, l) => n + l.quantity, 0),
     source: o.source ?? "website",
-    storefront: o.storefront ? { id: String(o.storefront.id), name: o.storefront.name, code: o.storefront.code } : undefined,
+    storefront: o.storefront
+      ? {
+          id: String(o.storefront.id),
+          name: o.storefront.name,
+          code: o.storefront.code,
+          courierAccountId: o.storefront.courierAccountId == null ? null : String(o.storefront.courierAccountId),
+        }
+      : undefined,
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
     memberDiscount: Number(o.memberDiscount ?? 0),

@@ -16,6 +16,10 @@ export const StorefrontDto = z.object({
   priceAdjustPercent: z.coerce.number().min(-90).max(500).optional(),
   includeNewProducts: z.boolean().optional(),
   sortOrder: z.coerce.number().int().min(0).max(1000).optional(),
+  /** Payment methods offered here (gateway codes); empty: every enabled one. */
+  paymentGateways: z.array(z.string().trim().toLowerCase().min(2).max(32)).max(30).optional(),
+  /** Courier account suggested for this storefront's parcels. */
+  courierAccountId: id.nullish(),
 })
 export const UpdateStorefrontDto = StorefrontDto.partial()
 

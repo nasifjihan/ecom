@@ -6,6 +6,7 @@
  * show in storefront slots (announcement bar, home, product page, cart…).
  */
 import { useEffect, useMemo, useState } from "react";
+import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
 import { toast } from "sonner";
 import { Gift, Pause, Pencil, Play, Plus, Search, Sparkles, Square, Trash2, X } from "lucide-react";
 import {
@@ -92,6 +93,7 @@ interface Form {
   gift: { productId: string; variantId: string | null; label: string } | null;
   giftQty: string;
   slots: string[];
+  storefrontIds: string[];
   headline: string;
   message: string;
   imageUrl: string;
@@ -118,6 +120,7 @@ const EMPTY: Form = {
   gift: null,
   giftQty: "1",
   slots: ["announcement_bar", "cart"],
+  storefrontIds: [],
   headline: "",
   message: "",
   imageUrl: "",
@@ -171,6 +174,7 @@ function fromPromotion(p: Promotion): Form {
     gift: p.giftProductId ? { productId: p.giftProductId, variantId: p.giftVariantId, label: p.gift?.name ?? `Product #${p.giftProductId}` } : null,
     giftQty: String(p.giftQty),
     slots: p.slots,
+    storefrontIds: p.storefrontIds,
     headline: p.headline ?? "",
     message: p.message ?? "",
     imageUrl: p.imageUrl ?? "",
@@ -200,6 +204,7 @@ function toInput(f: Form): PromotionInput {
     giftVariantId: f.type === "free_gift" ? (f.gift?.variantId ?? null) : null,
     giftQty: Number(f.giftQty) || 1,
     slots: f.slots,
+    storefrontIds: f.storefrontIds,
     headline: f.headline.trim() || null,
     message: f.message.trim() || null,
     imageUrl: f.imageUrl.trim() || null,
@@ -462,6 +467,8 @@ function PromotionDialog({ initial, editing, onClose }: { initial: Form; editing
               />
             )}
           </div>
+
+          <StorefrontMultiSelect value={f.storefrontIds} onChange={(ids) => set("storefrontIds", ids)} hint="Runs only on the ticked storefronts." />
 
           <div className="space-y-2">
             <Label>Where should it show?</Label>

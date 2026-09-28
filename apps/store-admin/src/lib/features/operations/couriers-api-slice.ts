@@ -152,7 +152,8 @@ export const couriersApi = api.injectEndpoints({
       query: () => ({ url: "/admin/shipments/sync", method: "POST" }),
       invalidatesTags: [...TAGS, "Order"],
     }),
-    bulkBookCourier: b.mutation<BulkResult, { accountId: string; orderIds: (string | number)[] }>({
+    /** No accountId: each order goes to its storefront's courier. */
+    bulkBookCourier: b.mutation<BulkResult, { accountId?: string; orderIds: (string | number)[] }>({
       query: (body) => ({ url: "/admin/orders/book-courier", method: "POST", body }),
       invalidatesTags: [...TAGS, "Order"],
     }),

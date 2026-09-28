@@ -3,6 +3,7 @@ import { refreshProductRating } from "../storefront/engagement";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, type RequestContext, type Paginated } from "../../core";
 import { CouponRepository, FlashSaleRepository, ReviewRepository } from "./marketing.repository";
 import { couponTypeToDiscountType } from "./marketing.dto";
+import { checkStorefrontIds } from "../storefronts/storefronts.context";
 import type {
   CreateCouponDto,
   UpdateCouponDto,
@@ -111,6 +112,7 @@ export class MarketingService extends BaseService {
     const storeId = this.ctx.storeId;
     const existing = await this.coupons.findByCode(this.ctx, dto.code);
     if (existing) throw new ConflictError(`Coupon code already exists: ${dto.code}`, "DUPLICATE_COUPON_CODE");
+    if (storeId !== undefined) await checkStorefrontIds(storeId, dto.storefrontIds);
 
     const data: Record<string, unknown> = {
       code: dto.code.toUpperCase(),
@@ -136,6 +138,7 @@ export class MarketingService extends BaseService {
       autoApply: dto.autoApply,
       audience: dto.audience,
       worksWithPromotions: dto.worksWithPromotions,
+      storefrontIds: dto.storefrontIds,
     };
     if (storeId !== undefined) data.storeId = storeId;
 
@@ -152,6 +155,7 @@ export class MarketingService extends BaseService {
 
   async updateCoupon(id: bigint | number, dto: UpdateCouponDto): Promise<unknown> {
     const cid = BigInt(id);
+    if (this.ctx.storeId !== undefined) await checkStorefrontIds(this.ctx.storeId, dto.storefrontIds);
     const data: Record<string, unknown> = {};
     for (const key of Object.keys(dto)) {
       if (key === "type" && dto.type !== undefined) {

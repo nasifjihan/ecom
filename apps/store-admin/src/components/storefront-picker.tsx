@@ -27,7 +27,8 @@ export function useStorefrontChoice(): StorefrontChoice {
   const pathname = usePathname();
   const storefronts = data ?? [];
   const wanted = params.get("storefront");
-  const current = storefronts.find((s) => s.id === wanted) ?? storefronts.find((s) => s.isDefault);
+  // Staff limited to some storefronts only get those, which may not include the default one.
+  const current = storefronts.find((s) => s.id === wanted) ?? storefronts.find((s) => s.isDefault) ?? storefronts[0];
   return {
     storefronts,
     current,
@@ -46,7 +47,7 @@ export function useStorefrontChoice(): StorefrontChoice {
 }
 
 export function StorefrontPicker({ choice, note }: { choice: StorefrontChoice; note?: React.ReactNode }) {
-  if (!choice.several) return null;
+  if (!choice.several && choice.current?.isDefault !== false) return null;
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950/40">
       <Store className="h-4 w-4 text-blue-600" aria-hidden />

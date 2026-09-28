@@ -3,6 +3,7 @@ import { prisma } from "../../config";
 import type { RequestContext } from "../../core";
 import { BadRequestError, NotFoundError, ConflictError } from "../../core";
 import { parseRules, zoneSpecificity, type AddressForMatch } from "./shipping.rules";
+import { checkStorefrontIds } from "../storefronts/storefronts.context";
 import type {
   CreateShippingZoneDto,
   UpdateShippingZoneDto,
@@ -65,9 +66,10 @@ export class ShippingZoneRepository {
   async create(ctx: RequestContext, dto: CreateShippingZoneDto) {
     const storeId = this.storeOf(ctx);
     await this.checkLocations(dto.locationIds);
+    await checkStorefrontIds(storeId, dto.storefrontIds);
     const zone = await prisma.$transaction(async (t) => {
       const z = await t.shippingZone.create({
-        data: { storeId, name: dto.name, enabled: dto.enabled, countries: dto.countries, states: [], postcodes: dto.postcodes },
+        data: { storeId, name: dto.name, enabled: dto.enabled, storefrontIds: dto.storefrontIds, countries: dto.countries, states: [], postcodes: dto.postcodes },
       });
       if (dto.locationIds.length) {
         await t.shippingZoneLocation.createMany({
@@ -83,10 +85,12 @@ export class ShippingZoneRepository {
   async update(ctx: RequestContext, id: bigint, dto: UpdateShippingZoneDto) {
     await this.get(ctx, id);
     if (dto.locationIds) await this.checkLocations(dto.locationIds);
+    await checkStorefrontIds(this.storeOf(ctx), dto.storefrontIds);
     await prisma.$transaction(async (t) => {
       const patch: Prisma.ShippingZoneUpdateInput = {};
       if (dto.name !== undefined) patch.name = dto.name;
       if (dto.enabled !== undefined) patch.enabled = dto.enabled;
+      if (dto.storefrontIds !== undefined) patch.storefrontIds = dto.storefrontIds;
       if (dto.countries !== undefined) patch.countries = dto.countries;
       if (dto.postcodes !== undefined) patch.postcodes = dto.postcodes;
       if (dto.locationIds !== undefined) {

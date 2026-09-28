@@ -10,7 +10,7 @@ import { jwt as jwtCfg, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config
 import { UnauthorizedError, ForbiddenError } from "../core";
 import type { TokenAudience } from "../config/jwt";
 import { COOKIE_NAMES } from "../config";
-import { adminPermissions } from "../config/admin-permissions";
+import { adminPermissions, adminStorefronts } from "../config/admin-permissions";
 import type { UserType } from "@ecom/shared-types";
 
 type AuthGuardType = "super" | "admin" | "customer" | "adminOrSuper" | "any" | "optional";
@@ -50,7 +50,10 @@ async function attachToCtx(
     const permissions = storeId && decoded.sub
       ? await adminPermissions(BigInt(storeId), BigInt(decoded.sub)).catch(() => [] as string[])
       : [];
-    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions };
+    const storefrontIds = storeId && decoded.sub
+      ? (await adminStorefronts(BigInt(String(storeId)), BigInt(String(decoded.sub))).catch((): string[] => [])).map((s) => BigInt(s))
+      : [];
+    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions, storefrontIds };
   } else {
     req.ctx.customer = { id: obj.id };
   }

@@ -46,6 +46,8 @@ export interface Promotion {
   giftQty: number;
   gift: { name: string; imageUrl: string | null } | null;
   slots: string[];
+  /** Only on these storefronts (empty: all). */
+  storefrontIds: string[];
   headline: string | null;
   message: string | null;
   imageUrl: string | null;

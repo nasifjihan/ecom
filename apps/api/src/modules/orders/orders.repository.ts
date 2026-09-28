@@ -1,4 +1,5 @@
-import { BaseRepository, type RequestContext, ConflictError } from "../../core";
+import { BaseRepository, type RequestContext, ConflictError, NotFoundError } from "../../core";
+import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { prisma } from "../../config/prisma";
 import type { OrderSearchQueryDto } from "./orders.dto";
 import type { Paginated } from "../../core/pagination";
@@ -10,9 +11,19 @@ export class OrderRepository extends BaseRepository<"order"> {
   }
 
   /** Admin order detail: lines, full status history, refunds and the linked customer. */
+  /** An order of this store, and of a storefront the staff member works on. */
+  override async findById(ctx: RequestContext, id: bigint | number): Promise<any> {
+    const row = await prisma.order.findFirst({
+      where: { id: BigInt(id), ...(ctx.storeId !== undefined ? { storeId: ctx.storeId } : {}), ...staffOrderScope(ctx) },
+    });
+    if (!row) throw new NotFoundError("Order", id);
+    return row;
+  }
+
   async findDetailById(id: bigint, ctx: RequestContext): Promise<unknown | null> {
     const where: Record<string, unknown> = { id };
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     return (this.q as any).findFirst({
       where,
       include: {
@@ -24,7 +35,7 @@ export class OrderRepository extends BaseRepository<"order"> {
         refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         createdByAdmin: { select: { id: true, name: true } },
-        storefront: { select: { id: true, name: true, code: true } },
+        storefront: { select: { id: true, name: true, code: true, courierAccountId: true } },
         shipments: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
         paymentRecords: { include: { settlement: { select: { id: true, code: true } }, shipment: { select: { code: true } } }, orderBy: { createdAt: "asc" } },
         returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
@@ -35,6 +46,7 @@ export class OrderRepository extends BaseRepository<"order"> {
   async findByNumber(number: string, ctx: RequestContext): Promise<unknown | null> {
     const where: Record<string, unknown> = { number };
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     return (this.q as any).findFirst({
       where,
       orderBy: { createdAt: "desc" },
@@ -96,7 +108,11 @@ export class OrderRepository extends BaseRepository<"order"> {
     }
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
     if (filters.source && filters.source.length > 0) where.source = { in: filters.source };
-    if (filters.storefrontId) where.storefrontId = filters.storefrontId;
+    // Staff limited to some storefronts only see those storefronts' orders.
+    const allowed = staffStorefronts(ctx);
+    if (filters.storefrontId) {
+      where.storefrontId = allowed && !allowed.includes(filters.storefrontId) ? { in: [] } : filters.storefrontId;
+    } else if (allowed) where.storefrontId = { in: allowed };
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: "insensitive" } },
@@ -159,6 +175,7 @@ export class OrderRepository extends BaseRepository<"order"> {
     // Built with Prisma filters (not string-built SQL) so query-string values are always bound parameters.
     const where: Record<string, unknown> = {};
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     if (filters.status?.length) where.status = { in: filters.status };
     if (filters.paymentStatus?.length) where.paymentStatus = { in: filters.paymentStatus };
     if (filters.dateFrom || filters.dateTo) {

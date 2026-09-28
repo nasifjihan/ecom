@@ -68,7 +68,8 @@ export const BookParcelDto = z.object({
 export type BookParcelDto = z.infer<typeof BookParcelDto>
 
 export const BulkBookDto = z.object({
-  accountId: z.coerce.bigint().positive(),
+  /** Left out: each order goes to its storefront's courier. */
+  accountId: z.coerce.bigint().positive().optional(),
   orderIds: z.array(z.coerce.bigint().positive()).min(1).max(100),
 })
 export type BulkBookDto = z.infer<typeof BulkBookDto>

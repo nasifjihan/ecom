@@ -33,6 +33,8 @@ export const CreateStaffDto = z.object({
   phone: z.string().trim().max(20).optional(),
   password,
   roleId: z.coerce.bigint().positive(),
+  /** Storefronts they work on (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).optional(),
 });
 export type CreateStaffDto = z.infer<typeof CreateStaffDto>;
 
@@ -41,6 +43,8 @@ export const UpdateStaffDto = z.object({
   phone: z.string().trim().max(20).optional(),
   roleId: z.coerce.bigint().positive().optional(),
   status: z.enum(["active", "inactive"]).optional(),
+  /** Storefronts they work on (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).optional(),
 });
 export type UpdateStaffDto = z.infer<typeof UpdateStaffDto>;
 

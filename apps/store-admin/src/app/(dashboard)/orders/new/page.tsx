@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -202,6 +203,8 @@ export default function NewOrderPage() {
   const [paid, setPaid] = useState(false);
   const [trx, setTrx] = useState("");
   const [source, setSource] = useState<OrderSource>("phone");
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
+  const [storefrontId, setStorefrontId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [customerNote, setCustomerNote] = useState("");
   const [staffNote, setStaffNote] = useState("");
@@ -235,12 +238,13 @@ export default function NewOrderPage() {
       paid,
       transactionId: trx.trim() || undefined,
       source,
+      ...(storefrontId ? { storefrontId } : {}),
       status: confirmed ? "PROCESSING" : "PENDING",
       customerNote: customerNote.trim() || undefined,
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, confirmed, customerNote, staffNote, notify],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -541,6 +545,17 @@ export default function NewOrderPage() {
                     ))}
                   </select>
                 </Field>
+                {storefronts.length > 1 && (
+                  <Field label="Storefront" htmlFor="order-sf" hint="Its prices, promotions and delivery charges apply.">
+                    <select id="order-sf" className={SELECT} value={storefrontId || (storefronts.find((s) => s.isDefault) ?? storefronts[0])?.id} onChange={(e) => setStorefrontId(e.target.value)}>
+                      {storefronts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
               </div>
               <Toggle
                 checked={applyPromotions}

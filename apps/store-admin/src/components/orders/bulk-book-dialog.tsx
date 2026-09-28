@@ -2,6 +2,7 @@
 
 /** Book many orders with one courier account; shows each order's result. */
 import { useEffect, useState } from "react";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
@@ -20,9 +21,14 @@ import {
 import { apiError } from "@/lib/features/operations/fulfilment-api-slice";
 import { useActiveCouriersQuery, useBulkBookCourierMutation, type BulkResult } from "@/lib/features/operations/couriers-api-slice";
 
+/** Bulk booking choice: each order goes to its storefront's courier. */
+const EACH = "storefront";
+
 export function BulkBookDialog({ orderIds, onClose }: { orderIds: (string | number)[]; onClose: () => void }) {
   const { data: accounts } = useActiveCouriersQuery();
   const [accountId, setAccountId] = useState("");
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
+  const severalFronts = storefronts.length > 1;
   const [result, setResult] = useState<BulkResult | null>(null);
   const [run, { isLoading }] = useBulkBookCourierMutation();
   useEffect(() => {
@@ -31,7 +37,7 @@ export function BulkBookDialog({ orderIds, onClose }: { orderIds: (string | numb
 
   async function submit() {
     try {
-      const r = await run({ accountId, orderIds }).unwrap();
+      const r = await run({ ...(accountId === EACH ? {} : { accountId }), orderIds }).unwrap();
       setResult(r);
       if (r.failed === 0) toast.success(`${r.booked} order(s) booked`);
       else toast.warning(`${r.booked} booked, ${r.failed} need attention`);
@@ -61,7 +67,11 @@ export function BulkBookDialog({ orderIds, onClose }: { orderIds: (string | numb
               {accounts.map((a) => (
                 <SelectItem key={a.id} value={a.id}>{a.label}{a.label !== a.courierName ? ` (${a.courierName})` : ""}</SelectItem>
               ))}
+              {severalFronts && <SelectItem value={EACH}>Each storefront&apos;s courier</SelectItem>}
             </Select>
+            {accountId === EACH && (
+              <p className="mt-1 text-xs text-slate-500">Each order goes to the courier set on its storefront (Online Store → Storefronts).</p>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">

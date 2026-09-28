@@ -65,6 +65,7 @@ interface Props {
     fulfillmentStatus: string;
     lines: OrderLine[];
     parcels?: Parcel[];
+  storefront?: { courierAccountId?: string | null };
   };
   canEdit: boolean;
 }
@@ -266,6 +267,7 @@ export function ParcelsCard({ order, canEdit }: Props) {
       {booking && (
         <BookCourierDialog
           parcel={{ id: booking.id, orderId: order.id, code: booking.code, weightKg: booking.weightKg }}
+          preferredAccountId={order.storefront?.courierAccountId}
           onClose={() => setBooking(null)}
         />
       )}

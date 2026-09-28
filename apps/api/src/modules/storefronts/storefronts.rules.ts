@@ -79,3 +79,23 @@ export function cleanHostname(raw: string): string | null {
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{2,5})?$/.test(s)) return null
   return s
 }
+
+/** A promotion, coupon, delivery zone or staff member limited to some storefronts (empty: all). */
+export function onStorefront(storefrontIds: readonly bigint[], storefrontId: bigint | null | undefined): boolean {
+  return storefrontIds.length === 0 || (storefrontId != null && storefrontIds.includes(storefrontId))
+}
+
+/** Whether a storefront offers a payment method (an empty list: every enabled one). */
+export function gatewayOffered(paymentGateways: readonly string[], code: string): boolean {
+  return paymentGateways.length === 0 || paymentGateways.includes(code)
+}
+
+/**
+ * The delivery zones a storefront uses among those matching an address: zones limited to it
+ * when any match (its own delivery prices), otherwise the shared ones.
+ */
+export function storefrontZones<Z extends { storefrontIds: readonly bigint[] }>(zones: Z[], storefrontId: bigint | null | undefined): Z[] {
+  const usable = zones.filter((z) => onStorefront(z.storefrontIds, storefrontId))
+  const own = usable.filter((z) => z.storefrontIds.length > 0)
+  return own.length ? own : usable
+}

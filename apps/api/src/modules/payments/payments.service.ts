@@ -10,6 +10,7 @@
  *    cash confirmation marks it received. A payout that is less than the parcels' cash minus the
  *    courier's charges is flagged as a shortfall.
  */
+import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
@@ -206,6 +207,8 @@ export class PaymentsService {
     const search = q.search?.trim();
     const where: Prisma.PaymentRecordWhereInput = {
       storeId: this.storeId,
+      // Staff limited to some storefronts see only their orders' rows.
+      ...(staffStorefronts(this.ctx) ? { order: staffOrderScope(this.ctx) } : {}),
       kind: q.kind,
       ...(q.method ? { method: q.method } : {}),
       ...(q.courier ? { courierCode: q.courier } : {}),

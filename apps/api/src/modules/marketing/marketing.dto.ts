@@ -65,6 +65,8 @@ const BaseCouponDto = z.object({
   audience: z.enum(["private", "public", "given"]).default("private"),
   /** Off: no automatic promotion on the order, and flash-sale items don't count toward the coupon. */
   worksWithPromotions: z.boolean().default(true),
+  /** Only on these storefronts (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).default([]),
 });
 
 export const CreateCouponDto = BaseCouponDto.superRefine((v, ctx) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -77,6 +78,7 @@ const createCouponSchema = z
     bogoGetQty: z.coerce.number().int().min(1).optional(),
     audience: z.enum(["private", "public", "given"]).default("private"),
     worksWithPromotions: z.boolean().default(true),
+    storefrontIds: z.array(z.string()).default([]),
   })
   .superRefine((v, ctx) => {
     if (v.audience === "given" && !v.allowedEmails?.trim()) {
@@ -178,6 +180,7 @@ function formToDto(form: CreateCouponForm): CreateCouponDto {
     bogoGetQty: form.bogoGetQty,
     audience: form.audience,
     worksWithPromotions: form.worksWithPromotions,
+    storefrontIds: form.storefrontIds,
   };
 }
 
@@ -210,6 +213,7 @@ export default function NewCouponPage() {
       bogoGetQty: 1,
       audience: "private",
       worksWithPromotions: true,
+      storefrontIds: [],
     },
   });
 
@@ -259,6 +263,7 @@ export default function NewCouponPage() {
         bogoGetQty: existing.bogoGetQty ?? 1,
         audience: existing.audience ?? "private",
         worksWithPromotions: existing.worksWithPromotions ?? true,
+        storefrontIds: existing.storefrontIds ?? [],
       });
     }
   }, [existing, isEdit, reset]);
@@ -739,6 +744,13 @@ export default function NewCouponPage() {
                             </span>
                           </Label>
                         </div>
+                      )}
+                    />
+                    <Controller
+                      control={control}
+                      name="storefrontIds"
+                      render={({ field }) => (
+                        <StorefrontMultiSelect value={field.value ?? []} onChange={field.onChange} hint="Works only on the ticked storefronts." />
                       )}
                     />
                   </div>

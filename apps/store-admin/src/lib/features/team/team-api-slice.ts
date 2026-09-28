@@ -28,6 +28,8 @@ export interface StaffMember {
   phone: string | null;
   status: "active" | "inactive" | string;
   role: { id: string; name: string; slug: string };
+  /** Storefronts they work on (empty: all). */
+  storefrontIds: string[];
   lastLoginAt: string | null;
   createdAt: string;
   isYou: boolean;
@@ -39,6 +41,7 @@ export interface StaffInput {
   password?: string;
   roleId?: string;
   status?: "active" | "inactive";
+  storefrontIds?: string[];
 }
 
 export interface AuditEntry {

@@ -142,7 +142,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Inventory valuation (at cost and at selling price) | ✅ Batch 28 |
 | Tax collected by day / month | ✅ Batch 28 (tax added on top; VAT-inclusive prices still to do) |
 | CSV export of every table | ✅ Batch 28 |
-| By storefront, scheduled e-mailed reports, PDF export | ❌ | Orders record their storefront (Batch 32) and the order list filters by it; reports by storefront are part 2 |
+| By storefront, scheduled e-mailed reports, PDF export | 🟡 | Batch 32: every report filters by storefront and sales has a by-storefront table; no scheduled e-mails or PDF |
 
 ### Operations (reference 20)
 | Feature | Status | Note |
@@ -156,7 +156,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 |---|---|---|
 | 10 default roles | ✅ | |
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
-| Staff on some sites only | ❌ | Storefronts exist (Batch 32); limiting staff to them is Batch 32 part 2 |
+| Staff on some sites only | ✅ | Batch 32: staff can be limited to some storefronts (their orders, parcels, returns, payments, reports and storefront content) |
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Email on/off per template ✅ |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | 🟡 | We add tax on top |
 | Company & legal details (BIN, trade licence) on invoices | 🟡 | |
@@ -222,7 +222,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 29 ✅ | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
-| 32 🟡 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings). Part 1 ✅: storefronts with their own web addresses, look, homepage, menus, product range and prices; orders record their storefront. Part 2: payment methods, delivery and couriers, promotions, staff and reports per storefront | Reference's core idea; big change | XL |
+| 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
 | 33 | Wholesale/B2B, sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

@@ -17,7 +17,7 @@ import {
   type RequestContext,
 } from "../../core"
 import { storeLanguages } from "../settings/languages"
-import { defaultStorefrontId } from "../storefronts/storefronts.context"
+import { assertStaffStorefront, defaultStorefrontId } from "../storefronts/storefronts.context"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
 import {
   HomepageSectionDto,
@@ -68,6 +68,8 @@ export class ContentService {
    */
   private async ownerOf(id?: bigint | null): Promise<bigint | null> {
     const want = id ?? this.ctx.storefrontId ?? null
+    // Staff limited to some storefronts only edit (and preview) those.
+    if (want !== null) assertStaffStorefront(this.ctx, want)
     if (want === null) return null
     if (want === (await defaultStorefrontId(this.storeId))) return null
     const sf = await prisma.storefront.findFirst({ where: { id: want, storeId: this.storeId }, select: { id: true } })
@@ -403,8 +405,15 @@ export class ContentService {
     return { ...menu, items: [] }
   }
 
-  async updateMenu(id: bigint, d: Partial<MenuDto>) {
+  /** A menu staff may change: one of a storefront they work on. */
+  private async editableMenu(id: bigint) {
     const menu = await this.getMenu(id)
+    assertStaffStorefront(this.ctx, menu.storefrontId ?? (await defaultStorefrontId(this.storeId)))
+    return menu
+  }
+
+  async updateMenu(id: bigint, d: Partial<MenuDto>) {
+    const menu = await this.editableMenu(id)
     const owner = d.storefrontId === undefined ? menu.storefrontId : await this.ownerOf(d.storefrontId)
     await this.assertOneHeader(d.location ?? menu.location, owner, id)
     await prisma.menu.update({
@@ -419,14 +428,14 @@ export class ContentService {
   }
 
   async deleteMenu(id: bigint) {
-    await this.getMenu(id)
+    await this.editableMenu(id)
     await prisma.menu.delete({ where: { id } })
     return { id, deleted: true }
   }
 
   /** Replaces the whole item tree, which is how the admin editor saves. */
   async setMenuItems(id: bigint, d: MenuItemsDto) {
-    await this.getMenu(id)
+    await this.editableMenu(id)
     await prisma.$transaction(async (tx) => {
       await tx.menuItem.deleteMany({ where: { menuId: id } })
       for (const [i, item] of d.items.entries()) {

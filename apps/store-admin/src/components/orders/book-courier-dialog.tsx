@@ -34,17 +34,22 @@ import {
 
 export function BookCourierDialog({
   parcel,
+  preferredAccountId,
   onClose,
 }: {
   parcel: { id: string; orderId: string | number; code: string; weightKg: number | null };
+  /** The order's storefront courier, picked first when it's connected. */
+  preferredAccountId?: string | null;
   onClose: () => void;
 }) {
   const { data: accounts, isLoading } = useActiveCouriersQuery();
   const [accountId, setAccountId] = useState("");
   const account = accounts?.find((a) => a.id === accountId);
   useEffect(() => {
-    if (!accountId && accounts?.length) setAccountId(accounts[0]!.id);
-  }, [accounts, accountId]);
+    if (!accountId && accounts?.length) {
+      setAccountId(accounts.find((a) => a.id === preferredAccountId)?.id ?? accounts[0]!.id);
+    }
+  }, [accounts, accountId, preferredAccountId]);
 
   const { data: hint, isFetching: matching } = useCourierAreaQuery(
     { parcelId: parcel.id, accountId },

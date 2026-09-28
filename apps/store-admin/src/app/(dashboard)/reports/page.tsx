@@ -96,6 +96,15 @@ export default function SalesReportPage() {
       </Note>
       <div className="grid gap-5 2xl:grid-cols-2">
         <ReportTable title="By source" description="Where orders came from" filename="sales-by-source" rows={data.bySource} columns={[keyCol("Source"), ...pick(figureColumns<KeyRow>()), shareCol]} />
+        {data.byStorefront.length > 1 && (
+          <ReportTable
+            title="By storefront"
+            description="Which storefront orders were placed on"
+            filename="sales-by-storefront"
+            rows={data.byStorefront}
+            columns={[keyCol("Storefront"), ...pick(figureColumns<KeyRow>()), shareCol]}
+          />
+        )}
         <ReportTable
           title="By payment method"
           filename="sales-by-payment"

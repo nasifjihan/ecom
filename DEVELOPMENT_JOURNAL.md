@@ -2682,3 +2682,85 @@ A store can now run more than one shop front, for example a main shop and a kids
   - a shop can add one without proof that it owns the domain; it only works once the domain's DNS points at us, and a taken address is refused;
   - the admin's "View store" uses a storefront's first web address.
 - **Hard-coded store name:** the about page and default site metadata still name the demo store.
+
+## ✅ BATCH #32 (part 2) — Payments, delivery, couriers, promotions, staff and reports per storefront (2026-09-28)
+Each storefront can now choose its own payment methods, delivery charges and courier, and run its own promotions and coupons. Staff can be limited to some storefronts, reports split by storefront, and staff taking an order by phone pick which storefront it's for. With one storefront nothing changes.
+
+### 32.8 Data (migration `storefront_settings`)
+- **`Storefront.paymentGateways`:** the payment methods offered there (empty: every enabled one).
+- **`Storefront.courierAccountId`:** the courier suggested for its parcels.
+- **"Only on these storefronts" lists (`storefrontIds`, empty: all):** on `ShippingZone`, `Promotion`, `Coupon` and `AdminUser`.
+- **Deleting a storefront:**
+  - it is taken out of those lists;
+  - deleting is refused while something is limited to that storefront alone, because an emptied list would mean "every storefront" (for a staff member, full access).
+
+### 32.9 Checkout (`storefronts.rules.ts`)
+- **Payment:** the checkout lists only the storefront's methods, and placing an order with another one is refused. Staff recording a manual order can still use any method the store has.
+- **Delivery:**
+  - a zone limited to some storefronts is used only there;
+  - where a storefront has its own zone for an address, that zone replaces the shared ones, even when a shared zone is more specific. So "Kids Corner delivery" (all of Bangladesh, ৳40) wins over "Dhaka Metro" on the Kids storefront.
+- **Promotions and coupons:**
+  - promotions limited to other storefronts don't apply and aren't shown in the storefront's slots;
+  - a coupon for another storefront reads "This coupon code is not valid" and isn't listed in the cart.
+- **Couriers:**
+  - the booking dialog picks the order's storefront courier first;
+  - bulk booking has "Each storefront's courier", which sends each order to its storefront's courier (an order whose storefront has none fails with a clear reason).
+
+### 32.10 Staff limited to storefronts
+- **Setting it:**
+  - in Settings → Staff, "Works on" ticks storefronts (none: all); owners always work on every storefront;
+  - the list shows "Kids Corner only";
+  - someone limited can only add or change staff within their own storefronts, can't make anyone unlimited, and can't change their own.
+- **What they see:**
+  - only their storefronts' orders (list, tab counts, detail, status changes), parcels, returns and payment records;
+  - only their storefronts in reports;
+  - only their storefronts on the Storefronts page, and they can edit only those storefronts' look, homepage, menus and product rows.
+- **What they can't do:** add, delete or change the default storefront, or move web addresses.
+- **Mechanics:**
+  - the limit is cached with the permissions (5 minutes, cleared when the staff member is saved) and carried on each request (`ctx.admin.storefrontIds`);
+  - `staffOrderScope` and `assertStaffStorefront` apply it.
+- **Storefront names:** `GET /api/admin/storefronts/options` gives the names any staff member may filter by, so an order manager without Online Store access still gets the storefront filter.
+
+### 32.11 Reports and manual orders
+- **Reports:**
+  - every report takes `storefrontId` (limited staff always get theirs);
+  - order, parcel, COD, refund and return figures follow it;
+  - courier settlements aren't per order, so they are left out when looking at some storefronts only;
+  - Sales adds a "By storefront" table;
+  - the report bar has a storefront picker.
+- **Manual orders:** the New order page has a Storefront field. Its prices, product range, promotions, coupons and delivery zones apply, and the order is recorded on it (limited staff: one of theirs).
+
+### 32.12 Store admin
+- **Storefront dialog:** payment methods (ticks) and courier.
+- **"Storefronts" ticks:** on delivery zones, promotions, coupons and staff.
+- **Other screens:** the report storefront picker, the New order storefront field, and the courier preselect and bulk option.
+
+### 32.13 Checked
+- **Tests:** 544/544 API tests. New ones:
+  - 3 unit tests: storefront lists, payment methods, own zones before shared;
+  - 9 database tests:
+    - payment methods and unknown codes;
+    - own vs shared delivery;
+    - promotion and coupon per storefront;
+    - staff order list and detail;
+    - reports split and refused for another storefront;
+    - limited staff editing storefronts;
+    - a manual order at the Kids price and promotion;
+    - a limited editor giving access;
+    - the delete guard, and removal from shared lists.
+- **Chromium, as the owner:**
+  - set Kids Corner to cash on delivery only;
+  - limited "Eid Sale" to the main storefront;
+  - added "Kids Staff" (Order Manager, Kids Corner only);
+  - Sales shows "By storefront".
+- **Chromium, on the storefronts:**
+  - Kids checkout (`127.0.0.1:3000`) offers no bKash, has "Kids delivery" ৳40 and no Eid Sale, and an order was placed;
+  - the main checkout still has bKash, courier delivery and Eid Sale.
+- **Chromium, as the Kids staff member:** the order list shows only the two Kids orders, with no errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before; API typecheck passes; admin and storefront build.
+
+### 32.14 Not done
+- **Payment and courier accounts:** a storefront can pick which methods it offers, but not its own bKash / Nagad number or gateway keys. Couriers are the store's accounts, with one suggested per storefront.
+- **Still shared by every storefront:** SMS and email settings, invoice details and flash sales.
+- **Staff limits** cover orders, parcels, returns, payment records, reports and storefront content. Other pages (customers, stock, dashboard figures, the COD / settlement pages) still show the whole store.
+- **Per-option prices:** there are no per-option own prices per storefront.

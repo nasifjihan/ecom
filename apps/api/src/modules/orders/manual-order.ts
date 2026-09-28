@@ -11,6 +11,7 @@ import { z } from "zod";
 import { prisma } from "../../config";
 import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
 import { StorefrontService, type OrderDraft } from "../storefront/storefront.service";
+import { assertStaffStorefront, defaultStorefrontId, staffStorefronts } from "../storefronts/storefronts.context";
 import { emitOrderPlaced } from "../notifications";
 
 export const ORDER_SOURCES = ["website", "phone", "facebook", "instagram", "whatsapp", "messenger", "walk_in", "other"] as const;
@@ -72,6 +73,8 @@ const Base = z.object({
   paid: z.boolean().default(false),
   transactionId: text(100).optional(),
   source: z.enum(ORDER_SOURCES).default("phone"),
+  /** The storefront the order is for: its prices, range, promotions and delivery (default: the main one). */
+  storefrontId: z.coerce.bigint().positive().optional(),
   status: z.enum(["PENDING", "PROCESSING"]).default("PENDING"),
   customerNote: text(2000).optional(),
   staffNote: text(2000).optional(),
@@ -126,10 +129,17 @@ export async function manualDiscountCap(ctx: RequestContext): Promise<number> {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export class ManualOrderService {
-  private readonly storefront: StorefrontService;
+  constructor(private readonly ctx: RequestContext) {}
 
-  constructor(private readonly ctx: RequestContext) {
-    this.storefront = new StorefrontService(ctx);
+  /** Checkout for the order's storefront (staff limited to some storefronts: one of theirs). */
+  private async shopFor(storefrontId: bigint | undefined): Promise<StorefrontService> {
+    const allowed = staffStorefronts(this.ctx);
+    const id = storefrontId ?? allowed?.[0] ?? (await defaultStorefrontId(this.storeId));
+    assertStaffStorefront(this.ctx, id);
+    if (!(await prisma.storefront.findFirst({ where: { id, storeId: this.storeId }, select: { id: true } }))) {
+      throw new NotFoundError("Storefront");
+    }
+    return new StorefrontService({ ...this.ctx, storefrontId: id });
   }
 
   private get storeId(): bigint {
@@ -206,7 +216,8 @@ export class ManualOrderService {
       customerId: customer?.id ?? null,
       useWallet: dto.useWallet && !!customer,
     };
-    const quote = await this.storefront.quoteOrder(input);
+    const shop = await this.shopFor(dto.storefrontId);
+    const quote = await shop.quoteOrder(input);
 
     const cap = await manualDiscountCap(this.ctx);
     const { itemsSubtotal, manualDiscount } = quote.totals;
@@ -217,7 +228,7 @@ export class ManualOrderService {
       if (strict) throw new ForbiddenError(msg, "DISCOUNT_OVER_LIMIT");
       quote.problems.push(msg);
     }
-    return { quote, customer, email, phone, cap };
+    return { quote, customer, email, phone, cap, shop };
   }
 
   async quote(dto: ManualOrderQuoteDto) {
@@ -264,7 +275,7 @@ export class ManualOrderService {
   }
 
   async create(dto: ManualOrderDto) {
-    const { quote, customer: found, email, phone } = await this.draft(dto, true);
+    const { quote, customer: found, email, phone, shop } = await this.draft(dto, true);
     const storeId = this.storeId;
 
     // Keep a customer record for the order (no login until they register on the storefront).
@@ -288,7 +299,7 @@ export class ManualOrderService {
     const adminId = await this.adminUserId();
     const who = await this.staffName(adminId);
     const sourceLabel = dto.source.replace("_", "-");
-    const order = await this.storefront.createOrder(quote, {
+    const order = await shop.createOrder(quote, {
       customerId: customer.id,
       customerNote: dto.customerNote || null,
       source: dto.source,

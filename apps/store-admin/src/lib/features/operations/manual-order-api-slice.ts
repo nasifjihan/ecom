@@ -35,6 +35,8 @@ export interface ManualOrderInput {
   paid: boolean;
   transactionId?: string;
   source: OrderSource;
+  /** The storefront whose prices, promotions and delivery charges apply (default: the main one). */
+  storefrontId?: string;
   status: "PENDING" | "PROCESSING";
   customerNote?: string;
   staffNote?: string;

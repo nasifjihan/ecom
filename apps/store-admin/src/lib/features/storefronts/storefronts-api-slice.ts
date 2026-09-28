@@ -28,6 +28,18 @@ export interface Storefront {
   ownTheme: boolean;
   ownHomepage: boolean;
   ownMenus: number;
+  /** Payment methods offered here (empty: every enabled one). */
+  paymentGateways: string[];
+  courierAccountId: string | null;
+}
+
+/** A storefront's name for filters and pickers (readable by any staff member). */
+export interface StorefrontOption {
+  id: string;
+  name: string;
+  code: string;
+  isDefault: boolean;
+  isActive: boolean;
 }
 
 export type StorefrontInput = Partial<{
@@ -37,6 +49,8 @@ export type StorefrontInput = Partial<{
   priceAdjustPercent: number;
   includeNewProducts: boolean;
   sortOrder: number;
+  paymentGateways: string[];
+  courierAccountId: string | null;
 }>;
 
 export interface ProductStorefront {
@@ -65,6 +79,7 @@ const product = (id: string) => ({ type: "Product" as const, id: `STOREFRONTS-${
 export const storefrontsApi = api.injectEndpoints({
   endpoints: (b) => ({
     storefronts: b.query<Storefront[], void>({ query: () => "/admin/storefronts", providesTags: [LIST] }),
+    storefrontOptions: b.query<StorefrontOption[], void>({ query: () => "/admin/storefronts/options", providesTags: [LIST] }),
     createStorefront: b.mutation<{ id: string }, StorefrontInput>({
       query: (body) => ({ url: "/admin/storefronts", method: "POST", body }),
       invalidatesTags: [LIST],
@@ -103,6 +118,7 @@ export const storefrontsApi = api.injectEndpoints({
 
 export const {
   useStorefrontsQuery,
+  useStorefrontOptionsQuery,
   useCreateStorefrontMutation,
   useUpdateStorefrontMutation,
   useMakeDefaultStorefrontMutation,

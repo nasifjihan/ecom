@@ -10,7 +10,8 @@
  */
 import { Prisma } from "@prisma/client"
 import { prisma } from "../../config"
-import { BadRequestError, type RequestContext } from "../../core"
+import { BadRequestError, ForbiddenError, type RequestContext } from "../../core"
+import { staffStorefronts } from "../storefronts/storefronts.context"
 import {
   bucketKeys,
   change,
@@ -31,6 +32,7 @@ export interface RangeQuery {
   from?: string
   to?: string
   basis?: ReportBasis
+  storefrontId?: bigint
 }
 
 const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
@@ -86,7 +88,34 @@ export class ReportsService {
     }
   }
 
+  /**
+   * Storefronts the report covers: the one asked for (it must be one the staff member works on),
+   * else the staff member's storefronts, else null for the whole store.
+   */
+  private sf: bigint[] | null = null
+
+  private pickStorefronts(storefrontId?: bigint) {
+    const allowed = staffStorefronts(this.ctx)
+    if (storefrontId !== undefined) {
+      if (allowed && !allowed.includes(storefrontId)) throw new ForbiddenError("You don't work on this storefront", "AUTH_FORBIDDEN")
+      this.sf = [storefrontId]
+    } else this.sf = allowed
+  }
+
+  /** ` AND o."storefrontId" = ANY(…)` for order rows `o`, or nothing for the whole store. */
+  private sfSql(): Prisma.Sql {
+    return this.sf ? Prisma.sql` AND o."storefrontId" = ANY(${this.sf.map(String)}::bigint[])` : Prisma.empty
+  }
+
+  /** The same for rows that point at an order (`column` is their order id). */
+  private sfOrderSql(column: string): Prisma.Sql {
+    return this.sf
+      ? Prisma.sql` AND ${Prisma.raw(column)} IN (SELECT "id" FROM "Order" WHERE "storefrontId" = ANY(${this.sf.map(String)}::bigint[]))`
+      : Prisma.empty
+  }
+
   private async range(q: RangeQuery) {
+    this.pickStorefronts(q.storefrontId)
     const tz = await this.tz()
     const r = resolveRange(q, new Date(), tz)
     if ("error" in r) throw new BadRequestError(r.error, "VALIDATION_FAILED")
@@ -107,7 +136,7 @@ export class ReportsService {
         SELECT o."id", ${key} AS k, o."itemsSubtotal", o."discountTotal", o."shippingTotal",
                o."taxTotal", o."refundedTotal"
         FROM "Order" o
-        WHERE o."storeId" = ${this.storeId}
+        WHERE o."storeId" = ${this.storeId}${this.sfSql()}
           AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
           AND o."status"::text = ANY(${statusesFor(basis)})
       ),
@@ -154,12 +183,14 @@ export class ReportsService {
     const prev = previousRange(r, tz)
     const bucket = pickBucket(r.days)
     const all = Prisma.sql`'all'`
-    const [cur, before, series, sources, payments] = await Promise.all([
+    const [cur, before, series, sources, payments, fronts, names] = await Promise.all([
       this.salesBy(r, basis, all),
       this.salesBy(prev, basis, all),
       this.salesBy(r, basis, ReportsService.bucketSql(bucket, tz)),
       this.salesBy(r, basis, Prisma.sql`o."source"`),
       this.salesBy(r, basis, Prisma.sql`o."paymentGatewayCode"`),
+      this.salesBy(r, basis, Prisma.sql`o."storefrontId"`),
+      prisma.storefront.findMany({ where: { storeId: this.storeId }, select: { id: true, name: true } }),
     ])
     const total = withProfit(figures(cur[0]))
     const previous = withProfit(figures(before[0]))
@@ -186,6 +217,11 @@ export class ReportsService {
       })),
       bySource: breakdown(sources),
       byPayment: breakdown(payments),
+      /** Keyed by storefront name (one row when the store has a single storefront). */
+      byStorefront: breakdown(fronts).map((row) => ({
+        ...row,
+        key: names.find((x) => String(x.id) === row.key)?.name ?? "No storefront",
+      })),
     }
   }
 
@@ -228,7 +264,7 @@ export class ReportsService {
       FROM "OrderItem" oi
       JOIN "Order" o ON o."id" = oi."orderId"
       LEFT JOIN back b ON b."orderItemId" = oi."id"
-      WHERE o."storeId" = ${this.storeId}
+      WHERE o."storeId" = ${this.storeId}${this.sfSql()}
         AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
         AND o."status"::text = ANY(${statusesFor(basis)})
       GROUP BY oi."productId", CASE WHEN oi."productId" IS NULL THEN oi."productName" END
@@ -295,7 +331,7 @@ export class ReportsService {
 
   async discounts(q: RangeQuery) {
     const { tz, r, basis } = await this.range(q)
-    const where = Prisma.sql`o."storeId" = ${this.storeId}
+    const where = Prisma.sql`o."storeId" = ${this.storeId}${this.sfSql()}
       AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
       AND o."status"::text = ANY(${statusesFor(basis)})`
     const [coupons, promos, totals] = await Promise.all([
@@ -418,7 +454,7 @@ export class ReportsService {
         WITH o AS (
           SELECT o."customerId", o."createdAt", (o."itemsSubtotal" - o."discountTotal" - o."refundedTotal") AS sales
           FROM "Order" o
-          WHERE o."storeId" = ${this.storeId}
+          WHERE o."storeId" = ${this.storeId}${this.sfSql()}
             AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
             AND o."status"::text = ANY(${statuses})
         ),
@@ -459,7 +495,7 @@ export class ReportsService {
                MIN(o."createdAt") AS first_at, MAX(o."createdAt") AS last_at,
                c."orderCount"::int AS lifetime_orders
         FROM "Order" o JOIN "Customer" c ON c."id" = o."customerId"
-        WHERE o."storeId" = ${this.storeId}
+        WHERE o."storeId" = ${this.storeId}${this.sfSql()}
           AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
           AND o."status"::text = ANY(${statuses})
         GROUP BY c."id"
@@ -471,7 +507,7 @@ export class ReportsService {
                COUNT(*)::int AS orders,
                SUM(o."itemsSubtotal" - o."discountTotal" - o."refundedTotal")::float8 AS sales
         FROM "Order" o
-        WHERE o."storeId" = ${this.storeId}
+        WHERE o."storeId" = ${this.storeId}${this.sfSql()}
           AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
           AND o."status"::text = ANY(${statuses})
         GROUP BY 1
@@ -542,14 +578,14 @@ export class ReportsService {
                AVG(EXTRACT(EPOCH FROM (s."deliveredAt" - COALESCE(s."shippedAt", s."createdAt"))) / 86400)
                  FILTER (WHERE s."status" = 'delivered' AND s."deliveredAt" IS NOT NULL)::float8 AS days
         FROM "Shipment" s
-        WHERE s."storeId" = ${this.storeId} AND s."createdAt" >= ${r.start} AND s."createdAt" < ${r.end}
+        WHERE s."storeId" = ${this.storeId}${this.sfOrderSql('s."orderId"')} AND s."createdAt" >= ${r.start} AND s."createdAt" < ${r.end}
         GROUP BY s."providerCode"
         ORDER BY parcels DESC
       `,
       prisma.$queryRaw<{ status: string; records: number; amount: number }[]>`
         SELECT pr."status", COUNT(*)::int AS records, SUM(pr."amount")::float8 AS amount
         FROM "PaymentRecord" pr
-        WHERE pr."storeId" = ${this.storeId} AND pr."kind" = 'cod'
+        WHERE pr."storeId" = ${this.storeId}${this.sfOrderSql('pr."orderId"')} AND pr."kind" = 'cod'
           AND pr."createdAt" >= ${r.start} AND pr."createdAt" < ${r.end}
         GROUP BY pr."status"
       `,
@@ -569,7 +605,7 @@ export class ReportsService {
                SUM(cs."receivedAmount")::float8 AS received,
                SUM(CASE WHEN cs."status" = 'resolved' THEN 0 ELSE cs."shortfall" END)::float8 AS shortfall
         FROM "CourierSettlement" cs
-        WHERE cs."storeId" = ${this.storeId} AND cs."paidOn" >= ${r.start} AND cs."paidOn" < ${r.end}
+        WHERE cs."storeId" = ${this.storeId} AND ${this.sf === null} AND cs."paidOn" >= ${r.start} AND cs."paidOn" < ${r.end}
         GROUP BY cs."courierCode"
       `,
     ])
@@ -623,26 +659,26 @@ export class ReportsService {
         prisma.$queryRaw<{ refunds: number; amount: number; orders: number }[]>`
         SELECT COUNT(*)::int AS refunds, COALESCE(SUM("amount"), 0)::float8 AS amount,
                COUNT(DISTINCT "orderId")::int AS orders
-        FROM "Refund" WHERE "storeId" = ${this.storeId} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
+        FROM "Refund" WHERE "storeId" = ${this.storeId}${this.sfOrderSql('"orderId"')} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
       `,
         prisma.$queryRaw<{ key: string; refunds: number; amount: number }[]>`
         SELECT "method" AS key, COUNT(*)::int AS refunds, SUM("amount")::float8 AS amount
-        FROM "Refund" WHERE "storeId" = ${this.storeId} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
+        FROM "Refund" WHERE "storeId" = ${this.storeId}${this.sfOrderSql('"orderId"')} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
         GROUP BY 1 ORDER BY amount DESC
       `,
         prisma.$queryRaw<{ key: string; refunds: number; amount: number }[]>`
         SELECT "reason" AS key, COUNT(*)::int AS refunds, SUM("amount")::float8 AS amount
-        FROM "Refund" WHERE "storeId" = ${this.storeId} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
+        FROM "Refund" WHERE "storeId" = ${this.storeId}${this.sfOrderSql('"orderId"')} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
         GROUP BY 1 ORDER BY refunds DESC LIMIT 15
       `,
         prisma.$queryRaw<{ key: string; returns: number; amount: number }[]>`
         SELECT "status" AS key, COUNT(*)::int AS returns, SUM("requestedAmount")::float8 AS amount
-        FROM "ReturnRequest" WHERE "storeId" = ${this.storeId} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
+        FROM "ReturnRequest" WHERE "storeId" = ${this.storeId}${this.sfOrderSql('"orderId"')} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
         GROUP BY 1 ORDER BY returns DESC
       `,
         prisma.$queryRaw<{ key: string; returns: number }[]>`
         SELECT "reason" AS key, COUNT(*)::int AS returns
-        FROM "ReturnRequest" WHERE "storeId" = ${this.storeId} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
+        FROM "ReturnRequest" WHERE "storeId" = ${this.storeId}${this.sfOrderSql('"orderId"')} AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end}
         GROUP BY 1 ORDER BY returns DESC LIMIT 15
       `,
         prisma.$queryRaw<{ name: string; units: number; amount: number }[]>`
@@ -650,13 +686,14 @@ export class ReportsService {
         FROM "RefundItem" ri
         JOIN "Refund" rf ON rf."id" = ri."refundId"
         JOIN "OrderItem" oi ON oi."id" = ri."orderItemId"
-        WHERE rf."storeId" = ${this.storeId} AND rf."createdAt" >= ${r.start} AND rf."createdAt" < ${r.end}
+        WHERE rf."storeId" = ${this.storeId}${this.sfOrderSql('rf."orderId"')} AND rf."createdAt" >= ${r.start} AND rf."createdAt" < ${r.end}
         GROUP BY COALESCE(oi."productId"::text, oi."productName")
         ORDER BY units DESC LIMIT 20
       `,
         prisma.order.count({
           where: {
             storeId: this.storeId,
+            ...(this.sf ? { storefrontId: { in: this.sf } } : {}),
             createdAt: { gte: r.start, lt: r.end },
             status: { notIn: ["CANCELLED", "FAILED"] },
           },
@@ -714,7 +751,7 @@ export class ReportsService {
              SUM(o."shippingTotal")::float8 AS shipping,
              SUM(o."taxTotal")::float8 AS tax
       FROM "Order" o
-      WHERE o."storeId" = ${this.storeId}
+      WHERE o."storeId" = ${this.storeId}${this.sfSql()}
         AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
         AND o."status"::text = ANY(${statusesFor(basis)})
       GROUP BY 1

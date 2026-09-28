@@ -5,8 +5,8 @@
  */
 import { Prisma } from "@prisma/client"
 import { cacheDel, CACHE_KEYS, prisma, tx } from "../../config"
-import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
-import { defaultStorefrontId, forgetStorefronts } from "./storefronts.context"
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core"
+import { assertStaffStorefront, defaultStorefrontId, forgetStorefronts, staffStorefronts } from "./storefronts.context"
 import { cleanHostname, storefrontCode } from "./storefronts.rules"
 import type { ProductStorefrontsInput, StorefrontInput } from "./storefronts.dto"
 
@@ -25,6 +25,11 @@ export class StorefrontsService {
     const sf = await t.storefront.findFirst({ where: { id, storeId: this.storeId } })
     if (!sf) throw new NotFoundError("Storefront")
     return sf
+  }
+
+  /** Adding, deleting or changing the default storefront: staff who work on every storefront only. */
+  private assertAllStorefronts() {
+    if (staffStorefronts(this.ctx)) throw new ForbiddenError("Only staff who work on every storefront can do this", "AUTH_FORBIDDEN")
   }
 
   private changed() {
@@ -59,7 +64,8 @@ export class StorefrontsService {
     const count = (list: { storefrontId: bigint | null; _count: { _all: number } }[], id: bigint) =>
       list.find((c) => c.storefrontId === id)?._count._all ?? 0
     const def = rows.find((r) => r.isDefault)
-    return rows.map((r) => ({
+    const allowed = staffStorefronts(this.ctx)
+    return rows.filter((r) => !allowed || allowed.includes(r.id)).map((r) => ({
       id: String(r.id),
       name: r.name,
       code: r.code,
@@ -68,6 +74,8 @@ export class StorefrontsService {
       priceAdjustPercent: Number(r.priceAdjustPercent),
       includeNewProducts: r.isDefault ? true : r.includeNewProducts,
       sortOrder: r.sortOrder,
+      paymentGateways: r.paymentGateways,
+      courierAccountId: r.courierAccountId === null ? null : String(r.courierAccountId),
       // Addresses not linked to a storefront open the default one.
       domains: domains
         .filter((d) => (d.storefrontId ?? def?.id) === r.id)
@@ -83,6 +91,18 @@ export class StorefrontsService {
     }))
   }
 
+  /** Names for filters and pickers (any staff member; limited staff get their storefronts). */
+  async options() {
+    await defaultStorefrontId(this.storeId)
+    const allowed = staffStorefronts(this.ctx)
+    const rows = await prisma.storefront.findMany({
+      where: { storeId: this.storeId, ...(allowed ? { id: { in: allowed } } : {}) },
+      orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, code: true, isDefault: true, isActive: true },
+    })
+    return rows.map((r) => ({ ...r, id: String(r.id) }))
+  }
+
   private async uniqueCode(t: T, raw: string, exceptId?: bigint) {
     const code = storefrontCode(raw)
     if (code.length < 2) throw new BadRequestError("The code needs at least 2 letters or digits", "BAD_REQUEST", { code: ["Too short"] })
@@ -91,7 +111,22 @@ export class StorefrontsService {
     return code
   }
 
+  /** Gateway codes the store has, and a courier account of its own. */
+  private async checkSettings(d: Partial<StorefrontInput>) {
+    if (d.paymentGateways?.length) {
+      const known = await prisma.paymentGatewayConfig.findMany({ where: { storeId: this.storeId, code: { in: d.paymentGateways } }, select: { code: true } })
+      const missing = d.paymentGateways.filter((c) => !known.some((k) => k.code === c))
+      if (missing.length) throw new BadRequestError(`Unknown payment method: ${missing.join(", ")}`, "BAD_REQUEST", { paymentGateways: ["Unknown"] })
+    }
+    if (d.courierAccountId) {
+      const a = await prisma.courierAccount.findFirst({ where: { id: d.courierAccountId, storeId: this.storeId }, select: { id: true } })
+      if (!a) throw new NotFoundError("Courier account")
+    }
+  }
+
   async create(d: StorefrontInput) {
+    this.assertAllStorefronts()
+    await this.checkSettings(d)
     const row = await tx(async (t: T) =>
       t.storefront.create({
         data: {
@@ -102,6 +137,8 @@ export class StorefrontsService {
           priceAdjustPercent: d.priceAdjustPercent ?? 0,
           includeNewProducts: d.includeNewProducts ?? true,
           sortOrder: d.sortOrder ?? 0,
+          paymentGateways: [...new Set(d.paymentGateways ?? [])],
+          courierAccountId: d.courierAccountId ?? null,
         },
       }),
     )
@@ -110,6 +147,8 @@ export class StorefrontsService {
   }
 
   async update(id: bigint, d: Partial<StorefrontInput>) {
+    assertStaffStorefront(this.ctx, id)
+    await this.checkSettings(d)
     await tx(async (t: T) => {
       const sf = await this.find(id, t)
       if (sf.isDefault && d.isActive === false) throw new BadRequestError("The default storefront can't be closed. Make another one the default first.")
@@ -122,6 +161,8 @@ export class StorefrontsService {
           ...(d.priceAdjustPercent !== undefined ? { priceAdjustPercent: d.priceAdjustPercent } : {}),
           ...(d.includeNewProducts !== undefined ? { includeNewProducts: d.includeNewProducts } : {}),
           ...(d.sortOrder !== undefined ? { sortOrder: d.sortOrder } : {}),
+          ...(d.paymentGateways !== undefined ? { paymentGateways: [...new Set(d.paymentGateways)] } : {}),
+          ...(d.courierAccountId !== undefined ? { courierAccountId: d.courierAccountId } : {}),
         },
       })
     })
@@ -131,6 +172,7 @@ export class StorefrontsService {
 
   /** Makes this the storefront addresses without their own open (it must be open). */
   async makeDefault(id: bigint) {
+    this.assertAllStorefronts()
     await tx(async (t: T) => {
       const sf = await this.find(id, t)
       if (!sf.isActive) throw new BadRequestError("Open the storefront before making it the default")
@@ -144,11 +186,34 @@ export class StorefrontsService {
 
   /** Only a storefront nothing was ordered on; otherwise close it. Its addresses go to the default. */
   async remove(id: bigint) {
+    this.assertAllStorefronts()
     const sf = await this.find(id)
     if (sf.isDefault) throw new BadRequestError("The default storefront can't be deleted")
     const orders = await prisma.order.count({ where: { storeId: this.storeId, storefrontId: id } })
     if (orders) throw new ConflictError(`${orders} order(s) were placed on this storefront. Close it instead.`)
-    await prisma.storefront.delete({ where: { id } })
+    // A list holding only this storefront would become empty, which means "every storefront".
+    const only = [id]
+    const [zones, promos, coupons, staff] = await Promise.all([
+      prisma.shippingZone.count({ where: { storeId: this.storeId, storefrontIds: { equals: only } } }),
+      prisma.promotion.count({ where: { storeId: this.storeId, storefrontIds: { equals: only } } }),
+      prisma.coupon.count({ where: { storeId: this.storeId, storefrontIds: { equals: only } } }),
+      prisma.adminUser.count({ where: { storeId: this.storeId, storefrontIds: { equals: only } } }),
+    ])
+    const used = [
+      zones && `${zones} delivery zone(s)`,
+      promos && `${promos} promotion(s)`,
+      coupons && `${coupons} coupon(s)`,
+      staff && `${staff} staff member(s)`,
+    ].filter(Boolean)
+    if (used.length) throw new ConflictError(`Only for this storefront: ${used.join(", ")}. Change or remove them first.`)
+    await tx(async (t: T) => {
+      // Take it out of every "only on these storefronts" list.
+      await t.$executeRaw`UPDATE "ShippingZone" SET "storefrontIds" = array_remove("storefrontIds", ${id}) WHERE "storeId" = ${this.storeId}`
+      await t.$executeRaw`UPDATE "Promotion" SET "storefrontIds" = array_remove("storefrontIds", ${id}) WHERE "storeId" = ${this.storeId}`
+      await t.$executeRaw`UPDATE "Coupon" SET "storefrontIds" = array_remove("storefrontIds", ${id}) WHERE "storeId" = ${this.storeId}`
+      await t.$executeRaw`UPDATE "AdminUser" SET "storefrontIds" = array_remove("storefrontIds", ${id}) WHERE "storeId" = ${this.storeId}`
+      await t.storefront.delete({ where: { id } })
+    })
     await this.dropDomainCache()
     this.changed()
     return { id: String(id), deleted: true }
@@ -163,6 +228,7 @@ export class StorefrontsService {
 
   /** Adds a web address for this storefront. The shop points it at us in its DNS. */
   async addDomain(id: bigint, raw: string) {
+    assertStaffStorefront(this.ctx, id)
     const sf = await this.find(id)
     const hostname = cleanHostname(raw)
     if (!hostname) throw new BadRequestError("That doesn't look like a web address (e.g. kids.myshop.com)", "BAD_REQUEST", { hostname: ["Not a web address"] })
@@ -183,6 +249,7 @@ export class StorefrontsService {
 
   /** Points one of the store's addresses at a storefront (null: the default one). */
   async moveDomain(domainId: bigint, storefrontId: bigint | null) {
+    this.assertAllStorefronts()
     const d = await prisma.domain.findFirst({ where: { id: domainId, storeId: this.storeId } })
     if (!d) throw new NotFoundError("Web address")
     if (d.type === "admin") throw new BadRequestError("The admin address can't open a storefront")
@@ -210,7 +277,8 @@ export class StorefrontsService {
       prisma.storefront.findMany({ where: { storeId: this.storeId }, orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { id: "asc" }] }),
       prisma.productStorefront.findMany({ where: { productId } }),
     ])
-    return sfs.map((sf) => {
+    const allowed = staffStorefronts(this.ctx)
+    return sfs.filter((sf) => !allowed || allowed.includes(sf.id)).map((sf) => {
       const row = own.find((o) => o.storefrontId === sf.id)
       const includeNew = sf.isDefault ? true : sf.includeNewProducts
       return {
@@ -242,6 +310,7 @@ export class StorefrontsService {
       for (const r of d.storefronts) {
         const sf = sfs.find((s) => s.id === r.storefrontId)
         if (!sf) throw new NotFoundError("Storefront", r.storefrontId)
+        assertStaffStorefront(this.ctx, sf.id)
         const includeNew = sf.isDefault ? true : sf.includeNewProducts
         const plain = r.listed === includeNew && r.regularPrice == null
         const key = { productId_storefrontId: { productId, storefrontId: sf.id } }
@@ -262,6 +331,7 @@ export class StorefrontsService {
 
   /** Adds products to a storefront, or takes them off it (keeping any own price). */
   async setProducts(id: bigint, productIds: bigint[], listed: boolean) {
+    assertStaffStorefront(this.ctx, id)
     await this.find(id)
     const found = await prisma.product.findMany({ where: { storeId: this.storeId, id: { in: productIds } }, select: { id: true } })
     await tx(async (t: T) => {

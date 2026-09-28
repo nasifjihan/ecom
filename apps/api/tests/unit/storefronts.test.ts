@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest"
-import { adjust, cleanHostname, listedIn, storefrontCode, storefrontPriceRow } from "../../src/modules/storefronts/storefronts.rules"
+import {
+  adjust,
+  cleanHostname,
+  gatewayOffered,
+  listedIn,
+  onStorefront,
+  storefrontCode,
+  storefrontPriceRow,
+  storefrontZones,
+} from "../../src/modules/storefronts/storefronts.rules"
 
 describe("storefront prices", () => {
   const row = { regularPrice: 1000, salePrice: 800, salePriceStartAt: null, salePriceEndAt: null }
@@ -68,5 +77,31 @@ describe("storefront codes and web addresses", () => {
     expect(cleanHostname("not a host")).toBeNull()
     expect(cleanHostname("-bad-.com")).toBeNull()
     expect(cleanHostname("")).toBeNull()
+  })
+})
+
+describe("storefront settings", () => {
+  it("limits to storefronts only when a list is given", () => {
+    expect(onStorefront([], 2n)).toBe(true)
+    expect(onStorefront([], null)).toBe(true)
+    expect(onStorefront([1n, 2n], 2n)).toBe(true)
+    expect(onStorefront([1n], 2n)).toBe(false)
+    expect(onStorefront([1n], undefined)).toBe(false)
+  })
+
+  it("offers every payment method unless the storefront picks some", () => {
+    expect(gatewayOffered([], "bkash")).toBe(true)
+    expect(gatewayOffered(["cod"], "cod")).toBe(true)
+    expect(gatewayOffered(["cod"], "bkash")).toBe(false)
+  })
+
+  it("uses a storefront's own delivery zones over shared ones, and never another storefront's", () => {
+    const shared = { id: "shared", storefrontIds: [] as bigint[] }
+    const kids = { id: "kids", storefrontIds: [2n] }
+    const main = { id: "main", storefrontIds: [1n] }
+    expect(storefrontZones([shared, kids, main], 2n).map((z) => z.id)).toEqual(["kids"])
+    expect(storefrontZones([shared, kids], 1n).map((z) => z.id)).toEqual(["shared"])
+    expect(storefrontZones([shared, main], 1n).map((z) => z.id)).toEqual(["main"])
+    expect(storefrontZones([kids], 1n)).toEqual([])
   })
 })

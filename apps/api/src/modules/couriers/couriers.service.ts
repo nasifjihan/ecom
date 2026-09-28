@@ -540,10 +540,11 @@ export class CouriersService {
 
   /**
    * Books many orders with one courier: each order's unbooked ready parcel, or a new parcel with
-   * everything not packed yet. One order failing doesn't stop the rest.
+   * everything not packed yet. One order failing doesn't stop the rest. Without an account, each
+   * order goes to the courier set on its storefront.
    */
   async bulkBook(dto: BulkBookDto) {
-    const a = await this.account(dto.accountId)
+    const chosen = dto.accountId ? await this.account(dto.accountId) : null
     const fulfil = new FulfilmentService(this.ctx)
     const results: {
       orderId: string
@@ -556,13 +557,16 @@ export class CouriersService {
     for (const orderId of dto.orderIds) {
       const o = await prisma.order.findFirst({
         where: { id: orderId, storeId: this.storeId },
-        select: { id: true, number: true, shipments: true },
+        select: { id: true, number: true, shipments: true, storefront: { select: { courierAccountId: true } } },
       })
       if (!o) {
         results.push({ orderId: String(orderId), number: "?", ok: false, error: "Order not found" })
         continue
       }
       try {
+        const sfCourier = o.storefront?.courierAccountId
+        const a = chosen ?? (sfCourier ? await this.account(sfCourier) : null)
+        if (!a) throw new BadRequestError("This order's storefront has no courier set: pick one", "VALIDATION_FAILED")
         let parcel = o.shipments.find((s) => s.status === "ready" && !s.consignmentId)
         const onTheWay = o.shipments.find((s) => s.consignmentId && !FINAL.includes(s.status))
         if (!parcel && onTheWay) {

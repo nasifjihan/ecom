@@ -1,6 +1,7 @@
 /**
  * STOREFRONT ROUTES (/api/admin/storefronts)
  *   GET|POST /, PATCH|DELETE /:id, POST /:id/default      storefronts (online_store.view / .edit)
+ *   GET /options                                          names for filters and pickers (any staff)
  *   POST /:id/domains, PATCH /domains/:domainId           add a web address / move one to a storefront
  *   POST /:id/products                                    add products to / take them off a storefront
  *   GET|PUT /products/:productId                          where a product is sold and its prices there
@@ -43,6 +44,13 @@ adminStorefrontsRouter.post(
   validate({ body: StorefrontDto }),
   ctrl(async (req: Req, res: Response) => {
     envelope(res, { status: 201, data: await svc(req).create(body<typeof StorefrontDto>(req)), message: "Storefront added" })
+  }),
+)
+
+adminStorefrontsRouter.get(
+  "/options",
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).options() })
   }),
 )
 

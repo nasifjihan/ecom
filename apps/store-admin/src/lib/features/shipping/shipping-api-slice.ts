@@ -62,6 +62,8 @@ export interface ShippingZone {
   states: string[] | null;
   locations: ZoneLocation[];
   locationIds: string[];
+  /** Only for these storefronts (empty: all). */
+  storefrontIds?: string[];
   _count?: { methods: number };
   methods?: ShippingMethod[];
 }
@@ -72,6 +74,7 @@ export interface ZoneInput {
   countries?: string[];
   locationIds?: string[];
   postcodes?: string[];
+  storefrontIds?: string[];
 }
 
 export interface MethodInput {

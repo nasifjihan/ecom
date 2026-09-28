@@ -25,6 +25,8 @@ import {
 import { Field, PageTitle, STOREFRONT_URL, Toggle } from "@/components/content/shared";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { useCan } from "@/lib/permissions";
+import { usePaymentMethodsQuery } from "@/lib/features/operations/payments-api-slice";
+import { useCourierAccountsQuery } from "@/lib/features/operations/couriers-api-slice";
 import {
   storefrontUrl,
   useAddStorefrontDomainMutation,
@@ -41,6 +43,10 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
   const [f, setF] = useState({ name: "", code: "", priceAdjustPercent: "0" });
   const [active, setActive] = useState(true);
   const [includeNew, setIncludeNew] = useState(true);
+  const [gateways, setGateways] = useState<string[]>([]);
+  const [courier, setCourier] = useState("");
+  const { data: methods = [] } = usePaymentMethodsQuery();
+  const { data: couriers = [] } = useCourierAccountsQuery();
   const [create, c] = useCreateStorefrontMutation();
   const [update, u] = useUpdateStorefrontMutation();
   useEffect(() => {
@@ -48,11 +54,20 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
     setF({ name: storefront?.name ?? "", code: storefront?.code ?? "", priceAdjustPercent: String(storefront?.priceAdjustPercent ?? 0) });
     setActive(storefront?.isActive ?? true);
     setIncludeNew(storefront?.includeNewProducts ?? true);
+    setGateways(storefront?.paymentGateways ?? []);
+    setCourier(storefront?.courierAccountId ?? "");
   }, [open, storefront]);
   const pct = Number(f.priceAdjustPercent);
   const pctOk = f.priceAdjustPercent.trim() !== "" && Number.isFinite(pct) && pct >= -90 && pct <= 500;
   const save = async () => {
-    const body = { name: f.name.trim(), code: f.code.trim() || undefined, priceAdjustPercent: pct, includeNewProducts: includeNew };
+    const body = {
+      name: f.name.trim(),
+      code: f.code.trim() || undefined,
+      priceAdjustPercent: pct,
+      includeNewProducts: includeNew,
+      paymentGateways: gateways,
+      courierAccountId: courier || null,
+    };
     try {
       if (storefront) await update({ id: storefront.id, ...body, ...(storefront.isDefault ? {} : { isActive: active }) }).unwrap();
       else await create(body).unwrap();
@@ -108,6 +123,46 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
               label="Sell every product here"
               hint="Off: only products you add to this storefront (in each product's Storefronts box) are sold here."
             />
+          )}
+          {methods.some((m) => m.enabled) && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Payment methods</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {methods
+                  .filter((m) => m.enabled)
+                  .map((m) => (
+                    <label key={m.code} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={gateways.includes(m.code)}
+                        onChange={(e) => setGateways((g) => (e.target.checked ? [...g, m.code] : g.filter((x) => x !== m.code)))}
+                      />
+                      {m.name}
+                    </label>
+                  ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                {gateways.length ? "Shoppers here can pay with the ticked methods only." : "Every method switched on in Payment settings (none ticked)."}
+              </p>
+            </fieldset>
+          )}
+          {couriers.length > 0 && (
+            <Field label="Courier" htmlFor="sf-courier" hint="Picked first when booking this storefront's parcels, and used by “Each storefront's courier” in bulk booking.">
+              <select
+                id="sf-courier"
+                value={courier}
+                onChange={(e) => setCourier(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">None</option>
+                {couriers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label} ({a.courierName})
+                  </option>
+                ))}
+              </select>
+            </Field>
           )}
           {storefront && !storefront.isDefault && (
             <Toggle checked={active} onChange={setActive} label="Open" hint="A closed storefront's web addresses open the default storefront." />
@@ -213,6 +268,7 @@ export default function StorefrontsPage() {
                             : "All products"
                           : `${s.addedProducts} product${s.addedProducts === 1 ? "" : "s"} added`}
                       </p>
+                      {s.paymentGateways.length > 0 && <p className="text-xs text-slate-500">Payment: {s.paymentGateways.join(", ")}</p>}
                     </div>
                     {s.isDefault ? (
                       <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">

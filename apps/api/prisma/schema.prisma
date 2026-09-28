@@ -178,6 +178,11 @@ model Storefront {
   priceAdjustPercent Decimal             @default(0) @db.Decimal(6, 2)
   /// New products are sold here automatically (otherwise they must be added one by one).
   includeNewProducts Boolean             @default(true)
+  /// Payment methods offered here (gateway codes; empty: every enabled one).
+  paymentGateways    String[]            @default([])
+  /// Courier account suggested when booking this storefront's parcels.
+  courierAccountId   BigInt?
+  courierAccount     CourierAccount?     @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
   sortOrder          Int                 @default(0)
   domains            Domain[]
   menus              Menu[]
@@ -266,6 +271,8 @@ model AdminUser {
   roleId          BigInt
   role            Role             @relation(fields: [roleId], references: [id])
   status          String           @default("active")
+  /// Storefronts this staff member works on (empty: all): their orders, reports and storefront content.
+  storefrontIds   BigInt[]         @default([])
   twoFactorSecret String?
   lastLoginAt     DateTime?
   lastLoginIp     String?
@@ -590,19 +597,21 @@ model PaymentGatewayConfig {
 }
 
 model ShippingZone {
-  id        BigInt                 @id @default(autoincrement())
-  storeId   BigInt
-  store     Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name      String
-  countries Json
-  states    Json?
-  postcodes Json?
-  enabled   Boolean                @default(true)
-  locations ShippingZoneLocation[]
-  methods   ShippingMethod[]
-  orders    Order[]
-  createdAt DateTime               @default(now())
-  updatedAt DateTime               @updatedAt
+  id            BigInt                 @id @default(autoincrement())
+  storeId       BigInt
+  store         Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name          String
+  countries     Json
+  states        Json?
+  postcodes     Json?
+  enabled       Boolean                @default(true)
+  /// Only for these storefronts (empty: all). A storefront's own zones replace shared ones where both cover an address.
+  storefrontIds BigInt[]               @default([])
+  locations     ShippingZoneLocation[]
+  methods       ShippingMethod[]
+  orders        Order[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 }
 
 model ShippingMethod {
@@ -1502,21 +1511,21 @@ model Shipment {
 
 /// A store's account with a courier that has an API (Steadfast, Pathao, RedX).
 model CourierAccount {
-  id            BigInt     @id @default(autoincrement())
+  id            BigInt       @id @default(autoincrement())
   storeId       BigInt
-  store         Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
   /// steadfast | pathao | redx
   courier       String
   label         String
-  enabled       Boolean    @default(true)
+  enabled       Boolean      @default(true)
   /// sandbox | live
-  mode          String     @default("live")
+  mode          String       @default("live")
   /// API keys and passwords as encrypted JSON (config/encryption.ts); never sent to the browser.
   credentials   String
   /// Non-secret options: Pathao store id, delivery type, item type; RedX pickup store; default weight.
   settings      Json?
   /// Part of the webhook URL given to the courier; identifies the account.
-  webhookToken  String     @unique
+  webhookToken  String       @unique
   /// Encrypted secret the courier sends back (Steadfast Bearer token, Pathao X-PATHAO-Signature).
   webhookSecret String
   /// Encrypted access / refresh tokens (Pathao) and their expiry.
@@ -1524,8 +1533,9 @@ model CourierAccount {
   lastCheckedAt DateTime?
   lastError     String?
   shipments     Shipment[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  storefronts   Storefront[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([storeId, courier])
 }
@@ -1794,6 +1804,8 @@ model Coupon {
   audience            String       @default("private")
   /// Off: no automatic promotion on the order and flash-sale items don't count toward this coupon.
   worksWithPromotions Boolean      @default(true)
+  /// Only on these storefronts (empty: all).
+  storefrontIds       BigInt[]     @default([])
   appliedCarts        Cart[]
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
@@ -1832,6 +1844,8 @@ model Promotion {
   giftQty          Int       @default(1)
   /// Where the storefront shows it (announcement_bar, home_hero, cart, …) and what it says.
   slots            String[]  @default([])
+  /// Only on these storefronts (empty: all).
+  storefrontIds    BigInt[]  @default([])
   headline         String?
   message          String?
   imageUrl         String?

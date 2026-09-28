@@ -37,7 +37,7 @@ import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from
 import { categoryLineage, livePromotionRules } from "../marketing/promotions.service";
 import { evaluatePromotions, type PromoResult } from "../marketing/promotions.rules";
 import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.context";
-import { storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
+import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -691,7 +691,9 @@ export class StorefrontService {
   > {
     const coupon = await prisma.coupon.findFirst({ where: { storeId: this.storeId, code: code.trim().toUpperCase() } });
     const subtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal, 0));
-    if (!coupon || !coupon.isActive) return { ok: false, error: "This coupon code is not valid" };
+    if (!coupon || !coupon.isActive || !onStorefront(coupon.storefrontIds, (await this.storefront()).id)) {
+      return { ok: false, error: "This coupon code is not valid" };
+    }
     const now = new Date();
     if (coupon.startsAt && coupon.startsAt > now) return { ok: false, error: "This coupon is not active yet" };
     if (coupon.expiresAt && coupon.expiresAt < now) return { ok: false, error: "This coupon has expired" };
@@ -771,7 +773,7 @@ export class StorefrontService {
    */
   private async promotionQuote(lines: PricedLine[]) {
     const [rules, lineage] = lines.length
-      ? await Promise.all([livePromotionRules(this.storeId), categoryLineage(this.storeId)])
+      ? await Promise.all([livePromotionRules(this.storeId, new Date(), (await this.storefront()).id), categoryLineage(this.storeId)])
       : [[], () => []];
     const result = evaluatePromotions(
       lines.map((l, i) => ({
@@ -878,7 +880,9 @@ export class StorefrontService {
       orderBy: [{ expiresAt: "asc" }, { id: "desc" }],
       take: 50,
     });
+    const sf = await this.storefront();
     return rows
+      .filter((c) => onStorefront(c.storefrontIds, sf.id))
       .filter((c) => c.totalUsageLimit === null || c.usageCount < c.totalUsageLimit)
       .filter((c) => c.audience !== "given" || (Array.isArray(c.customerEmails) && (c.customerEmails as string[]).some((e) => e.toLowerCase() === email)))
       .map((c) => {
@@ -955,7 +959,8 @@ export class StorefrontService {
     };
 
     const gateway = await prisma.paymentGatewayConfig.findFirst({ where: { storeId, code: input.paymentGateway } });
-    if (!gateway || (input.requireEnabledGateway && !gateway.enabled)) {
+    const offered = gatewayOffered((await this.storefront()).paymentGateways, input.paymentGateway);
+    if (!gateway || (input.requireEnabledGateway && (!gateway.enabled || !offered))) {
       fail(`Payment method "${input.paymentGateway}" is not available for this store`, "PAYMENT_GATEWAY_ERROR");
     }
 
@@ -1399,12 +1404,16 @@ export class StorefrontService {
   }
 
   /** Enabled payment gateways, in the admin's sort order. */
+  /** The enabled payment methods this storefront offers. */
   async paymentMethods() {
-    const rows = await prisma.paymentGatewayConfig.findMany({
-      where: { storeId: this.storeId, enabled: true },
-      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-    });
-    return rows.map((g) => ({
+    const [rows, sf] = await Promise.all([
+      prisma.paymentGatewayConfig.findMany({
+        where: { storeId: this.storeId, enabled: true },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      }),
+      this.storefront(),
+    ]);
+    return rows.filter((g) => gatewayOffered(sf.paymentGateways, g.code)).map((g) => ({
       code: g.code,
       name: g.name,
       description: g.description ?? undefined,

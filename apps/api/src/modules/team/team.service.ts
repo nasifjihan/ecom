@@ -12,6 +12,7 @@
 import bcrypt from "bcryptjs";
 import { ALL_PERMISSIONS, PERMISSION_AREAS, hasPermission } from "@ecom/shared-types";
 import { prisma } from "../../config";
+import { checkStorefrontIds, staffStorefronts } from "../storefronts/storefronts.context";
 import { invalidateAdminPermissions, invalidateRolePermissions } from "../../config/admin-permissions";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
 import { markPasswordChanged } from "../auth/password-reset";
@@ -213,6 +214,7 @@ export class TeamService {
     lastLoginAt: Date | null;
     createdAt: Date;
     role: { id: bigint; name: string; slug: string };
+    storefrontIds: bigint[];
   }) {
     return {
       id: String(u.id),
@@ -221,6 +223,7 @@ export class TeamService {
       phone: u.phone,
       status: u.status,
       role: { id: String(u.role.id), name: u.role.name, slug: u.role.slug },
+      storefrontIds: u.storefrontIds.map(String),
       lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
       createdAt: u.createdAt.toISOString(),
       isYou: this.myId !== null && u.id === this.myId,
@@ -246,13 +249,31 @@ export class TeamService {
     return role;
   }
 
+  /**
+   * Storefronts to limit someone to: this store's, and for an editor who is limited themselves,
+   * only (some of) their own, so nobody gives more than they have. Owners always work on all.
+   */
+  private async storefrontLimit(ids: bigint[] | undefined, roleSlug: string): Promise<bigint[] | undefined> {
+    if (ids === undefined) return undefined;
+    const unique = [...new Set(ids.map(String))].map((x) => BigInt(x));
+    if (roleSlug === OWNER && unique.length) throw new BadRequestError("An owner works on every storefront", "VALIDATION_FAILED");
+    await checkStorefrontIds(this.storeId, unique);
+    const mine = staffStorefronts(this.ctx);
+    if (mine && (!unique.length || unique.some((id) => !mine.includes(id)))) {
+      throw new ForbiddenError("You can only give access to storefronts you work on", "AUTH_INSUFFICIENT_PERMISSION");
+    }
+    return unique;
+  }
+
   private async activeOwnerCount() {
     return prisma.adminUser.count({ where: { storeId: this.storeId, status: "active", role: { slug: OWNER } } });
   }
 
   async createStaff(dto: CreateStaffDto) {
     const storeId = this.storeId;
-    await this.assignableRole(dto.roleId);
+    const role = await this.assignableRole(dto.roleId);
+    // Staff limited to some storefronts can only add people to those.
+    const storefrontIds = (await this.storefrontLimit(dto.storefrontIds, role.slug)) ?? staffStorefronts(this.ctx) ?? [];
     const email = dto.email.toLowerCase();
     if (await prisma.adminUser.findUnique({ where: { storeId_email: { storeId, email } } })) {
       throw new ConflictError(`${email} already has a staff account here`, "CONFLICT");
@@ -264,6 +285,7 @@ export class TeamService {
         name: dto.name,
         phone: dto.phone || null,
         roleId: dto.roleId,
+        storefrontIds,
         status: "active",
         passwordHash: await bcrypt.hash(dto.password, 12),
       },
@@ -281,9 +303,16 @@ export class TeamService {
       throw new ForbiddenError("You can't change your own role", "AUTH_INSUFFICIENT_PERMISSION");
     }
     if (isMe && dto.status === "inactive") throw new ForbiddenError("You can't deactivate yourself", "AUTH_INSUFFICIENT_PERMISSION");
+    if (isMe && dto.storefrontIds !== undefined) throw new ForbiddenError("You can't change your own storefronts", "AUTH_INSUFFICIENT_PERMISSION");
+    // A limited editor can't change someone who works on storefronts they don't.
+    const mine = staffStorefronts(this.ctx);
+    if (mine && (!u.storefrontIds.length || u.storefrontIds.some((sid) => !mine.includes(sid)))) {
+      throw new ForbiddenError("This person works on storefronts you don't", "AUTH_INSUFFICIENT_PERMISSION");
+    }
 
     let newRoleSlug = u.role.slug;
     if (dto.roleId !== undefined && dto.roleId !== u.role.id) newRoleSlug = (await this.assignableRole(dto.roleId)).slug;
+    const storefrontIds = await this.storefrontLimit(dto.storefrontIds, newRoleSlug);
     const losesOwner = isOwner && u.status === "active" && (newRoleSlug !== OWNER || dto.status === "inactive");
     if (losesOwner && (await this.activeOwnerCount()) <= 1) {
       throw new ConflictError("The store needs at least one active owner", "CONFLICT");
@@ -296,6 +325,8 @@ export class TeamService {
         ...(dto.phone !== undefined ? { phone: dto.phone || null } : {}),
         ...(dto.roleId !== undefined ? { roleId: dto.roleId } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
+        // Becoming an owner: every storefront.
+        ...(newRoleSlug === OWNER ? { storefrontIds: [] } : storefrontIds !== undefined ? { storefrontIds } : {}),
       },
       include: { role: { select: { id: true, name: true, slug: true } } },
     });

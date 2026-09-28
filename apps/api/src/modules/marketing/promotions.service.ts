@@ -5,6 +5,7 @@
 import type { Prisma, Promotion } from "@prisma/client"
 import { prisma } from "../../config"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
+import { checkStorefrontIds } from "../storefronts/storefronts.context"
 import {
   promotionProblems,
   type CreatePromotionDto,
@@ -54,11 +55,15 @@ export function toRule(p: Promotion, gift?: GiftInfo | null): PromoRule {
   }
 }
 
-const liveWhere = (storeId: bigint, now: Date): Prisma.PromotionWhereInput => ({
+/** Running promotions; with `storefrontId`, only those shown on that storefront. */
+const liveWhere = (storeId: bigint, now: Date, storefrontId?: bigint): Prisma.PromotionWhereInput => ({
   storeId,
   isActive: true,
   OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-  AND: [{ OR: [{ endsAt: null }, { endsAt: { gt: now } }] }],
+  AND: [
+    { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+    ...(storefrontId === undefined ? [] : [{ OR: [{ storefrontIds: { isEmpty: true } }, { storefrontIds: { has: storefrontId } }] }]),
+  ],
 })
 
 /** Gift product names (with the option) and pictures, by promotion id. */
@@ -115,9 +120,9 @@ export async function categoryLineage(storeId: bigint): Promise<(ids: bigint[]) 
 }
 
 /** Live promotions as engine rules, for pricing an order. */
-export async function livePromotionRules(storeId: bigint, now = new Date()): Promise<PromoRule[]> {
+export async function livePromotionRules(storeId: bigint, now = new Date(), storefrontId?: bigint): Promise<PromoRule[]> {
   const rows = await prisma.promotion.findMany({
-    where: liveWhere(storeId, now),
+    where: liveWhere(storeId, now, storefrontId),
     orderBy: { id: "asc" },
   })
   const gifts = await giftInfo(rows)
@@ -157,6 +162,7 @@ export class PromotionsService {
       giftQty: p.giftQty,
       gift: gifts.get(p.id) ?? null,
       slots: p.slots,
+      storefrontIds: p.storefrontIds.map(String),
       headline: p.headline,
       message: p.message,
       imageUrl: p.imageUrl,
@@ -238,6 +244,7 @@ export class PromotionsService {
 
   async create(dto: CreatePromotionDto) {
     await this.checkRefs(dto)
+    await checkStorefrontIds(this.storeId, dto.storefrontIds)
     const p = await prisma.promotion.create({
       data: {
         ...(this.data(dto) as Prisma.PromotionUncheckedCreateInput),
@@ -251,6 +258,7 @@ export class PromotionsService {
 
   async update(id: bigint, dto: UpdatePromotionDto) {
     const cur = await this.find(id)
+    await checkStorefrontIds(this.storeId, dto.storefrontIds)
     // A field sent as null clears it; one left out keeps the stored value.
     const pick = <K extends keyof UpdatePromotionDto>(k: K, v: unknown) => {
       const sent = dto[k] !== undefined
@@ -338,7 +346,7 @@ export class PromotionsService {
     const now = new Date()
     const rows = await prisma.promotion.findMany({
       where: {
-        ...liveWhere(this.storeId, now),
+        ...liveWhere(this.storeId, now, this.ctx.storefrontId),
         ...(q.slot ? { slots: { has: q.slot } } : { slots: { isEmpty: false } }),
       },
       orderBy: [{ createdAt: "desc" }],

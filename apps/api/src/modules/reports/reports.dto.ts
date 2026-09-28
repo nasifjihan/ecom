@@ -11,6 +11,8 @@ export const RangeQuery = z.object({
   to: day,
   /** placed = every order not cancelled or failed; delivered = delivered or completed only. */
   basis: z.enum(REPORT_BASES).optional(),
+  /** One storefront only (staff limited to some storefronts get theirs anyway). */
+  storefrontId: z.coerce.bigint().positive().optional(),
 })
 
 export const ProductsQuery = RangeQuery.extend({

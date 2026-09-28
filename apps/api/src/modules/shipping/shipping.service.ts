@@ -9,6 +9,7 @@ import type {
 import { BadRequestError } from "../../core";
 import { locationDepth, offInChain, resolveAddressLocation, storeLocationsOff } from "../locations/locations.service";
 import { methodCost, parseRules, pickZone } from "./shipping.rules";
+import { storefrontZones } from "../storefronts/storefronts.rules";
 import {
   generateCsv, generateXlsx, generatePdf,
   attachmentHeader, formatTimestampFilename,
@@ -54,13 +55,14 @@ export class ShippingService {
         return { ...this.optionsWrap([], null), reason: `Sorry, we don't deliver to ${off.nameEn} yet.` };
       }
     }
-    const zones = await this.zones.matchZonesForAddress(ctx, {
+    // A storefront with its own zones for this address uses them instead of the shared ones.
+    const zones = storefrontZones(await this.zones.matchZonesForAddress(ctx, {
       countryCode: q.countryCode,
       chain: (place?.chain ?? []).map((l) => ({ id: l.id, nameEn: l.nameEn, depth: locationDepth(l) })),
       division: q.division,
       district: q.district,
       postcode: q.postcode,
-    });
+    }), ctx.storefrontId);
     if (zones.length === 0 && q.countryCode !== "BD") {
       return { zonesMatched: 0, zone: null, options: [], cheapest: null, fastest: null, reason: `No shipping zones configured for ${q.countryCode} — International delivery not available.` };
     }
