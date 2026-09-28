@@ -17,6 +17,7 @@ import {
   type RequestContext,
 } from "../../core"
 import { storeLanguages } from "../settings/languages"
+import { defaultStorefrontId } from "../storefronts/storefronts.context"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
 import {
   HomepageSectionDto,
@@ -35,6 +36,8 @@ import {
 } from "./content.dto"
 
 const THEME_SLUG = "default"
+/** A storefront's own look is saved as its own theme row; without one it uses the main look. */
+const storefrontThemeSlug = (id: bigint) => `storefront-${id}`
 const pageMeta = (page: number, perPage: number, total: number) => ({
   page,
   perPage,
@@ -57,6 +60,19 @@ export class ContentService {
       )
     }
     return BigInt(this.ctx.storeId)
+  }
+
+  /**
+   * The storefront whose own content to read or write: null for the default storefront, whose
+   * content every other storefront falls back to. `id` omitted: the request's storefront.
+   */
+  private async ownerOf(id?: bigint | null): Promise<bigint | null> {
+    const want = id ?? this.ctx.storefrontId ?? null
+    if (want === null) return null
+    if (want === (await defaultStorefrontId(this.storeId))) return null
+    const sf = await prisma.storefront.findFirst({ where: { id: want, storeId: this.storeId }, select: { id: true } })
+    if (!sf) throw new NotFoundError("storefront")
+    return sf.id
   }
 
   /** Runs a write and turns a duplicate slug into a 409 the admin form can show. */
@@ -344,9 +360,11 @@ export class ContentService {
       }))
   }
 
-  async listMenus() {
+  /** All menus (admin), or with `storefrontId`, that storefront's own (the default's: the shared ones). */
+  async listMenus(storefrontId?: bigint) {
+    const owner = storefrontId === undefined ? undefined : await this.ownerOf(storefrontId)
     const menus = await prisma.menu.findMany({
-      where: { storeId: this.storeId },
+      where: { storeId: this.storeId, ...(owner === undefined ? {} : { storefrontId: owner }) },
       orderBy: [{ location: "desc" }, { createdAt: "asc" }],
       include: { items: { select: ContentService.itemSelect } },
     })
@@ -363,28 +381,40 @@ export class ContentService {
     return { ...m, items: this.toTree(items) }
   }
 
-  private async assertOneHeader(location: string, exceptId?: bigint) {
+  private async assertOneHeader(location: string, storefrontId: bigint | null, exceptId?: bigint) {
     if (location !== "header") return
     const other = await prisma.menu.findFirst({
       where: {
         storeId: this.storeId,
         location: "header",
+        storefrontId,
         ...(exceptId ? { id: { not: exceptId } } : {}),
       },
     })
-    if (other) throw new ConflictError(`"${other.name}" is already the header menu`, "CONFLICT")
+    if (other) throw new ConflictError(`"${other.name}" is already this storefront's header menu`, "CONFLICT")
   }
 
   async createMenu(d: MenuDto) {
-    await this.assertOneHeader(d.location)
-    const menu = await prisma.menu.create({ data: { ...d, storeId: this.storeId } })
+    const owner = await this.ownerOf(d.storefrontId ?? null)
+    await this.assertOneHeader(d.location, owner)
+    const menu = await prisma.menu.create({
+      data: { name: d.name, location: d.location, storefrontId: owner, storeId: this.storeId },
+    })
     return { ...menu, items: [] }
   }
 
   async updateMenu(id: bigint, d: Partial<MenuDto>) {
-    await this.getMenu(id)
-    if (d.location) await this.assertOneHeader(d.location, id)
-    await prisma.menu.update({ where: { id }, data: d })
+    const menu = await this.getMenu(id)
+    const owner = d.storefrontId === undefined ? menu.storefrontId : await this.ownerOf(d.storefrontId)
+    await this.assertOneHeader(d.location ?? menu.location, owner, id)
+    await prisma.menu.update({
+      where: { id },
+      data: {
+        ...(d.name !== undefined ? { name: d.name } : {}),
+        ...(d.location !== undefined ? { location: d.location } : {}),
+        storefrontId: owner,
+      },
+    })
     return this.getMenu(id)
   }
 
@@ -450,54 +480,86 @@ export class ContentService {
     })
   }
 
-  async getTheme(): Promise<ThemeSettings> {
-    const [base, saved] = await Promise.all([
+  /** A storefront's look: its own when saved, otherwise the main (default storefront's) look. */
+  async getTheme(storefrontId?: bigint): Promise<ThemeSettings> {
+    const owner = await this.ownerOf(storefrontId)
+    const [base, saved, own] = await Promise.all([
       this.themeDefaults(),
       prisma.themeConfig.findUnique({
         where: { storeId_slug: { storeId: this.storeId, slug: THEME_SLUG } },
       }),
+      owner === null
+        ? null
+        : prisma.themeConfig.findUnique({
+            where: { storeId_slug: { storeId: this.storeId, slug: storefrontThemeSlug(owner) } },
+          }),
     ])
-    return mergeTheme(base, saved?.config)
+    return mergeTheme(mergeTheme(base, saved?.config), own?.config)
   }
 
-  async saveTheme(theme: ThemeSettings) {
+  async saveTheme(theme: ThemeSettings, storefrontId?: bigint) {
+    const owner = await this.ownerOf(storefrontId)
+    const slug = owner === null ? THEME_SLUG : storefrontThemeSlug(owner)
     await prisma.themeConfig.upsert({
-      where: { storeId_slug: { storeId: this.storeId, slug: THEME_SLUG } },
+      where: { storeId_slug: { storeId: this.storeId, slug } },
       update: { config: theme },
       create: {
         storeId: this.storeId,
-        slug: THEME_SLUG,
-        name: "Default",
+        slug,
+        name: owner === null ? "Default" : `Storefront ${owner}`,
         isActive: true,
         config: theme,
       },
     })
-    return this.getTheme()
+    return this.getTheme(storefrontId)
+  }
+
+  /** A storefront goes back to the main look (the default storefront's own can't be removed). */
+  async resetTheme(storefrontId: bigint) {
+    const owner = await this.ownerOf(storefrontId)
+    if (owner === null) throw new BadRequestError("The default storefront's look is the main look")
+    await prisma.themeConfig.deleteMany({ where: { storeId: this.storeId, slug: storefrontThemeSlug(owner) } })
+    return this.getTheme(storefrontId)
   }
 
   // ------------------------------------------------------------------ homepage
 
-  /** Saved sections in order; invalid rows (e.g. from an older shape) are skipped. Defaults until first save. */
-  async getHomepage(): Promise<{ sections: HomepageSection[]; customised: boolean }> {
-    const rows = await prisma.homepageSection.findMany({
-      where: { storeId: this.storeId },
+  /**
+   * Saved sections in order; invalid rows (e.g. from an older shape) are skipped. A storefront
+   * without its own home page shows the main one (`inherited`); defaults until the first save.
+   */
+  async getHomepage(
+    storefrontId?: bigint,
+  ): Promise<{ sections: HomepageSection[]; customised: boolean; inherited: boolean }> {
+    const owner = await this.ownerOf(storefrontId)
+    let rows = await prisma.homepageSection.findMany({
+      where: { storeId: this.storeId, storefrontId: owner },
       orderBy: { sortOrder: "asc" },
     })
-    if (!rows.length) return { sections: DEFAULT_HOMEPAGE, customised: false }
+    const inherited = owner !== null && !rows.length
+    if (inherited) {
+      rows = await prisma.homepageSection.findMany({
+        where: { storeId: this.storeId, storefrontId: null },
+        orderBy: { sortOrder: "asc" },
+      })
+    }
+    if (!rows.length) return { sections: DEFAULT_HOMEPAGE, customised: false, inherited }
     const sections = rows
       .map((r) =>
         HomepageSectionDto.safeParse({ type: r.type, enabled: r.enabled, config: r.config }),
       )
       .flatMap((p) => (p.success ? [p.data] : []))
-    return { sections, customised: true }
+    return { sections, customised: !inherited, inherited }
   }
 
-  async saveHomepage(sections: HomepageSection[]) {
+  async saveHomepage(sections: HomepageSection[], storefrontId?: bigint) {
+    const owner = await this.ownerOf(storefrontId)
     await prisma.$transaction([
-      prisma.homepageSection.deleteMany({ where: { storeId: this.storeId } }),
+      prisma.homepageSection.deleteMany({ where: { storeId: this.storeId, storefrontId: owner } }),
       prisma.homepageSection.createMany({
         data: sections.map((s, i) => ({
           storeId: this.storeId,
+          storefrontId: owner,
           type: s.type,
           enabled: s.enabled,
           sortOrder: i,
@@ -505,19 +567,21 @@ export class ContentService {
         })),
       }),
     ])
-    return this.getHomepage()
+    return this.getHomepage(storefrontId)
   }
 
-  async resetHomepage() {
-    await prisma.homepageSection.deleteMany({ where: { storeId: this.storeId } })
-    return this.getHomepage()
+  /** Default storefront: back to the built-in sections. Another one: back to the main home page. */
+  async resetHomepage(storefrontId?: bigint) {
+    const owner = await this.ownerOf(storefrontId)
+    await prisma.homepageSection.deleteMany({ where: { storeId: this.storeId, storefrontId: owner } })
+    return this.getHomepage(storefrontId)
   }
 
   // ------------------------------------------------------------------ storefront (public)
 
   /** Everything the header and footer need, in one request. */
   async site() {
-    const [theme, menus, footerPages, languages] = await Promise.all([
+    const [theme, allMenus, footerPages, languages, owner] = await Promise.all([
       this.getTheme(),
       this.listMenus(),
       prisma.cmsPage.findMany({
@@ -526,7 +590,13 @@ export class ContentService {
         select: { title: true, slug: true },
       }),
       storeLanguages(this.storeId),
+      this.ownerOf(),
     ])
+    // This storefront's own menus for a place (header / footer), else the main ones there.
+    const menus = (["header", "footer"] as const).flatMap((loc) => {
+      const own = allMenus.filter((m) => m.location === loc && owner !== null && m.storefrontId === owner)
+      return own.length ? own : allMenus.filter((m) => m.location === loc && m.storefrontId === null)
+    })
     // Menu links in the shopper's language (Bangla titles where the shop gave them).
     interface Link {
       title: string

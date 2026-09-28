@@ -167,6 +167,7 @@ export default function OrderDetailPage() {
   // Loyalty lines, read from the typed order.
   const loyalty = { discount: orderRaw?.memberDiscount ?? 0, level: orderRaw?.memberLevel, wallet: orderRaw?.walletUsed ?? 0, cashback: orderRaw?.cashback ?? 0 };
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
+  const placedOn = orderRaw?.storefront;
 
   const [updateStatus] = useUpdateOrderStatusMutation();
   const [loadInvoice] = useOrderInvoiceMutation();
@@ -562,6 +563,12 @@ export default function OrderDetailPage() {
                 <span className="text-slate-500">Source</span>
                 <span>{sourceLabel(order.source)}</span>
               </div>
+              {placedOn && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Storefront</span>
+                  <span>{placedOn.name}</span>
+                </div>
+              )}
               {order.createdByName && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Entered by</span>

@@ -41,7 +41,7 @@ These are our advantages. Keep them.
 | Product tags (EN/BN) | ✅ | Batch 26: tags saved, searched and filterable (`/products?tag=`); one language |
 | Specifications table (group / label / value) | ✅ | Batch 26 |
 | Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ❌ | Variants are added one by one today |
-| Per-storefront price override on a variant | ❌ | Needs multi-storefront |
+| Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
 | Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
 | Soft delete + "Deleted only" filter, created/updated by | ❌ | Products are hard-deleted |
 | Product landing page `/lp/{slug}` built from blocks | ❌ | Reuse our page builder — cheap win |
@@ -142,7 +142,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Inventory valuation (at cost and at selling price) | ✅ Batch 28 |
 | Tax collected by day / month | ✅ Batch 28 (tax added on top; VAT-inclusive prices still to do) |
 | CSV export of every table | ✅ Batch 28 |
-| By storefront, scheduled e-mailed reports, PDF export | ❌ |
+| By storefront, scheduled e-mailed reports, PDF export | ❌ | Orders record their storefront (Batch 32) and the order list filters by it; reports by storefront are part 2 |
 
 ### Operations (reference 20)
 | Feature | Status | Note |
@@ -156,7 +156,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 |---|---|---|
 | 10 default roles | ✅ | |
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
-| Staff on some sites only | ❌ | Needs multi-storefront |
+| Staff on some sites only | ❌ | Storefronts exist (Batch 32); limiting staff to them is Batch 32 part 2 |
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Email on/off per template ✅ |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | 🟡 | We add tax on top |
 | Company & legal details (BIN, trade licence) on invoices | 🟡 | |
@@ -165,7 +165,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 ### Per-storefront settings (reference 22)
 | Feature | Status |
 |---|---|
-| Identity, logo, favicon, colours, footer, homepage, menus | ✅ (per store) |
+| Identity, logo, favicon, colours, footer, homepage, menus | ✅ per storefront (Batch 32: each storefront can have its own, else uses the default storefront's) |
 | Colour scheme presets (10) + custom schemes | 🟡 (one brand colour) |
 | Product display toggles (show rating, show sales count, low-stock threshold) | ❌ |
 | Checkout style (single page vs steps), guest checkout | 🟡 |
@@ -222,7 +222,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 29 ✅ | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
-| 32 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings) | Reference's core idea; big change | XL |
+| 32 🟡 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings). Part 1 ✅: storefronts with their own web addresses, look, homepage, menus, product range and prices; orders record their storefront. Part 2: payment methods, delivery and couriers, promotions, staff and reports per storefront | Reference's core idea; big change | XL |
 | 33 | Wholesale/B2B, sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

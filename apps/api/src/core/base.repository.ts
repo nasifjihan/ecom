@@ -21,6 +21,8 @@ import { paginate, type Paginated } from "./pagination";
 
 export type RequestContext = {
   storeId?: bigint;
+  /** The storefront the request is for (web address → Storefront, else the store's default). */
+  storefrontId?: bigint;
   admin?: { id: bigint; role: string; permissions: string[] };
   customer?: { id: bigint };
   super?: { id: bigint };

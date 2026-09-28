@@ -97,6 +97,8 @@ import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/feat
 import { BulkBookDialog } from "@/components/orders/bulk-book-dialog";
 import { useCan } from "@/lib/permissions";
 import { cn } from "@/components/ui";
+import { useSearchParams } from "next/navigation";
+import { useStorefrontsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -191,6 +193,11 @@ export default function OrdersPage() {
   const [filterCoupon, setFilterCoupon] = useState(false);
   const [filterShippingZone, setFilterShippingZone] = useState<string>("");
   const [filterSource, setFilterSource] = useState<string>("");
+  // Storefront filter (the Storefronts page links here with ?storefrontId=); shown with 2+ storefronts.
+  const searchParams = useSearchParams();
+  const [filterStorefront, setFilterStorefront] = useState<string>(searchParams.get("storefrontId") ?? "");
+  const { data: storefronts = [] } = useStorefrontsQuery();
+  const severalFronts = storefronts.length > 1;
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [page, setPage] = useState(1);
   const [cancelDialogOrder, setCancelDialogOrder] = useState<Order | null>(null);
@@ -203,6 +210,7 @@ export default function OrdersPage() {
     status: activeTab === "ALL" ? undefined : activeTab,
     search: search || undefined,
     source: filterSource || undefined,
+    storefrontId: filterStorefront || undefined,
     page,
     limit: 20,
   });
@@ -256,6 +264,14 @@ export default function OrdersPage() {
               >
                 {o.orderNumber}
               </Link>
+              {severalFronts && o.storefront && (
+                <span
+                  title={`Placed on ${o.storefront.name}`}
+                  className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  {o.storefront.code}
+                </span>
+              )}
             </div>
           );
         },
@@ -419,7 +435,7 @@ export default function OrdersPage() {
         },
       },
     ],
-    [],
+    [severalFronts],
   );
 
   const table = useReactTable({
@@ -594,6 +610,24 @@ export default function OrdersPage() {
                   </option>
                 ))}
               </select>
+              {severalFronts && (
+                <select
+                  aria-label="Filter by storefront"
+                  value={filterStorefront}
+                  onChange={(e) => {
+                    setFilterStorefront(e.target.value);
+                    setPage(1);
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">All storefronts</option>
+                  {storefronts.map((sf) => (
+                    <option key={sf.id} value={sf.id}>
+                      {sf.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">

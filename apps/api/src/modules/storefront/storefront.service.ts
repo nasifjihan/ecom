@@ -36,6 +36,8 @@ import { recordPaidAtEntry } from "../payments/payments.records";
 import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
 import { categoryLineage, livePromotionRules } from "../marketing/promotions.service";
 import { evaluatePromotions, type PromoResult } from "../marketing/promotions.rules";
+import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.context";
+import { storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -107,6 +109,19 @@ function variantLabel(values: unknown): string {
   return Object.entries(values as Record<string, unknown>)
     .map(([k, v]) => `${k.charAt(0).toUpperCase()}${k.slice(1)}: ${String(v)}`)
     .join(" • ");
+}
+
+/** A product's row for the request's storefront (own price / whether it's sold there), if any. */
+const ownRow = (storefrontId: bigint) => ({
+  where: { storefrontId },
+  select: { listed: true, regularPrice: true, salePrice: true },
+});
+
+/** Products sold in a storefront (see storefronts.rules listedIn). */
+function inRange(sf: StorefrontInfo): Prisma.ProductWhereInput {
+  return sf.includeNewProducts
+    ? { storefronts: { none: { storefrontId: sf.id, listed: false } } }
+    : { storefronts: { some: { storefrontId: sf.id, listed: true } } };
 }
 
 const LIST_INCLUDE = {
@@ -191,9 +206,28 @@ export class StorefrontService {
     return this.ctx.locale;
   }
 
-  private toSummary(p: any, flashSales: FlashSales) {
+  /** The storefront this request is for (its range, price adjustment). */
+  private sfInfo?: Promise<StorefrontInfo>;
+  storefront(): Promise<StorefrontInfo> {
+    this.sfInfo ??= storefrontInfo(this.storeId, this.ctx.storefrontId);
+    return this.sfInfo;
+  }
+
+  /** LIST_INCLUDE plus the product's own row for this storefront. */
+  private async listInclude() {
+    const sf = await this.storefront();
+    return { ...LIST_INCLUDE, storefronts: ownRow(sf.id) };
+  }
+
+  /** The price row a product (or one of its options) sells from in this storefront. */
+  private sfRow(sf: StorefrontInfo, p: { storefronts?: OwnPrice[] }, row: PriceRow): PriceRow {
+    return storefrontPriceRow(row, sf, p.storefronts?.[0]);
+  }
+
+  private toSummary(p: any, flashSales: FlashSales, sf: StorefrontInfo) {
     const L = this.locale;
-    const { price, compareAtPrice, flash } = pricedWith(flashSales, p, null, p);
+    const own = p as { storefronts?: OwnPrice[] } & PriceRow;
+    const { price, compareAtPrice, flash } = pricedWith(flashSales, p, null, this.sfRow(sf, own, own));
     const primary = p.categories?.find((c: any) => c.primary) ?? p.categories?.[0];
     const variants: any[] = p.variants ?? [];
     const qty = variants.length > 0
@@ -251,8 +285,10 @@ export class StorefrontService {
   }
 
   async listProducts(q: StorefrontProductsQueryDto) {
+    const sf = await this.storefront();
+    const include = await this.listInclude();
     const where: Prisma.ProductWhereInput = { storeId: this.storeId, status: "published" };
-    const and: Prisma.ProductWhereInput[] = [];
+    const and: Prisma.ProductWhereInput[] = [inRange(sf)];
 
     let categoryIds: bigint[] = q.categoryId ? q.categoryId.split(",").map((s) => BigInt(s)) : [];
     if (q.categorySlug) {
@@ -283,16 +319,20 @@ export class StorefrontService {
         ],
       });
     }
-    if (q.minPrice !== undefined || q.maxPrice !== undefined) {
+    // A storefront with its own prices is filtered on them in memory (below), not in the database.
+    const ownPrices = sf.priceAdjustPercent !== 0 ||
+      (await prisma.productStorefront.count({ where: { storefrontId: sf.id, regularPrice: { not: null } } })) > 0;
+    const priceRange = q.minPrice !== undefined || q.maxPrice !== undefined;
+    if (priceRange && !ownPrices) {
       // Filter on the price a shopper pays: salePrice when set, otherwise regularPrice.
       const range: Prisma.DecimalNullableFilter = {};
       if (q.minPrice !== undefined) range.gte = q.minPrice;
       if (q.maxPrice !== undefined) range.lte = q.maxPrice;
       and.push({ OR: [{ salePrice: range }, { salePrice: null, regularPrice: range }] });
     }
-    if (and.length) where.AND = and;
+    where.AND = and;
 
-    if (q.sort === "price_asc" || q.sort === "price_desc") {
+    if (q.sort === "price_asc" || q.sort === "price_desc" || (priceRange && ownPrices)) {
       // Sort on the price a shopper pays (sale price inside its window), which Prisma's
       // orderBy cannot express, so rank the matching ids in memory and load one page.
       const candidates = await prisma.product.findMany({
@@ -304,49 +344,67 @@ export class StorefrontService {
           salePriceStartAt: true,
           salePriceEndAt: true,
           categories: { select: { categoryId: true } },
+          storefronts: ownRow(sf.id),
         },
       });
       const flash = await FlashSales.load(this.storeId, candidates.map((c) => c.id));
-      const dir = q.sort === "price_asc" ? 1 : -1;
+      const byPrice = q.sort === "price_asc" || q.sort === "price_desc";
+      const dir = q.sort === "price_desc" ? -1 : 1;
       const ranked = candidates
-        .map((c) => ({ id: c.id, price: pricedWith(flash, c, null, c).price }))
-        .sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
-      const pageIds = ranked.slice((q.page - 1) * q.perPage, q.page * q.perPage).map((r) => r.id);
-      const rows = await prisma.product.findMany({ where: { id: { in: pageIds } }, include: LIST_INCLUDE });
+        .map((c) => ({ id: c.id, price: pricedWith(flash, c, null, this.sfRow(sf, c, c)).price }))
+        .filter((r) => (q.minPrice === undefined || r.price >= q.minPrice) && (q.maxPrice === undefined || r.price <= q.maxPrice));
+      if (byPrice) ranked.sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
+      const kept = byPrice
+        ? ranked.map((r) => r.id)
+        : (
+            await prisma.product.findMany({
+              where: { id: { in: ranked.map((r) => r.id) } },
+              orderBy: this.orderBy(q.sort),
+              select: { id: true },
+            })
+          ).map((r) => r.id);
+      const pageIds = kept.slice((q.page - 1) * q.perPage, q.page * q.perPage);
+      const rows = await prisma.product.findMany({ where: { id: { in: pageIds } }, include });
       const byId = new Map(rows.map((r) => [r.id, r]));
       const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
-      return this.page(ordered.map((r) => this.toSummary(r, flash)), ranked.length, q);
+      return this.page(ordered.map((r) => this.toSummary(r, flash, sf)), kept.length, q);
     }
 
-    const orderBy: Prisma.ProductOrderByWithRelationInput[] =
-      q.sort === "newest"
-        ? [{ createdAt: "desc" }, { id: "desc" }]
-        : q.sort === "rating"
-          ? [{ averageRating: "desc" }, { reviewCount: "desc" }, { id: "desc" }]
-          : [{ saleCount: "desc" }, { id: "desc" }];
     const [total, rows] = await Promise.all([
       prisma.product.count({ where }),
       prisma.product.findMany({
         where,
-        orderBy,
+        orderBy: this.orderBy(q.sort),
         skip: (q.page - 1) * q.perPage,
         take: q.perPage,
-        include: LIST_INCLUDE,
+        include,
       }),
     ]);
     const flash = await FlashSales.load(this.storeId, rows.map((r) => r.id));
-    return this.page(rows.map((r) => this.toSummary(r, flash)), total, q);
+    return this.page(rows.map((r) => this.toSummary(r, flash, sf)), total, q);
   }
 
-  /** Product cards for these ids, in the order given (unpublished ones left out). */
+  private orderBy(sort: StorefrontProductsQueryDto["sort"]): Prisma.ProductOrderByWithRelationInput[] {
+    return sort === "newest"
+      ? [{ createdAt: "desc" }, { id: "desc" }]
+      : sort === "rating"
+        ? [{ averageRating: "desc" }, { reviewCount: "desc" }, { id: "desc" }]
+        : [{ saleCount: "desc" }, { id: "desc" }];
+  }
+
+  /** Product cards for these ids, in the order given (unpublished ones and ones not sold here left out). */
   async productSummaries(ids: bigint[]) {
     if (!ids.length) return [];
-    const rows = await prisma.product.findMany({ where: { storeId: this.storeId, id: { in: ids }, status: "published" }, include: LIST_INCLUDE });
+    const sf = await this.storefront();
+    const rows = await prisma.product.findMany({
+      where: { storeId: this.storeId, id: { in: ids }, status: "published", ...inRange(sf) },
+      include: await this.listInclude(),
+    });
     const flash = await FlashSales.load(this.storeId, rows.map((r) => r.id));
     const byId = new Map(rows.map((r) => [r.id, r]));
     return ids.flatMap((id) => {
       const r = byId.get(id);
-      return r ? [this.toSummary(r, flash)] : [];
+      return r ? [this.toSummary(r, flash, sf)] : [];
     });
   }
 
@@ -355,9 +413,11 @@ export class StorefrontService {
   }
 
   async getProductBySlug(slug: string) {
+    const sf = await this.storefront();
     const p = await prisma.product.findFirst({
-      where: { storeId: this.storeId, slug, status: "published" },
+      where: { storeId: this.storeId, slug, status: "published", ...inRange(sf) },
       include: {
+        storefronts: ownRow(sf.id),
         brand: { select: { id: true, name: true, slug: true, translations: true } },
         categories: {
           include: { category: { select: { id: true, name: true, slug: true, parentId: true, translations: true } } },
@@ -377,7 +437,7 @@ export class StorefrontService {
     if (!p) throw new NotFoundError("Product");
 
     const flash = await FlashSales.load(this.storeId, [p.id]);
-    const summary = this.toSummary(p, flash);
+    const summary = this.toSummary(p, flash, sf);
     const primary = p.categories.find((c) => c.primary) ?? p.categories[0];
     const parent = primary?.category.parentId
       ? await prisma.category.findFirst({
@@ -435,7 +495,7 @@ export class StorefrontService {
       })),
       reviews,
       variants: p.variants.map((v) => {
-        const vp = pricedWith(flash, p, v.id, variantPriceRow(p, v));
+        const vp = pricedWith(flash, p, v.id, this.sfRow(sf, p, variantPriceRow(p, v)));
         const values = (v.attributeValues ?? {}) as Record<string, unknown>;
         const qty = available(v);
         return {
@@ -516,10 +576,13 @@ export class StorefrontService {
    */
   async quoteLines(lines: CartLineDto[]) {
     const productIds = [...new Set(lines.map((l) => l.productId))];
+    // Shoppers can only buy what their storefront sells; staff taking an order can sell anything.
+    const sf = await this.storefront();
     const [products, flashSales] = await Promise.all([
       prisma.product.findMany({
-        where: { storeId: this.storeId, id: { in: productIds }, status: "published" },
+        where: { storeId: this.storeId, id: { in: productIds }, status: "published", ...(this.ctx.admin ? {} : inRange(sf)) },
         include: {
+          storefronts: ownRow(sf.id),
           variants: { where: { status: "active" } },
           images: { orderBy: { sortOrder: "asc" }, take: 1 },
           categories: { select: { categoryId: true } },
@@ -543,7 +606,7 @@ export class StorefrontService {
       } else if (p.variants.length > 0) {
         return { line, problem: { message: `Please choose an option for "${p.name}"`, code: "CART_INVALID" as const } };
       }
-      const priced = pricedWith(flashSales, p, variant?.id ?? null, variant ? variantPriceRow(p, variant) : p);
+      const priced = pricedWith(flashSales, p, variant?.id ?? null, this.sfRow(sf, p, variant ? variantPriceRow(p, variant) : p));
       const stockRow = variant ?? p;
       const what = `"${p.name}"${variant ? ` (${variantLabel(variant.attributeValues)})` : ""}`;
       const left = available(stockRow);
@@ -1044,6 +1107,7 @@ export class StorefrontService {
     if (!q.gateway || !q.delivery) throw new BadRequestError("The order is missing a payment or delivery method", "CART_INVALID");
     const storeId = this.storeId;
     const { lines, ship, bill, coupon, delivery, gateway } = q;
+    const storefrontId = (await this.storefront()).id;
     const { itemsSubtotal, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal } = q.totals;
     const orderKey = newId("ok");
     const status = meta.status ?? "PENDING";
@@ -1189,6 +1253,7 @@ export class StorefrontService {
           memberLevel: q.member?.level ?? null,
           walletUsed: q.totals.walletUsed,
           locale: this.ctx.locale,
+          storefrontId,
           paymentGatewayCode: gateway.code,
           // Paid in full from the wallet: nothing left to collect.
           paymentStatus: meta.paid || (q.totals.walletUsed > 0 && grandTotal <= 0) ? "paid" : "unpaid",

@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
+import { storeOrigin } from "@/lib/server-api";
 
-const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const SITE_BASE = await storeOrigin();
   return {
     rules: [
       {

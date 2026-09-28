@@ -2579,3 +2579,106 @@ Shoppers can switch the storefront between English and বাংলা. Every bu
 - **Shop-written text** such as the announcement bar, promotion headlines, CMS page bodies, blog posts and FAQs has no Bangla field yet; it shows as entered. The About page is fixed English text.
 - **Admin panel** is English only.
 - **Other:** no Arabic or right-to-left layout; no Bangla digits for prices; SEO metadata stays English.
+
+## ✅ BATCH #32 (part 1) — Several storefronts in one store (2026-09-28)
+A store can now run more than one shop front, for example a main shop and a kids' shop on another web address. Each storefront has its own web addresses, look (name, logo, colour, announcement, footer), homepage, menus, product range and prices. Stock, customers, staff and orders stay shared, and every order records the storefront it was placed on. A store with one storefront works exactly as before. Part 2 will add payment methods, delivery and couriers, promotions, staff access and reports per storefront.
+
+### 32.1 Data (migration `storefronts`)
+- **`Storefront`:**
+  - name, code (e.g. `KIDS`), default flag, open/closed;
+  - a price change in % (`priceAdjustPercent`);
+  - "sell every product here" (`includeNewProducts`).
+- **Every existing store** gets one default storefront, `MAIN`, named after the store, and its past orders are put on it. A store without one gets it made on first use (`storefronts.context.ts`).
+- **Links to a storefront (`storefrontId`):**
+  - `Domain.storefrontId`: which storefront a web address opens (none: the default one);
+  - `Menu` and `HomepageSection`: none means the default storefront's, which the others fall back to;
+  - `Order.storefrontId`.
+- **`ProductStorefront`:** one row per product and storefront, holding whether it's sold there and an optional own price (regular and sale).
+- **The look:** a storefront's own look is saved as its own `ThemeConfig` row (`storefront-<id>`); without one, it shows the default storefront's.
+
+### 32.2 Which storefront a request is for
+- **Resolution:**
+  - the tenant middleware already finds the store from the request's web address, and now also its storefront (`ctx.storefrontId`);
+  - an address not linked to a storefront, or linked to a closed one, opens the default storefront;
+  - storefront settings are cached for a minute.
+- **The storefront app** now sends the address the visitor opened (`Host` / `X-Forwarded-Host`) on its server-side API calls, instead of one fixed address. One running app can therefore serve several storefronts, and Next's cache keeps their pages apart.
+- **Links in the sitemap, robots file and product page** use that address too.
+
+### 32.3 Range and prices (`storefronts.rules.ts`, `storefront.service.ts`)
+- **Price, in this order:**
+  1. the product's own price in that storefront (applies to all its options);
+  2. otherwise the product's or option's price with the storefront's % change, rounded to whole taka, keeping the sale window;
+  3. otherwise the price as it is.
+- **What is sold:**
+  - the product's row decides;
+  - with no row, the storefront's "sell every product here" setting decides (always on for the default storefront).
+- **Where it applies:**
+  - product lists, sorting and filtering by price (done on the storefront's own prices when it has any), product pages, product cards (wishlist, search suggestions, flash-sale page, recommendations);
+  - cart prices and checkout: a shopper can't buy a product their storefront doesn't sell. Staff taking an order by hand can still sell anything.
+- **Flash sales:** a flash sale with a set price charges that price in every storefront; a percentage flash sale works from the storefront's price.
+
+### 32.4 Store admin
+- **Online Store → Storefronts:**
+  - one card per storefront, showing its prices, product range, web addresses and number of orders;
+  - add, edit (name, code, price change, sell every product, open), make default, delete (only with no orders);
+  - add a web address, or move an address to another storefront;
+  - links to that storefront's look, homepage, menus and orders.
+- **Storefront picker** on Theme, Homepage and Menus, shown once there is more than one storefront:
+  - it says whether the chosen storefront has its own version or uses the default one's;
+  - "Use default look" and homepage "Reset" go back to the default storefront's.
+- **Product editor (Pricing tab):** a "Storefronts" box with, for each storefront, "Sold on …", an own price and sale price, and the price it shows otherwise.
+- **Orders:**
+  - the list has a storefront filter (the Storefronts page links to it) and a storefront code beside each order number;
+  - the order page shows the storefront.
+
+### 32.5 API
+- **`/api/admin/storefronts`:**
+  - `GET` / `POST`, `PATCH` / `DELETE /:id`, `POST /:id/default`;
+  - `POST /:id/domains`, `PATCH /domains/:domainId`;
+  - `POST /:id/products` (add many / take many off);
+  - `GET` / `PUT /products/:productId`.
+- **Permissions:** Online Store view/edit; Products view/edit for product rows.
+- **Content endpoints:** `theme`, `homepage` and `menus` take `?storefrontId=`, and `DELETE /theme?storefrontId=` removes a storefront's own look.
+- **Orders:** the admin order list takes `storefrontId=`; list and detail include the storefront.
+
+### 32.6 Checked
+- **Tests:** 532/532 API tests. New ones:
+  - 9 unit tests: prices, range, codes, web addresses;
+  - 13 database tests:
+    - default storefront made on first use;
+    - codes, and the % change and own prices on product lists;
+    - a hidden product is missing from the list, product page and cart, but staff can still sell it;
+    - filtering and sorting on storefront prices;
+    - a storefront that doesn't sell every product;
+    - unchanged rows removed;
+    - the look, homepage and menus fall back to the default storefront's and go back on reset;
+    - web addresses: clean-up, duplicates, closed storefront;
+    - one default that can't be closed or deleted;
+    - no deleting a storefront that has orders.
+- **By API:**
+  - a second storefront "Kids Corner" (+10%) opened at `127.0.0.1:3000`, with `localhost:3000` staying on the main one;
+  - the same product list returned the Kids prices (own price ৳899/৳999, others +10%) and left out the hidden product;
+  - cart prices refused the hidden product;
+  - `/content/site` returned each storefront's own name, colour and announcement.
+- **Chromium:**
+  - admin Storefronts page; the theme editor switching between storefronts; the homepage note ("Shows the default storefront's homepage");
+  - the product Storefronts box, saved and then cleared;
+  - the orders page filtered by storefront.
+  - On the storefront, `127.0.0.1:3000` shows Kids Corner (blue, own announcement, ৳899 for the shirt that is ৳3,690 on the main shop), with the hidden shirt left out;
+  - a guest order there was stored with the Kids storefront at ৳899;
+  - no failed requests or page errors.
+- **Lint and builds:**
+  - new files lint clean, and edited files have no more lint errors than before;
+  - API typecheck passes; admin and storefront build.
+
+### 32.7 Not done (part 2 and later)
+- **Still shared by every storefront:** payment methods, delivery zones and couriers, promotions and coupons, SMS/email settings and invoice details.
+- **Staff access:** can't be limited to some storefronts yet.
+- **Reports:** can't be split by storefront yet.
+- **Admin manual orders** go on the default storefront; there is no picker yet.
+- **Per-option prices:** there are no per-option own prices per storefront.
+- **Category and brand product counts** on the storefront count every published product, not just the storefront's range.
+- **Web addresses:**
+  - a shop can add one without proof that it owns the domain; it only works once the domain's DNS points at us, and a taken address is refused;
+  - the admin's "View store" uses a storefront's first web address.
+- **Hard-coded store name:** the about page and default site metadata still name the demo store.

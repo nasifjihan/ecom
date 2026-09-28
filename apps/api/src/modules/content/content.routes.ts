@@ -27,6 +27,7 @@ import {
   type HomepageSection,
   type ThemeSettings,
 } from "./content.dto"
+import { StorefrontQuery } from "../storefronts/storefronts.dto"
 
 type Req = Request & { ctx: RequestContext }
 type Handler = (svc: ContentService, req: Req) => Promise<unknown>
@@ -35,6 +36,8 @@ const svc = (req: Req) => new ContentService(req.ctx)
 const id = (req: Req) => BigInt((req.params as { id: string }).id)
 const slug = (req: Req) => (req.params as { slug: string }).slug
 const q = (req: Req) => req.query as unknown as ListQueryDto
+/** `?storefrontId=` on the theme, home page and menu editors (omitted: the default storefront). */
+const sf = (req: Req) => (req.query as { storefrontId?: bigint }).storefrontId
 /** The body after validate() has parsed it with the route's DTO. */
 const body = <T>(req: Req) => req.body as T
 
@@ -172,7 +175,8 @@ adminContentRouter.delete(
 adminContentRouter.get(
   "/menus",
   can("menus.view"),
-  send((s) => s.listMenus()),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.listMenus(sf(r))),
 )
 adminContentRouter.post(
   "/menus",
@@ -209,29 +213,38 @@ adminContentRouter.delete(
 adminContentRouter.get(
   "/theme",
   can("online_store.view"),
-  send((s) => s.getTheme()),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.getTheme(sf(r))),
 )
 adminContentRouter.put(
   "/theme",
   can("online_store.edit"),
-  validate({ body: ThemeDto }),
-  send((s, r) => s.saveTheme(body<ThemeSettings>(r))),
+  validate({ query: StorefrontQuery, body: ThemeDto }),
+  send((s, r) => s.saveTheme(body<ThemeSettings>(r), sf(r))),
+)
+adminContentRouter.delete(
+  "/theme",
+  can("online_store.edit"),
+  validate({ query: StorefrontQuery.required() }),
+  send((s, r) => s.resetTheme(sf(r)!)),
 )
 adminContentRouter.get(
   "/homepage",
   can("online_store.view"),
-  send((s) => s.getHomepage()),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.getHomepage(sf(r))),
 )
 adminContentRouter.put(
   "/homepage",
   can("online_store.edit"),
-  validate({ body: HomepageDto }),
-  send((s, r) => s.saveHomepage(body<{ sections: HomepageSection[] }>(r).sections)),
+  validate({ query: StorefrontQuery, body: HomepageDto }),
+  send((s, r) => s.saveHomepage(body<{ sections: HomepageSection[] }>(r).sections, sf(r))),
 )
 adminContentRouter.delete(
   "/homepage",
   can("online_store.edit"),
-  send((s) => s.resetHomepage()),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.resetHomepage(sf(r))),
 )
 
 // ============================================================ storefront

@@ -21,6 +21,7 @@ import {
   cn,
 } from "@/components/ui";
 import { EmptyState, Field, PageTitle } from "@/components/content/shared";
+import { StorefrontPicker, useStorefrontChoice } from "@/components/storefront-picker";
 import {
   errorText,
   useCreateMenuMutation,
@@ -49,7 +50,10 @@ const QUICK_LINKS: MenuLink[] = [
 const validUrl = (u: string) => u.startsWith("/") || /^https?:\/\//i.test(u);
 
 export default function MenusPage() {
-  const { data: menus = [], isLoading } = useGetMenusQuery();
+  const { data: all = [], isLoading } = useGetMenusQuery();
+  const sf = useStorefrontChoice();
+  // The chosen storefront's own menus (the default storefront's have no storefront set).
+  const menus = all.filter((m) => (m.storefrontId ?? undefined) === sf.storefrontId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const selected = menus.find((m) => m.id === selectedId) ?? menus[0] ?? null;
@@ -67,6 +71,17 @@ export default function MenusPage() {
         }
       />
 
+      <StorefrontPicker
+        choice={sf}
+        note={
+          sf.storefrontId
+            ? "Header or footer: where it has no menu of its own, it uses the default storefront's."
+            : sf.several
+              ? "Storefronts without their own header or footer menus use these."
+              : null
+        }
+      />
+
       {isLoading ? (
         <Skeleton className="h-72 w-full" />
       ) : menus.length === 0 ? (
@@ -75,7 +90,11 @@ export default function MenusPage() {
             <EmptyState
               icon={ListTree}
               title="No menus yet"
-              text="Your store uses a default header until you create a header menu."
+              text={
+                sf.storefrontId
+                  ? "This storefront uses the default storefront's menus until you create its own."
+                  : "Your store uses a default header until you create a header menu."
+              }
               action={<Button onClick={() => setCreating(true)}>Create a menu</Button>}
             />
           </CardContent>
@@ -105,12 +124,30 @@ export default function MenusPage() {
         </div>
       )}
 
-      <NewMenuDialog open={creating} onClose={() => setCreating(false)} hasHeader={menus.some((m) => m.location === "header")} onCreated={setSelectedId} />
+      <NewMenuDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        hasHeader={menus.some((m) => m.location === "header")}
+        storefrontId={sf.storefrontId}
+        onCreated={setSelectedId}
+      />
     </div>
   );
 }
 
-function NewMenuDialog({ open, onClose, hasHeader, onCreated }: { open: boolean; onClose: () => void; hasHeader: boolean; onCreated: (id: string) => void }) {
+function NewMenuDialog({
+  open,
+  onClose,
+  hasHeader,
+  storefrontId,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  hasHeader: boolean;
+  storefrontId: string | undefined;
+  onCreated: (id: string) => void;
+}) {
   const [create, { isLoading }] = useCreateMenuMutation();
   const [name, setName] = useState("");
   const [location, setLocation] = useState<MenuLocation>(hasHeader ? "footer" : "header");
@@ -124,7 +161,7 @@ function NewMenuDialog({ open, onClose, hasHeader, onCreated }: { open: boolean;
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const m = await create({ name: name.trim(), location }).unwrap();
+      const m = await create({ name: name.trim(), location, storefrontId: storefrontId ?? null }).unwrap();
       toast.success("Menu created");
       onCreated(m.id);
       onClose();
@@ -143,7 +180,7 @@ function NewMenuDialog({ open, onClose, hasHeader, onCreated }: { open: boolean;
           <Field label="Name" htmlFor="menu-name" hint="For footer menus this is the column heading.">
             <Input id="menu-name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer Care" />
           </Field>
-          <Field label="Where it shows" htmlFor="menu-location" hint={hasHeader ? "Your store already has a header menu." : undefined}>
+          <Field label="Where it shows" htmlFor="menu-location" hint={hasHeader ? "This storefront already has a header menu." : undefined}>
             <select
               id="menu-location"
               value={location}

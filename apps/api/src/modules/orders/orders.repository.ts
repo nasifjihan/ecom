@@ -24,6 +24,7 @@ export class OrderRepository extends BaseRepository<"order"> {
         refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
         createdByAdmin: { select: { id: true, name: true } },
+        storefront: { select: { id: true, name: true, code: true } },
         shipments: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
         paymentRecords: { include: { settlement: { select: { id: true, code: true } }, shipment: { select: { code: true } } }, orderBy: { createdAt: "asc" } },
         returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
@@ -95,6 +96,7 @@ export class OrderRepository extends BaseRepository<"order"> {
     }
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
     if (filters.source && filters.source.length > 0) where.source = { in: filters.source };
+    if (filters.storefrontId) where.storefrontId = filters.storefrontId;
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: "insensitive" } },
@@ -125,6 +127,7 @@ export class OrderRepository extends BaseRepository<"order"> {
           customer: {
             select: { id: true, firstName: true, lastName: true, email: true },
           },
+          storefront: { select: { id: true, name: true, code: true } },
         },
       }),
     ]);

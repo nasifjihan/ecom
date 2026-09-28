@@ -126,6 +126,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/online-store/homepage", label: "Homepage", icon: Home, perm: "online_store.view" },
       { href: "/online-store/theme", label: "Theme", icon: Palette, perm: "online_store.view" },
       { href: "/online-store/menus", label: "Menus", icon: ListTree, perm: "menus.view" },
+      { href: "/online-store/storefronts", label: "Storefronts", icon: Store, perm: "online_store.view" },
     ],
   },
   {

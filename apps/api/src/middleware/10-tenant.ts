@@ -3,6 +3,7 @@ import { logger, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config";
 import type { RequestContext } from "../core";
 import { ForbiddenError, UnauthorizedError, normalizeLocale } from "../core";
 import { defaultLocale } from "../modules/settings/languages";
+import { resolveStorefrontId } from "../modules/storefronts/storefronts.context";
 
 declare global {
   namespace Express {
@@ -28,6 +29,11 @@ function hostCandidates(origin?: string): string[] {
   hostPort = hostPort.replace(/^www\./, "").toLowerCase();
   const bare = hostPort.split(":")[0] ?? "";
   return [...new Set([hostPort, bare].filter(Boolean))];
+}
+
+/** The cached domain lookup (resolveStoreByOrigin): the storefront its address is linked to, if any. */
+interface ResolvedDomain {
+  storefrontId?: string | null;
 }
 
 function extractHost(origin?: string): string | null {
@@ -65,6 +71,7 @@ async function resolveStoreByOrigin(host: string) {
       ? {
           id: String(row.storeId),
           hostname: host,
+          storefrontId: row.storefrontId === null ? null : String(row.storefrontId),
           store: { ...row.store, id: String(row.store.id), planId: row.store.planId === null ? null : String(row.store.planId) },
         }
       : null;
@@ -138,6 +145,13 @@ export default async function tenantMiddleware(
     } else {
       req.store = { id: forcedStoreId, status: "active" };
     }
+  }
+
+  // Which storefront: the one the web address is linked to, else the store's default.
+  if (req.ctx.storeId) {
+    const linkedId = (resolved as ResolvedDomain | null)?.storefrontId;
+    const linked = linkedId ? BigInt(linkedId) : null;
+    req.ctx.storefrontId = await resolveStorefrontId(req.ctx.storeId, linked).catch(() => undefined);
   }
 
   // A storefront request that doesn't say which language gets the shop's default.

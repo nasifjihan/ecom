@@ -150,6 +150,8 @@ export interface Order {
   assignedToUserId?: string | number;
   itemsCount: number;
   source: string;
+  /** The storefront it was placed on. */
+  storefront?: { id: string; name: string; code: string };
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
@@ -179,6 +181,7 @@ export interface OrderListFilters {
   shippingZone?: ShippingZone;
   search?: string;
   source?: string;
+  storefrontId?: string;
   page?: number;
   limit?: number;
 }
@@ -572,6 +575,7 @@ interface ApiOrder {
   grandTotal: string;
   couponUsed: string | null;
   source?: string;
+  storefront?: { id: string; name: string; code: string } | null;
   manualDiscount?: string;
   memberDiscount?: string;
   memberLevel?: string | null;
@@ -676,6 +680,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     updatedAt: o.updatedAt,
     itemsCount: lines.reduce((n, l) => n + l.quantity, 0),
     source: o.source ?? "website",
+    storefront: o.storefront ? { id: String(o.storefront.id), name: o.storefront.name, code: o.storefront.code } : undefined,
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
     memberDiscount: Number(o.memberDiscount ?? 0),
@@ -706,6 +711,7 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.maxTotal !== undefined) params.set("maxTotal", String(filters.maxTotal));
         if (filters.search) params.set("search", filters.search);
         if (filters.source) params.set("source", filters.source);
+        if (filters.storefrontId) params.set("storefrontId", filters.storefrontId);
         if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
         params.set("page", String(filters.page ?? 1));
         params.set("perPage", String(filters.limit ?? 20));
