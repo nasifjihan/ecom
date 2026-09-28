@@ -8,6 +8,8 @@ import { ChevronRight, ShoppingBag } from "lucide-react";
 import { ScrollArea } from "@/components/ui";
 import { useMeQuery } from "@/lib/features/auth/auth-api-slice";
 import { NAV_SECTIONS, type NavItem } from "@/lib/nav";
+
+const NAV_HREFS = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
 import { useCan } from "@/lib/permissions";
 
 interface SidebarProps {
@@ -78,7 +80,9 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
     if (href === "/orders") return pathname === "/orders" || /^\/orders\/\d+/.test(pathname ?? "");
-    return pathname === href || pathname.startsWith(`${href}/`);
+    const matches = (h: string) => pathname === h || pathname.startsWith(`${h}/`);
+    // A more specific item wins: /inventory/warehouses lights up Warehouses, not Stock.
+    return matches(href) && !NAV_HREFS.some((o) => o !== href && o.startsWith(`${href}/`) && matches(o));
   };
 
   return (

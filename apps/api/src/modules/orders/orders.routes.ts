@@ -8,7 +8,6 @@ import { EmailService } from "../notifications";
 import { InvoiceService, sendInvoice } from "../invoices";
 import {
   OrderSearchQueryDto,
-  CreateOrderFromCartDto,
   OrderIdParamDto,
   OrderNumberParamDto,
   TransitionStatusDto,
@@ -31,14 +30,6 @@ adminOrdersRouter.get(
   rbacMiddleware("orders.view"),
   validate({ query: OrderSearchQueryDto }),
   ordersController.listOrders,
-);
-
-adminOrdersRouter.post(
-  "/",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.create"),
-  validate({ body: CreateOrderFromCartDto }),
-  ordersController.createOrderFromCart,
 );
 
 /** Manual orders (phone, Facebook, walk-in): price a draft, then create it. */
@@ -205,13 +196,6 @@ adminOrdersRouter.get(
 );
 
 export const checkoutRouter = Router();
-
-checkoutRouter.post(
-  "/from-cart",
-  authMiddleware("optional"),
-  validate({ body: CreateOrderFromCartDto }),
-  ordersController.createOrderFromCart,
-);
 
 checkoutRouter.get(
   "/my-orders",

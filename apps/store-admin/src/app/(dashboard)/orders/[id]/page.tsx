@@ -91,6 +91,7 @@ import { FULFILLMENT_LABELS, FULFILLMENT_STYLES, RETURN_LABELS, RETURN_STYLES, t
 import { ParcelsCard } from "@/components/orders/parcels-card";
 import { ReturnsCard } from "@/components/orders/returns-card";
 import { OrderSmsCard } from "@/components/orders/order-sms-card";
+import { ShipsFromCard } from "@/components/orders/ships-from-card";
 import { OrderPayments } from "@/components/orders/order-payments";
 import { useCan } from "@/lib/permissions";
 import { openFile } from "@ecom/api-client";
@@ -574,6 +575,7 @@ export default function OrderDetailPage() {
           </Card>
 
           <ParcelsCard order={order} canEdit={canEdit} />
+          <ShipsFromCard orderId={orderId} canEdit={canEdit} />
         </div>
       </div>
 

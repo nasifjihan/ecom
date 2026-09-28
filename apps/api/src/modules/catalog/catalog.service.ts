@@ -31,7 +31,9 @@ import type {
   CreateProductVariantDto,
   UpdateProductVariantDto,
 } from "./catalog.dto";
+import type { Prisma } from "@prisma/client";
 import { slugify } from "@ecom/utils";
+import { resyncProductTotals, setStockTotal } from "../stock";
 
 function randomAlphanum(length: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -142,8 +144,8 @@ export class CatalogService extends BaseService {
         salePriceStartAt: dto.salePriceStartAt ?? null,
         salePriceEndAt: dto.salePriceEndAt ?? null,
         manageStock: dto.manageStock,
-        stockQty: dto.stockQty ?? null,
-        reservedStock: dto.reservedStock,
+        // Stock goes in through the ledger below (default warehouse), never written directly.
+        stockQty: 0,
         allowBackorder: dto.allowBackorder,
         lowStockThreshold: dto.lowStockThreshold ?? null,
         weight: dto.weight ?? null,
@@ -171,7 +173,8 @@ export class CatalogService extends BaseService {
         supplierSku: dto.supplierSku ?? null,
         fulfillmentType: dto.fulfillmentType,
       };
-      const product = await t.product.create({ data: productData });
+      const db = t as Prisma.TransactionClient;
+      const product = await db.product.create({ data: productData as Prisma.ProductUncheckedCreateInput });
 
       if (dto.categoryIds && dto.categoryIds.length > 0) {
         await t.productCategory.createMany({
@@ -184,10 +187,11 @@ export class CatalogService extends BaseService {
       }
 
       if (dto.variants && dto.variants.length > 0) {
-        await t.productVariant.createMany({
-          data: dto.variants.map((v: CreateProductVariantDto) => ({
+        for (const v of dto.variants as CreateProductVariantDto[]) {
+          const created = await db.productVariant.create({
+            data: {
             productId: product.id,
-            attributeValues: v.attributeValues,
+            attributeValues: v.attributeValues as Prisma.InputJsonValue,
             sku: v.sku ?? null,
             barcode: v.barcode ?? null,
             regularPrice: v.regularPrice ?? null,
@@ -196,7 +200,7 @@ export class CatalogService extends BaseService {
             salePriceStartAt: v.salePriceStartAt ?? null,
             salePriceEndAt: v.salePriceEndAt ?? null,
             manageStock: v.manageStock,
-            stockQty: v.stockQty ?? null,
+            stockQty: 0,
             allowBackorder: v.allowBackorder,
             lowStockThreshold: v.lowStockThreshold ?? null,
             imageUrl: v.imageUrl ?? null,
@@ -205,8 +209,12 @@ export class CatalogService extends BaseService {
             width: v.width ?? null,
             height: v.height ?? null,
             status: v.status,
-          })),
-        });
+            },
+          });
+          await setStockTotal(db, storeId, { productId: product.id, variantId: created.id }, v.stockQty, dto.name);
+        }
+      } else {
+        await setStockTotal(db, storeId, { productId: product.id, variantId: null }, dto.stockQty, dto.name);
       }
 
       if (dto.imageUrls && dto.imageUrls.length > 0) {
@@ -256,9 +264,12 @@ export class CatalogService extends BaseService {
     }
 
     await tx(async (t: any) => {
+      const db = t as Prisma.TransactionClient;
       const updateData: Record<string, unknown> = {};
       for (const key of Object.keys(dto)) {
         if (key === "categoryIds" || key === "variants" || key === "imageUrls" || key === "slug") continue;
+        // Stock only changes through the ledger (below), and holds only through orders.
+        if (key === "stockQty" || key === "reservedStock") continue;
         (updateData as any)[key] = (dto as any)[key];
       }
       if (uniqueSlug !== undefined) updateData.slug = uniqueSlug;
@@ -295,7 +306,6 @@ export class CatalogService extends BaseService {
           salePriceStartAt: v.salePriceStartAt ?? null,
           salePriceEndAt: v.salePriceEndAt ?? null,
           manageStock: v.manageStock ?? true,
-          stockQty: v.stockQty ?? null,
           allowBackorder: v.allowBackorder ?? false,
           lowStockThreshold: v.lowStockThreshold ?? null,
           imageUrl: v.imageUrl ?? null,
@@ -308,12 +318,18 @@ export class CatalogService extends BaseService {
         const keepIds = variants.filter((v) => v.id !== undefined).map((v) => BigInt(v.id!));
         await t.productVariant.deleteMany({ where: { productId, id: { notIn: keepIds } } });
         for (const v of variants.filter((v) => v.id !== undefined)) {
-          await t.productVariant.updateMany({ where: { id: BigInt(v.id!), productId }, data: toData(v) });
+          const updated = await db.productVariant.updateMany({ where: { id: BigInt(v.id!), productId }, data: toData(v) });
+          if (updated.count) await setStockTotal(db, storeId, { productId, variantId: BigInt(v.id!) }, v.stockQty, existing.name);
         }
-        const fresh = variants.filter((v) => v.id === undefined);
-        if (fresh.length > 0) {
-          await t.productVariant.createMany({ data: fresh.map((v) => ({ productId, ...toData(v) })) });
+        for (const v of variants.filter((v) => v.id === undefined)) {
+          const created = await db.productVariant.create({ data: { productId, ...toData(v), stockQty: 0 } });
+          await setStockTotal(db, storeId, { productId, variantId: created.id }, v.stockQty, existing.name);
         }
+        await resyncProductTotals(db, productId);
+      }
+      // A product without options: its stock box sets the total (difference in the default warehouse).
+      if (dto.stockQty !== undefined && (await db.productVariant.count({ where: { productId } })) === 0) {
+        await setStockTotal(db, storeId, { productId, variantId: null }, dto.stockQty, existing.name);
       }
 
       if (dto.imageUrls !== undefined) {
@@ -402,7 +418,8 @@ export class CatalogService extends BaseService {
       await this.checkVariantSkuUniqueness(storeId, dto.sku);
     }
 
-    const variant = await prisma.productVariant.create({
+    const variant = await tx(async (t: Prisma.TransactionClient) => {
+      const v = await t.productVariant.create({
       data: {
         productId: pid,
         attributeValues: dto.attributeValues as any,
@@ -413,7 +430,7 @@ export class CatalogService extends BaseService {
         salePriceStartAt: dto.salePriceStartAt ?? null,
         salePriceEndAt: dto.salePriceEndAt ?? null,
         manageStock: dto.manageStock,
-        stockQty: dto.stockQty ?? null,
+        stockQty: 0,
         allowBackorder: dto.allowBackorder,
         lowStockThreshold: dto.lowStockThreshold ?? null,
         imageUrl: dto.imageUrl ?? null,
@@ -423,6 +440,10 @@ export class CatalogService extends BaseService {
         height: dto.height ?? null,
         status: dto.status,
       },
+      });
+      await setStockTotal(t, storeId, { productId: pid, variantId: v.id }, dto.stockQty, product.name);
+      await resyncProductTotals(t, pid);
+      return t.productVariant.findUniqueOrThrow({ where: { id: v.id } });
     });
     await this.invalidateProductCache(pid);
     return variant;
@@ -440,9 +461,11 @@ export class CatalogService extends BaseService {
       await this.checkVariantSkuUniqueness(storeId, dto.sku, vid);
     }
 
-    const updated = await prisma.productVariant.update({
-      where: { id: vid },
-      data: dto as any,
+    const { stockQty, reservedStock: _held, ...rest } = dto as UpdateProductVariantDto & { reservedStock?: number };
+    const updated = await tx(async (t: Prisma.TransactionClient) => {
+      await t.productVariant.update({ where: { id: vid }, data: rest as Prisma.ProductVariantUpdateInput });
+      await setStockTotal(t, storeId, { productId: existing.productId, variantId: vid }, stockQty);
+      return t.productVariant.findUniqueOrThrow({ where: { id: vid } });
     });
     await this.invalidateProductCache(existing.productId);
     return updated;

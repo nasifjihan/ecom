@@ -81,7 +81,7 @@ export default function PurchasePage() {
           ["Total", tk(p.total)],
           ["Paid against it", tk(p.paid)],
           ["Payment", PAYMENT_TERM_LABELS[p.paymentTerm]],
-          ["Source", p.sourcingType === "import" ? `Import${p.originCountry ? ` from ${p.originCountry}` : ""}` : "Local"],
+          ["Source", `${p.sourcingType === "import" ? `Import${p.originCountry ? ` from ${p.originCountry}` : ""}` : "Local"}${p.warehouse ? ` · into ${p.warehouse.code}` : ""}`],
         ].map(([k, v]) => (
           <Card key={k}>
             <CardContent className="p-4">

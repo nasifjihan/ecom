@@ -1,89 +1,80 @@
+import type { Prisma } from "@prisma/client";
 import { prisma, tx } from "../../config";
+import { defaultWarehouseId, moveStock } from "../stock";
 import { BaseService, type RequestContext, type Paginated, NotFoundError, BadRequestError } from "../../core";
-import { InventoryLogRepository, InventoryRepository } from "./inventory.repository";
+import { InventoryLogRepository } from "./inventory.repository";
 import type {
   StockAdjustmentDto,
-  StockTransferDto,
   MovementQueryDto,
   LowStockReportDto,
 } from "./inventory.dto";
 
 export class InventoryService extends BaseService {
   private inventoryLogs: InventoryLogRepository;
-  private inventory: InventoryRepository;
 
   constructor(ctx: RequestContext) {
     super(ctx);
     this.inventoryLogs = new InventoryLogRepository();
-    this.inventory = new InventoryRepository();
   }
 
   /**
-   * Applies stock deltas. A line targets a variant (variantId) or, for a simple product
-   * without variants, the product itself (productId only). Rows are looked up inside the
-   * caller's store, so one store's admin can never touch another store's stock.
+   * Applies stock counts: each line adds or takes units off the shelf of one warehouse (the default
+   * one when none is given). A line targets an option (variantId) or a product without options
+   * (productId only). Rows are looked up inside the caller's store; the shelf can't go below zero.
    */
-  async adjustStock(lines: StockAdjustmentDto): Promise<unknown[]> {
+  async adjustStock(lines: StockAdjustmentDto): Promise<{ applied: number }> {
     const storeId = this.ctx.storeId;
-    const results: unknown[] = [];
-    await tx(async (t: any) => {
+    if (storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED");
+    let applied = 0;
+    await tx(async (t: Prisma.TransactionClient) => {
       for (const line of lines.lines) {
         let productId: bigint;
         let variantId: bigint | null = null;
-        let qtyBefore: number;
-
+        let label: string;
         if (line.variantId !== undefined) {
           variantId = BigInt(line.variantId);
           const variant = await t.productVariant.findFirst({
-            where: { id: variantId, ...(storeId !== undefined ? { product: { storeId } } : {}) },
+            where: { id: variantId, product: { storeId } },
+            select: { productId: true, product: { select: { name: true } } },
           });
           if (!variant) throw new NotFoundError("productVariant", variantId);
           productId = variant.productId;
-          qtyBefore = Number(variant.stockQty ?? 0);
+          label = variant.product.name;
         } else {
           productId = BigInt(line.productId!);
           const product = await t.product.findFirst({
-            where: { id: productId, ...(storeId !== undefined ? { storeId } : {}) },
-            include: { _count: { select: { variants: true } } },
+            where: { id: productId, storeId },
+            select: { name: true, _count: { select: { variants: true } } },
           });
           if (!product) throw new NotFoundError("product", productId);
           if (product._count.variants > 0) {
-            throw new BadRequestError("This product has variants; adjust a variant instead", "VARIANT_REQUIRED");
+            throw new BadRequestError("This product has options; adjust an option instead", "VARIANT_REQUIRED");
           }
-          qtyBefore = Number(product.stockQty ?? 0);
+          label = product.name;
         }
-
-        const qtyAfter = qtyBefore + line.delta;
-        if (qtyAfter < 0) {
-          throw new BadRequestError(`Insufficient stock: have ${qtyBefore}, need ${-line.delta}`, "INSUFFICIENT_STOCK");
-        }
-
-        if (variantId !== null) {
-          await t.productVariant.update({ where: { id: variantId }, data: { stockQty: qtyAfter } });
-          // Keep the parent's aggregate in step with its variants (used by listings and low-stock reports).
-          const sum = await t.productVariant.aggregate({ where: { productId }, _sum: { stockQty: true } });
-          await t.product.update({ where: { id: productId }, data: { stockQty: sum._sum.stockQty ?? 0 } });
+        let warehouseId: bigint;
+        if (line.warehouseId !== undefined) {
+          const w = await t.warehouse.findFirst({ where: { id: BigInt(line.warehouseId), storeId }, select: { id: true } });
+          if (!w) throw new NotFoundError("warehouse", line.warehouseId);
+          warehouseId = w.id;
         } else {
-          await t.product.update({ where: { id: productId }, data: { stockQty: qtyAfter } });
+          warehouseId = await defaultWarehouseId(t, storeId);
         }
-
-        const log = await t.inventoryLog.create({
-          data: {
-            variantId,
-            productId,
-            warehouse: line.warehouse ?? "MAIN",
-            changeQty: line.delta,
-            reason: line.reason ?? (line.delta > 0 ? "MANUAL_RESTOCK" : "MANUAL_DEDUCT"),
-            referenceId: null,
-            note: line.note ?? null,
-            qtyBefore,
-            qtyAfter,
-          },
+        const moved = await moveStock(t, {
+          storeId,
+          warehouseId,
+          sku: { productId, variantId },
+          onHand: line.delta,
+          guard: line.delta < 0 ? "onHand" : undefined,
+          reason: line.reason ?? (line.delta > 0 ? "MANUAL_RESTOCK" : "MANUAL_DEDUCT"),
+          note: line.note ?? null,
+          label,
         });
-        results.push(log);
+        if (!moved.applied) throw new BadRequestError(`"${label}" doesn't track stock; turn on stock tracking first`, "VALIDATION_FAILED");
+        applied += 1;
       }
     });
-    return results;
+    return { applied };
   }
 
   /**
@@ -114,6 +105,18 @@ export class InventoryService extends BaseService {
       _max: { createdAt: true },
     });
     const lastAt = new Map(lastLogs.map((l) => [`${l.productId}:${l.variantId ?? ""}`, l._max.createdAt]));
+    // Stock per warehouse, for the breakdown and for "set to" counts in one warehouse.
+    const [warehouses, perWarehouse] = await Promise.all([
+      prisma.warehouse.findMany({
+        where: { ...(storeId !== undefined ? { storeId } : {}) },
+        orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+        select: { id: true, code: true, name: true, isDefault: true, isActive: true },
+      }),
+      prisma.warehouseStock.findMany({
+        where: { productId: { in: products.map((p) => p.id) } },
+        select: { warehouseId: true, skuKey: true, onHand: true, reserved: true },
+      }),
+    ]);
 
     const rows = products.flatMap((p) => {
       const image = p.images[0]?.imageUrl ?? null;
@@ -123,6 +126,10 @@ export class InventoryService extends BaseService {
         const label = v ? Object.values((v.attributeValues ?? {}) as Record<string, string>).join(" / ") : "";
         return {
           id: v ? `v${v.id}` : `p${p.id}`,
+          byWarehouse: warehouses.map((w) => {
+            const row = perWarehouse.find((x) => x.warehouseId === w.id && x.skuKey === (v ? `v${v.id}` : `p${p.id}`));
+            return { warehouseId: String(w.id), code: w.code, onHand: row?.onHand ?? 0, reserved: row?.reserved ?? 0 };
+          }),
           productId: String(p.id),
           variantId: v ? String(v.id) : null,
           productName: label ? `${p.name} (${label})` : p.name,
@@ -155,84 +162,13 @@ export class InventoryService extends BaseService {
     const start = (q.page - 1) * q.perPage;
     return {
       items: filtered.slice(start, start + q.perPage),
+      warehouses: warehouses.map((w) => ({ id: String(w.id), code: w.code, name: w.name, isDefault: w.isDefault, isActive: w.isActive })),
       summary,
       total,
       page: q.page,
       perPage: q.perPage,
       totalPages: Math.max(1, Math.ceil(total / q.perPage)),
     };
-  }
-
-  async transferStock(dto: StockTransferDto): Promise<{ originLogs: unknown[]; destLogs: unknown[] }> {
-    const originLogs: unknown[] = [];
-    const destLogs: unknown[] = [];
-
-    await tx(async (t: any) => {
-      for (const line of dto.lines) {
-        if (line.variantId === undefined) throw new BadRequestError("Transfers need a variantId", "VARIANT_REQUIRED");
-        const vid = BigInt(line.variantId);
-        const variant = await prisma.productVariant.findFirst({
-          where: { id: vid, ...(this.ctx.storeId !== undefined ? { product: { storeId: this.ctx.storeId } } : {}) },
-        });
-        if (!variant) throw new NotFoundError("productVariant", vid);
-
-        const qtyBefore = Number(variant.stockQty ?? 0);
-        const transferQty = Math.abs(line.delta || 1);
-        if (qtyBefore < transferQty) {
-          throw new BadRequestError(
-            `Insufficient stock at origin for variant ${vid}: have ${qtyBefore}, need ${transferQty}`,
-            "INSUFFICIENT_STOCK",
-          );
-        }
-        const qtyAfter = qtyBefore - transferQty;
-
-        await t.productVariant.update({
-          where: { id: vid },
-          data: { stockQty: qtyAfter },
-        });
-
-        const deductReason = "TRANSFER_OUT";
-        const originLog = await t.inventoryLog.create({
-          data: {
-            variantId: vid,
-            productId: line.productId ? BigInt(line.productId) : variant.productId,
-            warehouse: dto.originWarehouse,
-            changeQty: -transferQty,
-            reason: deductReason,
-            referenceId: null,
-            note: `Transfer to ${dto.destWarehouse}`,
-            qtyBefore,
-            qtyAfter,
-          },
-        });
-        originLogs.push(originLog);
-
-        const destQtyBefore = qtyAfter;
-        const destQtyAfter = destQtyBefore + transferQty;
-        await t.productVariant.update({
-          where: { id: vid },
-          data: { stockQty: destQtyAfter },
-        });
-
-        const addReason = "TRANSFER_IN";
-        const destLog = await t.inventoryLog.create({
-          data: {
-            variantId: vid,
-            productId: line.productId ? BigInt(line.productId) : variant.productId,
-            warehouse: dto.destWarehouse,
-            changeQty: transferQty,
-            reason: addReason,
-            referenceId: null,
-            note: `Transfer from ${dto.originWarehouse}`,
-            qtyBefore: destQtyBefore,
-            qtyAfter: destQtyAfter,
-          },
-        });
-        destLogs.push(destLog);
-      }
-    });
-
-    return { originLogs, destLogs };
   }
 
   async movementReport(filters: MovementQueryDto): Promise<Paginated<unknown>> {
@@ -410,12 +346,11 @@ export class InventoryService extends BaseService {
 
   async adjustVariant(
     variantId: bigint | number,
-    line: { delta: number; reason?: string; warehouse?: string; note?: string },
+    line: { delta: number; reason?: string; warehouseId?: bigint; note?: string },
   ): Promise<unknown> {
-    const result = await this.adjustStock({
-      lines: [{ variantId: BigInt(variantId), delta: line.delta, reason: line.reason, warehouse: line.warehouse, note: line.note }],
+    return this.adjustStock({
+      lines: [{ variantId: BigInt(variantId), delta: line.delta, reason: line.reason, warehouseId: line.warehouseId, note: line.note }],
     });
-    return result[0];
   }
 
   async getMovement(id: bigint | number): Promise<unknown> {

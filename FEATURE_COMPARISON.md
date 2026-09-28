@@ -62,7 +62,7 @@ These are our advantages. Keep them.
 | Returns screen (request → received → approved → refunded / rejected) | ✅ | Batch 20: customer requests on the storefront (7-day window), staff approve / receive (restock) / reject / refund; Returns page |
 | Invoice by SMS | ✅ | Batch 24: order page "Send invoice by SMS" |
 | Gift orders (recipient vs buyer, print labels) | ❌ | |
-| Stock reserved on order, committed on payment | 🟡 | We decrement at checkout; no reservation step |
+| Stock reserved on order, committed when packed | ✅ | Batch 29: an order holds stock in the warehouse it ships from; packing a parcel takes it off the shelf; cancelling releases it |
 | Order code `ORD-YYYYMMDD-XXXXXX`, prefix per store | 🟡 | We use `20260926000001`; add a prefix setting |
 
 ### Marketing (reference 12, 07.3–07.5)
@@ -148,7 +148,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Feature | Status | Note |
 |---|---|---|
 | Stock list, adjustments, movement log | ✅ | |
-| Warehouses, stock per warehouse, transfers with shortfall | ❌ | Batch 11 removed the fake warehouse UI |
+| Warehouses, stock per warehouse, transfers with shortfall | ✅ | Batch 29: warehouses with a default, stock and holds per warehouse, transfers (send / receive with shortfall written off / cancel), order "ships from", purchases into a warehouse |
 | Audit log viewer for store admin | ✅ | Batch 25: every admin change recorded |
 
 ### Settings & access (reference 05, 21)
@@ -219,7 +219,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 26 ✅ | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
 | 27 ✅ | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
 | 28 ✅ | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
-| 29 | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
+| 29 ✅ | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings) | Reference's core idea; big change | XL |

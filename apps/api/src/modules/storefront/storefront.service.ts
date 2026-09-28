@@ -28,6 +28,7 @@ import { emitOrderPlaced } from "../notifications";
 import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
 import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
 import { FulfilmentService } from "../fulfilment/fulfilment.service";
+import { chooseWarehouse, moveStock } from "../stock";
 import { PaymentsService } from "../payments/payments.service";
 import { recordPaidAtEntry } from "../payments/payments.records";
 import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
@@ -1003,8 +1004,9 @@ export class StorefrontService {
   }
 
   /**
-   * Saves a priced order in one transaction: stock (guarded against overselling), flash-sale
-   * limits, coupon usage and the order with its lines and first status entry.
+   * Saves a priced order in one transaction: stock held for it in the warehouse it ships from
+   * (guarded against overselling), flash-sale limits, coupon usage and the order with its lines
+   * and first status entry. Stock leaves the shelf when a parcel is packed (fulfilment).
    */
   async createOrder(q: OrderQuote, meta: OrderMeta) {
     if (q.problems.length) throw new BadRequestError(q.problems[0]!, "CART_INVALID");
@@ -1016,28 +1018,13 @@ export class StorefrontService {
     const status = meta.status ?? "PENDING";
 
     return tx(async (t: Prisma.TransactionClient) => {
-      // Decrement stock atomically; the WHERE guard stops overselling under concurrency.
+      // Hold the stock in the warehouse the order ships from; the guard stops overselling.
+      const skuOf = (x: { product: { id: bigint }; variant?: { id: bigint } | null }) => ({ productId: x.product.id, variantId: x.variant?.id ?? null });
+      const warehouseId = await chooseWarehouse(t, storeId, [...lines, ...q.gifts].map((x) => ({ sku: skuOf(x), qty: x.qty })));
+      const held: number[] = [];
       for (const l of lines) {
-        const row = l.variant ?? l.product;
-        if (!row.manageStock) continue;
-        const where = { id: row.id, ...(row.allowBackorder ? {} : { stockQty: { gte: l.qty + row.reservedStock } }) };
-        const updated = l.variant
-          ? await t.productVariant.updateMany({ where, data: { stockQty: { decrement: l.qty } } })
-          : await t.product.updateMany({ where, data: { stockQty: { decrement: l.qty } } });
-        if (updated.count === 0) {
-          throw new BadRequestError(`"${l.product.name}" just sold out — please update the order`, "INSUFFICIENT_STOCK");
-        }
-        await t.inventoryLog.create({
-          data: {
-            productId: l.product.id,
-            variantId: l.variant?.id ?? null,
-            changeQty: -l.qty,
-            reason: "ORDER_CREATE",
-            referenceId: orderKey,
-            qtyBefore: row.stockQty ?? 0,
-            qtyAfter: (row.stockQty ?? 0) - l.qty,
-          },
-        });
+        const r = await moveStock(t, { storeId, warehouseId, sku: skuOf(l), reserved: l.qty, guard: "available", reason: "ORDER_RESERVE", ref: orderKey, label: l.product.name });
+        held.push(r.applied ? l.qty : 0);
       }
       await t.product.updateMany({ where: { id: { in: lines.map((l) => l.product.id) } }, data: { saleCount: { increment: 1 } } });
 
@@ -1066,24 +1053,13 @@ export class StorefrontService {
       // Free gifts: taken from stock like any line; one that sold out meanwhile is left out.
       const giftItems: Prisma.OrderItemUncheckedCreateWithoutOrderInput[] = [];
       for (const g of q.gifts) {
-        const row = g.variant ?? g.product;
-        if (row.manageStock) {
-          const where = { id: row.id, ...(row.allowBackorder ? {} : { stockQty: { gte: g.qty + row.reservedStock } }) };
-          const updated = g.variant
-            ? await t.productVariant.updateMany({ where, data: { stockQty: { decrement: g.qty } } })
-            : await t.product.updateMany({ where, data: { stockQty: { decrement: g.qty } } });
-          if (updated.count === 0) continue;
-          await t.inventoryLog.create({
-            data: {
-              productId: g.product.id,
-              variantId: g.variant?.id ?? null,
-              changeQty: -g.qty,
-              reason: "ORDER_CREATE",
-              referenceId: orderKey,
-              qtyBefore: row.stockQty ?? 0,
-              qtyAfter: (row.stockQty ?? 0) - g.qty,
-            },
-          });
+        let giftHeld = 0;
+        try {
+          const r = await moveStock(t, { storeId, warehouseId, sku: skuOf(g), reserved: g.qty, guard: "available", reason: "ORDER_RESERVE", ref: orderKey, label: g.product.name });
+          giftHeld = r.applied ? g.qty : 0;
+        } catch (e) {
+          if (e instanceof BadRequestError) continue;
+          throw e;
         }
         giftItems.push({
           productId: g.product.id,
@@ -1093,6 +1069,7 @@ export class StorefrontService {
           variantValues: (g.variant?.attributeValues as Prisma.InputJsonValue) ?? undefined,
           imageUrl: g.imageUrl,
           quantity: g.qty,
+          qtyReserved: giftHeld,
           unitPrice: 0,
           // A free gift still cost the shop something.
           unitCost: g.variant?.costPrice ?? g.product.costPrice ?? null,
@@ -1134,6 +1111,7 @@ export class StorefrontService {
           customerId: meta.customerId,
           isGuest: meta.customerId === null,
           customerNote: meta.customerNote ?? null,
+          warehouseId,
           ipAddress: null,
           source: meta.source,
           createdByAdminId: meta.createdByAdminId ?? null,
@@ -1193,6 +1171,7 @@ export class StorefrontService {
                 variantValues: (l.variant?.attributeValues as Prisma.InputJsonValue) ?? undefined,
                 imageUrl: l.variant?.imageUrl ?? l.product.images[0]?.imageUrl ?? null,
                 quantity: l.qty,
+                qtyReserved: held[i] ?? 0,
                 unitPrice: l.unitPrice,
                 unitCost: l.variant?.costPrice ?? l.product.costPrice ?? null,
                 lineSubtotal: l.lineSubtotal,

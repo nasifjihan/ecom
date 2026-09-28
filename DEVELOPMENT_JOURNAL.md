@@ -2270,3 +2270,125 @@ A new **Reports** section answers what owners ask most: how much did we sell, wh
 - Refunds don't reduce the tax report.
 - Past lines' costs are today's cost prices (the migration's best guess).
 - At phone width the admin sidebar stays open and the header is wider than the screen, on every admin page. That needs a separate layout fix.
+
+---
+
+## ✅ BATCH #29 — Warehouses, stock held for orders, and transfers (2026-09-28)
+Stock is now counted per warehouse, and an order holds (reserves) its units until a parcel is packed, instead of taking them at checkout. Staff can add warehouses, send stock between them (recording anything that went missing on the way), choose which warehouse an order ships from, and receive purchases into a chosen warehouse. All stock changes now go through one ledger, so the numbers stay consistent.
+
+### 29.1 Schema and data (migration `warehouses`)
+- **`Warehouse`:** name, code (unique per store), address, phone, default, in use, sort order.
+- **`WarehouseStock`:** one row per product (no options) or option per warehouse: **on hand**, **held for orders**, and a shelf / bin note.
+  - A product's and option's `stockQty` / `reservedStock` are the **totals over all warehouses**, so the storefront and reports keep working.
+  - A product with options now always totals its options (before, the two had drifted apart: 50 vs 48 and so on).
+- **`StockTransfer` / `StockTransferItem`:** `TR-0001`, from, to, status (on the way / received / cancelled), sent and received quantities, notes.
+- **New fields:**
+  - `Order.warehouseId` (ships from);
+  - `OrderItem.qtyReserved` (still held);
+  - `Shipment.warehouseId` (packed at);
+  - `Purchase.warehouseId` (received into);
+  - `InventoryLog.warehouseId`.
+- **Data conversion:**
+  - every store got a "Main warehouse" (MAIN) holding all current stock;
+  - open orders' units that weren't in a parcel yet went back on the shelf and are now held for those orders, so what's available didn't change. On the dev data, on hand went from 375 to 411 with 36 held;
+  - existing orders, parcels, purchases and stock logs belong to MAIN.
+
+### 29.2 Rules and the ledger (`modules/stock`)
+- **`stock.rules.ts` (32 table tests):**
+  - which warehouse an order ships from: the default one if it has everything free, otherwise the first that does, otherwise the default;
+  - splitting refunded units into "stop holding" and "back on the shelf";
+  - checking a transfer receipt and its shortfall;
+  - transfer checks, codes and warehouse codes.
+- **`stock.ledger.ts`:** the only code that changes stock.
+  - Every move updates the warehouse row, the option or product totals and the parent product together, and logs on-hand changes with the warehouse.
+  - Guards are single conditional updates, and the guarded one runs first, so a refused move changes nothing:
+    - **available**, for placing orders: the total must have the units free, unless the product allows backorders;
+    - **on shelf**, for packing, adjustments and cancelled purchases;
+    - **free**, for sending transfers: on the shelf and not held for orders.
+  - Stock written before warehouses existed (seed data, imports) is adopted into the default warehouse the first time it's touched.
+
+### 29.3 Every stock flow moved onto the ledger
+- **Checkout and staff-entered orders:**
+  - the order picks its warehouse and **holds** each line (and free gift);
+  - selling more than is free is refused; a gift that ran out is left off, as before.
+- **Packing a parcel** takes the units off that warehouse's shelf and ends their hold. It is refused when that warehouse doesn't have them on the shelf.
+- **A parcel coming back:** a **cancelled** or **returned** parcel puts its goods back on the shelf where it was packed, and holds them again while the order is open.
+- **Cancelling an order** releases what it still holds and unpacks parcels not yet handed to a courier. Refunded and failed orders release their holds too. Units already with a courier or the customer come back through a returned parcel or a return (before, cancelling or refunding a shipped or delivered order put everything back on the shelf even though the goods weren't there).
+- **Returns and refunds:**
+  - a return received puts the goods back on the order's warehouse shelf;
+  - a refund with restock first stops holding units that never left, then puts the rest back;
+  - a full refund releases anything still held.
+- **Purchases** go into a chosen warehouse (default otherwise). Cancelling one takes them back out of that warehouse, and is refused if they're no longer on its shelf.
+- **Stock adjustments:** each line can name a warehouse, and can't take a shelf below zero.
+- **Product editor:**
+  - saving no longer overwrites stock: the stock box sets the total by adding or removing the difference in the default warehouse;
+  - new products and options get their opening stock the same way;
+  - a product's totals are recalculated when its options change.
+- **Removed:**
+  - the old unused cart-checkout routes (`POST /api/admin/orders`, `/checkout/from-cart`), which took stock outside all of this;
+  - five unused repository methods that wrote stock directly;
+  - the old `/inventory/transfer` endpoint, which subtracted and re-added to the same total and did nothing.
+
+### 29.4 API (`/api/admin/warehouses`)
+- **Warehouses:**
+  - list with on hand, held, available, value at cost and incoming transfers;
+  - add, edit, **make default**;
+  - turn off only when empty and not the default; delete only if never used.
+- **Stock by warehouse:** `GET /stock?search=&warehouseId=`, each product / option with its stock in every warehouse.
+- **Transfers:**
+  - send (stock leaves at once; only free units);
+  - receive with actual counts (a shortfall needs a note and is written off);
+  - cancel while on the way (everything goes back);
+  - list and detail.
+- **Orders:**
+  - `GET /orders/:id`: each line's held units against what's on that warehouse's shelf, and what's free elsewhere;
+  - `POST /orders/:id`: ship from another warehouse (the holds move there).
+- **Stock list and permissions:** the stock list (`/admin/inventory/stock`) adds a per-warehouse breakdown. Permissions reuse `inventory.view` / `inventory.edit` (and `orders.view` / `orders.edit` for an order's warehouse).
+
+### 29.5 Store admin
+- **Catalog menu:** Stock, **Warehouses** and **Transfers**. The sidebar now highlights only the most specific item, so Warehouses no longer lights up Stock as well.
+- **Warehouses:** a card per warehouse (on the shelf, held for orders, value at cost, products in stock, transfers on the way) with Edit, Make default and Delete, and an add / edit dialog.
+- **Transfers:**
+  - tabs for on the way / received / cancelled / all;
+  - **New transfer**: from / to, search what's free in the source, quantities checked against what's free, a note;
+  - the detail dialog receives with per-line "arrived" counts (a shortfall needs a reason) or cancels.
+- **Stock page:** with several warehouses, each row shows per-warehouse chips (e.g. `MAIN 47/5 · CTG 2`, meaning 47 on hand, 5 held), and the Adjust sheet asks which warehouse; "set to" counts use that warehouse's own shelf. With one warehouse it works as before.
+- **Order page:** a new **Ships from** card, shown when there's a choice or a problem. It shows each line's held units against what's on the shelf, what's free elsewhere, a warning with a transfer link when the warehouse is short, and a warehouse picker while the order is open.
+- **Record purchase:** "Receive into" warehouse; the purchase page shows it.
+
+### 29.6 Checked
+- **Tests:** 449/449 API tests:
+  - 32 stock rule tests;
+  - a new database test (`tests/integration/stock.db.test.ts`) that runs the real services and checks after every step that the warehouse rows add up to the product's totals:
+    - holding and the oversell refusal (a refused order changes nothing);
+    - packing, a cancelled parcel held again, cancelling the order;
+    - cancelling with a packed parcel unpacks it;
+    - a transfer of free stock only, a receipt with a shortfall (refused without a note), and a cancelled transfer;
+    - an order that can't be packed where the stock isn't, until it's moved;
+    - the editor's stock box.
+  - The same 2 unhandled errors from the old batch-9 smoke test remain; they were there before.
+- **By API (dev data), each step's numbers checked:**
+  - a staff order held 3 units;
+  - a transfer of 10 took them off MAIN, and 9 were received at CTG (1 short with a note; refused without one);
+  - the order moved to CTG and its holds moved with it;
+  - packing took 3 off CTG's shelf;
+  - a cancelled parcel put them back, held;
+  - cancelling the order released them;
+  - an oversized order was refused, and a cancelled transfer returned its stock;
+  - turning off or deleting a warehouse with stock was refused.
+  - A database-wide check found **0** options or products whose warehouse rows don't add up, and the units held in warehouses match what open order lines hold.
+- **Chromium:**
+  - Warehouses page;
+  - a new transfer (picker, quantities, note), then receiving it with 1 missing (the button stayed off until a reason was given) and the transfer list;
+  - Stock page per-warehouse chips;
+  - the order's Ships from card: moving the order to CTG moved its 2 held units there;
+  - the purchase form's warehouse choice;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before (several have fewer). The admin and storefront build.
+
+### 29.7 Not done
+- One order ships from one warehouse (no splitting one order across warehouses), and orders don't pick the warehouse nearest the customer.
+- Stock on its way between warehouses isn't counted anywhere until received, so stock value dips while a transfer is on the road.
+- Shelf / bin locations are stored but not editable yet.
+- The storefront shows total availability across all warehouses; there's no "available in Chattogram" per branch.
+- A full stock count (stocktake) screen per warehouse.

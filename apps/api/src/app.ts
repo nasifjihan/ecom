@@ -48,6 +48,7 @@ import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
+import { adminWarehousesRouter } from "./modules/stock";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
@@ -165,6 +166,7 @@ export function buildApp(): Express {
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
+  app.use("/api/admin/warehouses", adminWarehousesRouter);            // warehouses, stock per warehouse, transfers, order ship-from
   app.use("/api/admin/reports", adminReportsRouter);                  // sales and profit, products, discounts, customers, couriers, returns, tax, stock value
   app.use("/api/admin/purchasing", adminPurchasingRouter);            // suppliers, purchases, supplier payments, money accounts
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);

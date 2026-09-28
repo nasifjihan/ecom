@@ -13,6 +13,7 @@ import { ArrowLeft, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Textarea, cn } from "@/components/ui";
 import { Field, PageTitle } from "@/components/content/shared";
 import { SELECT, SupplierDialog } from "@/components/purchasing/shared";
+import { useWarehousesQuery } from "@/lib/features/warehouses/warehouses-api-slice";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import {
   PAYMENT_METHOD_LABELS,
@@ -119,6 +120,9 @@ export default function NewPurchasePage() {
   const [addGrade] = useAddGradeMutation();
   const [create, { isLoading }] = useCreatePurchaseMutation();
 
+  const { data: warehouses } = useWarehousesQuery();
+  const liveWarehouses = (warehouses ?? []).filter((w) => w.isActive);
+  const [warehouseId, setWarehouseId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [addingSupplier, setAddingSupplier] = useState(false);
   const [sourcingType, setSourcingType] = useState<"local" | "import">("local");
@@ -197,6 +201,7 @@ export default function NewPurchasePage() {
         sourceFrom,
         reference,
         purchasedOn,
+        warehouseId: warehouseId || null,
         shippingCost: n(shipping),
         customsDuty: n(customs),
         otherCharges: n(other),
@@ -273,6 +278,17 @@ export default function NewPurchasePage() {
           {sourcingType === "import" && (
             <Field label="Country of origin" htmlFor="origin">
               <Input id="origin" value={originCountry} onChange={(e) => setOriginCountry(e.target.value)} placeholder="e.g. China" />
+            </Field>
+          )}
+          {liveWarehouses.length > 1 && (
+            <Field label="Receive into" htmlFor="warehouse" hint="Where the goods go on the shelf">
+              <select id="warehouse" className={SELECT} value={warehouseId || (liveWarehouses.find((w) => w.isDefault)?.id ?? "")} onChange={(e) => setWarehouseId(e.target.value)}>
+                {liveWarehouses.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} ({w.code})
+                  </option>
+                ))}
+              </select>
             </Field>
           )}
           <Field label="Bought from" htmlFor="from" hint="Market, wholesaler or website">

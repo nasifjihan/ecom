@@ -374,6 +374,16 @@ export interface StockItem {
   unitCost: number;
   lastAdjustedAt?: string;
   lastAdjustedBy?: string;
+  /** On hand and held per warehouse (every warehouse, in the store's order). */
+  byWarehouse?: { warehouseId: string; code: string; onHand: number; reserved: number }[];
+}
+
+export interface StockWarehouse {
+  id: string;
+  code: string;
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
 }
 
 export interface StockFilters {
@@ -422,7 +432,7 @@ export interface StockTransfer {
 export interface AdjustStockInput {
   productId: string;
   variantId: string | null;
-  /** Current on-hand quantity, needed to turn SET / INVENTORY_COUNT into a delta. */
+  /** Current on-hand quantity in that warehouse, needed to turn SET / INVENTORY_COUNT into a delta. */
   currentQty: number;
   productVariantId: string | number;
   warehouseId: string | number;
@@ -457,6 +467,7 @@ interface ApiStockRow {
   lowStockThreshold: number;
   unitCost: number;
   lastAdjustedAt: string | null;
+  byWarehouse?: { warehouseId: string; code: string; onHand: number; reserved: number }[];
 }
 
 interface ApiMovement {
@@ -912,7 +923,7 @@ export const operationsApiSlice = api.injectEndpoints({
     }),
 
     getStockList: builder.query<
-      PaginatedResponse<StockItem> & { summary: StockSummary },
+      PaginatedResponse<StockItem> & { summary: StockSummary; warehouses: StockWarehouse[] },
       StockFilters
     >({
       query: (filters) => {
@@ -929,6 +940,7 @@ export const operationsApiSlice = api.injectEndpoints({
       },
       transformResponse: (res: {
         items: ApiStockRow[];
+        warehouses?: StockWarehouse[];
         summary: StockSummary;
         total: number;
         page: number;
@@ -944,6 +956,7 @@ export const operationsApiSlice = api.injectEndpoints({
           lastAdjustedAt: r.lastAdjustedAt ?? undefined,
         })),
         summary: res.summary,
+        warehouses: res.warehouses ?? [],
         total: res.total,
         page: res.page,
         limit: res.perPage,
@@ -959,7 +972,7 @@ export const operationsApiSlice = api.injectEndpoints({
     }),
 
     adjustStock: builder.mutation<unknown, AdjustStockInput>({
-      query: ({ productId, variantId, currentQty, quantity, type, reason, note }) => {
+      query: ({ productId, variantId, currentQty, quantity, type, reason, note, warehouseId }) => {
         const delta =
           type === "SET" || type === "INVENTORY_COUNT"
             ? quantity - currentQty
@@ -973,6 +986,8 @@ export const operationsApiSlice = api.injectEndpoints({
             lines: [
               {
                 ...(variantId ? { variantId } : { productId }),
+                // A real warehouse id; anything else means the default warehouse.
+                ...(/^\d+$/.test(String(warehouseId)) ? { warehouseId: String(warehouseId) } : {}),
                 delta,
                 reason: reason ?? (type === "DAMAGE" ? "DAMAGED" : undefined),
                 note: note || undefined,

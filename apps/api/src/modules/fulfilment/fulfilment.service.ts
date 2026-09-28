@@ -15,6 +15,7 @@ import { getPaymentProvider } from "../../services/payments";
 import type { PaymentMethod } from "../../services/payments/types";
 import { OrdersService, STATUS_TRANSITIONS } from "../orders/orders.service";
 import { recordParcelCash } from "../payments/payments.records";
+import { defaultWarehouseId, moveStock, releaseOrderStock, splitBack } from "../stock";
 import {
   RETURN_WINDOW_DAYS,
   canMoveParcel,
@@ -63,26 +64,30 @@ export class FulfilmentService {
     return o;
   }
 
-  /** Puts units back on the shelf inside the caller's transaction. */
-  private async restock(t: T, item: { productId: bigint | null; variantId: bigint | null }, qty: number, reason: string, ref: string) {
+  /** The warehouse an order ships from (older orders: the default one). */
+  private async warehouseOf(t: T, o: { warehouseId: bigint | null }): Promise<bigint> {
+    return o.warehouseId ?? defaultWarehouseId(t, this.storeId);
+  }
+
+  /** Returned goods back on the shelf (they had left in a parcel). */
+  private async receiveBack(t: T, warehouseId: bigint, item: { productId: bigint | null; variantId: bigint | null; productName: string }, qty: number, reason: string, ref: string) {
     if (!item.productId || qty <= 0) return;
-    const target = item.variantId
-      ? await t.productVariant.findFirst({ where: { id: item.variantId, product: { storeId: this.storeId } } })
-      : await t.product.findFirst({ where: { id: item.productId, storeId: this.storeId } });
-    if (!target) return; // deleted since the order
-    if (item.variantId) await t.productVariant.update({ where: { id: item.variantId }, data: { stockQty: { increment: qty } } });
-    else await t.product.update({ where: { id: item.productId }, data: { stockQty: { increment: qty } } });
-    await t.inventoryLog.create({
-      data: {
-        productId: item.productId,
-        variantId: item.variantId,
-        changeQty: qty,
-        reason,
-        referenceId: ref,
-        qtyBefore: target.stockQty ?? 0,
-        qtyAfter: (target.stockQty ?? 0) + qty,
-      },
-    });
+    await moveStock(t, { storeId: this.storeId, warehouseId, sku: { productId: item.productId, variantId: item.variantId }, onHand: qty, reason, ref, label: item.productName });
+  }
+
+  /**
+   * Refunded units coming back into stock: the part still held for the order (never packed) is
+   * released; the rest was sent out and goes back on the shelf.
+   */
+  private async unitsBack(t: T, warehouseId: bigint, item: { id: bigint; productId: bigint | null; variantId: bigint | null; productName: string }, qty: number, reason: string, ref: string) {
+    if (!item.productId || qty <= 0) return;
+    const { qtyReserved } = await t.orderItem.findUniqueOrThrow({ where: { id: item.id }, select: { qtyReserved: true } });
+    const { release, receive } = splitBack(qty, qtyReserved);
+    if (release) {
+      await moveStock(t, { storeId: this.storeId, warehouseId, sku: { productId: item.productId, variantId: item.variantId }, reserved: -release, reason, ref, label: item.productName });
+      await t.orderItem.update({ where: { id: item.id }, data: { qtyReserved: { decrement: release } } });
+    }
+    await this.receiveBack(t, warehouseId, item, receive, reason, ref);
   }
 
   /** Re-derives the order's fulfilment and return status from its parcels and returns. */
@@ -144,11 +149,32 @@ export class FulfilmentService {
     const code = `${o.number}-P${o.shipments.length + 1}`;
 
     const parcel = await tx(async (t: T) => {
+      // Packing takes the units off the shelf of the order's warehouse and ends their hold.
+      const warehouseId = await this.warehouseOf(t, o);
+      for (const l of lines) {
+        const item = o.items.find((i) => i.id === BigInt(l.orderItemId))!;
+        if (!item.productId) continue;
+        const { qtyReserved } = await t.orderItem.findUniqueOrThrow({ where: { id: item.id }, select: { qtyReserved: true } });
+        const held = Math.min(l.quantity, qtyReserved);
+        const moved = await moveStock(t, {
+          storeId: this.storeId,
+          warehouseId,
+          sku: { productId: item.productId, variantId: item.variantId },
+          onHand: -l.quantity,
+          reserved: -held,
+          guard: "onHand",
+          reason: "ORDER_PACKED",
+          ref: code,
+          label: item.productName,
+        });
+        if (moved.applied && held) await t.orderItem.update({ where: { id: item.id }, data: { qtyReserved: { decrement: held } } });
+      }
       const s = await t.shipment.create({
         data: {
           storeId: this.storeId,
           orderId,
           code,
+          warehouseId,
           status: "ready",
           providerCode: dto.courierCode,
           providerName: dto.courierName,
@@ -217,6 +243,29 @@ export class FulfilmentService {
         },
       });
       await t.shipmentEvent.create({ data: { shipmentId: id, status: dto.status, note: dto.note || null, adminId: this.adminId } });
+      // A cancelled parcel is unpacked and a returned one is back: its goods go on the shelf again,
+      // held for the order while it's still open.
+      if (dto.status === "cancelled" || dto.status === "returned") {
+        const order = await t.order.findUniqueOrThrow({ where: { id: s.orderId }, select: { status: true, warehouseId: true } });
+        const open = !["CANCELLED", "REFUNDED", "FAILED"].includes(order.status);
+        const warehouseId = s.warehouseId ?? (await this.warehouseOf(t, order));
+        const items = await t.shipmentItem.findMany({ where: { shipmentId: id }, include: { orderItem: true } });
+        for (const si of items) {
+          const oi = si.orderItem;
+          if (!oi.productId) continue;
+          const moved = await moveStock(t, {
+            storeId: this.storeId,
+            warehouseId,
+            sku: { productId: oi.productId, variantId: oi.variantId },
+            onHand: si.quantity,
+            reserved: open ? si.quantity : 0,
+            reason: dto.status === "cancelled" ? "PARCEL_CANCELLED" : "PARCEL_RETURNED",
+            ref: s.code,
+            label: oi.productName,
+          });
+          if (open && moved.applied) await t.orderItem.update({ where: { id: oi.id }, data: { qtyReserved: { increment: si.quantity } } });
+        }
+      }
       // The courier now holds this parcel's cash until it pays the shop (Cash & couriers).
       if (dto.status === "delivered") await recordParcelCash(t, s);
       return this.recompute(t, s.orderId);
@@ -372,8 +421,8 @@ export class FulfilmentService {
         const skip = new Set((dto.noRestockItemIds ?? []).map(String));
         for (const i of r.items) {
           if (dto.restock === false || skip.has(String(i.orderItemId))) continue;
-          const oi = await t.orderItem.findUniqueOrThrow({ where: { id: i.orderItemId } });
-          await this.restock(t, oi, i.quantity, "RETURN_RECEIVED", r.code ?? String(r.id));
+          const oi = await t.orderItem.findUniqueOrThrow({ where: { id: i.orderItemId }, include: { order: { select: { warehouseId: true } } } });
+          await this.receiveBack(t, await this.warehouseOf(t, oi.order), oi, i.quantity, "RETURN_RECEIVED", r.code ?? String(r.id));
           await t.returnItem.update({ where: { id: i.id }, data: { restocked: true } });
         }
       }
@@ -507,9 +556,11 @@ export class FulfilmentService {
         for (const l of priced.perLine) {
           const qty = l.quantity - Math.min(l.quantity, backAlready.get(l.orderItemId) ?? 0);
           const oi = o.items.find((i) => String(i.id) === l.orderItemId)!;
-          await this.restock(t, oi, qty, "REFUND_RESTOCK", `refund-${rf.id}`);
+          await this.unitsBack(t, await this.warehouseOf(t, o), oi, qty, "REFUND_RESTOCK", `refund-${rf.id}`);
         }
       }
+      // Fully refunded: nothing more ships, so whatever is still held goes back on sale.
+      if (full) await releaseOrderStock(t, this.storeId, orderId, "ORDER_REFUNDED", true);
       if (dto.method === "store_credit") {
         await t.customer.update({ where: { id: o.customerId! }, data: { storeCredit: { increment: priced.amount } } });
       }

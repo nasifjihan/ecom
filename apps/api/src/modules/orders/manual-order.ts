@@ -322,7 +322,7 @@ export class ManualOrderService {
       },
       select: {
         id: true, name: true, sku: true, type: true, regularPrice: true, salePrice: true,
-        stockQty: true, manageStock: true,
+        stockQty: true, reservedStock: true, manageStock: true,
         images: { orderBy: { sortOrder: "asc" }, take: 1, select: { imageUrl: true } },
         _count: { select: { variants: { where: { status: "active" } } } },
       },
@@ -335,7 +335,8 @@ export class ManualOrderService {
       sku: p.sku,
       type: p.type,
       price: Number(p.salePrice ?? p.regularPrice ?? 0) || Number(p.regularPrice ?? 0),
-      stockQty: p.stockQty,
+      // Free to sell: on hand less what open orders hold.
+      stockQty: p.stockQty === null ? null : p.stockQty - p.reservedStock,
       manageStock: p.manageStock,
       variantCount: p._count.variants,
       imageUrl: p.images[0]?.imageUrl ?? null,
@@ -352,7 +353,7 @@ export class ManualOrderService {
       label: Object.values((v.attributeValues as Record<string, string>) ?? {}).join(" / ") || v.sku || `#${v.id}`,
       sku: v.sku,
       price: Number(v.salePrice ?? v.regularPrice ?? 0) || Number(v.regularPrice ?? 0),
-      stockQty: v.stockQty,
+      stockQty: v.stockQty === null ? null : v.stockQty - v.reservedStock,
       manageStock: v.manageStock,
     }));
   }

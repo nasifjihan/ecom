@@ -94,6 +94,7 @@ export interface PurchaseRow {
 export interface PurchaseDetail {
   id: string;
   number: string;
+  warehouse: { name: string; code: string } | null;
   supplier: { id: string; name: string };
   sourcingType: "local" | "import";
   originCountry: string | null;
@@ -135,6 +136,8 @@ export interface PurchaseInput {
   sourceFrom?: string;
   reference?: string;
   purchasedOn: string;
+  /** Warehouse the goods go into; the default one when left out. */
+  warehouseId?: string | null;
   shippingCost?: number;
   customsDuty?: number;
   otherCharges?: number;

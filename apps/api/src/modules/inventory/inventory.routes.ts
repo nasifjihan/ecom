@@ -3,7 +3,6 @@ import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { inventoryController } from "./inventory.controller";
 import {
   StockAdjustmentDto,
-  StockTransferDto,
   MovementQueryDto,
   LowStockReportDto,
   VariantIdParamDto,
@@ -25,14 +24,6 @@ adminInventoryRouter.post(
   rbacMiddleware("inventory.edit"),
   validate({ body: StockAdjustmentDto }),
   inventoryController.adjustStock,
-);
-
-adminInventoryRouter.post(
-  "/transfer",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.edit"),
-  validate({ body: StockTransferDto }),
-  inventoryController.transferStock,
 );
 
 adminInventoryRouter.get(

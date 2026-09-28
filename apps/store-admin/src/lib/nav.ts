@@ -4,9 +4,11 @@
  */
 import {
   Activity,
+  ArrowLeftRight,
   Award,
   Banknote,
   BarChart3,
+  Boxes,
   CreditCard,
   Factory,
   FileText,
@@ -90,7 +92,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/catalog/brands", label: "Brands", icon: Award, perm: "categories.view" },
       { href: "/catalog/attributes", label: "Attributes", icon: SlidersHorizontal, perm: "attributes.view" },
       { href: "/catalog/media", label: "Media", icon: Image, perm: "media.view" },
-      { href: "/inventory", label: "Stock", icon: Warehouse, perm: "inventory.view" },
+      { href: "/inventory", label: "Stock", icon: Boxes, perm: "inventory.view" },
+      { href: "/inventory/warehouses", label: "Warehouses", icon: Warehouse, perm: "inventory.view" },
+      { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "inventory.view" },
     ],
   },
   {

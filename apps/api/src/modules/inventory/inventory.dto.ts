@@ -18,7 +18,8 @@ export const StockAdjustLineDto = z.object({
   productId: z.coerce.bigint().positive().optional(),
   delta: z.number().int(),
   reason: z.string().max(100).optional().refine(noXss, noXssMessage),
-  warehouse: z.string().max(100).optional(),
+  /** Warehouse whose shelf changes; the default warehouse when left out. */
+  warehouseId: z.coerce.bigint().positive().optional(),
   note: z.string().max(500).optional().refine(noXss, noXssMessage),
 });
 export type StockAdjustLineDto = z.infer<typeof StockAdjustLineDto>;
@@ -41,31 +42,6 @@ export const StockAdjustmentDto = BaseStockAdjustmentDto.superRefine((v, ctx) =>
   });
 });
 export type StockAdjustmentDto = z.infer<typeof StockAdjustmentDto>;
-
-const BaseStockTransferDto = z.object({
-  originWarehouse: z.string().min(1).max(100),
-  destWarehouse: z.string().min(1).max(100),
-  lines: z.array(StockAdjustLineDto).min(1),
-});
-export const StockTransferDto = BaseStockTransferDto.superRefine((v, ctx) => {
-  if (v.originWarehouse === v.destWarehouse) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "originWarehouse must differ from destWarehouse",
-      path: ["destWarehouse"],
-    });
-  }
-  v.lines.forEach((line, idx) => {
-    if (line.delta === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "delta must not be zero",
-        path: ["lines", idx, "delta"],
-      });
-    }
-  });
-});
-export type StockTransferDto = z.infer<typeof StockTransferDto>;
 
 export const StockListQueryDto = PaginationSchema.extend({
   lowStock: z.enum(["true", "false"]).transform((v) => v === "true").optional(),

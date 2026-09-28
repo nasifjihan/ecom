@@ -74,6 +74,8 @@ export const PurchaseDto = z.object({
   sourceFrom: text(120).nullish(),
   reference: text(100).nullish(),
   purchasedOn: date,
+  /** Warehouse the goods go into; the default one when left out. */
+  warehouseId: z.coerce.bigint().positive().nullish(),
   shippingCost: money.optional(),
   customsDuty: money.optional(),
   otherCharges: money.optional(),

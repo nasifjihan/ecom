@@ -6,6 +6,7 @@
 import { Prisma } from "@prisma/client"
 import { prisma, tx } from "../../config"
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
+import { defaultWarehouseId, moveStock } from "../stock"
 import {
   averageCost,
   payNowFor,
@@ -43,6 +44,7 @@ export interface PurchaseInput {
   sourceFrom?: string | null
   reference?: string | null
   purchasedOn: Date
+  warehouseId?: bigint | null
   shippingCost?: number
   customsDuty?: number
   otherCharges?: number
@@ -772,6 +774,7 @@ export class PurchasingService {
       where: { id, storeId: this.storeId },
       include: {
         supplier: { select: { id: true, name: true } },
+        warehouse: { select: { name: true, code: true } },
         items: { orderBy: { id: "asc" } },
         payments: {
           include: { account: { select: { name: true } }, purchase: { select: { number: true } } },
@@ -784,6 +787,7 @@ export class PurchasingService {
       id: String(p.id),
       number: p.number,
       supplier: { id: String(p.supplier.id), name: p.supplier.name },
+      warehouse: p.warehouse,
       sourcingType: p.sourcingType,
       originCountry: p.originCountry,
       sourceFrom: p.sourceFrom,
@@ -884,9 +888,19 @@ export class PurchasingService {
 
     const id = await tx(async (t: T) => {
       const number = await this.nextNumber(t)
+      let warehouseId = await defaultWarehouseId(t, this.storeId)
+      if (d.warehouseId) {
+        const w = await t.warehouse.findFirst({
+          where: { id: d.warehouseId, storeId: this.storeId, isActive: true },
+          select: { id: true },
+        })
+        if (!w) throw new BadRequestError("Choose a warehouse that's in use", "VALIDATION_FAILED")
+        warehouseId = w.id
+      }
       const purchase = await t.purchase.create({
         data: {
           storeId: this.storeId,
+          warehouseId,
           number,
           supplierId: d.supplierId,
           sourcingType: d.sourcingType,
@@ -939,20 +953,17 @@ export class PurchasingService {
           l.qty,
           l.landed,
         )
-        const data = { stockQty: { increment: l.qty }, costPrice: cost }
+        const data = { costPrice: cost }
         if (l.variant) await t.productVariant.update({ where: { id: l.variant.id }, data })
         else await t.product.update({ where: { id: l.productId }, data })
-        await t.inventoryLog.create({
-          data: {
-            productId: l.productId,
-            variantId: l.variant?.id ?? null,
-            changeQty: l.qty,
-            reason: "PURCHASE",
-            referenceId: number,
-            note: `${supplier.name}${d.reference ? ` · ${d.reference}` : ""}`,
-            qtyBefore: before,
-            qtyAfter: before + l.qty,
-          },
+        await moveStock(t, {
+          storeId: this.storeId,
+          warehouseId,
+          sku: { productId: l.productId, variantId: l.variant?.id ?? null },
+          onHand: l.qty,
+          reason: "PURCHASE",
+          ref: number,
+          note: `${supplier.name}${d.reference ? ` · ${d.reference}` : ""}`,
         })
       }
 
@@ -986,40 +997,27 @@ export class PurchasingService {
       if (!p) throw new NotFoundError("Purchase")
       if (p.status === "cancelled")
         throw new BadRequestError("This purchase is already cancelled", "VALIDATION_FAILED")
+      const warehouseId = p.warehouseId ?? (await defaultWarehouseId(t, this.storeId))
       for (const i of p.items) {
-        const where = { id: i.variantId ?? i.productId, stockQty: { gte: i.qty } }
-        const updated = i.variantId
-          ? await t.productVariant.updateMany({ where, data: { stockQty: { decrement: i.qty } } })
-          : await t.product.updateMany({ where, data: { stockQty: { decrement: i.qty } } })
-        if (updated.count === 0)
-          throw new BadRequestError(
-            `Can't cancel: some of "${i.name}" from this purchase has already been sold or moved`,
-            "VALIDATION_FAILED",
-          )
-        const after = i.variantId
-          ? ((
-              await t.productVariant.findUniqueOrThrow({
-                where: { id: i.variantId },
-                select: { stockQty: true },
-              })
-            ).stockQty ?? 0)
-          : ((
-              await t.product.findUniqueOrThrow({
-                where: { id: i.productId },
-                select: { stockQty: true },
-              })
-            ).stockQty ?? 0)
-        await t.inventoryLog.create({
-          data: {
-            productId: i.productId,
-            variantId: i.variantId,
-            changeQty: -i.qty,
+        try {
+          await moveStock(t, {
+            storeId: this.storeId,
+            warehouseId,
+            sku: { productId: i.productId, variantId: i.variantId },
+            onHand: -i.qty,
+            guard: "onHand",
             reason: "PURCHASE_CANCELLED",
-            referenceId: p.number,
-            qtyBefore: after + i.qty,
-            qtyAfter: after,
-          },
-        })
+            ref: p.number,
+            label: i.name,
+          })
+        } catch (e) {
+          if (e instanceof BadRequestError)
+            throw new BadRequestError(
+              `Can't cancel: some of "${i.name}" from this purchase has already been sold or moved (${e.message.replace(/^"[^"]*": /, "")})`,
+              "VALIDATION_FAILED",
+            )
+          throw e
+        }
       }
       await t.purchase.update({
         where: { id },
