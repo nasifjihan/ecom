@@ -2197,3 +2197,76 @@ Staff can now record the stock they buy. A purchase adds the stock, sets each pr
 - Cancelling a purchase doesn't reverse the cost price change (reversing an average after later sales isn't exact).
 - Sales money isn't posted into accounts automatically yet (COD settlements and gateway payments stay in the Batch 21 screens).
 - Editing a recorded purchase isn't possible: cancel it and record it again.
+
+---
+
+## ✅ BATCH #28 — Reports: sales and gross profit, products, discounts, customers, couriers, returns, tax, stock value (2026-09-28)
+A new **Reports** section answers what owners ask most: how much did we sell, what did we make, which products and coupons earned it, which couriers bring parcels back, how much COD is still out, and what the stock is worth. Every table downloads as CSV.
+
+### 28.1 Permission and data (migration `reports`)
+- **New permission `reports.view`.** Reports show cost prices and profit, so this is separate from the dashboard.
+  - Granted to the finance, reports and viewer roles.
+  - Also granted to custom roles that can already see purchasing, since they see costs anyway.
+  - The owner has everything.
+- **Past order lines:** lines sold before Batch 27 had no cost, so the migration filled them from today's cost price (the option's, else the product's). New orders keep the cost from the time of sale.
+
+### 28.2 Rules (`reports.rules.ts`, 37 table tests)
+- **Dates are shop calendar days** in the store's time zone (settings; default Asia/Dhaka, and a mistyped zone falls back to it).
+  - "From" and "to" are both included, and turn into a UTC range for the queries.
+  - With no dates, the range is the last 30 days. Ranges longer than 3 years, reversed dates and impossible dates are refused.
+- **Charts group by** day (up to 2 months), week starting Monday (up to 6 months), or month. Every period gets a row, so gaps show as zero.
+- **Comparison:** the previous period of the same length.
+- **Net sales** = items − discounts − refunds. Delivery charges and tax are not the shop's income.
+- **Gross profit** = net sales − the cost of the units kept (sold − restocked by a refund), at their cost when sold.
+- **Cost coverage** is the share of units sold that had a cost. Below 100% the pages warn that profit is shown too high.
+- **Which orders:** "all placed" means everything except cancelled and failed; "delivered only" means delivered and completed.
+
+### 28.3 API (`/api/admin/reports`, all read-only SQL)
+- **`/sales`:** totals with % change vs the previous period, a series by period, and breakdowns by order source and by payment method.
+- **`/products`:** per product: orders, units, units returned, net sales (after line discounts and line refunds), cost of goods, gross profit, margin, cost coverage. Sort by net sales, units or profit. Also totals per main category.
+- **`/discounts`:**
+  - totals for coupons, automatic promotions and staff discounts;
+  - per coupon: orders, discount given, sales, average order, sales per ৳1 off, and customers whose first order used it;
+  - per promotion, read from what each order recorded.
+- **`/customers`:** customers who ordered (new vs returning), repeat rate, guest orders, the top 50 customers, and orders by district.
+- **`/couriers`:**
+  - per courier: parcels, delivered, returned or failed, still on the way, delivered %, average days to deliver, COD delivered, courier fees, payouts and unresolved shortfall;
+  - COD status totals, including what's still with couriers or staff.
+- **`/returns`:** refunds by method and reason, returns by status and reason, most-refunded products, and the return rate against orders placed.
+- **`/tax`:** tax per day or month, with sales and delivery charged.
+- **`/stock`:** stock on hand at cost and at selling price, per category and per product (options use their own cost and price), with units that have no cost counted.
+- **Counting dates:** orders count on the day they were placed, and a refund counts against its order's day, so a past period's profit doesn't change when a refund comes in later. The returns report lists refunds by the day they were given.
+
+### 28.4 Store admin
+- **Reports** in the Overview menu, with tabs: Sales & profit, Products, Coupons & promotions, Customers, Couriers & COD, Returns & refunds, Tax, Stock value.
+- **Date bar:** Today, 7 days, 30 days, This month, Last month, This year, or custom dates, plus "All placed orders" / "Delivered orders only".
+  - The choice is kept in the URL, so switching tabs keeps it and a report can be reloaded or shared.
+- **Sales & profit:**
+  - 8 summary tiles, with changes vs the previous period;
+  - a line chart of net sales and gross profit, with a hover tooltip showing both values, orders and margin;
+  - tables by source, by payment method and by period.
+  - The two chart colours passed the colour-blindness and contrast checks, with separate steps for dark mode.
+- **Warnings and CSV:** a warning appears when some units sold had no cost price. Every table has **CSV**: a UTF-8 file with a BOM so Excel shows ৳ and Bangla, named with the date range.
+
+### 28.5 Checked
+- **Tests:** 411/411 API tests, including 37 new report tests (time zones, including daylight saving; ranges; weeks and months across year ends; profit maths).
+  - The same 2 unhandled errors from the old batch-9 smoke test remain; they were there before this batch.
+- **By API:**
+  - every report ran on the dev data;
+  - sales totals and cost of goods matched a hand-written SQL query exactly (36 orders, ৳220,610 items, ৳23,531.41 cost);
+  - reversed and impossible dates were refused, "delivered only" cut the orders to 5, and a request without sign-in got 401.
+- **Chromium:**
+  - opened Reports from the menu and chose "This year" (the URL updated);
+  - the chart tooltip showed;
+  - downloaded a CSV and checked its header and rows;
+  - opened every tab (the date range carried over) and switched to delivered orders only.
+  - The only error was the admin's missing `favicon.ico`.
+  - Fixed along the way: month labels said "Aug 26" (now "Aug 2026"), and the by-source / by-payment tables were cramped side by side (now stacked unless the screen is very wide).
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The admin apps build.
+
+### 28.6 Not done
+- Reports per storefront (waits for multi-storefront), reports e-mailed on a schedule, and PDF export.
+- VAT-inclusive pricing: tax is still added on top.
+- Refunds don't reduce the tax report.
+- Past lines' costs are today's cost prices (the migration's best guess).
+- At phone width the admin sidebar stays open and the header is wider than the screen, on every admin page. That needs a separate layout fix.

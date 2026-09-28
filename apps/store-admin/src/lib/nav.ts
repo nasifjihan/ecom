@@ -6,6 +6,7 @@ import {
   Activity,
   Award,
   Banknote,
+  BarChart3,
   CreditCard,
   Factory,
   FileText,
@@ -63,7 +64,13 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: NavSection[] = [
-  { title: "Overview", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutGrid, perm: "dashboard.view" }] },
+  {
+    title: "Overview",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, perm: "dashboard.view" },
+      { href: "/reports", label: "Reports", icon: BarChart3, perm: "reports.view" },
+    ],
+  },
   {
     title: "Orders",
     items: [

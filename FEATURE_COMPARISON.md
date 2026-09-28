@@ -132,8 +132,17 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | Feature | Status |
 |---|---|
 | Admin dashboard KPIs | ✅ |
-| Sales with COGS and gross profit | ❌ |
-| By storefront / by source / returns / refunds / inventory valuation / COD / products / couriers / coupon ROI / customers / VAT | ❌ |
+| Sales with COGS and gross profit, vs previous period, chart | ✅ Batch 28: Reports → Sales & profit |
+| By source / payment method | ✅ Batch 28 |
+| Products and categories with cost and profit | ✅ Batch 28 |
+| Coupon ROI and promotions | ✅ Batch 28: discount given, sales, sales per ৳1 off, first orders |
+| Customers: new / returning / repeat, top customers, by area | ✅ Batch 28 |
+| Couriers: delivered / returned rate, days to deliver, COD outstanding, payouts and shortfall | ✅ Batch 28 |
+| Returns and refunds by reason and method | ✅ Batch 28 |
+| Inventory valuation (at cost and at selling price) | ✅ Batch 28 |
+| Tax collected by day / month | ✅ Batch 28 (tax added on top; VAT-inclusive prices still to do) |
+| CSV export of every table | ✅ Batch 28 |
+| By storefront, scheduled e-mailed reports, PDF export | ❌ |
 
 ### Operations (reference 20)
 | Feature | Status | Note |
@@ -209,7 +218,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 25 ✅ | **Custom role editor** + store-admin audit log | Shops hire staff | M |
 | 26 ✅ | **Storefront gaps**: search page + search terms, order tracking, wishlist, flash-sale page, reviews/Q&A submit, low-stock label, product tags + specifications | Customer-facing polish | M |
 | 27 ✅ | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
-| 28 | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
+| 28 ✅ | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
 | 29 | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
