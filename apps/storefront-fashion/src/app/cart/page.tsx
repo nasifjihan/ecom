@@ -32,6 +32,7 @@ import {
   Label,
   useCart,
   useGetProductsQuery,
+  useT,
   cn,
   formatMoney,
   toast,
@@ -45,6 +46,7 @@ function formatBDT(n: number) {
 
 export default function CartPage() {
   const { items, subtotal, itemCount, updateQty, removeItem, clearCart } = useCart();
+  const t = useT();
   const [mounted, setMounted] = React.useState(false);
   const { problems, hasProblems, promotions } = useCartPriceCheck();
   const promoLines = promotionLines(promotions);
@@ -62,14 +64,14 @@ export default function CartPage() {
     <div className="container py-6 md:py-10">
       <div className="mb-8">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 flex items-center gap-2">
-          <ShoppingBag className="h-7 w-7 text-primary" /> Shopping Cart
+          <ShoppingBag className="h-7 w-7 text-primary" /> {t("Shopping Cart")}
         </h1>
         <p className="text-muted-foreground">
           {mounted
             ? itemCount > 0
-              ? `You have ${itemCount} item${itemCount > 1 ? "s" : ""} in your cart`
-              : "Your cart is currently empty"
-            : "Loading cart..."}
+              ? t("You have {n} items in your cart", { n: itemCount })
+              : t("Your cart is currently empty")
+            : t("Loading cart...")}
         </p>
       </div>
 
@@ -99,19 +101,19 @@ export default function CartPage() {
               <div className="h-28 w-28 rounded-full bg-primary/10 flex items-center justify-center mb-6">
                 <ShoppingCart className="h-14 w-14 text-primary/60" />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
+              <h2 className="text-2xl font-bold mb-2">{t("Your cart is empty")}</h2>
               <p className="text-muted-foreground max-w-sm mb-8">
-                Looks like you haven't added anything yet. Explore our fashion catalog to find something you love!
+                {t("Looks like you haven't added anything yet. Explore our catalog to find something you love!")}
               </p>
               <div className="flex flex-wrap items-center gap-3 justify-center">
                 <Button size="lg" asChild>
                   <Link href="/products">
-                    <ShoppingBag className="h-5 w-5 mr-2" /> Start Shopping
+                    <ShoppingBag className="h-5 w-5 mr-2" /> {t("Start Shopping")}
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
                   <Link href="/">
-                    <ArrowLeft className="h-5 w-5 mr-2" /> Back to Home
+                    <ArrowLeft className="h-5 w-5 mr-2" /> {t("Back to Home")}
                   </Link>
                 </Button>
               </div>
@@ -119,7 +121,7 @@ export default function CartPage() {
               <Separator className="my-12 w-48" />
 
               <div className="w-full text-left">
-                <h3 className="font-semibold mb-4">Customers also viewed</h3>
+                <h3 className="font-semibold mb-4">{t("Customers also viewed")}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {crossSell.map((p) => (
                     <Link
@@ -140,12 +142,12 @@ export default function CartPage() {
           ) : (
             <div className="space-y-3">
               <div className="hidden md:grid grid-cols-[120px_1fr_auto] gap-4 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 rounded-t-2xl border border-b-0">
-                <span>Product</span>
+                <span>{t("Product")}</span>
                 <div className="grid grid-cols-[1fr_100px_140px_80px_40px] gap-4">
-                  <span>Details</span>
-                  <span>Unit Price</span>
-                  <span>Quantity</span>
-                  <span className="text-right">Total</span>
+                  <span>{t("Details")}</span>
+                  <span>{t("Unit Price")}</span>
+                  <span>{t("Quantity")}</span>
+                  <span className="text-right">{t("Total")}</span>
                   <span></span>
                 </div>
               </div>
@@ -197,7 +199,7 @@ export default function CartPage() {
                                 else updateQty(item.productId, item.variantId, item.qty - 1);
                               }}
                               className="h-9 w-8 flex items-center justify-center hover:bg-accent transition-colors"
-                              aria-label="Decrease quantity"
+                              aria-label={t("Decrease quantity")}
                             >
                               <Minus className="h-3.5 w-3.5" />
                             </button>
@@ -205,7 +207,7 @@ export default function CartPage() {
                             <button
                               onClick={() => updateQty(item.productId, item.variantId, item.qty + 1)}
                               className="h-9 w-8 flex items-center justify-center hover:bg-accent transition-colors"
-                              aria-label="Increase quantity"
+                              aria-label={t("Increase quantity")}
                             >
                               <Plus className="h-3.5 w-3.5" />
                             </button>
@@ -220,10 +222,10 @@ export default function CartPage() {
                           <button
                             onClick={() => {
                               removeItem(item.productId, item.variantId);
-                              toast.info("Item removed from cart");
+                              toast.info(t("Item removed from cart"));
                             }}
                             className="p-2 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
-                            aria-label="Remove item"
+                            aria-label={t("Remove item")}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -237,27 +239,27 @@ export default function CartPage() {
               <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 p-4 border rounded-2xl bg-muted/20">
                 <div className="flex items-center gap-2 text-sm">
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  <span className="text-muted-foreground">Shipping and taxes calculated at checkout.</span>
+                  <span className="text-muted-foreground">{t("Shipping and taxes calculated at checkout.")}</span>
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" asChild>
                     <Link href="/products">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Continue Shopping
+                      <ArrowLeft className="h-4 w-4 mr-2" /> {t("Continue Shopping")}
                     </Link>
                   </Button>
                   <Button
                     variant="ghost"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => { clearCart(); toast.info("Cart cleared"); }}
+                    onClick={() => { clearCart(); toast.info(t("Cart cleared")); }}
                   >
-                    <Trash2 className="h-4 w-4 mr-2" /> Clear Cart
+                    <Trash2 className="h-4 w-4 mr-2" /> {t("Clear Cart")}
                   </Button>
                 </div>
               </div>
 
               <div className="p-5 rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-secondary/5">
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <Gift className="h-4 w-4 text-secondary" /> You May Also Like
+                  <Gift className="h-4 w-4 text-secondary" /> {t("You May Also Like")}
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
                   {crossSell.map((p) => (
@@ -283,15 +285,15 @@ export default function CartPage() {
           <Card className="lg:sticky lg:top-24 shadow-soft">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
-                <ShoppingBag className="h-5 w-5 text-primary" /> Order Summary
+                <ShoppingBag className="h-5 w-5 text-primary" /> {t("Order Summary")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground flex items-center gap-2">
-                    Subtotal
-                    <Badge variant="secondary" className="text-[10px] px-1.5">{itemCount} items</Badge>
+                    {t("Subtotal")}
+                    <Badge variant="secondary" className="text-[10px] px-1.5">{t("{n} items", { n: itemCount })}</Badge>
                   </span>
                   <span className="font-medium">{formatBDT(subtotal)}</span>
                 </div>
@@ -306,7 +308,7 @@ export default function CartPage() {
                 <CartPromotionSummary promotions={promotions} />
 
                 <p className="text-xs text-muted-foreground pt-2 border-t">
-                  Delivery charge, VAT and promo codes are calculated at checkout from your address.
+                  {t("Delivery charge, VAT and promo codes are calculated at checkout from your address.")}
                 </p>
               </div>
 
@@ -314,10 +316,10 @@ export default function CartPage() {
 
               <div className="bg-muted/30 rounded-xl p-4 flex flex-col gap-2">
                 <div className="flex justify-between items-baseline">
-                  <span className="font-semibold text-sm">{promoLines.length ? "After offers" : "Subtotal"}</span>
+                  <span className="font-semibold text-sm">{promoLines.length ? t("After offers") : t("Subtotal")}</span>
                   <div className="text-right">
                     <div className="text-2xl font-black text-primary">{formatBDT(afterOffers)}</div>
-                    <div className="text-[11px] text-muted-foreground">Before delivery and VAT</div>
+                    <div className="text-[11px] text-muted-foreground">{t("Before delivery and VAT")}</div>
                   </div>
                 </div>
               </div>
@@ -328,7 +330,7 @@ export default function CartPage() {
                 {hasProblems && (
                   <p className="flex items-start gap-1.5 text-xs font-medium text-destructive">
                     <AlertTriangle className="h-3.5 w-3.5 mt-px flex-shrink-0" />
-                    Some items can&apos;t be ordered as they are. Change or remove them to continue.
+                    {t("Some items can't be ordered as they are. Change or remove them to continue.")}
                   </p>
                 )}
                 <Button
@@ -340,12 +342,12 @@ export default function CartPage() {
                     window.location.href = "/checkout";
                   }}
                 >
-                  Proceed to Checkout
+                  {t("Proceed to Checkout")}
                   <ArrowRight className="h-5 w-5 ml-2" />
                 </Button>
                 <Button variant="outline" className="w-full" asChild>
                   <Link href="/products">
-                    <ArrowLeft className="h-4 w-4 mr-2" /> Continue Shopping
+                    <ArrowLeft className="h-4 w-4 mr-2" /> {t("Continue Shopping")}
                   </Link>
                 </Button>
               </div>
@@ -353,18 +355,18 @@ export default function CartPage() {
               <div className="grid grid-cols-3 gap-2 pt-2">
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Truck className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">Nationwide</span>
-                  <span className="text-[9px] text-muted-foreground">Delivery</span>
+                  <span className="text-[10px] font-semibold">{t("Nationwide")}</span>
+                  <span className="text-[9px] text-muted-foreground">{t("Delivery")}</span>
                 </div>
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Shield className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">Secure</span>
+                  <span className="text-[10px] font-semibold">{t("Secure")}</span>
                   <span className="text-[9px] text-muted-foreground">100%</span>
                 </div>
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Gift className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">COD</span>
-                  <span className="text-[9px] text-muted-foreground">Available</span>
+                  <span className="text-[10px] font-semibold">{t("COD")}</span>
+                  <span className="text-[9px] text-muted-foreground">{t("Available")}</span>
                 </div>
               </div>
             </CardContent>

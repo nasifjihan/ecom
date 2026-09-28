@@ -4,7 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Heart } from "lucide-react";
-import { Button, ProductGrid, useGetProductsQuery } from "@ecom/storefront-base";
+import { Button, ProductGrid, useGetProductsQuery, useT } from "@ecom/storefront-base";
 import { useWishlist, useWishlistProductsQuery } from "@/lib/engagement";
 import { useProductGridActions } from "../_components/product-actions";
 
@@ -13,6 +13,7 @@ export default function WishlistPage() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const actions = useProductGridActions();
+  const t = useT();
   const mine = useWishlistProductsQuery(undefined, { skip: !wishlist.signedIn });
   const guestIds = wishlist.guestIds;
   const guest = useGetProductsQuery({ ids: guestIds.join(","), perPage: 60 }, { skip: wishlist.signedIn || !guestIds.length });
@@ -26,10 +27,10 @@ export default function WishlistPage() {
     <div className="container space-y-6 py-6 md:py-10">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
-          <Heart className="h-7 w-7 text-primary" /> Wishlist
+          <Heart className="h-7 w-7 text-primary" /> {t("Wishlist")}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          {wishlist.signedIn ? "Saved on your account." : "Saved in this browser. Log in to keep them on your account."}
+          {wishlist.signedIn ? t("Saved on your account.") : t("Saved in this browser. Log in to keep them on your account.")}
         </p>
       </div>
       {loading ? (
@@ -38,18 +39,18 @@ export default function WishlistPage() {
         <ProductGrid products={products} cols={4} {...actions} />
       ) : (
         <div className="rounded-2xl border p-10 text-center">
-          <p className="mb-4 text-muted-foreground">Nothing saved yet. Tap the heart on any product to keep it here.</p>
+          <p className="mb-4 text-muted-foreground">{t("Nothing saved yet. Tap the heart on any product to keep it here.")}</p>
           <Button asChild>
-            <Link href="/products">Browse products</Link>
+            <Link href="/products">{t("Browse products")}</Link>
           </Button>
         </div>
       )}
       {!wishlist.signedIn && products.length > 0 && (
         <p className="text-sm text-muted-foreground">
           <Link href="/account/login?next=/wishlist" className="font-medium text-primary hover:underline">
-            Log in
+            {t("Log in")}
           </Link>{" "}
-          to save these to your account.
+          {t("to save these to your account.")}
         </p>
       )}
     </div>

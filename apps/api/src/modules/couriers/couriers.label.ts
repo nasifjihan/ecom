@@ -7,7 +7,7 @@ import PDFDocument from "pdfkit"
 import { prisma } from "../../config"
 import { NotFoundError } from "../../core"
 import { storeBrand } from "../content/store-details"
-import { pdfText } from "../invoices/invoice.pdf"
+import { FONT, pdfText, useFonts } from "../invoices/pdf-fonts"
 import { code128 } from "./couriers.rules"
 
 const W = 288 // 4 in
@@ -17,7 +17,7 @@ const INK = "#111827"
 const MUTED = "#4b5563"
 
 const money = (n: number) =>
-  `Tk ${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  `৳${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
 function barcode(
   doc: PDFKit.PDFDocument,
@@ -77,6 +77,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
   doc.on("data", (c: Buffer) => chunks.push(c))
   const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))))
 
+  await useFonts(doc)
   for (const p of parcels) {
     const o = p.order
     doc.addPage({ size: [W, H], margin: 0 })
@@ -84,13 +85,13 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
 
     // Shop
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(11)
       .fillColor(INK)
       .text(pdfText(brand.storeName), M, y, { width: W - 2 * M, lineBreak: false, ellipsis: true })
     y += 13
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(7.5)
       .fillColor(MUTED)
       .text(pdfText([brand.phone, brand.address].filter(Boolean).join(" · ")), M, y, {
@@ -110,7 +111,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
     // Courier and cash
     const cod = Number(p.codAmount)
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(16)
       .fillColor(INK)
       .text(pdfText(p.providerName || "Delivery"), M, y, {
@@ -125,12 +126,12 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       .strokeColor(INK)
       .stroke()
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(7)
       .fillColor(MUTED)
       .text(cod > 0 ? "COLLECT" : "PAYMENT", W - M - boxW, y, { width: boxW, align: "center" })
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(12)
       .fillColor(INK)
       .text(cod > 0 ? money(cod) : "PAID - NO CASH", W - M - boxW, y + 9, {
@@ -144,14 +145,14 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
     barcode(doc, code, M + 10, y, W - 2 * M - 20, 46)
     y += 50
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(10)
       .fillColor(INK)
       .text(pdfText(code), M, y, { width: W - 2 * M, align: "center" })
     y += 13
     if (p.consignmentId && p.consignmentId !== code) {
       doc
-        .font("Helvetica")
+        .font(FONT.regular)
         .fontSize(7.5)
         .fillColor(MUTED)
         .text(pdfText(`Consignment ${p.consignmentId}`), M, y, {
@@ -176,10 +177,10 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
     ]
       .filter(Boolean)
       .join(" ")
-    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text("DELIVER TO", M, y)
+    doc.font(FONT.regular).fontSize(7.5).fillColor(MUTED).text("DELIVER TO", M, y)
     y += 10
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(13)
       .fillColor(INK)
       .text(pdfText(name || "Customer"), M, y, {
@@ -189,7 +190,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       })
     y += 16
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(12)
       .text(pdfText(o.shippingPhone ?? o.billingPhone ?? ""), M, y)
     y += 16
@@ -201,7 +202,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       .filter(Boolean)
       .join("\n")
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(10)
       .fillColor(INK)
       .text(pdfText(address), M, y, { width: W - 2 * M, height: 52, ellipsis: true })
@@ -216,13 +217,13 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
 
     // Order and items
     doc
-      .font("Helvetica-Bold")
+      .font(FONT.bold)
       .fontSize(9)
       .fillColor(INK)
       .text(pdfText(`Order ${o.number}`), M, y, { width: W - 2 * M, lineBreak: false })
     y += 11
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(7.5)
       .fillColor(MUTED)
       .text(pdfText(`Parcel ${p.code} · ${o.createdAt.toISOString().slice(0, 10)}`), M, y, {
@@ -238,7 +239,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       return `${i.quantity} x ${i.orderItem.productName}${v}`
     })
     const shown = lines.slice(0, 6)
-    doc.font("Helvetica").fontSize(8).fillColor(INK)
+    doc.font(FONT.regular).fontSize(8).fillColor(INK)
     for (const l of shown) {
       doc.text(pdfText(l), M, y, { width: W - 2 * M, lineBreak: false, ellipsis: true })
       y += 10
@@ -247,7 +248,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       doc.fillColor(MUTED).text(`+ ${lines.length - shown.length} more`, M, y)
     const weight = p.weightKg ? `${Number(p.weightKg)} kg` : ""
     doc
-      .font("Helvetica")
+      .font(FONT.regular)
       .fontSize(7)
       .fillColor(MUTED)
       .text(pdfText([weight, p.notes].filter(Boolean).join(" · ")), M, H - M - 9, {

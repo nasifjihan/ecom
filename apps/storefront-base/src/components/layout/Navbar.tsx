@@ -33,6 +33,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui";
 import { cn } from "@ecom/utils";
+import { LanguageSwitcher, useT } from "../../i18n/provider";
 
 export type MenuLink = {
   label: string;
@@ -83,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onCartClick,
   onWishlistClick,
   className,
-  searchPlaceholder = "Search products...",
+  searchPlaceholder,
   searchSlot,
   account = null,
   onLogout,
@@ -92,6 +93,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [openCategory, setOpenCategory] = React.useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+  const t = useT();
+  const placeholder = searchPlaceholder ?? t("Search products...");
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -114,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               className="lg:hidden p-2 -ml-2 rounded-md hover:bg-accent"
               onClick={() => setMobileOpen(true)}
-              aria-label="Open menu"
+              aria-label={t("Open menu")}
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -190,7 +193,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={searchPlaceholder}
+                placeholder={placeholder}
                 className="pl-10 pr-4 w-full"
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
@@ -206,14 +209,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="ml-auto flex items-center gap-1">
-            <Link href="/search" className="p-2 rounded-md hover:bg-accent md:hidden" aria-label="Search">
+            <LanguageSwitcher />
+            <Link href="/search" className="p-2 rounded-md hover:bg-accent md:hidden" aria-label={t("Search")}>
               <Search className="h-5 w-5" />
             </Link>
 
             <button
               className="p-2 rounded-md hover:bg-accent relative"
               onClick={onWishlistClick}
-              aria-label="Wishlist"
+              aria-label={t("Wishlist")}
             >
               <Heart className="h-5 w-5" />
               {wishlistCount > 0 && (
@@ -226,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               className="p-2 rounded-md hover:bg-accent relative"
               onClick={onCartClick}
-              aria-label="Cart"
+              aria-label={t("Cart")}
             >
               <ShoppingCart className="h-5 w-5" />
               {cartCount > 0 && (
@@ -238,42 +242,42 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
               <DropdownMenuTrigger onClick={() => setUserMenuOpen(!userMenuOpen)}>
-                <button className="p-2 rounded-md hover:bg-accent" aria-label="Account">
+                <button className="p-2 rounded-md hover:bg-accent" aria-label={t("Account")}>
                   <User className="h-5 w-5" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent open={userMenuOpen}>
-                <DropdownMenuLabel>{account ? account.name : "My Account"}</DropdownMenuLabel>
+                <DropdownMenuLabel>{account ? account.name : t("My Account")}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {account ? (
                   <>
                     <DropdownMenuItem onClick={() => (window.location.href = "/account")}>
                       <User className="h-4 w-4 mr-2" />
-                      My Account
+                      {t("My Account")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => (window.location.href = "/account/orders")}>
                       <Package className="h-4 w-4 mr-2" />
-                      Orders
+                      {t("Orders")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => (window.location.href = "/account/addresses")}>
                       <Settings className="h-4 w-4 mr-2" />
-                      Addresses
+                      {t("Addresses")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => { setUserMenuOpen(false); onLogout?.(); }}>
                       <LogOut className="h-4 w-4 mr-2" />
-                      Log Out
+                      {t("Log Out")}
                     </DropdownMenuItem>
                   </>
                 ) : (
                   <>
                     <DropdownMenuItem onClick={() => (window.location.href = "/account/login")}>
                       <LogIn className="h-4 w-4 mr-2" />
-                      Log In
+                      {t("Log In")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => (window.location.href = "/account/register")}>
                       <UserCircle className="h-4 w-4 mr-2" />
-                      Sign Up
+                      {t("Sign Up")}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -286,8 +290,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent className="w-full sm:w-80 !left-0 !right-auto border-r">
           <SheetHeader className="flex flex-row items-center justify-between">
-            <SheetTitle>Menu</SheetTitle>
-            <button onClick={() => setMobileOpen(false)} className="p-2 rounded-md hover:bg-accent" aria-label="Close menu">
+            <SheetTitle>{t("Menu")}</SheetTitle>
+            <button onClick={() => setMobileOpen(false)} className="p-2 rounded-md hover:bg-accent" aria-label={t("Close menu")}>
               <X className="h-5 w-5" />
             </button>
           </SheetHeader>
@@ -295,7 +299,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={searchPlaceholder}
+                placeholder={placeholder}
                 className="pl-10"
                 enterKeyHint="search"
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -352,22 +356,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </nav>
           <div className="mt-6 space-y-2">
+            <LanguageSwitcher className="w-full rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent" />
             {account ? (
               <>
                 <Button variant="outline" className="w-full" onClick={() => (window.location.href = "/account")}>
-                  <User className="h-4 w-4 mr-2" /> My Account
+                  <User className="h-4 w-4 mr-2" /> {t("My Account")}
                 </Button>
                 <Button variant="ghost" className="w-full" onClick={() => { setMobileOpen(false); onLogout?.(); }}>
-                  <LogOut className="h-4 w-4 mr-2" /> Log Out
+                  <LogOut className="h-4 w-4 mr-2" /> {t("Log Out")}
                 </Button>
               </>
             ) : (
               <>
                 <Button variant="outline" className="w-full" onClick={() => (window.location.href = "/account/login")}>
-                  <LogIn className="h-4 w-4 mr-2" /> Log In
+                  <LogIn className="h-4 w-4 mr-2" /> {t("Log In")}
                 </Button>
                 <Button className="w-full" onClick={() => (window.location.href = "/account/register")}>
-                  <UserCircle className="h-4 w-4 mr-2" /> Create Account
+                  <UserCircle className="h-4 w-4 mr-2" /> {t("Create Account")}
                 </Button>
               </>
             )}

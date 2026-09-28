@@ -21,8 +21,6 @@ import {
   RotateCcw,
   Star,
   CheckCircle2,
-  MessageSquare,
-  Send,
   Zap,
 } from "lucide-react";
 import {
@@ -34,7 +32,6 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-  Input,
   Label,
   Select,
   SelectItem,
@@ -42,6 +39,8 @@ import {
   ProductCardData,
   Skeleton,
   useCart,
+  useT,
+  msg,
   useGetProductBySlugQuery,
   useGetProductsQuery,
   type ProductDetail,
@@ -67,10 +66,11 @@ function swatch(color: string): string {
 /** Flash-sale strip with a live countdown. Rendered after mount so server and browser clocks can't disagree. */
 function FlashSaleStrip({ sale }: { sale: NonNullable<ProductDetail["flashSale"]> }) {
   const [now, setNow] = React.useState<number | null>(null);
+  const t = useT();
   React.useEffect(() => {
     setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
   const left = now === null ? null : Math.max(0, new Date(sale.endsAt).getTime() - now);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -89,10 +89,10 @@ function FlashSaleStrip({ sale }: { sale: NonNullable<ProductDetail["flashSale"]
         <Zap className="h-4 w-4 fill-current" /> {sale.name}
       </span>
       {left === 0 ? (
-        <span className="text-sm font-medium">This sale has ended</span>
+        <span className="text-sm font-medium">{t("This sale has ended")}</span>
       ) : (
         <span className="flex items-center gap-1.5 text-sm" aria-live="off">
-          Ends in
+          {t("Ends in")}
           <span className="font-mono font-bold tabular-nums">
             {parts ? `${parts.d > 0 ? `${parts.d}d ` : ""}${pad(parts.h)}:${pad(parts.m)}:${pad(parts.s)}` : "--:--:--"}
           </span>
@@ -100,7 +100,7 @@ function FlashSaleStrip({ sale }: { sale: NonNullable<ProductDetail["flashSale"]
       )}
       {sale.remaining !== null && left !== 0 && (
         <span className="ml-auto text-xs font-semibold rounded-full bg-white/20 px-2 py-0.5">
-          Only {sale.remaining} left at this price
+          {t("Only {n} left at this price", { n: sale.remaining })}
         </span>
       )}
     </div>
@@ -122,6 +122,7 @@ export default function ProductDetailClient({ slug }: Props) {
     { categoryId: product?.categoryId, excludeId: product?.id, perPage: 4, sort: "popular" },
     { skip: !product?.categoryId },
   );
+  const t = useT();
 
   if (isLoading) {
     return (
@@ -139,10 +140,10 @@ export default function ProductDetailClient({ slug }: Props) {
   if (isError || !product) {
     return (
       <div className="container py-24 text-center">
-        <h1 className="text-2xl font-bold mb-2">Product not found</h1>
-        <p className="text-muted-foreground mb-6">This product may have been removed or is no longer available.</p>
+        <h1 className="text-2xl font-bold mb-2">{t("Product not found")}</h1>
+        <p className="text-muted-foreground mb-6">{t("This product may have been removed or is no longer available.")}</p>
         <Button asChild>
-          <Link href="/products">Browse all products</Link>
+          <Link href="/products">{t("Browse all products")}</Link>
         </Button>
       </div>
     );
@@ -152,6 +153,7 @@ export default function ProductDetailClient({ slug }: Props) {
 
 function ProductDetailView({ product, related }: { product: ProductDetail; related: ProductCardData[] }) {
   const { addItem } = useCart();
+  const t = useT();
 
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
   const [qty, setQty] = React.useState(1);
@@ -197,11 +199,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
   const handleAddToCart = () => {
     if (hasVariants && !selectedVariant) {
-      toast.error("Choose an option", { description: "Please pick a size/colour that is available" });
+      toast.error(t("Choose an option"), { description: t("Please pick a size/colour that is available") });
       return;
     }
     if (!inStock) {
-      toast.error("Out of stock");
+      toast.error(t("Out of stock"));
       return;
     }
     addItem({
@@ -217,9 +219,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       weightKG: product.weightKG,
       variantLabel: selectedVariant?.label,
     });
-    toast.success("Added to cart", {
+    toast.success(t("Added to cart"), {
       description: `${product.title.slice(0, 40)} × ${qty}`,
-      action: { label: "View Cart", onClick: () => (window.location.href = "/cart") },
+      action: { label: t("View Cart"), onClick: () => (window.location.href = "/cart") },
     });
   };
 
@@ -240,11 +242,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
   return (
     <div className="container py-6 md:py-10">
-      <nav aria-label="Breadcrumb" className="mb-6">
+      <nav aria-label={t("Breadcrumb")} className="mb-6">
         <ol className="flex items-center flex-wrap gap-1 text-sm text-muted-foreground">
           <li className="flex items-center gap-1">
             <Link href="/" className="flex items-center gap-1 hover:text-foreground hover:underline transition-colors">
-              <Home className="h-3.5 w-3.5" /> Home
+              <Home className="h-3.5 w-3.5" /> {t("Home")}
             </Link>
           </li>
           <li className="flex items-center"><ChevronRight className="h-3 w-3 mx-1" /></li>
@@ -286,15 +288,15 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-slate-50">
                 {images.map((img: string, i: number) => (
                   <SwiperSlide key={i}>
-                    <img src={img} alt={`${product.title} — view ${i + 1}`} className="h-full w-full object-cover" />
+                    <img src={img} alt={t("{title} — view {n}", { title: product.title, n: i + 1 })} className="h-full w-full object-cover" />
                   </SwiperSlide>
                 ))}
               </Swiper>
 
               {discountPct > 0 && (
                 <div className="absolute top-4 left-4 flex flex-col gap-1">
-                  <Badge variant="destructive" className="text-xs px-2.5 py-1">-{discountPct}% OFF</Badge>
-                  {product.isNew && <Badge variant="success" className="text-xs px-2.5 py-1">NEW</Badge>}
+                  <Badge variant="destructive" className="text-xs px-2.5 py-1">{t("-{n}% OFF", { n: discountPct })}</Badge>
+                  {product.isNew && <Badge variant="success" className="text-xs px-2.5 py-1">{t("NEW")}</Badge>}
                 </div>
               )}
 
@@ -303,14 +305,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   onClick={toggleWishlist}
                   aria-pressed={wishlisted}
                   className={cn("h-10 w-10 rounded-full shadow-lg flex items-center justify-center transition-colors", wishlisted ? "bg-red-50 text-red-500" : "bg-white hover:bg-red-50 hover:text-red-500 text-slate-600")}
-                  aria-label="Wishlist"
+                  aria-label={t("Wishlist")}
                 >
                   <Heart className={cn("h-5 w-5", wishlisted && "fill-current")} />
                 </button>
                 <button
-                  onClick={() => toast.success("Link copied to clipboard!")}
+                  onClick={() => toast.success(t("Link copied to clipboard!"))}
                   className="h-10 w-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-accent text-slate-600"
-                  aria-label="Share"
+                  aria-label={t("Share")}
                 >
                   <Share2 className="h-5 w-5" />
                 </button>
@@ -320,15 +322,15 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
           <div className="grid grid-cols-3 gap-3 pt-2">
             {[
-              { icon: <Truck className="h-5 w-5" />, title: "Free Delivery", desc: "On orders > ৳1000" },
-              { icon: <RotateCcw className="h-5 w-5" />, title: "7-day Returns", desc: "No questions asked" },
-              { icon: <ShieldCheck className="h-5 w-5" />, title: "Authentic", desc: "100% genuine products" },
+              { icon: <Truck className="h-5 w-5" />, title: msg("Free Delivery"), desc: msg("On orders > ৳1000") },
+              { icon: <RotateCcw className="h-5 w-5" />, title: msg("7-day Returns"), desc: msg("No questions asked") },
+              { icon: <ShieldCheck className="h-5 w-5" />, title: msg("Authentic"), desc: msg("100% genuine products") },
             ].map((f) => (
               <div key={f.title} className="flex items-center gap-2 p-3 rounded-xl bg-card border">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">{f.icon}</div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold leading-tight">{f.title}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight">{f.desc}</div>
+                  <div className="text-xs font-semibold leading-tight">{t(f.title)}</div>
+                  <div className="text-[11px] text-muted-foreground leading-tight">{t(f.desc)}</div>
                 </div>
               </div>
             ))}
@@ -342,10 +344,10 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             </Badge>
             {inStock ? (
               <Badge variant="success" className="gap-1">
-                <CheckCircle2 className="h-3 w-3" /> In Stock
+                <CheckCircle2 className="h-3 w-3" /> {t("In Stock")}
               </Badge>
             ) : (
-              <Badge variant="destructive">Out of Stock</Badge>
+              <Badge variant="destructive">{t("Out of Stock")}</Badge>
             )}
           </div>
 
@@ -359,10 +361,10 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 ))}
               </div>
               <span className="text-sm font-semibold">{averageRating.toFixed(1)}</span>
-              <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({product.reviewCount} reviews)</a>
+              <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({t("{n} reviews", { n: product.reviewCount })})</a>
             </div>
             <span className="text-slate-300">|</span>
-            <span className="text-sm text-muted-foreground">SKU: <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
+            <span className="text-sm text-muted-foreground">{t("SKU:")} <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
           </div>
 
           {flashSale && <FlashSaleStrip sale={flashSale} />}
@@ -372,12 +374,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             {compareAtPrice && (
               <>
                 <span className="text-lg text-muted-foreground line-through">{formatMoney(compareAtPrice)}</span>
-                <Badge variant="destructive" className="text-xs px-2 py-0.5">Save {formatMoney(compareAtPrice - price)}</Badge>
+                <Badge variant="destructive" className="text-xs px-2 py-0.5">{t("Save {amount}", { amount: formatMoney(compareAtPrice - price) })}</Badge>
               </>
             )}
             <div className="ml-auto text-right">
-              <div className="text-xs text-muted-foreground">or 4 installments</div>
-              <div className="text-sm font-semibold">৳{Math.round(price / 4)}/month • bKash Nagad</div>
+              <div className="text-xs text-muted-foreground">{t("or 4 installments")}</div>
+              <div className="text-sm font-semibold">{t("৳{amount}/month • bKash Nagad", { amount: Math.round(price / 4) })}</div>
             </div>
           </div>
 
@@ -387,7 +389,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             {optionAxes.map(([axis, values]) => (
               <div key={axis}>
                 <Label className="text-sm font-semibold mb-2.5 block capitalize">
-                  {axis}: <span className="font-normal text-muted-foreground">{selected[axis] ?? "—"}</span>
+                  {t(axis)}: <span className="font-normal text-muted-foreground">{selected[axis] ?? "—"}</span>
                 </Label>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   {values.map((val) => {
@@ -406,7 +408,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                           isSelected && "ring-2 ring-primary ring-offset-2 scale-110",
                           disabled && "opacity-40",
                         )}
-                        aria-label={`Color ${val}`}
+                        aria-label={t("Color {name}", { name: val })}
                         title={val}
                       >
                         <span className="h-7 w-7 rounded-full border shadow-inner" style={{ backgroundColor: swatch(val) }} />
@@ -430,12 +432,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
             <div className="grid grid-cols-[120px_1fr] gap-3 items-end">
               <div>
-                <Label className="text-sm font-semibold mb-2 block">Quantity</Label>
+                <Label className="text-sm font-semibold mb-2 block">{t("Quantity")}</Label>
                 <div className="flex items-center border rounded-lg overflow-hidden">
                   <button
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                     className="h-11 w-10 flex items-center justify-center hover:bg-accent transition-colors"
-                    aria-label="Decrease quantity"
+                    aria-label={t("Decrease quantity")}
                   >
                     <Minus className="h-4 w-4" />
                   </button>
@@ -443,7 +445,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   <button
                     onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
                     className="h-11 w-10 flex items-center justify-center hover:bg-accent transition-colors"
-                    aria-label="Increase quantity"
+                    aria-label={t("Increase quantity")}
                   >
                     <Plus className="h-4 w-4" />
                   </button>
@@ -451,12 +453,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               </div>
               <div className="text-sm text-muted-foreground">
                 {!inStock ? (
-                  <span className="text-destructive font-medium">Currently out of stock</span>
+                  <span className="text-destructive font-medium">{t("Currently out of stock")}</span>
                 ) : stockLeft !== null && stockLeft <= (product.lowStockThreshold ?? 5) ? (
-                  <span className="font-medium text-amber-600">Hurry, only {stockLeft} left</span>
+                  <span className="font-medium text-amber-600">{t("Hurry, only {n} left", { n: stockLeft })}</span>
                 ) : null}
                 {(product.saleCount ?? 0) >= 10 && (
-                  <span className="ml-2 before:mr-2 before:content-['·'] first:ml-0 first:before:content-none">{product.saleCount}+ sold</span>
+                  <span className="ml-2 before:mr-2 before:content-['·'] first:ml-0 first:before:content-none">{t("{n}+ sold", { n: product.saleCount ?? 0 })}</span>
                 )}
               </div>
             </div>
@@ -464,7 +466,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             <div className="flex flex-wrap gap-3 pt-2">
               <Button size="lg" className="flex-1 min-w-[220px] h-12 text-base shadow-soft" onClick={handleAddToCart} disabled={!inStock}>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                {inStock ? `Add to Cart — ${formatMoney(price * qty)}` : "Out of Stock"}
+                {inStock ? `${t("Add to Cart")} — ${formatMoney(price * qty)}` : t("Out of Stock")}
               </Button>
               <Button
                 size="lg"
@@ -474,16 +476,16 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 className={cn("h-12 min-w-[130px]", wishlisted && "bg-red-50 text-red-500 border-red-200 hover:bg-red-100")}
               >
                 <Heart className={cn("h-5 w-5 mr-2", wishlisted && "fill-current")} />
-                Wishlist
+                {t("Wishlist")}
               </Button>
             </div>
 
             {!!product.tags?.length && (
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-muted-foreground">Tags:</span>
-                {product.tags.map((t) => (
-                  <Link key={t} href={`/products?tag=${encodeURIComponent(t)}`} className="rounded-full border px-2 py-0.5 hover:border-primary hover:text-primary">
-                    {t}
+                <span className="text-muted-foreground">{t("Tags:")}</span>
+                {product.tags.map((tag) => (
+                  <Link key={tag} href={`/products?tag=${encodeURIComponent(tag)}`} className="rounded-full border px-2 py-0.5 hover:border-primary hover:text-primary">
+                    {tag}
                   </Link>
                 ))}
               </div>
@@ -492,11 +494,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             <div className="pt-2 text-xs text-muted-foreground space-y-1.5">
               <div className="flex items-center gap-2">
                 <Truck className="h-3.5 w-3.5 text-primary" />
-                Delivery inside Dhaka: 24-48hrs • Outside: 2-4 days
+                {t("Delivery inside Dhaka: 24-48hrs • Outside: 2-4 days")}
               </div>
               <div className="flex items-center gap-2">
                 <RotateCcw className="h-3.5 w-3.5 text-primary" />
-                Cash on Delivery available nationwide
+                {t("Cash on Delivery available nationwide")}
               </div>
             </div>
           </div>
@@ -509,22 +511,22 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             <div className="border-b px-4 overflow-x-auto">
               <TabsList className="!bg-transparent !p-0 h-auto">
                 <TabsTrigger value="description" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground">
-                  Description
+                  {t("Description")}
                 </TabsTrigger>
                 <TabsTrigger value="specifications" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground">
-                  Specifications
+                  {t("Specifications")}
                 </TabsTrigger>
                 <TabsTrigger value="reviews" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground" id="reviews">
-                  Reviews <span className="ml-1 text-xs">({product.reviewCount})</span>
+                  {t("Reviews")} <span className="ml-1 text-xs">({product.reviewCount})</span>
                 </TabsTrigger>
                 <TabsTrigger value="questions" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground">
-                  Questions <span className="ml-1 text-xs">({product.questions?.length ?? 0})</span>
+                  {t("Questions")} <span className="ml-1 text-xs">({product.questions?.length ?? 0})</span>
                 </TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value="description" className="mt-0 p-6 md:p-8 prose prose-slate max-w-none prose-headings:font-bold prose-p:text-foreground/80 prose-li:text-foreground/80 prose-strong:text-foreground">
-              <pre className="!bg-transparent !p-0 !m-0 whitespace-pre-wrap font-sans text-[15px] leading-7">{product.description ?? product.shortDescription ?? "No description yet."}</pre>
+              <pre className="!bg-transparent !p-0 !m-0 whitespace-pre-wrap font-sans text-[15px] leading-7">{product.description ?? product.shortDescription ?? t("No description yet.")}</pre>
             </TabsContent>
 
             <TabsContent value="specifications" className="mt-0">
@@ -535,7 +537,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                     <div className="px-6 md:px-8 pt-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{row.group}</div>
                   )}
                   <div className="grid grid-cols-[160px_1fr] md:grid-cols-[220px_1fr]">
-                    <div className="px-6 md:px-8 py-3.5 bg-muted/50 text-sm font-medium text-muted-foreground">{row.name}</div>
+                    <div className="px-6 md:px-8 py-3.5 bg-muted/50 text-sm font-medium text-muted-foreground">{t(row.name)}</div>
                     <div className="px-6 md:px-8 py-3.5 text-sm">{row.value}</div>
                   </div>
                   </React.Fragment>
@@ -544,7 +546,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             </TabsContent>
 
             <TabsContent value="reviews" className="mt-0 p-6 md:p-8">
-              <div className="grid lg:grid-cols-[280px_1fr] gap-8 mb-8">
+              <div className="mb-8 max-w-sm">
                 <div className="p-6 border rounded-2xl bg-card">
                   <div className="text-center">
                     <div className="text-5xl font-black mb-1">{averageRating.toFixed(1)}</div>
@@ -553,7 +555,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                         <Star key={i} className={cn("h-5 w-5", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
                       ))}
                     </div>
-                    <div className="text-sm text-muted-foreground">Based on {product.reviewCount} review{product.reviewCount === 1 ? "" : "s"}</div>
+                    <div className="text-sm text-muted-foreground">{t("Based on {n} reviews", { n: product.reviewCount })}</div>
                   </div>
                   <div className="mt-6 space-y-2">
                     {[5, 4, 3, 2, 1].map((star) => {
@@ -572,53 +574,19 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   </div>
                 </div>
 
-                <Card>
-                  <CardContent className="p-5 space-y-3">
-                    <h4 className="font-semibold flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" /> Write a Review</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Your Name</Label>
-                        <Input placeholder="e.g. John Doe" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Your Rating</Label>
-                        <Select defaultValue="5">
-                          <SelectItem value="5">★★★★★ (5 stars)</SelectItem>
-                          <SelectItem value="4">★★★★☆ (4 stars)</SelectItem>
-                          <SelectItem value="3">★★★☆☆ (3 stars)</SelectItem>
-                          <SelectItem value="2">★★☆☆☆ (2 stars)</SelectItem>
-                          <SelectItem value="1">★☆☆☆☆ (1 star)</SelectItem>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Review Title</Label>
-                      <Input placeholder="Summary of your experience" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Your Review</Label>
-                      <textarea className="flex min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y" placeholder="Share your thoughts... (minimum 20 characters)" />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button onClick={() => toast.info("Reviews open to verified buyers once customer accounts ship.")}>
-                        <Send className="h-4 w-4 mr-2" /> Submit Review
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
 
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold">Customer Reviews ({product.reviewCount})</h4>
+                <h4 className="font-semibold">{t("Customer Reviews ({n})", { n: product.reviewCount })}</h4>
                 <Select value={reviewSort} onValueChange={(v: string) => setReviewSort(v as any)}>
-                  <SelectItem value="latest">Latest First</SelectItem>
-                  <SelectItem value="top">Top Rated</SelectItem>
+                  <SelectItem value="latest">{t("Latest First")}</SelectItem>
+                  <SelectItem value="top">{t("Top Rated")}</SelectItem>
                 </Select>
               </div>
 
               <div className="space-y-4">
                 {sortedReviews.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No reviews yet. Be the first to review this product.</p>
+                  <p className="text-sm text-muted-foreground">{t("No reviews yet. Be the first to review this product.")}</p>
                 )}
                 {sortedReviews.map((r) => (
                   <motion.div
@@ -636,7 +604,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-semibold">{r.name}</span>
-                            {r.verified && <Badge variant="success" className="h-5 text-[10px] px-1.5"><CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Verified</Badge>}
+                            {r.verified && <Badge variant="success" className="h-5 text-[10px] px-1.5"><CheckCircle2 className="h-2.5 w-2.5 mr-1" /> {t("Verified")}</Badge>}
                           </div>
                           <div className="text-xs text-muted-foreground">{formatReviewDate(r.date)}</div>
                         </div>
@@ -669,11 +637,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       <section className="mb-16">
         <div className="flex items-end justify-between mb-6 gap-3">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">You May Also Like</h2>
-            <p className="text-muted-foreground mt-1">More from {product.category?.name ?? "this category"}</p>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{t("You May Also Like")}</h2>
+            <p className="text-muted-foreground mt-1">{t("More from {name}", { name: product.category?.name ?? t("this category") })}</p>
           </div>
           <Button variant="ghost" asChild>
-            <Link href="/products">View all <ChevronRight className="h-4 w-4 ml-1" /></Link>
+            <Link href="/products">{t("View all")} <ChevronRight className="h-4 w-4 ml-1" /></Link>
           </Button>
         </div>
         <ProductGrid products={related} />

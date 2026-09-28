@@ -105,6 +105,8 @@ export type MenuDto = z.infer<typeof MenuDto>
 
 const MenuLeaf = z.object({
   title: text(80).min(1),
+  /** The link's text in Bangla (optional). */
+  titleBn: text(80).optional(),
   url: link.refine((v) => v !== "", "Link is required"),
   openInNewTab: z.boolean().default(false),
 })

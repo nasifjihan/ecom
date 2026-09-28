@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, TrendingUp } from "lucide-react";
-import { Button, Input, ProductGrid, useGetProductsQuery } from "@ecom/storefront-base";
+import { Button, Input, ProductGrid, useGetProductsQuery, useT } from "@ecom/storefront-base";
 import { usePopularSearchesQuery } from "@/lib/engagement";
 import { useProductGridActions } from "../_components/product-actions";
 
@@ -24,6 +24,7 @@ export default function SearchPage() {
   const { data, isFetching } = useGetProductsQuery({ search: q, page, perPage: PER_PAGE }, { skip: !q });
   const { data: popular = [] } = usePopularSearchesQuery();
   const actions = useProductGridActions();
+  const t = useT();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,12 +36,12 @@ export default function SearchPage() {
     popular.length ? (
       <div className="space-y-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-          <TrendingUp className="h-4 w-4" /> Popular searches
+          <TrendingUp className="h-4 w-4" /> {t("Popular searches")}
         </p>
         <div className="flex flex-wrap gap-2">
-          {popular.map((t) => (
-            <Link key={t} href={`/search?q=${encodeURIComponent(t)}`} className="rounded-full border px-3 py-1 text-sm hover:border-primary hover:text-primary">
-              {t}
+          {popular.map((term) => (
+            <Link key={term} href={`/search?q=${encodeURIComponent(term)}`} className="rounded-full border px-3 py-1 text-sm hover:border-primary hover:text-primary">
+              {term}
             </Link>
           ))}
         </div>
@@ -55,8 +56,8 @@ export default function SearchPage() {
           autoFocus={!q}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Search products, e.g. panjabi, saree, cotton"
-          aria-label="Search products"
+          placeholder={t("Search products, e.g. panjabi, saree, cotton")}
+          aria-label={t("Search products")}
           enterKeyHint="search"
           className="h-12 pl-11 text-base"
         />
@@ -67,16 +68,16 @@ export default function SearchPage() {
       ) : (
         <>
           <h1 className="text-xl font-bold md:text-2xl">
-            {data ? `${data.total} result${data.total === 1 ? "" : "s"} for “${q}”` : `Searching for “${q}”…`}
+            {data ? t("{n} results for “{q}”", { n: data.total, q }) : t("Searching for “{q}”…", { q })}
           </h1>
           {data?.total === 0 ? (
             <div className="space-y-6 rounded-2xl border p-8 text-center">
-              <p className="text-muted-foreground">Nothing matches “{q}”. Try a shorter word, or one of these:</p>
+              <p className="text-muted-foreground">{t("Nothing matches “{q}”. Try a shorter word, or one of these:", { q })}</p>
               <div className="flex justify-center">
                 <Popular />
               </div>
               <Button asChild variant="outline">
-                <Link href="/products">Browse all products</Link>
+                <Link href="/products">{t("Browse all products")}</Link>
               </Button>
             </div>
           ) : (
@@ -85,13 +86,13 @@ export default function SearchPage() {
           {data && data.totalPages > 1 && (
             <div className="flex items-center justify-center gap-3">
               <Button variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
+                {t("Previous")}
               </Button>
               <span className="text-sm text-muted-foreground">
-                Page {page} of {data.totalPages}
+                {t("Page {page} of {pages}", { page, pages: data.totalPages })}
               </span>
               <Button variant="outline" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
+                {t("Next")}
               </Button>
             </div>
           )}

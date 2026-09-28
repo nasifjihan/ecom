@@ -87,6 +87,32 @@ const ProductSpecifications = z
   )
   .max(60);
 
+
+/** A text in another language; blank or null removes it. */
+const otherText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullable()
+    .optional()
+    .refine((v) => !v || noXss(v), "No JavaScript injection allowed");
+
+/** Texts in other languages: `{ bn: { name: "…" } }`. */
+const nameAndDescription = (descMax: number) =>
+  z
+    .object({ bn: z.object({ name: otherText(255), description: otherText(descMax) }).partial() })
+    .partial()
+    .optional();
+
+const ProductTranslations = z
+  .object({
+    bn: z
+      .object({ name: otherText(255), shortDescription: otherText(500), description: otherText(20000) })
+      .partial(),
+  })
+  .partial()
+  .optional();
+
 const BaseCreateProductDto = z.object({
   type: z.enum(["SIMPLE", "VARIABLE", "DIGITAL", "SUBSCRIPTION", "MADE_TO_ORDER"]).default("SIMPLE"),
   name: z.string().min(2).max(255),
@@ -135,6 +161,7 @@ const BaseCreateProductDto = z.object({
   fulfillmentType: z.string().default("own"),
   tags: ProductTags.default([]),
   specifications: ProductSpecifications.default([]),
+  translations: ProductTranslations,
 });
 export const CreateProductDto = BaseCreateProductDto.superRefine(priceStockRefine);
 export type CreateProductDto = z.infer<typeof CreateProductDto>;
@@ -164,6 +191,7 @@ export const CreateCategoryDto = z.object({
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
   ogImageUrl: z.string().max(500).optional().nullable(),
+  translations: nameAndDescription(5000),
 });
 export type CreateCategoryDto = z.infer<typeof CreateCategoryDto>;
 export const UpdateCategoryDto = CreateCategoryDto.partial();
@@ -187,6 +215,7 @@ export const CreateBrandDto = z.object({
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
   ogImageUrl: z.string().max(500).optional().nullable(),
+  translations: nameAndDescription(5000),
 });
 export type CreateBrandDto = z.infer<typeof CreateBrandDto>;
 export const UpdateBrandDto = CreateBrandDto.partial();

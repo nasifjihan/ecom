@@ -64,6 +64,13 @@ import {
 } from "@/lib/features/catalog/catalog-api-slice";
 import { ProductStatus, ProductType } from "@ecom/shared-types";
 import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
+import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTexts } from "@/components/catalog/bangla-fields";
+
+const BANGLA_FIELDS: BanglaField[] = [
+  { key: "name", label: "Name" },
+  { key: "shortDescription", label: "Short description", rows: 2 },
+  { key: "description", label: "Long description", rows: 6 },
+];
 
 const ProductTypeValues = [
   { value: ProductType.SIMPLE, label: "Simple Product" },
@@ -203,6 +210,7 @@ export default function NewProductPage() {
   const typeValue = watch("type");
   const tags = watch("tagNames") || [];
   const [specs, setSpecs] = useState<SpecRow[]>([]);
+  const [bangla, setBangla] = useState<BanglaTexts>({});
   const relatedIds = watch("relatedProductIds") || [];
 
   useEffect(() => {
@@ -339,6 +347,7 @@ export default function NewProductPage() {
         tags: values.tagNames,
         specifications: cleanSpecs(specs),
         description: values.description || null,
+        translations: banglaPayload(BANGLA_FIELDS, bangla),
         regularPrice: values.regularPrice ?? null,
         salePrice: values.salePrice ?? null,
         costPrice: values.costPrice ?? null,
@@ -547,6 +556,7 @@ export default function NewProductPage() {
                           </FormItem>
                         )}
                       />
+                      <BanglaFields fields={BANGLA_FIELDS} value={bangla} onChange={setBangla} />
                     </CardContent>
                   </Card>
                 </TabsContent>

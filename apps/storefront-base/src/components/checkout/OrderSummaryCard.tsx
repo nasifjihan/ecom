@@ -22,12 +22,12 @@ import {
   Checkbox,
   Label,
   Skeleton,
-  cn,
-  formatMoney,
   useCart,
   CartItem,
 } from "@ecom/storefront-base";
+import { cn, formatMoney } from "@ecom/utils";
 import { CouponApplyInput, CouponAppliedState } from "./CouponApplyInput";
+import { useT } from "../../i18n/provider";
 
 export type OrderSummaryLineItem = {
   id: string;
@@ -80,7 +80,7 @@ export type OrderSummaryCardProps = {
 export function OrderSummaryCard({
   subtotal,
   shippingAmount,
-  shippingLabel = "Standard Shipping",
+  shippingLabel,
   shippingFree = false,
   shippingLoading = false,
   taxAmount = 0,
@@ -98,7 +98,7 @@ export function OrderSummaryCard({
   grandTotal,
   placeOrderDisabled = false,
   placeOrderLoading = false,
-  placeOrderLabel = "Place Order",
+  placeOrderLabel,
   onPlaceOrder,
   termsChecked = false,
   onTermsToggle,
@@ -113,6 +113,7 @@ export function OrderSummaryCard({
   className,
 }: OrderSummaryCardProps) {
   const cart = useCart();
+  const t = useT();
   const displayItems = items ?? cart.items;
   const displayItemCount = itemCount ?? cart.itemCount;
 
@@ -135,7 +136,7 @@ export function OrderSummaryCard({
       <CardHeader className="pb-4">
         <CardTitle className="text-lg flex items-center gap-2">
           <ShoppingBag className="h-5 w-5 text-primary" />
-          Order Summary
+          {t("Order Summary")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -177,7 +178,7 @@ export function OrderSummaryCard({
             })}
             {displayItems.length > 5 && (
               <p className="text-xs text-center text-muted-foreground pt-1">
-                +{displayItems.length - 5} more item{displayItems.length - 5 > 1 ? "s" : ""}
+                {t("+{n} more items", { n: displayItems.length - 5 })}
               </p>
             )}
           </div>
@@ -188,8 +189,7 @@ export function OrderSummaryCard({
             <div className="flex items-start gap-2 mb-2">
               <Gift className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-800">
-                Add <span className="font-bold">{formatMoney(shippingDelta, currency)}</span> more for{" "}
-                <span className="font-bold">FREE Delivery</span>!
+                {t("Add {amount} more for FREE Delivery!", { amount: formatMoney(shippingDelta, currency) })}
               </p>
             </div>
             <div className="h-2 w-full bg-amber-100 rounded-full overflow-hidden">
@@ -204,9 +204,9 @@ export function OrderSummaryCard({
         <div className="space-y-3 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground flex items-center gap-2">
-              Subtotal
+              {t("Subtotal")}
               <Badge variant="secondary" className="text-[10px] px-1.5">
-                {displayItemCount} {displayItemCount === 1 ? "item" : "items"}
+                {displayItemCount === 1 ? t("1 item") : t("{n} items", { n: displayItemCount })}
               </Badge>
             </span>
             <span className="font-medium">{formatMoney(subtotal, currency)}</span>
@@ -215,9 +215,9 @@ export function OrderSummaryCard({
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground flex items-center gap-2">
               <Truck className="h-3.5 w-3.5" />
-              Shipping
+              {t("Shipping")}
               {shippingFree && (
-                <Badge variant="success" className="text-[10px] px-1.5">FREE</Badge>
+                <Badge variant="success" className="text-[10px] px-1.5">{t("FREE")}</Badge>
               )}
             </span>
             {shippingLoading ? (
@@ -235,20 +235,20 @@ export function OrderSummaryCard({
                     ? formatMoney(0, currency)
                     : shippingAmount !== undefined
                       ? formatMoney(shippingAmount, currency)
-                      : "Calculating..."}
+                      : t("Calculating...")}
               </span>
             )}
           </div>
 
           {shippingLabel && !shippingLoading && shippingAmount !== undefined && shippingAmount > 0 && (
             <p className="text-[11px] text-muted-foreground pl-5">
-              {shippingLabel}
+              {shippingLabel ?? t("Standard Shipping")}
             </p>
           )}
 
           {taxLoading ? (
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Taxes & Fees</span>
+              <span className="text-muted-foreground">{t("Taxes & Fees")}</span>
               <Skeleton className="h-5 w-20" />
             </div>
           ) : taxLines.length > 0 ? (
@@ -256,7 +256,7 @@ export function OrderSummaryCard({
               {taxLines.map((line, i) => (
                 <div key={i} className="flex justify-between items-center pl-0">
                   <span className="text-muted-foreground text-xs pl-5">
-                    {line.name}
+                    {t(line.name)}
                     {line.rate !== undefined && <span className="text-[10px] ml-1">({(line.rate * 100).toFixed(0)}%)</span>}
                   </span>
                   <span className="font-medium text-xs">{formatMoney(line.amount, currency)}</span>
@@ -264,7 +264,7 @@ export function OrderSummaryCard({
               ))}
               <div className="flex justify-between items-center pt-1 border-t border-dashed">
                 <span className="text-muted-foreground text-xs flex items-center gap-1">
-                  <Info className="h-3 w-3" /> Total Tax
+                  <Info className="h-3 w-3" /> {t("Total Tax")}
                 </span>
                 <span className="font-semibold text-xs">{formatMoney(taxAmount, currency)}</span>
               </div>
@@ -273,7 +273,7 @@ export function OrderSummaryCard({
             taxAmount > 0 && (
               <div className="flex justify-between items-start">
                 <span className="text-muted-foreground flex flex-col">
-                  <span>VAT / Tax</span>
+                  <span>{t("VAT / Tax")}</span>
                 </span>
                 <span className="font-medium">{formatMoney(taxAmount, currency)}</span>
               </div>
@@ -339,20 +339,20 @@ export function OrderSummaryCard({
 
         <div className="bg-muted/30 rounded-xl p-4 flex flex-col gap-2">
           <div className="flex justify-between items-baseline">
-            <span className="font-semibold text-sm">Grand Total</span>
+            <span className="font-semibold text-sm">{t("Grand Total")}</span>
             <div className="text-right">
               <div className="text-2xl font-black text-primary tracking-tight">
                 {formatMoney(grandTotal, currency)}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                Incl. all taxes & fees
+                {t("Incl. all taxes & fees")}
               </div>
             </div>
           </div>
           {totalDiscount > 0 && (
             <div className="text-xs text-green-600 font-semibold flex items-center gap-1 pt-1">
               <Gift className="h-3.5 w-3.5" />
-              You're saving {formatMoney(totalDiscount, currency)} today!
+              {t("You're saving {amount} today!", { amount: formatMoney(totalDiscount, currency) })}
             </div>
           )}
         </div>
@@ -364,15 +364,15 @@ export function OrderSummaryCard({
               onCheckedChange={onTermsToggle}
             />
             <Label className="text-xs leading-relaxed cursor-pointer text-muted-foreground">
-              I have read and agree to the{" "}
+              {t("I have read and agree to the")}{" "}
               <a href={termsUrl} className="text-primary hover:underline font-medium">
-                Terms & Conditions
+                {t("Terms & Conditions")}
               </a>{" "}
-              and{" "}
+              {t("and")}{" "}
               <a href={privacyUrl} className="text-primary hover:underline font-medium">
-                Privacy Policy
+                {t("Privacy Policy")}
               </a>
-              .
+              {t(".")}
             </Label>
           </div>
         )}
@@ -387,11 +387,11 @@ export function OrderSummaryCard({
             {placeOrderLoading ? (
               <>
                 <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                Processing...
+                {t("Processing...")}
               </>
             ) : (
               <>
-                {placeOrderLabel}
+                {placeOrderLabel ?? t("Place Order")}
                 <ArrowRight className="h-5 w-5 ml-2" />
               </>
             )}
@@ -401,18 +401,18 @@ export function OrderSummaryCard({
         <div className="grid grid-cols-3 gap-2 pt-1">
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <Truck className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">Fast Ship</span>
-            <span className="text-[9px] text-muted-foreground">24-72hrs</span>
+            <span className="text-[10px] font-semibold">{t("Fast Ship")}</span>
+            <span className="text-[9px] text-muted-foreground">{t("24-72hrs")}</span>
           </div>
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <ShieldCheck className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">100% Secure</span>
-            <span className="text-[9px] text-muted-foreground">SSL Encrypted</span>
+            <span className="text-[10px] font-semibold">{t("100% Secure")}</span>
+            <span className="text-[9px] text-muted-foreground">{t("SSL Encrypted")}</span>
           </div>
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <Gift className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">7 Days</span>
-            <span className="text-[9px] text-muted-foreground">Easy Returns</span>
+            <span className="text-[10px] font-semibold">{t("7 Days")}</span>
+            <span className="text-[9px] text-muted-foreground">{t("Easy Returns")}</span>
           </div>
         </div>
       </CardContent>

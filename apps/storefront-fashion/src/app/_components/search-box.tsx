@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, TrendingUp } from "lucide-react";
-import { Input, formatMoney } from "@ecom/storefront-base";
+import { Input, formatMoney, useT } from "@ecom/storefront-base";
 import { useSearchSuggestQuery } from "@/lib/engagement";
 
 function useDebounced<T>(v: T, ms = 200) {
@@ -17,8 +17,9 @@ function useDebounced<T>(v: T, ms = 200) {
   return d;
 }
 
-export function SearchBox({ placeholder = "Search products..." }: { placeholder?: string }) {
+export function SearchBox({ placeholder }: { placeholder?: string }) {
   const router = useRouter();
+  const t = useT();
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const term = useDebounced(q.trim());
@@ -60,8 +61,8 @@ export function SearchBox({ placeholder = "Search products..." }: { placeholder?
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-          placeholder={placeholder}
-          aria-label="Search products"
+          placeholder={placeholder ?? t("Search products...")}
+          aria-label={t("Search products")}
           enterKeyHint="search"
           className="w-full pl-10 pr-4"
         />
@@ -70,10 +71,10 @@ export function SearchBox({ placeholder = "Search products..." }: { placeholder?
         <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg">
           {data.terms.length > 0 && (
             <ul className="border-b py-1">
-              {data.terms.map((t) => (
-                <li key={t}>
-                  <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => go(t)}>
-                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" /> {t}
+              {data.terms.map((term) => (
+                <li key={term}>
+                  <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => go(term)}>
+                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" /> {term}
                   </button>
                 </li>
               ))}
@@ -105,7 +106,7 @@ export function SearchBox({ placeholder = "Search products..." }: { placeholder?
             ))}
           </ul>
           <button type="button" onClick={() => go(q)} className="block w-full border-t px-3 py-2 text-left text-sm font-medium text-primary hover:bg-accent">
-            See all results for &ldquo;{q.trim()}&rdquo;
+            {t("See all results for “{q}”", { q: q.trim() })}
           </button>
         </div>
       )}

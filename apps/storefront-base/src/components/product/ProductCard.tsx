@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from "../ui";
 import { cn, formatMoney } from "@ecom/utils";
+import { useT } from "../../i18n/provider";
 
 export type ProductCardData = {
   id: string;
@@ -54,6 +55,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = React.useState(false);
   const [liked, setLiked] = React.useState(isWishlisted);
+  const t = useT();
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -115,7 +117,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   className="text-[10px] font-semibold bg-gradient-to-r from-orange-500 to-rose-600 border-0"
                   title={product.flashSale.name}
                 >
-                  ⚡ FLASH SALE
+                  ⚡ {t("FLASH SALE")}
                 </Badge>
               )}
               {isOnSale && discountPercent && (
@@ -125,7 +127,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               )}
               {product.isNew && (
                 <Badge variant="success" className="text-[10px] font-semibold">
-                  NEW
+                  {t("NEW")}
                 </Badge>
               )}
               {product.badge && (
@@ -138,7 +140,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {product.isOutOfStock && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                 <Badge variant="destructive" className="px-3 py-1 text-sm">
-                  Out of Stock
+                  {t("Out of Stock")}
                 </Badge>
               </div>
             )}
@@ -154,7 +156,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 variant="outline"
                 className="h-9 w-9 rounded-full bg-white/90 backdrop-blur hover:bg-white"
                 onClick={handleQuickView}
-                aria-label="Quick view"
+                aria-label={t("Quick view")}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -166,7 +168,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   liked && "text-red-500 bg-red-50",
                 )}
                 onClick={handleWishlist}
-                aria-label="Add to wishlist"
+                aria-label={t("Add to wishlist")}
               >
                 <Heart className={cn("h-4 w-4", liked && "fill-current")} />
               </Button>
@@ -184,7 +186,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 disabled={product.isOutOfStock}
               >
                 <ShoppingCart className="h-4 w-4 mr-2" />
-                {product.isOutOfStock ? "Out of Stock" : "Add to Cart"}
+                {product.isOutOfStock ? t("Out of Stock") : t("Add to Cart")}
               </Button>
             </motion.div>
           </div>

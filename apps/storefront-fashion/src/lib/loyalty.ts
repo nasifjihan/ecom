@@ -6,7 +6,7 @@
  */
 import * as React from "react";
 import { api } from "@ecom/api-client";
-import { toast } from "@ecom/storefront-base";
+import { msg, toast, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 
 export interface WalletEntry {
@@ -56,13 +56,13 @@ const loyaltyApi = api.injectEndpoints({
 export const { useMyLoyaltyQuery, useMyReferralQuery, useClaimReferralMutation } = loyaltyApi;
 
 export const WALLET_KIND_LABELS: Record<string, string> = {
-  cashback: "Cashback",
-  cashback_reversed: "Cashback taken back",
-  order_payment: "Paid for an order",
-  order_payment_returned: "Returned from an order",
-  refund: "Refund",
-  referral: "Referral reward",
-  adjustment: "From the shop",
+  cashback: msg("Cashback"),
+  cashback_reversed: msg("Cashback taken back"),
+  order_payment: msg("Paid for an order"),
+  order_payment_returned: msg("Returned from an order"),
+  refund: msg("Refund"),
+  referral: msg("Referral reward"),
+  adjustment: msg("From the shop"),
 };
 
 const REF_KEY = "ref:v1";
@@ -75,6 +75,7 @@ export function ReferralCapture() {
   const signedIn = useAppSelector((s) => s.auth.isAuthenticated);
   const [claim] = useClaimReferralMutation();
   const tried = React.useRef(false);
+  const t = useT();
 
   React.useEffect(() => {
     try {
@@ -98,8 +99,8 @@ export function ReferralCapture() {
     claim(code)
       .unwrap()
       .then((r) => {
-        toast.success("Your friend's invite is saved", {
-          description: r.friendGets > 0 ? `You'll get ৳${r.friendGets} in your wallet when your first order is delivered.` : undefined,
+        toast.success(t("Your friend's invite is saved"), {
+          description: r.friendGets > 0 ? t("You'll get ৳{amount} in your wallet when your first order is delivered.", { amount: r.friendGets }) : undefined,
         });
       })
       .catch(() => undefined) // own code, already referred, not a new customer: nothing to say
@@ -110,7 +111,7 @@ export function ReferralCapture() {
           // ignore
         }
       });
-  }, [signedIn, claim]);
+  }, [signedIn, claim, t]);
 
   return null;
 }

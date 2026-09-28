@@ -41,6 +41,11 @@ import {
   useGetOrderByKeyQuery,
   useSubmitOrderPaymentMutation,
   useGetProductsQuery,
+  useT,
+  useLocale,
+  DATE_LOCALES,
+  orderStatusWord,
+  msg,
   type OrderAddressSummary,
 } from "@ecom/storefront-base";
 import { useOrderInvoiceByKeyMutation } from "@/lib/account";
@@ -49,26 +54,28 @@ const CURRENCY = "BDT";
 const formatBDT = (n: number) => formatMoney(n, CURRENCY);
 
 const PAYMENT_GATEWAY_LABELS: Record<string, string> = {
-  [PaymentMethod.STRIPE]: "Credit / Debit Card (Stripe)",
+  [PaymentMethod.STRIPE]: msg("Credit / Debit Card (Stripe)"),
   [PaymentMethod.BKASH]: "bKash",
   [PaymentMethod.NAGAD]: "Nagad",
   [PaymentMethod.ROCKET]: "Rocket",
   [PaymentMethod.SSLCOMMERZ]: "SSLCommerz",
-  [PaymentMethod.COD]: "Cash On Delivery",
-  [PaymentMethod.BANK_TRANSFER]: "Bank Transfer",
+  [PaymentMethod.COD]: msg("Cash On Delivery"),
+  [PaymentMethod.BANK_TRANSFER]: msg("Bank Transfer"),
 };
 
 const PAYMENT_STATUS_LABELS: Record<string, { label: string; variant: "default" | "success" | "secondary" | "destructive" }> = {
-  paid: { label: "Paid", variant: "success" },
-  unpaid: { label: "Awaiting Payment", variant: "secondary" },
-  failed: { label: "Payment Failed", variant: "destructive" },
-  refunded: { label: "Refunded", variant: "default" },
+  paid: { label: msg("Paid"), variant: "success" },
+  unpaid: { label: msg("Awaiting Payment"), variant: "secondary" },
+  failed: { label: msg("Payment Failed"), variant: "destructive" },
+  refunded: { label: msg("Refunded"), variant: "default" },
 };
 
 export default function ThankYouPage() {
   const searchParams = useSearchParams();
   const [copied, setCopied] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const t = useT();
+  const { locale } = useLocale();
 
   React.useEffect(() => {
     setMounted(true);
@@ -88,7 +95,7 @@ export default function ThankYouPage() {
         mode: "download",
       });
     } catch {
-      toast.error("Couldn't download the invoice. Please try again.");
+      toast.error(t("Couldn't download the invoice. Please try again."));
     }
   };
 
@@ -99,10 +106,10 @@ export default function ThankYouPage() {
     const end = new Date(d);
     end.setDate(end.getDate() + 5);
     return {
-      start: start.toLocaleDateString("en-BD", { day: "numeric", month: "short" }),
-      end: end.toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" }),
+      start: start.toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "short" }),
+      end: end.toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "short", year: "numeric" }),
     };
-  }, [order]);
+  }, [order, locale]);
 
   if (!mounted || (orderKey && isLoading)) {
     return (
@@ -121,11 +128,11 @@ export default function ThankYouPage() {
   if (!orderKey || isError || !order) {
     return (
       <div className="container py-24 text-center max-w-xl">
-        <h1 className="text-2xl font-bold mb-2">We couldn't find that order</h1>
-        <p className="text-muted-foreground mb-6">The order link is incomplete or has expired. If you just placed an order, check your email or contact support with your phone number.</p>
+        <h1 className="text-2xl font-bold mb-2">{t("We couldn't find that order")}</h1>
+        <p className="text-muted-foreground mb-6">{t("The order link is incomplete or has expired. If you just placed an order, check your email or contact support with your phone number.")}</p>
         <Button asChild>
           <Link href="/">
-            <Home className="h-4 w-4 mr-2" /> Back to Home
+            <Home className="h-4 w-4 mr-2" /> {t("Back to Home")}
           </Link>
         </Button>
       </div>
@@ -137,18 +144,19 @@ export default function ThankYouPage() {
   const paymentGateway = order.paymentGateway;
   const pStatus =
     order.paymentGateway === PaymentMethod.COD && order.paymentStatus === "unpaid"
-      ? { label: "Pay on Delivery", variant: "secondary" as const }
+      ? { label: t("Pay on Delivery"), variant: "secondary" as const }
       : PAYMENT_STATUS_LABELS[order.paymentStatus] ?? { label: order.paymentStatus, variant: "default" as const };
+  const pLabel = t(pStatus.label);
   const orderItems = order.items;
 
   const copyRef = async () => {
     try {
       await navigator.clipboard.writeText(orderRef);
       setCopied(true);
-      toast.success("Copied!", { description: `Order #${orderRef} copied to clipboard` });
+      toast.success(t("Copied!"), { description: t("Order #{ref} copied to clipboard", { ref: orderRef }) });
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Could not copy");
+      toast.error(t("Could not copy"));
     }
   };
 
@@ -157,7 +165,7 @@ export default function ThankYouPage() {
     address: a.address,
     city: [a.upazila, a.city, a.division].filter(Boolean).join(", "),
     postcode: a.postcode ?? "",
-    country: a.country === "BD" ? "Bangladesh" : a.country ?? "",
+    country: a.country === "BD" ? t("Bangladesh") : a.country ?? "",
   });
   const customer = {
     email: order.email,
@@ -200,16 +208,16 @@ export default function ThankYouPage() {
           </motion.div>
         </div>
         <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-3">
-          Your Order Has Been Received!
+          {t("Your Order Has Been Received!")}
         </h1>
         <p className="text-muted-foreground mb-6 text-base md:text-lg">
-          Thank you for shopping with Fashion BD. Keep your order reference handy; we'll contact you on {customer.phone || "your phone"} before delivery.
+          {t("Thank you for shopping with us. Keep your order reference handy; we'll contact you on {phone} before delivery.", { phone: customer.phone || t("your phone") })}
         </p>
 
         <div className="inline-flex flex-col sm:flex-row items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/5 via-background to-secondary/5 border-2 border-primary/10 shadow-sm">
           <div className="text-left sm:border-r sm:pr-5 border-border">
             <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-              Order Reference
+              {t("Order Reference")}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xl md:text-2xl font-black font-mono text-primary tracking-wide">
@@ -221,7 +229,7 @@ export default function ThankYouPage() {
                   "h-8 w-8 rounded-lg flex items-center justify-center transition-all",
                   copied ? "bg-green-500 text-white" : "bg-muted hover:bg-muted/70 text-muted-foreground",
                 )}
-                aria-label="Copy order ref"
+                aria-label={t("Copy order ref")}
               >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </button>
@@ -229,10 +237,10 @@ export default function ThankYouPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant="success" className="text-xs px-3 py-1 gap-1 h-8">
-              <Check className="h-3 w-3" /> Status: {status}
+              <Check className="h-3 w-3" /> {t("Status:")} {t(orderStatusWord(status))}
             </Badge>
             <Badge variant={pStatus.variant} className="text-xs px-3 py-1 gap-1 h-8">
-              <CreditCard className="h-3 w-3" /> {pStatus.label}
+              <CreditCard className="h-3 w-3" /> {pLabel}
             </Badge>
           </div>
         </div>
@@ -251,7 +259,7 @@ export default function ThankYouPage() {
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
-                Order Summary ({orderItems.length} item{orderItems.length > 1 ? "s" : ""})
+                {t("Order Summary ({n} items)", { n: orderItems.length })}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -279,7 +287,7 @@ export default function ThankYouPage() {
                           {it.title}
                         </p>
                         {it.variantLabel && <p className="text-xs text-muted-foreground">{it.variantLabel}</p>}
-                        {it.giftFrom && <p className="text-xs font-semibold text-pink-600">Free gift · {it.giftFrom}</p>}
+                        {it.giftFrom && <p className="text-xs font-semibold text-pink-600">{t("Free gift")} · {it.giftFrom}</p>}
                       </div>
                       <div className="text-right py-0.5 flex-shrink-0">
                         <p className="font-bold">{formatBDT(lineTotal)}</p>
@@ -294,7 +302,7 @@ export default function ThankYouPage() {
               <Separator />
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">{t("Subtotal")}</span>
                   <span className="font-medium">{formatBDT(order.itemsSubtotal)}</span>
                 </div>
                 {(order.promotions ?? [])
@@ -307,41 +315,41 @@ export default function ThankYouPage() {
                   ))}
                 {order.discountTotal - (order.promotionDiscount ?? 0) - (order.memberDiscount ?? 0) > 0.004 && (
                   <div className="flex justify-between text-green-600">
-                    <span>{order.couponUsed ? `Coupon "${order.couponUsed}"` : "Discount"}</span>
+                    <span>{order.couponUsed ? t("Coupon \"{code}\"", { code: order.couponUsed }) : t("Discount")}</span>
                     <span className="font-medium">-{formatBDT(order.discountTotal - (order.promotionDiscount ?? 0) - (order.memberDiscount ?? 0))}</span>
                   </div>
                 )}
                 {(order.memberDiscount ?? 0) > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>{order.memberLevel ?? "Member"} discount</span>
+                    <span>{t("{level} discount", { level: order.memberLevel ?? t("Member") })}</span>
                     <span className="font-medium">-{formatBDT(order.memberDiscount ?? 0)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping ({order.shippingMethodName})</span>
+                  <span className="text-muted-foreground">{t("Shipping ({method})", { method: order.shippingMethodName })}</span>
                   <span className={cn("font-medium", order.shippingTotal === 0 && "text-green-600")}>
-                    {order.shippingTotal === 0 ? "FREE" : formatBDT(order.shippingTotal)}
+                    {order.shippingTotal === 0 ? t("FREE") : formatBDT(order.shippingTotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">VAT</span>
+                  <span className="text-muted-foreground">{t("VAT")}</span>
                   <span className="font-medium">{formatBDT(order.taxTotal)}</span>
                 </div>
                 {order.feeTotal > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Payment fee</span>
+                    <span className="text-muted-foreground">{t("Payment fee")}</span>
                     <span className="font-medium">{formatBDT(order.feeTotal)}</span>
                   </div>
                 )}
                 {(order.walletUsed ?? 0) > 0 && (
                   <div className="flex justify-between text-primary">
-                    <span>Paid from your wallet</span>
+                    <span>{t("Paid from your wallet")}</span>
                     <span className="font-medium">-{formatBDT(order.walletUsed ?? 0)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between items-baseline pt-1">
-                  <span className="font-semibold">{(order.walletUsed ?? 0) > 0 ? "Left to pay" : "Grand Total"}</span>
+                  <span className="font-semibold">{(order.walletUsed ?? 0) > 0 ? t("Left to pay") : t("Grand Total")}</span>
                   <span className="text-2xl font-black text-primary">{formatBDT(order.grandTotal)}</span>
                 </div>
               </div>
@@ -353,7 +361,7 @@ export default function ThankYouPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-primary" />
-                  Shipping Address
+                  {t("Shipping Address")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
@@ -372,7 +380,7 @@ export default function ThankYouPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
-                  Billing Address
+                  {t("Billing Address")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
@@ -384,9 +392,9 @@ export default function ThankYouPage() {
                 <div className="text-muted-foreground">{customer.billing.country}</div>
                 <Separator className="my-3" />
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Payment Method:</span>
+                  <span className="text-xs text-muted-foreground">{t("Payment Method:")}</span>
                   <span className="font-semibold text-xs">
-                    {PAYMENT_GATEWAY_LABELS[paymentGateway] ?? paymentGateway}
+                    {t(PAYMENT_GATEWAY_LABELS[paymentGateway] ?? paymentGateway)}
                   </span>
                 </div>
               </CardContent>
@@ -399,7 +407,7 @@ export default function ThankYouPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
-                Expected Delivery
+                {t("Expected Delivery")}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -407,7 +415,7 @@ export default function ThankYouPage() {
                 {expectedDelivery.start} — {expectedDelivery.end}
               </div>
               <p className="text-xs text-muted-foreground mb-4">
-                We'll send you tracking updates via SMS & email once your order ships.
+                {t("We'll send you tracking updates via SMS & email once your order ships.")}
               </p>
               <Link
                 href={`/track?order=${encodeURIComponent(order.orderRef)}`}
@@ -415,8 +423,8 @@ export default function ThankYouPage() {
               >
                 <Truck className="h-5 w-5 text-primary flex-shrink-0" />
                 <div className="text-xs">
-                  <div className="font-semibold">Track Your Order</div>
-                  <div className="text-muted-foreground">With the order number and your phone</div>
+                  <div className="font-semibold">{t("Track Your Order")}</div>
+                  <div className="text-muted-foreground">{t("With the order number and your phone")}</div>
                 </div>
               </Link>
             </CardContent>
@@ -426,11 +434,11 @@ export default function ThankYouPage() {
             <CardContent className="p-5 space-y-3">
               <Button className="w-full h-11" asChild>
                 <Link href="/">
-                  <Home className="h-4 w-4 mr-2" /> Continue Shopping
+                  <Home className="h-4 w-4 mr-2" /> {t("Continue Shopping")}
                 </Link>
               </Button>
               <Button variant="outline" className="w-full h-11" disabled={loadingInvoice} onClick={onInvoice}>
-                <FileDown className="h-4 w-4 mr-2" /> {loadingInvoice ? "Preparing invoice..." : "Download Invoice"}
+                <FileDown className="h-4 w-4 mr-2" /> {loadingInvoice ? t("Preparing invoice...") : t("Download Invoice")}
               </Button>
             </CardContent>
           </Card>
@@ -439,7 +447,7 @@ export default function ThankYouPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Mail className="h-4 w-4 text-primary" />
-                Order Email
+                {t("Order Email")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -458,13 +466,13 @@ export default function ThankYouPage() {
           <div>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
               <ShoppingBag className="h-6 w-6 text-primary" />
-              You Might Also Like
+              {t("You Might Also Like")}
             </h2>
-            <p className="text-muted-foreground mt-1">Popular picks from our store</p>
+            <p className="text-muted-foreground mt-1">{t("Popular picks from our store")}</p>
           </div>
           <Button variant="ghost" asChild>
             <Link href="/products">
-              View all <ChevronRight className="h-4 w-4 ml-1" />
+              {t("View all")} <ChevronRight className="h-4 w-4 ml-1" />
             </Link>
           </Button>
         </div>
@@ -483,18 +491,18 @@ export default function ThankYouPage() {
               <FileText className="h-6 w-6" />
             </div>
             <div>
-              <h3 className="font-bold text-lg mb-1">Need help with your order?</h3>
+              <h3 className="font-bold text-lg mb-1">{t("Need help with your order?")}</h3>
               <p className="text-sm text-muted-foreground max-w-xl">
-                Our customer support team is available 24/7. Have your order reference number {orderRef} ready when contacting us.
+                {t("Our customer support team is available 24/7. Have your order reference number {ref} ready when contacting us.", { ref: orderRef })}
               </p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" asChild>
-              <Link href="/faq">FAQ Page</Link>
+              <Link href="/faq">{t("FAQ Page")}</Link>
             </Button>
             <Button asChild>
-              <Link href="/contact">Contact Support</Link>
+              <Link href="/contact">{t("Contact Support")}</Link>
             </Button>
           </div>
         </CardContent>

@@ -6,6 +6,7 @@ import {
   ConflictError,
   NotFoundError,
   BadRequestError,
+  mergeTranslations,
   type RequestContext,
   type Paginated,
 } from "../../core";
@@ -136,6 +137,7 @@ export class CatalogService extends BaseService {
         barcode: dto.barcode ?? null,
         shortDescription: dto.shortDescription ?? null,
         description: dto.description ?? null,
+        translations: mergeTranslations(null, dto.translations ?? {}),
         tags: dto.tags,
         specifications: dto.specifications.length ? dto.specifications : undefined,
         regularPrice: dto.regularPrice ?? null,
@@ -270,6 +272,10 @@ export class CatalogService extends BaseService {
         if (key === "categoryIds" || key === "variants" || key === "imageUrls" || key === "slug") continue;
         // Stock only changes through the ledger (below), and holds only through orders.
         if (key === "stockQty" || key === "reservedStock") continue;
+        if (key === "translations") {
+          updateData.translations = mergeTranslations(existing.translations, dto.translations ?? {});
+          continue;
+        }
         (updateData as any)[key] = (dto as any)[key];
       }
       if (uniqueSlug !== undefined) updateData.slug = uniqueSlug;
@@ -510,6 +516,7 @@ export class CatalogService extends BaseService {
       imageUrl: dto.imageUrl ?? null,
       bannerUrl: dto.bannerUrl ?? null,
       description: dto.description ?? null,
+      translations: mergeTranslations(null, dto.translations ?? {}),
       displayMode: dto.displayMode,
       sortOrder: dto.sortOrder,
       isActive: dto.isActive,
@@ -554,6 +561,10 @@ export class CatalogService extends BaseService {
     const updateData: Record<string, unknown> = {};
     for (const key of Object.keys(dto)) {
       if (key === "slug") continue;
+      if (key === "translations") {
+        updateData.translations = mergeTranslations(existing.translations, dto.translations ?? {});
+        continue;
+      }
       (updateData as any)[key] = (dto as any)[key];
     }
     if (uniqueSlug !== undefined) updateData.slug = uniqueSlug;
@@ -626,6 +637,7 @@ export class CatalogService extends BaseService {
       bannerUrl: dto.bannerUrl ?? null,
       websiteUrl: dto.websiteUrl ?? null,
       description: dto.description ?? null,
+      translations: mergeTranslations(null, dto.translations ?? {}),
       sortOrder: dto.sortOrder,
       isActive: dto.isActive,
       seoTitle: dto.seoTitle ?? null,
@@ -655,6 +667,10 @@ export class CatalogService extends BaseService {
     const updateData: Record<string, unknown> = {};
     for (const key of Object.keys(dto)) {
       if (key === "slug") continue;
+      if (key === "translations") {
+        updateData.translations = mergeTranslations(existing.translations, dto.translations ?? {});
+        continue;
+      }
       (updateData as any)[key] = (dto as any)[key];
     }
     if (uniqueSlug !== undefined) updateData.slug = uniqueSlug;

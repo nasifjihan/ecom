@@ -7,6 +7,7 @@ import { logger, prisma } from "../../config"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
 import { storeBrand, type StoreBrand } from "../content/store-details"
 import { renderInvoicePdf, renderInvoicesPdf, type InvoiceDoc } from "./invoice.pdf"
+import { INVOICE_TEXT, type InvoiceLang } from "./invoice.text"
 
 export interface InvoiceFile {
   number: string
@@ -155,17 +156,20 @@ export class InvoiceService {
       }),
     ])
     const cur = order.currencyCode || "BDT"
+    const sign = cur === "BDT" ? "৳" : `${cur} `
     const money = (v: unknown) =>
-      `${cur} ${num(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      `${sign}${num(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+    const lang: InvoiceLang = order.locale === "bn" ? "bn" : "en"
+    const T = INVOICE_TEXT[lang]
     const method = gateway?.name ?? order.paymentGatewayCode
     const cod = order.paymentGatewayCode === "cod"
     const payment: InvoiceDoc["payment"] =
       order.paymentStatus === "paid"
-        ? { method, status: "paid", label: "Paid" }
+        ? { method, status: "paid", label: T.paid }
         : order.paymentStatus === "refunded"
-          ? { method, status: "refunded", label: "Refunded" }
-          : { method, status: "due", label: cod ? "Due on delivery" : "Payment due" }
+          ? { method, status: "refunded", label: T.refunded }
+          : { method, status: "due", label: cod ? T.dueOnDelivery : T.paymentDue }
 
     const name = (first: string | null, last: string | null) =>
       `${first ?? ""} ${last ?? ""}`.trim()
@@ -195,36 +199,37 @@ export class InvoiceService {
     const shipment = order.shipments[0]
     const tracking = shipment?.trackingNumber ?? order.trackingNumber
     const totals: InvoiceDoc["totals"] = [
-      { label: "Subtotal", value: money(order.itemsSubtotal) },
+      { label: T.subtotal, value: money(order.itemsSubtotal) },
       ...(num(order.discountTotal) > 0
         ? [
             {
-              label: order.couponUsed ? `Discount (${order.couponUsed})` : "Discount",
+              label: order.couponUsed ? `${T.discount} (${order.couponUsed})` : T.discount,
               value: `-${money(order.discountTotal)}`,
             },
           ]
         : []),
       {
-        label: "Delivery",
-        value: num(order.shippingTotal) > 0 ? money(order.shippingTotal) : "Free",
+        label: T.deliveryCharge,
+        value: num(order.shippingTotal) > 0 ? money(order.shippingTotal) : T.free,
       },
-      ...(num(order.taxTotal) > 0 ? [{ label: "Tax", value: money(order.taxTotal) }] : []),
-      ...(num(order.feeTotal) > 0 ? [{ label: "Payment fee", value: money(order.feeTotal) }] : []),
+      ...(num(order.taxTotal) > 0 ? [{ label: T.tax, value: money(order.taxTotal) }] : []),
+      ...(num(order.feeTotal) > 0 ? [{ label: T.paymentFee, value: money(order.feeTotal) }] : []),
       // Paid from the wallet: the order total, the wallet part, then what the payment method covers.
       ...(num(order.walletUsed) > 0
         ? [
-            { label: "Total", value: money(num(order.grandTotal) + num(order.walletUsed)), strong: true },
-            { label: "Paid from wallet", value: `-${money(order.walletUsed)}` },
+            { label: T.total, value: money(num(order.grandTotal) + num(order.walletUsed)), strong: true },
+            { label: T.paidFromWallet, value: `-${money(order.walletUsed)}` },
           ]
-        : [{ label: "Total", value: money(order.grandTotal), strong: true }]),
+        : [{ label: T.total, value: money(order.grandTotal), strong: true }]),
       payment.status === "paid"
-        ? { label: "Amount paid", value: money(order.grandTotal) }
+        ? { label: T.amountPaid, value: money(order.grandTotal) }
         : payment.status === "due"
-          ? { label: "Amount due", value: money(order.grandTotal) }
-          : { label: "Refunded", value: money(order.grandTotal) },
+          ? { label: T.amountDue, value: money(order.grandTotal) }
+          : { label: T.refunded, value: money(order.grandTotal) },
     ]
 
     return {
+      lang,
       number: invoice.number,
       issuedAt: invoice.createdAt,
       orderNumber: order.number,

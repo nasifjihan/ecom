@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Markdown, markdownToText } from "@ecom/ui";
-import { getFaqs, type Faq } from "@/lib/content";
+import { getFaqs, serverT, type Faq } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Frequently Asked Questions",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function FaqPage() {
-  const faqs = (await getFaqs()) ?? [];
+  const [faqs, t] = await Promise.all([getFaqs().then((f) => f ?? []), serverT()]);
 
   // Keep the admin's order, grouping questions that share a group name.
   const groups: { name: string | null; items: Faq[] }[] = [];
@@ -33,22 +33,22 @@ export default async function FaqPage() {
 
   return (
     <div className="container max-w-3xl py-10 md:py-14">
-      <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Frequently Asked Questions</h1>
+      <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{t("Frequently Asked Questions")}</h1>
       <p className="mt-2 text-muted-foreground">
-        Can&apos;t find what you need?{" "}
+        {t("Can't find what you need?")}{" "}
         <Link href="/contact" className="text-primary hover:underline">
-          Contact us
+          {t("Contact us")}
         </Link>
-        .
+        {t(".")}
       </p>
 
       {faqs.length === 0 ? (
-        <p className="mt-10 text-muted-foreground">No questions have been added yet.</p>
+        <p className="mt-10 text-muted-foreground">{t("No questions have been added yet.")}</p>
       ) : (
         <div className="mt-8 space-y-8">
           {groups.map((g) => (
             <section key={g.name ?? "general"}>
-              {groups.length > 1 && <h2 className="mb-3 text-lg font-semibold">{g.name ?? "General"}</h2>}
+              {groups.length > 1 && <h2 className="mb-3 text-lg font-semibold">{g.name ?? t("General")}</h2>}
               <div className="divide-y rounded-xl border bg-card">
                 {g.items.map((f) => (
                   <details key={f.id} className="group px-5 py-4 [&_summary::-webkit-details-marker]:hidden">

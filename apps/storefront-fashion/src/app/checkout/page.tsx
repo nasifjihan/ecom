@@ -37,6 +37,8 @@ import {
   Skeleton,
   Button,
   useCart,
+  useT,
+  msg,
   cn,
   formatMoney,
   toast,
@@ -76,14 +78,15 @@ function formatBDT(n: number) {
 }
 
 const TRUST_BADGES = [
-  { icon: <ShieldCheck className="h-4 w-4" />, label: "Secure Checkout", desc: "SSL Encrypted" },
-  { icon: <RotateCcw className="h-4 w-4" />, label: "Free Returns", desc: "7 days return" },
-  { icon: <Headphones className="h-4 w-4" />, label: "24/7 Support", desc: "We're here" },
-  { icon: <BadgeCheck className="h-4 w-4" />, label: "100% Protected", desc: "Purchase safe" },
+  { icon: <ShieldCheck className="h-4 w-4" />, label: msg("Secure Checkout"), desc: msg("SSL Encrypted") },
+  { icon: <RotateCcw className="h-4 w-4" />, label: msg("Free Returns"), desc: msg("7 days return") },
+  { icon: <Headphones className="h-4 w-4" />, label: msg("24/7 Support"), desc: msg("We're here") },
+  { icon: <BadgeCheck className="h-4 w-4" />, label: msg("100% Protected"), desc: msg("Purchase safe") },
 ];
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const t = useT();
   const { items, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   const customerName = useAppSelector((s) => s.auth.customerName);
@@ -275,18 +278,18 @@ export default function CheckoutPage() {
   if (couponDiscount > 0) {
     discountsArr.push({
       id: "coupon",
-      label: `Coupon "${appliedCoupon!.couponCode}"`,
+      label: t("Coupon \"{code}\"", { code: appliedCoupon!.couponCode }),
       amount: couponDiscount,
       isDiscount: true,
       color: "text-green-600 font-medium",
-      badge: appliedCoupon?.discountType === "FREE_SHIPPING" ? "Free Ship" : undefined,
+      badge: appliedCoupon?.discountType === "FREE_SHIPPING" ? t("Free Ship") : undefined,
     });
   }
 
   if (memberDiscount > 0) {
     discountsArr.push({
       id: "member",
-      label: `${member!.level} member (${member!.percent}% off)`,
+      label: t("{level} member ({percent}% off)", { level: member!.level, percent: member!.percent }),
       amount: memberDiscount,
       isDiscount: true,
       color: "text-green-600 font-medium",
@@ -301,7 +304,7 @@ export default function CheckoutPage() {
       ? Math.round(Math.min(walletBalance, (orderTotal * (loyalty?.wallet.maxPercent ?? 100)) / 100, orderTotal) * 100) / 100
       : 0;
   if (walletUsed > 0) {
-    discountsArr.push({ id: "wallet", label: "Paid from your wallet", amount: walletUsed, isDiscount: true, color: "text-primary font-medium" });
+    discountsArr.push({ id: "wallet", label: t("Paid from your wallet"), amount: walletUsed, isDiscount: true, color: "text-primary font-medium" });
   }
   const grandTotal = Math.max(0, Math.round((orderTotal - walletUsed) * 100) / 100);
 
@@ -344,23 +347,23 @@ export default function CheckoutPage() {
           newSubtotal: result.newSubtotal,
         });
         setCouponCode("");
-        toast.success("Coupon applied!", {
+        toast.success(t("Coupon applied!"), {
           description:
             result.worksWithPromotions === false && promoDiscount > 0
-              ? `-৳${result.discountAmount} with ${result.couponCode}. It can't be combined with other offers, so they're removed.`
-              : `-৳${result.discountAmount} OFF with ${result.couponCode}`,
+              ? t("-৳{amount} with {code}. It can't be combined with other offers, so they're removed.", { amount: result.discountAmount, code: result.couponCode })
+              : t("-৳{amount} OFF with {code}", { amount: result.discountAmount, code: result.couponCode }),
         });
       } else {
-        setCouponError(result.errorMessage ?? "Invalid or expired coupon code");
+        setCouponError(result.errorMessage ?? t("Invalid or expired coupon code"));
         setAppliedCoupon(null);
-        toast.error("Invalid coupon", {
-          description: result.errorMessage ?? "Check the code and try again",
+        toast.error(t("Invalid coupon"), {
+          description: result.errorMessage ?? t("Check the code and try again"),
         });
       }
     } catch (err: any) {
-      const msg = apiErrorMessage(err, "Could not apply coupon. Try again.");
+      const msg = apiErrorMessage(err, t("Could not apply coupon. Try again."));
       setCouponError(msg);
-      toast.error("Coupon error", { description: msg });
+      toast.error(t("Coupon error"), { description: msg });
     }
   };
 
@@ -368,7 +371,7 @@ export default function CheckoutPage() {
     setAppliedCoupon(null);
     setCouponError(null);
     setCouponCode("");
-    toast.info("Coupon removed");
+    toast.info(t("Coupon removed"));
   };
 
   const validateStep = (stepId: string): boolean => {
@@ -376,31 +379,31 @@ export default function CheckoutPage() {
       case "information":
         // Email is optional (many customers only give a phone), but a new account needs one.
         if ((contactEmail.trim() || createAccount) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
-          toast.error(createAccount ? "Email needed for an account" : "Check your email", {
-            description: createAccount ? "Enter your email to create an account, or untick it." : "That doesn't look like an email address. Leave it empty if you don't have one.",
+          toast.error(createAccount ? t("Email needed for an account") : t("Check your email"), {
+            description: createAccount ? t("Enter your email to create an account, or untick it.") : t("That doesn't look like an email address. Leave it empty if you don't have one."),
           });
           return false;
         }
         if (createAccount && !isAuthenticated && passwordProblem(accountPassword)) {
-          toast.error("Choose a stronger password", { description: passwordProblem(accountPassword)! });
+          toast.error(t("Choose a stronger password"), { description: t(passwordProblem(accountPassword)!) });
           return false;
         }
         return true;
       case "shipping":
         if (!selectedShippingRateId) {
-          toast.error("Choose shipping method", { description: "Select a shipping method to continue" });
+          toast.error(t("Choose shipping method"), { description: t("Select a shipping method to continue") });
           return false;
         }
         if (!shippingAddress.firstName || !shippingAddress.lastName ||
             !shippingAddress.addressLine1 || !shippingAddress.phone ||
             !shippingAddress.district) {
-          toast.error("Fill shipping address", { description: "All required fields in shipping address are required" });
+          toast.error(t("Fill shipping address"), { description: t("All required fields in shipping address are required") });
           return false;
         }
         return true;
       case "payment":
         if (!selectedPaymentMethod) {
-          toast.error("Payment method required", { description: "Please select a payment method" });
+          toast.error(t("Payment method required"), { description: t("Please select a payment method") });
           return false;
         }
         return true;
@@ -421,16 +424,16 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (itemCount === 0) {
-      toast.error("Your cart is empty");
+      toast.error(t("Your cart is empty"));
       return;
     }
     if (cartHasProblems) {
-      toast.error("Some items can't be ordered", { description: Object.values(cartProblems)[0] });
+      toast.error(t("Some items can't be ordered"), { description: Object.values(cartProblems)[0] });
       return;
     }
     if (!validateStep("information") || !validateStep("shipping") || !validateStep("payment")) return;
     if (!termsChecked) {
-      toast.error("Accept terms first", { description: "Please read and agree to Terms & Conditions" });
+      toast.error(t("Accept terms first"), { description: t("Please read and agree to Terms & Conditions") });
       return;
     }
 
@@ -450,8 +453,8 @@ export default function CheckoutPage() {
         signedIn = true;
         setCreateAccount(false);
       } catch (err) {
-        toast.error("Couldn't create your account", {
-          description: `${apiErrorMessage(err)} You can untick "Create an account" to check out as a guest.`,
+        toast.error(t("Couldn't create your account"), {
+          description: `${apiErrorMessage(err)} ${t("You can untick \"Create an account\" to check out as a guest.")}`,
         });
         return;
       }
@@ -540,7 +543,7 @@ export default function CheckoutPage() {
         useWallet: walletUsed > 0,
       }).unwrap();
 
-      toast.success("Order placed!", { description: `Order #${result.orderRef} created successfully` });
+      toast.success(t("Order placed!"), { description: t("Order #{ref} created successfully", { ref: result.orderRef }) });
       clearCart();
       setCompletedStepIds((prev) => [...prev, "information", "shipping", "payment"]);
       setCurrentStepId("confirmation");
@@ -551,8 +554,8 @@ export default function CheckoutPage() {
         router.push(`/checkout/thank-you?key=${encodeURIComponent(result.orderKey)}`);
       }
     } catch (err: any) {
-      const msg = apiErrorMessage(err, "Could not place order. Please try again.");
-      toast.error("Order failed", { description: msg });
+      const msg = apiErrorMessage(err, t("Could not place order. Please try again."));
+      toast.error(t("Order failed"), { description: msg });
       // Stock or a flash-sale price may have run out: refresh the cart so it shows what changed.
       recheckCart();
     }
@@ -591,12 +594,12 @@ export default function CheckoutPage() {
         <div className="h-28 w-28 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
           <Tag className="h-12 w-12 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold mb-2">Your cart is empty</h1>
+        <h1 className="text-2xl font-bold mb-2">{t("Your cart is empty")}</h1>
         <p className="text-muted-foreground mb-8">
-          Add some products first, then come back to checkout.
+          {t("Add some products first, then come back to checkout.")}
         </p>
         <Button size="lg" asChild>
-          <Link href="/products">Browse Products</Link>
+          <Link href="/products">{t("Browse Products")}</Link>
         </Button>
       </div>
     );
@@ -624,9 +627,9 @@ export default function CheckoutPage() {
                 {b.icon}
               </div>
               <div className="min-w-0">
-                <div className="text-xs md:text-sm font-semibold leading-tight">{b.label}</div>
+                <div className="text-xs md:text-sm font-semibold leading-tight">{t(b.label)}</div>
                 <div className="hidden md:block text-[11px] text-muted-foreground leading-tight">
-                  {b.desc}
+                  {t(b.desc)}
                 </div>
               </div>
             </div>
@@ -649,10 +652,10 @@ export default function CheckoutPage() {
                 <CardHeader className="pb-4 flex flex-row items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
-                    Section 1: Contact Information
+                    {t("Section 1: Contact Information")}
                   </CardTitle>
                   <Badge variant={isAuthenticated ? "success" : "secondary"}>
-                    {isAuthenticated ? "Logged in" : "Guest Checkout"}
+                    {isAuthenticated ? t("Logged in") : t("Guest Checkout")}
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -663,7 +666,7 @@ export default function CheckoutPage() {
                       </div>
                       <div className="min-w-0">
                         <div className="font-semibold text-green-800">
-                          Welcome back, {customerName ?? "Valued Customer"}!
+                          {t("Welcome back, {name}!", { name: customerName ?? t("Valued Customer") })}
                         </div>
                         <div className="text-sm text-green-700/80">{customerEmail}</div>
                       </div>
@@ -673,15 +676,15 @@ export default function CheckoutPage() {
                       <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border border-dashed">
                         <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                         <div className="flex-1 text-sm">
-                          <span className="text-muted-foreground">Already have an account? </span>
+                          <span className="text-muted-foreground">{t("Already have an account?")} </span>
                           <Link href="/account/login?next=/checkout" className="font-semibold text-primary hover:underline">
-                            Log in
+                            {t("Log in")}
                           </Link>
-                          <span className="text-muted-foreground"> for a faster checkout experience.</span>
+                          <span className="text-muted-foreground"> {t("for a faster checkout experience.")}</span>
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Email Address (optional)</Label>
+                        <Label>{t("Email Address (optional)")}</Label>
                         <Input
                           type="email"
                           placeholder="you@example.com"
@@ -690,7 +693,7 @@ export default function CheckoutPage() {
                           className={cn(!contactEmail && "border-muted")}
                         />
                         <p className="text-[11px] text-muted-foreground">
-                          For the order confirmation by email. Order updates also come by SMS to your phone.
+                          {t("For the order confirmation by email. Order updates also come by SMS to your phone.")}
                         </p>
                       </div>
                       <div className="flex items-start gap-3">
@@ -699,9 +702,9 @@ export default function CheckoutPage() {
                           onCheckedChange={setSubscribeNewsletter}
                         />
                         <Label className="text-sm cursor-pointer text-foreground leading-relaxed">
-                          Subscribe to our newsletter for exclusive discounts, new arrivals and flash sales.
+                          {t("Subscribe to our newsletter for exclusive discounts, new arrivals and flash sales.")}
                           <span className="block text-[11px] text-muted-foreground font-normal mt-0.5">
-                            Unsubscribe at any time. We respect your privacy.
+                            {t("Unsubscribe at any time. We respect your privacy.")}
                           </span>
                         </Label>
                       </div>
@@ -710,7 +713,7 @@ export default function CheckoutPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <UserPlus className="h-4 w-4 text-primary" />
-                            <Label className="font-semibold cursor-pointer">Create an account?</Label>
+                            <Label className="font-semibold cursor-pointer">{t("Create an account?")}</Label>
                           </div>
                           <Checkbox
                             checked={createAccount}
@@ -728,13 +731,13 @@ export default function CheckoutPage() {
                               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
                                 <div className="flex items-start gap-2 text-xs text-primary/80">
                                   <Lock className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                                  Create an account now to track orders, save addresses & earn loyalty points with future purchases.
+                                  {t("Create an account now to track orders, save addresses & earn loyalty points with future purchases.")}
                                 </div>
                                 <div className="space-y-1.5">
-                                  <Label className="text-xs">Password *</Label>
+                                  <Label className="text-xs">{t("Password *")}</Label>
                                   <Input
                                     type="password"
-                                    placeholder="8+ characters, an uppercase letter and a number"
+                                    placeholder={t("8+ characters, an uppercase letter and a number")}
                                     value={accountPassword}
                                     onChange={(e) => setAccountPassword(e.target.value)}
                                   />
@@ -753,17 +756,17 @@ export default function CheckoutPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <FileText className="h-5 w-5 text-primary" />
-                    Section 2: Shipping Address
+                    {t("Section 2: Shipping Address")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                      { key: "firstName", label: "First Name *", placeholder: "John", required: true },
-                      { key: "lastName", label: "Last Name *", placeholder: "Doe", required: true },
+                      { key: "firstName", label: msg("First Name *"), placeholder: "John", required: true },
+                      { key: "lastName", label: msg("Last Name *"), placeholder: "Doe", required: true },
                     ].map((f) => (
                       <div key={f.key} className="space-y-1.5">
-                        <Label>{f.label}</Label>
+                        <Label>{t(f.label)}</Label>
                         <Input
                           placeholder={f.placeholder}
                           value={(shippingAddress as any)[f.key] ?? ""}
@@ -775,7 +778,7 @@ export default function CheckoutPage() {
                     ))}
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Company (Optional)</Label>
+                    <Label>{t("Company (Optional)")}</Label>
                     <Input
                       placeholder="Acme Ltd."
                       value={shippingAddress.company ?? ""}
@@ -786,7 +789,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label>Country *</Label>
+                      <Label>{t("Country *")}</Label>
                       <select
                         value={shippingAddress.country ?? "BD"}
                         onChange={(e) =>
@@ -794,7 +797,7 @@ export default function CheckoutPage() {
                         }
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
-                        <option value="BD">🇧🇩 Bangladesh</option>
+                        <option value="BD">🇧🇩 {t("Bangladesh")}</option>
                         <option value="US">🇺🇸 United States</option>
                         <option value="GB">🇬🇧 United Kingdom</option>
                         <option value="CA">🇨🇦 Canada</option>
@@ -817,10 +820,10 @@ export default function CheckoutPage() {
                         )}
                       />
                       <div className="space-y-1.5">
-                        <Label htmlFor="ship-postcode">Postcode (optional)</Label>
+                        <Label htmlFor="ship-postcode">{t("Postcode (optional)")}</Label>
                         <Input
                           id="ship-postcode"
-                          placeholder="e.g. 1205"
+                          placeholder={t("e.g. 1205")}
                           value={shippingAddress.postcode ?? ""}
                           onChange={(e) => setShippingAddress((s) => ({ ...s, postcode: e.target.value }))}
                         />
@@ -829,7 +832,7 @@ export default function CheckoutPage() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
-                        <Label htmlFor="ship-state">State / Region</Label>
+                        <Label htmlFor="ship-state">{t("State / Region")}</Label>
                         <Input
                           id="ship-state"
                           value={shippingAddress.division ?? ""}
@@ -837,7 +840,7 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="ship-city">City *</Label>
+                        <Label htmlFor="ship-city">{t("City *")}</Label>
                         <Input
                           id="ship-city"
                           value={shippingAddress.district ?? ""}
@@ -845,7 +848,7 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="ship-postcode">Postcode / ZIP</Label>
+                        <Label htmlFor="ship-postcode">{t("Postcode / ZIP")}</Label>
                         <Input
                           id="ship-postcode"
                           value={shippingAddress.postcode ?? ""}
@@ -855,7 +858,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <Label>Address Line 1 *</Label>
+                    <Label>{t("Address Line 1 *")}</Label>
                     <Input
                       placeholder="House #42, Road #11, Banani"
                       value={shippingAddress.addressLine1 ?? ""}
@@ -865,9 +868,9 @@ export default function CheckoutPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Address Line 2 (Optional)</Label>
+                    <Label>{t("Address Line 2 (Optional)")}</Label>
                     <Input
-                      placeholder="Apartment, suite, floor, building"
+                      placeholder={t("Apartment, suite, floor, building")}
                       value={shippingAddress.addressLine2 ?? ""}
                       onChange={(e) =>
                         setShippingAddress((s) => ({ ...s, addressLine2: e.target.value }))
@@ -876,7 +879,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label>Phone Number *</Label>
+                      <Label>{t("Phone Number *")}</Label>
                       <Input
                         placeholder="+8801XXXXXXXXX"
                         value={shippingAddress.phone ?? ""}
@@ -885,14 +888,14 @@ export default function CheckoutPage() {
                         }
                       />
                       <p className="text-[11px] text-muted-foreground">
-                        Rider will call this number for delivery coordination
+                        {t("Rider will call this number for delivery coordination")}
                       </p>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Email</Label>
+                      <Label>{t("Email")}</Label>
                       <Input
                         type="email"
-                        placeholder="Contact email (same as above if filled)"
+                        placeholder={t("Contact email (same as above if filled)")}
                         value={shippingAddress.email ?? contactEmail ?? ""}
                         onChange={(e) =>
                           setShippingAddress((s) => ({ ...s, email: e.target.value }))
@@ -908,10 +911,10 @@ export default function CheckoutPage() {
                     />
                     <div>
                       <Label className="font-semibold cursor-pointer">
-                        Billing address same as shipping
+                        {t("Billing address same as shipping")}
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Uncheck if billing differs (for corporate/invoice orders)
+                        {t("Uncheck if billing differs (for corporate/invoice orders)")}
                       </p>
                     </div>
                   </div>
@@ -922,7 +925,7 @@ export default function CheckoutPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Truck className="h-5 w-5 text-primary" />
-                    Section 3: Shipping Method
+                    {t("Section 3: Shipping Method")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -935,20 +938,20 @@ export default function CheckoutPage() {
                   ) : shippingQueryArgs.countryCode === "BD" && !shippingQueryArgs.district ? (
                     <div className="p-6 rounded-xl border border-dashed text-center text-sm text-muted-foreground">
                       <MapPin className="h-6 w-6 mx-auto mb-2" />
-                      Pick your division and district above to see delivery options and prices.
+                      {t("Pick your division and district above to see delivery options and prices.")}
                     </div>
                   ) : rates.length === 0 ? (
                     <div className="p-6 rounded-xl bg-amber-50 border border-amber-200 text-center">
                       <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
                       <p className="font-semibold text-amber-800 mb-1">
                         {ratesError
-                          ? "We couldn't load delivery options"
-                          : "Sorry, no carriers available for your location"}
+                          ? t("We couldn't load delivery options")
+                          : t("Sorry, no carriers available for your location")}
                       </p>
                       <p className="text-sm text-amber-700/80">
                         {ratesError
-                          ? "Check the division and district, then try again."
-                          : "Please contact support or try a different shipping address."}
+                          ? t("Check the division and district, then try again.")
+                          : t("Please contact support or try a different shipping address.")}
                       </p>
                     </div>
                   ) : (
@@ -988,24 +991,24 @@ export default function CheckoutPage() {
                                   </span>
                                   {isCheapest && (
                                     <Badge variant="success" className="text-[10px] px-2 py-0.5 gap-1">
-                                      <Tag className="h-3 w-3" /> Cheapest
+                                      <Tag className="h-3 w-3" /> {t("Cheapest")}
                                     </Badge>
                                   )}
                                   {isFastest && !isCheapest && (
                                     <Badge variant="default" className="text-[10px] px-2 py-0.5 gap-1">
-                                      <Zap className="h-3 w-3" /> Fastest
+                                      <Zap className="h-3 w-3" /> {t("Fastest")}
                                     </Badge>
                                   )}
                                   {rateIsFree && (
                                     <Badge variant="success" className="text-[10px] px-2 py-0.5 gap-1">
-                                      FREE
+                                      {t("FREE")}
                                     </Badge>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-1">
                                   <Clock className="h-3.5 w-3.5" />
                                   <span>
-                                    Estimated: {rate.estimatedLabel ?? `${rate.minDeliveryDays ?? 1}-${rate.maxDeliveryDays ?? 5} days`}
+                                    {t("Estimated:")} {rate.estimatedLabel ?? t("{min}-{max} days", { min: rate.minDeliveryDays ?? 1, max: rate.maxDeliveryDays ?? 5 })}
                                   </span>
                                 </div>
                                 {rate.description && (
@@ -1019,7 +1022,7 @@ export default function CheckoutPage() {
                                     rateIsFree ? "text-green-600" : "text-foreground",
                                   )}
                                 >
-                                  {rateIsFree ? "FREE" : formatBDT(rate.cost)}
+                                  {rateIsFree ? t("FREE") : formatBDT(rate.cost)}
                                 </div>
                               </div>
                             </div>
@@ -1033,7 +1036,7 @@ export default function CheckoutPage() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-primary" />
-                        <h4 className="font-semibold text-sm">VAT / Tax Breakdown</h4>
+                        <h4 className="font-semibold text-sm">{t("VAT / Tax Breakdown")}</h4>
                       </div>
                       {taxLoading && <Skeleton className="h-5 w-20 rounded" />}
                     </div>
@@ -1042,7 +1045,7 @@ export default function CheckoutPage() {
                         {actualTaxLines.map((line, i) => (
                           <div key={i} className="flex justify-between items-center px-4 py-2.5 text-sm">
                             <span className="text-muted-foreground flex items-center gap-2">
-                              {line.name}
+                              {t(line.name)}
                               {typeof line.rate === "number" && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">
                                   {(line.rate * 100).toFixed(0)}%
@@ -1053,7 +1056,7 @@ export default function CheckoutPage() {
                           </div>
                         ))}
                         <div className="flex justify-between items-center px-4 py-2.5 bg-card font-semibold">
-                          <span>Total Tax</span>
+                          <span>{t("Total Tax")}</span>
                           <span className="text-primary">{formatBDT(actualTaxTotal)}</span>
                         </div>
                       </div>
@@ -1061,7 +1064,7 @@ export default function CheckoutPage() {
                     {(shippingAddress.country ?? "BD") !== "BD" && (
                       <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                         <AlertCircle className="h-3.5 w-3.5" />
-                        International orders may be subject to export-exempt Zero rate VAT and customs duties at destination.
+                        {t("International orders may be subject to export-exempt Zero rate VAT and customs duties at destination.")}
                       </p>
                     )}
                   </div>
@@ -1072,7 +1075,7 @@ export default function CheckoutPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-primary" />
-                    Section 4: Payment Method
+                    {t("Section 4: Payment Method")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1085,13 +1088,13 @@ export default function CheckoutPage() {
                         onChange={(e) => setPayFromWallet(e.target.checked)}
                       />
                       <span className="text-sm">
-                        <span className="font-medium">Pay from my wallet</span>{" "}
-                        <span className="text-muted-foreground">({formatBDT(walletBalance)} available)</span>
+                        <span className="font-medium">{t("Pay from my wallet")}</span>{" "}
+                        <span className="text-muted-foreground">({t("{amount} available", { amount: formatBDT(walletBalance) })})</span>
                         {payFromWallet && (
                           <span className="block text-xs text-muted-foreground">
-                            {formatBDT(walletUsed)} from your wallet
-                            {grandTotal > 0 ? `, ${formatBDT(grandTotal)} by the method below` : ". Nothing more to pay"}
-                            {(loyalty?.wallet.maxPercent ?? 100) < 100 ? ` (the wallet can pay up to ${loyalty!.wallet.maxPercent}% of an order)` : ""}.
+                            {t("{amount} from your wallet", { amount: formatBDT(walletUsed) })}
+                            {grandTotal > 0 ? t(", {amount} by the method below", { amount: formatBDT(grandTotal) }) : t(". Nothing more to pay")}
+                            {(loyalty?.wallet.maxPercent ?? 100) < 100 ? t(" (the wallet can pay up to {percent}% of an order)", { percent: loyalty!.wallet.maxPercent }) : ""}{t(".")}
                           </span>
                         )}
                       </span>
@@ -1111,10 +1114,10 @@ export default function CheckoutPage() {
 
               <div className="flex flex-col sm:flex-row justify-between gap-3 lg:hidden">
                 <Button variant="outline" size="lg" asChild>
-                  <Link href="/cart">← Back to Cart</Link>
+                  <Link href="/cart">← {t("Back to Cart")}</Link>
                 </Button>
                 <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12">
-                  {placingOrder ? "Placing Order..." : `Place Order • ${formatBDT(grandTotal)}`}
+                  {placingOrder ? t("Placing Order...") : `${t("Place Order")} • ${formatBDT(grandTotal)}`}
                 </Button>
               </div>
             </motion.div>
@@ -1125,7 +1128,7 @@ export default function CheckoutPage() {
           {cartHasProblems && (
             <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
               <div className="flex items-center gap-2 font-semibold text-destructive">
-                <AlertCircle className="h-4 w-4" /> Some items can&apos;t be ordered
+                <AlertCircle className="h-4 w-4" /> {t("Some items can't be ordered")}
               </div>
               <ul className="mt-2 space-y-1 text-destructive/90">
                 {Object.values(cartProblems).map((p) => (
@@ -1133,7 +1136,7 @@ export default function CheckoutPage() {
                 ))}
               </ul>
               <Link href="/cart" className="mt-2 inline-block font-medium underline">
-                Update your cart
+                {t("Update your cart")}
               </Link>
             </div>
           )}
@@ -1141,21 +1144,21 @@ export default function CheckoutPage() {
           <PromoSlotStrip slot="checkout" className="mb-4" />
           {!appliedCoupon?.valid && availableCoupons.length > 0 && (
             <div className="mb-4 rounded-xl border p-4">
-              <p className="mb-2 text-sm font-semibold">Coupons you can use</p>
+              <p className="mb-2 text-sm font-semibold">{t("Coupons you can use")}</p>
               <ul className="space-y-2">
                 {availableCoupons.slice(0, 5).map((c) => (
                   <li key={c.code} className="flex items-center justify-between gap-3 text-sm">
                     <span className="min-w-0">
                       <span className="font-mono font-semibold">{c.code}</span>
-                      {c.forYou && <span className="ml-2 rounded bg-primary/10 px-1.5 text-[11px] font-medium text-primary">For you</span>}
+                      {c.forYou && <span className="ml-2 rounded bg-primary/10 px-1.5 text-[11px] font-medium text-primary">{t("For you")}</span>}
                       <span className="block text-xs text-muted-foreground">
                         {c.summary}
-                        {c.minSubtotal ? ` on orders over ${formatBDT(c.minSubtotal)}` : ""}
-                        {c.worksWithPromotions ? "" : " · not with other offers"}
+                        {c.minSubtotal ? ` ${t("on orders over {amount}", { amount: formatBDT(c.minSubtotal) })}` : ""}
+                        {c.worksWithPromotions ? "" : ` · ${t("not with other offers")}`}
                       </span>
                     </span>
                     <Button type="button" size="sm" variant="outline" disabled={applyingCoupon} onClick={() => void applyCode(c.code)}>
-                      Apply
+                      {t("Apply")}
                     </Button>
                   </li>
                 ))}
@@ -1177,7 +1180,7 @@ export default function CheckoutPage() {
                 ? [
                     {
                       id: "gateway-fee",
-                      label: `${selectedGatewayConfig?.name ?? "Payment"} fee`,
+                      label: t("{method} fee", { method: selectedGatewayConfig?.name ?? t("Payment") }),
                       amount: gatewayFee,
                     },
                   ]
@@ -1193,7 +1196,7 @@ export default function CheckoutPage() {
             grandTotal={grandTotal}
             placeOrderDisabled={placingOrder || cartHasProblems}
             placeOrderLoading={placingOrder}
-            placeOrderLabel={`Place Order • ${formatBDT(grandTotal)}`}
+            placeOrderLabel={`${t("Place Order")} • ${formatBDT(grandTotal)}`}
             onPlaceOrder={handlePlaceOrder}
             termsChecked={termsChecked}
             onTermsToggle={setTermsChecked}

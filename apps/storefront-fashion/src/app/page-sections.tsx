@@ -13,6 +13,8 @@ import {
   ProductCardData,
   useGetProductsQuery,
   useGetCategoriesTreeQuery,
+  msg,
+  useT,
 } from "@ecom/storefront-base";
 import type { Faq, HomepageSection } from "@/lib/content";
 import type { SlotPromotion } from "@/lib/promotions";
@@ -51,8 +53,8 @@ const FEATURE_ICONS: Record<string, React.ComponentType<{ className?: string }>>
 
 /** Shown only if the content API is unreachable. */
 const FALLBACK: HomepageSection[] = [
-  { type: "featured_products", enabled: true, config: { heading: "Featured Products", subheading: "", limit: 8 } },
-  { type: "new_arrivals", enabled: true, config: { heading: "New Arrivals", subheading: "", limit: 8 } },
+  { type: "featured_products", enabled: true, config: { heading: msg("Featured Products"), subheading: "", limit: 8 } },
+  { type: "new_arrivals", enabled: true, config: { heading: msg("New Arrivals"), subheading: "", limit: 8 } },
 ];
 
 type SectionOf<T extends HomepageSection["type"]> = Extract<HomepageSection, { type: T }>;
@@ -119,9 +121,9 @@ export function PageSections({
           case "categories":
             return <Categories key={key} section={s} />;
           case "featured_products":
-            return <ProductsBlock key={key} section={s} query={{ featured: true, sort: "popular" }} moreHref="/products" moreLabel="View All Products" {...productProps} />;
+            return <ProductsBlock key={key} section={s} query={{ featured: true, sort: "popular" }} moreHref="/products" moreLabel={msg("View All Products")} {...productProps} />;
           case "new_arrivals":
-            return <ProductsBlock key={key} section={s} query={{ sort: "newest" }} moreHref="/products?sort=newest" moreLabel="See all new" {...productProps} />;
+            return <ProductsBlock key={key} section={s} query={{ sort: "newest" }} moreHref="/products?sort=newest" moreLabel={msg("See all new")} {...productProps} />;
           case "promo_banner":
             return <Promo key={key} section={s} />;
           case "rich_text":
@@ -138,17 +140,22 @@ export function PageSections({
   }
 }
 
+/*
+ * Section text comes from the shop's own settings. It's passed through t(), so the words of the
+ * default homepage (and any the shop wrote that we have Bangla for) follow the page's language.
+ */
 function Hero({ section }: { section: SectionOf<"hero"> }) {
+  const t = useT();
   return (
     <section className="container pt-4 md:pt-6">
       <HeroSlider
         height={{ sm: "360px", md: "460px", lg: "560px" } as unknown as number}
         slides={section.config.slides.map((s, i) => ({
           id: i,
-          badge: s.badge || undefined,
-          title: s.title,
-          subtitle: s.subtitle || undefined,
-          ctaText: s.ctaText || undefined,
+          badge: s.badge ? t(s.badge) : undefined,
+          title: t(s.title),
+          subtitle: s.subtitle ? t(s.subtitle) : undefined,
+          ctaText: s.ctaText ? t(s.ctaText) : undefined,
           ctaHref: s.ctaHref || undefined,
           backgroundImage: s.imageUrl || undefined,
           bgGradient: GRADIENTS[s.gradient] ?? GRADIENTS.violet,
@@ -162,6 +169,7 @@ function Hero({ section }: { section: SectionOf<"hero"> }) {
 
 function Features({ section }: { section: SectionOf<"features"> }) {
   const items = section.config.items;
+  const t = useT();
   return (
     <section className="container">
       <motion.div
@@ -179,8 +187,8 @@ function Features({ section }: { section: SectionOf<"features"> }) {
                 <Icon className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h4 className="font-semibold text-sm md:text-base">{f.title}</h4>
-                <p className="text-xs md:text-sm text-muted-foreground">{f.desc}</p>
+                <h4 className="font-semibold text-sm md:text-base">{t(f.title)}</h4>
+                <p className="text-xs md:text-sm text-muted-foreground">{t(f.desc)}</p>
               </div>
             </div>
           );
@@ -192,6 +200,7 @@ function Features({ section }: { section: SectionOf<"features"> }) {
 
 function Categories({ section }: { section: SectionOf<"categories"> }) {
   const { data: categoryTree = [] } = useGetCategoriesTreeQuery();
+  const t = useT();
   // Leaf categories read best as shop-by-category tiles; fall back to roots for flat trees.
   const cats = React.useMemo(() => {
     const leaves = categoryTree.flatMap((c) => (c.children?.length ? c.children : [c]));
@@ -207,7 +216,11 @@ function Categories({ section }: { section: SectionOf<"categories"> }) {
   if (!cats.length) return null;
   return (
     <section className="container">
-      <FeaturedCategories categories={cats} heading={section.config.heading} subheading={section.config.subheading || undefined} />
+      <FeaturedCategories
+        categories={cats}
+        heading={t(section.config.heading)}
+        subheading={section.config.subheading ? t(section.config.subheading) : undefined}
+      />
     </section>
   );
 }
@@ -230,6 +243,7 @@ function ProductsBlock({
   wishlistedIds: Set<string>;
 }) {
   const { data, isLoading } = useGetProductsQuery({ ...query, perPage: section.config.limit });
+  const t = useT();
   if (!isLoading && !data?.items.length) return null;
   return (
     <section className="container">
@@ -240,12 +254,12 @@ function ProductsBlock({
         className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3"
       >
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{section.config.heading}</h2>
-          {section.config.subheading && <p className="text-muted-foreground mt-1">{section.config.subheading}</p>}
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{t(section.config.heading)}</h2>
+          {section.config.subheading && <p className="text-muted-foreground mt-1">{t(section.config.subheading)}</p>}
         </div>
         <Button variant="outline" asChild>
           <Link href={moreHref}>
-            {moreLabel}
+            {t(moreLabel)}
             <ArrowRight className="h-4 w-4 ml-2" />
           </Link>
         </Button>
@@ -264,21 +278,22 @@ function ProductsBlock({
 
 function Promo({ section }: { section: SectionOf<"promo_banner"> }) {
   const c = section.config;
+  const t = useT();
   return (
     <section className="w-full bg-gradient-to-r from-primary to-primary/70 text-white">
       <div className="container py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
         <div>
           {c.badge && (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-sm font-semibold mb-3">
-              <Truck className="h-4 w-4" /> {c.badge}
+              <Truck className="h-4 w-4" /> {t(c.badge)}
             </div>
           )}
-          <h3 className="text-xl md:text-2xl font-bold">{c.title}</h3>
-          {c.text && <p className="text-white/80 text-sm mt-1">{c.text}</p>}
+          <h3 className="text-xl md:text-2xl font-bold">{t(c.title)}</h3>
+          {c.text && <p className="text-white/80 text-sm mt-1">{t(c.text)}</p>}
         </div>
         {c.ctaText && c.ctaHref && (
           <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-lg min-w-[160px]" asChild>
-            <Link href={c.ctaHref}>{c.ctaText}</Link>
+            <Link href={c.ctaHref}>{t(c.ctaText)}</Link>
           </Button>
         )}
       </div>

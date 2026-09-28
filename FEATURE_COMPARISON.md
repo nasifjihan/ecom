@@ -183,7 +183,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | `/track` order by code + phone | ✅ Batch 26 |
 | `/flash-sale` listing page | ✅ Batch 26 |
 | Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; Batch 30: wallet + refer pages; my coupons not yet |
-| Bangla / Arabic language switch | ❌ |
+| Bangla / Arabic language switch | 🟡 Batch 31: Bangla ⇄ English switch on the storefront, Bangla product/category/brand/menu names, Bangla invoices; no Arabic/RTL |
 | Low-stock label, sales count, Q&A on product page | ✅ Batch 26 |
 | Data-saver mode (lighter images) | ❌ |
 
@@ -221,7 +221,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 28 ✅ | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
 | 29 ✅ | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
-| 31 | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
+| 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings) | Reference's core idea; big change | XL |
 | 33 | Wholesale/B2B, sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
 

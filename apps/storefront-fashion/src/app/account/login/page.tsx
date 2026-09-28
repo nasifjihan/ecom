@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card, CardContent, apiErrorMessage, cn, toast } from "@ecom/storefront-base";
+import { Button, Card, CardContent, apiErrorMessage, cn, msg, toast, useT } from "@ecom/storefront-base";
 import { useAppDispatch } from "@/lib/store";
 import {
   fullName,
@@ -24,6 +24,7 @@ export default function LoginPage() {
   const next = safeNext(params.get("next"));
   const { data: methods } = useLoginMethodsQuery();
   const [method, setMethod] = React.useState<Method | null>(null);
+  const t = useT();
 
   React.useEffect(() => {
     if (hasStoredToken()) router.replace(next);
@@ -37,11 +38,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardContent className="p-6 md:p-8 space-y-6">
           <div className="space-y-1 text-center">
-            <h1 className="text-2xl font-bold">Log in</h1>
-            <p className="text-sm text-muted-foreground">Track your orders and check out faster.</p>
+            <h1 className="text-2xl font-bold">{t("Log in")}</h1>
+            <p className="text-sm text-muted-foreground">{t("Track your orders and check out faster.")}</p>
           </div>
           {methods?.phoneOtp && (
-            <div role="tablist" aria-label="How to log in" className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-medium">
+            <div role="tablist" aria-label={t("How to log in")} className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-medium">
               {(["phone", "email"] as const).map((m) => (
                 <button
                   key={m}
@@ -51,19 +52,19 @@ export default function LoginPage() {
                   onClick={() => setMethod(m)}
                   className={cn("rounded-md py-2 transition-colors", shown === m ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  {m === "phone" ? "Mobile number" : "Email"}
+                  {m === "phone" ? t("Mobile number") : t("Email")}
                 </button>
               ))}
             </div>
           )}
           {shown === "phone" ? <PhoneLogin next={next} /> : <EmailLogin next={next} />}
           <p className="text-center text-sm text-muted-foreground">
-            New here?{" "}
+            {t("New here?")}{" "}
             {shown === "phone" ? (
-              "Enter your number: we'll make your account when you confirm the code."
+              t("Enter your number: we'll make your account when you confirm the code.")
             ) : (
               <Link href={`/account/register${next !== "/account" ? `?next=${encodeURIComponent(next)}` : ""}`} className="font-semibold text-primary hover:underline">
-                Create an account
+                {t("Create an account")}
               </Link>
             )}
           </p>
@@ -80,6 +81,7 @@ function EmailLogin({ next }: { next: string }) {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const t = useT();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,22 +89,22 @@ function EmailLogin({ next }: { next: string }) {
     try {
       const result = await login({ email: email.trim(), password }).unwrap();
       signIn(dispatch, result);
-      toast.success(`Welcome back, ${fullName(result.user)}`);
+      toast.success(t("Welcome back, {name}", { name: fullName(result.user) }));
       router.replace(next);
     } catch (err) {
       const status = (err as { status?: number })?.status;
-      setError(status === 401 ? "That email and password don't match. Please try again." : apiErrorMessage(err, "Couldn't sign you in. Please try again."));
+      setError(status === 401 ? t("That email and password don't match. Please try again.") : apiErrorMessage(err, t("Couldn't sign you in. Please try again.")));
     }
   };
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Field id="email" label="Email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field id="email" label={msg("Email")} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
       <div className="space-y-1">
-        <Field id="password" label="Password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Field id="password" label={msg("Password")} type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         <div className="text-right">
           <Link href={`/account/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`} className="text-xs font-medium text-primary hover:underline">
-            Forgot password?
+            {t("Forgot password?")}
           </Link>
         </div>
       </div>
@@ -112,7 +114,7 @@ function EmailLogin({ next }: { next: string }) {
         </p>
       )}
       <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Logging in..." : "Log in"}
+        {isLoading ? t("Logging in...") : t("Log in")}
       </Button>
     </form>
   );
@@ -132,11 +134,12 @@ function PhoneLogin({ next }: { next: string }) {
   const [name, setName] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [wait, setWait] = React.useState(0);
+  const t = useT();
 
   React.useEffect(() => {
     if (wait <= 0) return;
-    const t = setTimeout(() => setWait((w) => w - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => clearTimeout(timer);
   }, [wait]);
 
   const send = async (e?: React.FormEvent) => {
@@ -147,9 +150,9 @@ function PhoneLogin({ next }: { next: string }) {
       setSentTo(phone.trim());
       setCode("");
       setWait(RESEND_SECONDS);
-      toast.success("Code sent", { description: `We sent a 6-digit code to ${phone.trim()}.` });
+      toast.success(t("Code sent"), { description: t("We sent a 6-digit code to {phone}.", { phone: phone.trim() }) });
     } catch (err) {
-      setError(apiErrorMessage(err, "Couldn't send the code. Please try again."));
+      setError(apiErrorMessage(err, t("Couldn't send the code. Please try again.")));
     }
   };
 
@@ -161,10 +164,10 @@ function PhoneLogin({ next }: { next: string }) {
     try {
       const result = await verify({ phone: sentTo, code: code.trim(), ...(firstName ? { firstName } : {}), ...(rest.length ? { lastName: rest.join(" ") } : {}) }).unwrap();
       signIn(dispatch, result);
-      toast.success(result.created ? `Welcome, ${fullName(result.user)}! Your account is ready.` : `Welcome back, ${fullName(result.user)}`);
+      toast.success(result.created ? t("Welcome, {name}! Your account is ready.", { name: fullName(result.user) }) : t("Welcome back, {name}", { name: fullName(result.user) }));
       router.replace(next);
     } catch (err) {
-      setError(apiErrorMessage(err, "That code didn't work. Please try again."));
+      setError(apiErrorMessage(err, t("That code didn't work. Please try again.")));
     }
   };
 
@@ -173,7 +176,7 @@ function PhoneLogin({ next }: { next: string }) {
       <form onSubmit={send} className="space-y-4">
         <Field
           id="phone"
-          label="Mobile number"
+          label={msg("Mobile number")}
           type="tel"
           inputMode="tel"
           required
@@ -188,7 +191,7 @@ function PhoneLogin({ next }: { next: string }) {
           </p>
         )}
         <Button type="submit" className="w-full" disabled={sending || phone.trim().length < 10}>
-          {sending ? "Sending code..." : "Send code by SMS"}
+          {sending ? t("Sending code...") : t("Send code by SMS")}
         </Button>
       </form>
     );
@@ -197,15 +200,15 @@ function PhoneLogin({ next }: { next: string }) {
   return (
     <form onSubmit={confirm} className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Enter the 6-digit code we sent to <span className="font-medium text-foreground">{sentTo}</span>.{" "}
+        {t("Enter the 6-digit code we sent to {phone}.", { phone: sentTo })}{" "}
         <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setSentTo(null); setError(null); }}>
-          Change number
+          {t("Change number")}
         </button>
       </p>
       <Field
         id="code"
         autoFocus
-        label="Code"
+        label={msg("Code")}
         inputMode="numeric"
         autoComplete="one-time-code"
         pattern="\d{6}"
@@ -215,22 +218,22 @@ function PhoneLogin({ next }: { next: string }) {
         onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
         className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.5em]"
       />
-      <Field id="name" label="Your name (only for new accounts)" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Field id="name" label={msg("Your name (only for new accounts)")} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
       <Button type="submit" className="w-full" disabled={verifying || code.length !== 6}>
-        {verifying ? "Checking..." : "Log in"}
+        {verifying ? t("Checking...") : t("Log in")}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
-        Didn&apos;t get it?{" "}
+        {t("Didn't get it?")}{" "}
         {wait > 0 ? (
-          `Send again in ${wait}s`
+          t("Send again in {n}s", { n: wait })
         ) : (
           <button type="button" className="font-medium text-primary hover:underline" disabled={sending} onClick={() => void send()}>
-            Send a new code
+            {t("Send a new code")}
           </button>
         )}
       </p>

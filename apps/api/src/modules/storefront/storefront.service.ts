@@ -11,7 +11,7 @@
  */
 import { Prisma, type Coupon } from "@prisma/client";
 import { prisma, tx } from "../../config";
-import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext } from "../../core";
+import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext, tr } from "../../core";
 import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
 import { getPaymentProvider } from "../../services/payments";
@@ -110,8 +110,8 @@ function variantLabel(values: unknown): string {
 }
 
 const LIST_INCLUDE = {
-  brand: { select: { id: true, name: true, slug: true } },
-  categories: { include: { category: { select: { id: true, name: true, slug: true } } } },
+  brand: { select: { id: true, name: true, slug: true, translations: true } },
+  categories: { include: { category: { select: { id: true, name: true, slug: true, translations: true } } } },
   images: { orderBy: { sortOrder: "asc" as const }, take: 2 },
   variants: { where: { status: "active" }, select: { stockQty: true, reservedStock: true, manageStock: true, allowBackorder: true } },
 };
@@ -186,7 +186,13 @@ export class StorefrontService {
 
   // ------------------------------------------------------------------ catalog
 
+  /** The shopper's language (see core/translations). */
+  private get locale(): string {
+    return this.ctx.locale;
+  }
+
   private toSummary(p: any, flashSales: FlashSales) {
+    const L = this.locale;
     const { price, compareAtPrice, flash } = pricedWith(flashSales, p, null, p);
     const primary = p.categories?.find((c: any) => c.primary) ?? p.categories?.[0];
     const variants: any[] = p.variants ?? [];
@@ -198,7 +204,7 @@ export class StorefrontService {
     return {
       id: String(p.id),
       slug: p.slug,
-      title: p.name,
+      title: tr(p, L, "name"),
       image: images[0] ?? "",
       images,
       price,
@@ -215,12 +221,12 @@ export class StorefrontService {
       sku: p.sku ?? undefined,
       weightKG: p.weight !== null && p.weight !== undefined ? num(p.weight) : undefined,
       brandId: p.brandId ? String(p.brandId) : undefined,
-      brand: p.brand ? { id: String(p.brand.id), name: p.brand.name, slug: p.brand.slug } : undefined,
+      brand: p.brand ? { id: String(p.brand.id), name: tr(p.brand, L, "name"), slug: p.brand.slug } : undefined,
       categoryId: primary ? String(primary.category.id) : undefined,
       category: primary
-        ? { id: String(primary.category.id), slug: primary.category.slug, name: primary.category.name }
+        ? { id: String(primary.category.id), slug: primary.category.slug, name: tr(primary.category, L, "name") }
         : undefined,
-      shortDescription: p.shortDescription ?? undefined,
+      shortDescription: tr(p, L, "shortDescription") ?? undefined,
     };
   }
 
@@ -269,6 +275,7 @@ export class StorefrontService {
       and.push({
         OR: [
           { name: { contains: q.search, mode: "insensitive" } },
+          { translations: { path: ["bn", "name"], string_contains: q.search.trim() } },
           { sku: { contains: q.search, mode: "insensitive" } },
           { shortDescription: { contains: q.search, mode: "insensitive" } },
           { tags: { has: term } },
@@ -351,8 +358,10 @@ export class StorefrontService {
     const p = await prisma.product.findFirst({
       where: { storeId: this.storeId, slug, status: "published" },
       include: {
-        brand: { select: { id: true, name: true, slug: true } },
-        categories: { include: { category: { select: { id: true, name: true, slug: true, parentId: true } } } },
+        brand: { select: { id: true, name: true, slug: true, translations: true } },
+        categories: {
+          include: { category: { select: { id: true, name: true, slug: true, parentId: true, translations: true } } },
+        },
         images: { orderBy: { sortOrder: "asc" } },
         variants: { where: { status: "active" }, orderBy: { id: "asc" } },
         attributes: { include: { attribute: true, terms: { include: { term: true } } } },
@@ -373,7 +382,7 @@ export class StorefrontService {
     const parent = primary?.category.parentId
       ? await prisma.category.findFirst({
           where: { id: primary.category.parentId, storeId: this.storeId },
-          select: { id: true, name: true, slug: true },
+          select: { id: true, name: true, slug: true, translations: true },
         })
       : null;
 
@@ -385,7 +394,7 @@ export class StorefrontService {
       : [];
     const specifications = [
       ...custom,
-      ...(p.brand ? [{ name: "Brand", value: p.brand.name }] : []),
+      ...(p.brand ? [{ name: "Brand", value: tr(p.brand, this.locale, "name") }] : []),
       ...(p.sku ? [{ name: "SKU", value: p.sku }] : []),
       ...p.attributes.map((a) => ({ name: a.attribute.name, value: a.terms.map((t) => t.term.name).join(", ") })),
       ...(p.weight ? [{ name: "Weight", value: `${num(p.weight)} kg` }] : []),
@@ -407,10 +416,10 @@ export class StorefrontService {
       ...summary,
       rating: round2(rating),
       reviewCount: summary.reviewCount || reviews.length,
-      description: p.description ?? undefined,
+      description: tr(p, this.locale, "description") ?? undefined,
       breadcrumbs: [parent, primary?.category]
-        .filter((c): c is { id: bigint; name: string; slug: string; parentId?: bigint | null } => Boolean(c))
-        .map((c) => ({ id: String(c.id), name: c.name, slug: c.slug })),
+        .filter((c): c is NonNullable<typeof parent> => Boolean(c))
+        .map((c) => ({ id: String(c.id), name: tr(c, this.locale, "name"), slug: c.slug })),
       specifications,
       tags: p.tags,
       /** Orders that included it (shown as "N sold" once it's worth showing). */
@@ -461,7 +470,7 @@ export class StorefrontService {
       nodes.set(String(c.id), {
         id: String(c.id),
         slug: c.slug,
-        name: c.name,
+        name: tr(c, this.locale, "name"),
         image: c.imageUrl ?? undefined,
         parentId: c.parentId ? String(c.parentId) : null,
         productCount: c._count.products,
@@ -493,7 +502,7 @@ export class StorefrontService {
     return rows.map((b) => ({
       id: String(b.id),
       slug: b.slug,
-      name: b.name,
+      name: tr(b, this.locale, "name"),
       logo: b.logoUrl ?? undefined,
       productCount: b._count.products,
     }));
@@ -1179,6 +1188,7 @@ export class StorefrontService {
           memberDiscount: q.totals.memberDiscount,
           memberLevel: q.member?.level ?? null,
           walletUsed: q.totals.walletUsed,
+          locale: this.ctx.locale,
           paymentGatewayCode: gateway.code,
           // Paid in full from the wallet: nothing left to collect.
           paymentStatus: meta.paid || (q.totals.walletUsed > 0 && grandTotal <= 0) ? "paid" : "unpaid",

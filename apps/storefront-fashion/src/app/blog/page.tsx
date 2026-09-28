@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cn } from "@ecom/storefront-base";
-import { formatDate, getBlogCategories, getBlogPosts } from "@/lib/content";
+import { formatDate, getBlogCategories, getBlogPosts, serverT } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -15,7 +15,7 @@ export default async function BlogIndex({ searchParams }: Props) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const category = sp.category || undefined;
-  const [result, categories] = await Promise.all([getBlogPosts(page, category), getBlogCategories()]);
+  const [result, categories, t] = await Promise.all([getBlogPosts(page, category), getBlogCategories(), serverT()]);
   const posts = result?.data ?? [];
   const totalPages = result?.meta.totalPages ?? 1;
   const href = (p: number, c = category) => {
@@ -25,12 +25,12 @@ export default async function BlogIndex({ searchParams }: Props) {
 
   return (
     <div className="container py-10 md:py-14">
-      <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Blog</h1>
-      <p className="mt-2 text-muted-foreground">Style guides, news and tips from our team.</p>
+      <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{t("Blog")}</h1>
+      <p className="mt-2 text-muted-foreground">{t("Style guides, news and tips from our team.")}</p>
 
       {categories && categories.length > 0 && (
-        <nav className="mt-6 flex flex-wrap gap-2" aria-label="Blog categories">
-          {[{ name: "All", slug: "" }, ...categories].map((c) => {
+        <nav className="mt-6 flex flex-wrap gap-2" aria-label={t("Blog categories")}>
+          {[{ name: t("All"), slug: "" }, ...categories].map((c) => {
             const active = (c.slug || undefined) === category;
             return (
               <Link
@@ -49,7 +49,7 @@ export default async function BlogIndex({ searchParams }: Props) {
       )}
 
       {posts.length === 0 ? (
-        <p className="mt-10 text-muted-foreground">No posts yet. Check back soon.</p>
+        <p className="mt-10 text-muted-foreground">{t("No posts yet. Check back soon.")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map((p) => (
@@ -77,15 +77,15 @@ export default async function BlogIndex({ searchParams }: Props) {
         <div className="mt-10 flex items-center justify-center gap-3 text-sm">
           {page > 1 && (
             <Link href={href(page - 1)} className="rounded-md border px-4 py-2 hover:bg-accent">
-              Newer posts
+              {t("Newer posts")}
             </Link>
           )}
           <span className="text-muted-foreground">
-            Page {page} of {totalPages}
+            {t("Page {page} of {pages}", { page, pages: totalPages })}
           </span>
           {page < totalPages && (
             <Link href={href(page + 1)} className="rounded-md border px-4 py-2 hover:bg-accent">
-              Older posts
+              {t("Older posts")}
             </Link>
           )}
         </div>

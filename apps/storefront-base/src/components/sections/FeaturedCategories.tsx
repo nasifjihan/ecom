@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { cn } from "@ecom/utils";
+import { useT } from "../../i18n/provider";
 
 export type FeaturedCategory = {
   id: string | number;
@@ -41,10 +42,13 @@ export const FeaturedCategories: React.FC<FeaturedCategoriesProps> = ({
   variant = "circles",
   cols = 8,
   className,
-  heading = "Shop by Category",
-  subheading = "Browse our wide range of curated collections",
+  heading,
+  subheading,
   showCount = true,
 }) => {
+  const t = useT();
+  heading ??= t("Shop by Category");
+  subheading ??= t("Browse our wide range of curated collections");
   const colsClass =
     cols === 4
       ? "grid-cols-2 sm:grid-cols-4"
@@ -135,7 +139,7 @@ export const FeaturedCategories: React.FC<FeaturedCategoriesProps> = ({
                   <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
                     <h3 className="font-bold text-lg leading-tight">{cat.name}</h3>
                     {showCount && cat.productCount !== undefined && (
-                      <p className="text-xs text-white/80">{cat.productCount} products</p>
+                      <p className="text-xs text-white/80">{t("{n} products", { n: cat.productCount })}</p>
                     )}
                   </div>
                 </div>
@@ -147,7 +151,7 @@ export const FeaturedCategories: React.FC<FeaturedCategoriesProps> = ({
                     {cat.name}
                   </h3>
                   {showCount && cat.productCount !== undefined && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{cat.productCount} items</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("{n} items", { n: cat.productCount })}</p>
                   )}
                 </div>
               )}

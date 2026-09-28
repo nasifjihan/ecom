@@ -7,7 +7,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Gift, Sparkles, Tag, Truck, X } from "lucide-react";
-import { Button, cn } from "@ecom/storefront-base";
+import { Button, cn, useT } from "@ecom/storefront-base";
 import { useSlotPromotionsQuery, type CartPromotions, type PromoSlot, type SlotPromotion } from "@/lib/promotions";
 
 const ICONS = { discount: Tag, free_gift: Gift, bxgy: Sparkles, free_delivery: Truck } as const;
@@ -26,9 +26,10 @@ function Cta({ href, children, className }: { href: string; children: React.Reac
 
 /** Home and category banners: one row per live promotion in the slot. */
 export function PromoBanners({ promotions, className }: { promotions: SlotPromotion[]; className?: string }) {
+  const t = useT();
   if (!promotions.length) return null;
   return (
-    <section className={cn("container", className)} aria-label="Offers">
+    <section className={cn("container", className)} aria-label={t("Offers")}>
       <div className={cn("grid gap-4", promotions.length > 1 && "md:grid-cols-2")}>
         {promotions.map((p) => {
           const Icon = ICONS[p.type];
@@ -62,11 +63,12 @@ export function PromoBanners({ promotions, className }: { promotions: SlotPromot
 
 /** Home offers section: cards side by side. */
 export function PromoOffers({ promotions }: { promotions: SlotPromotion[] }) {
+  const t = useT();
   if (!promotions.length) return null;
   return (
     <section className="container" aria-labelledby="offers-heading">
       <h2 id="offers-heading" className="mb-4 text-2xl font-bold">
-        Offers
+        {t("Offers")}
       </h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {promotions.map((p) => {
@@ -100,10 +102,11 @@ export function PromoOffers({ promotions }: { promotions: SlotPromotion[] }) {
 /** Loads a slot on the client (product page, category list, cart, checkout). */
 export function PromoSlotStrip({ slot, productId, categorySlug, className }: { slot: PromoSlot; productId?: string; categorySlug?: string; className?: string }) {
   const { data = [] } = useSlotPromotionsQuery({ slot, productId, categorySlug });
+  const t = useT();
   if (!data.length) return null;
   if (slot === "category_banner") return <PromoBanners promotions={data} className={cn("px-0", className)} />;
   return (
-    <ul className={cn("space-y-2", className)} aria-label="Offers">
+    <ul className={cn("space-y-2", className)} aria-label={t("Offers")}>
       {data.map((p) => {
         const Icon = ICONS[p.type];
         return (
@@ -123,6 +126,7 @@ export function PromoSlotStrip({ slot, productId, categorySlug, className }: { s
 /** Shown once per visit when a promotion uses the pop-up slot. */
 export function EntryPopup() {
   const { data = [] } = useSlotPromotionsQuery({ slot: "entry_popup" });
+  const t = useT();
   const [open, setOpen] = React.useState(false);
   const p = data[0];
   const closeRef = React.useRef<HTMLButtonElement>(null);
@@ -137,8 +141,8 @@ export function EntryPopup() {
       // Storage blocked: show it anyway.
     }
     if (seen) return;
-    const t = setTimeout(() => setOpen(true), 1200);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setOpen(true), 1200);
+    return () => clearTimeout(timer);
   }, [p, key]);
 
   const close = React.useCallback(() => {
@@ -168,7 +172,7 @@ export function EntryPopup() {
         className="relative w-full max-w-md overflow-hidden rounded-2xl bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <button ref={closeRef} type="button" onClick={close} aria-label="Close" className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60">
+        <button ref={closeRef} type="button" onClick={close} aria-label={t("Close")} className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60">
           <X className="h-4 w-4" />
         </button>
         {p.imageUrl && <img src={p.imageUrl} alt="" className="aspect-[16/9] w-full object-cover" />}
@@ -181,10 +185,10 @@ export function EntryPopup() {
           <div className="mt-5 flex justify-center gap-2">
             {p.linkUrl ? (
               <Button asChild onClick={close}>
-                <Cta href={p.linkUrl}>Shop now</Cta>
+                <Cta href={p.linkUrl}>{t("Shop now")}</Cta>
               </Button>
             ) : (
-              <Button onClick={close}>Start shopping</Button>
+              <Button onClick={close}>{t("Start shopping")}</Button>
             )}
           </div>
         </div>
@@ -195,6 +199,7 @@ export function EntryPopup() {
 
 /** What the cart gets from automatic promotions, and how close the next offer is. */
 export function CartPromotionSummary({ promotions, className }: { promotions: CartPromotions | null; className?: string }) {
+  const t = useT();
   if (!promotions) return null;
   const { discount, bxgy, gifts, freeDelivery, nudges, notes, droppedForCoupon } = promotions;
   const anything = !!discount || !!freeDelivery || droppedForCoupon || bxgy.length + gifts.length + nudges.length + notes.length > 0;
@@ -203,14 +208,14 @@ export function CartPromotionSummary({ promotions, className }: { promotions: Ca
     <div className={cn("space-y-2 text-sm", className)}>
       {droppedForCoupon && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          Your coupon can&apos;t be combined with other offers, so they&apos;re not applied.
+          {t("Your coupon can't be combined with other offers, so they're not applied.")}
         </p>
       )}
       {gifts.map((g) => (
         <div key={g.promotionId} className="flex items-center gap-3 rounded-lg bg-pink-50 px-3 py-2 dark:bg-pink-500/10">
           {g.imageUrl ? <img src={g.imageUrl} alt="" className="h-10 w-10 rounded object-cover" /> : <Gift className="h-5 w-5 text-pink-600" />}
           <span className="text-xs">
-            <span className="font-semibold text-pink-700 dark:text-pink-300">Free gift</span>
+            <span className="font-semibold text-pink-700 dark:text-pink-300">{t("Free gift")}</span>
             <span className="block">
               {g.qty} × {g.title}
             </span>
@@ -219,7 +224,7 @@ export function CartPromotionSummary({ promotions, className }: { promotions: Ca
       ))}
       {freeDelivery && (
         <p className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          <Truck className="h-4 w-4" /> Free delivery ({freeDelivery.name})
+          <Truck className="h-4 w-4" /> {t("Free delivery ({name})", { name: freeDelivery.name })}
         </p>
       )}
       {nudges.map((n) => (

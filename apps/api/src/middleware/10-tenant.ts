@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config";
 import type { RequestContext } from "../core";
-import { ForbiddenError, UnauthorizedError } from "../core";
+import { ForbiddenError, UnauthorizedError, normalizeLocale } from "../core";
+import { defaultLocale } from "../modules/settings/languages";
 
 declare global {
   namespace Express {
@@ -85,7 +86,9 @@ export default async function tenantMiddleware(
       storeId: undefined,
       requestId: req.requestId,
       ip: req.ip,
-      locale: String(req.headers["accept-language"] || req.cookies?.locale || "en").split(",")[0] || "en",
+      // The storefront says which language it shows (header from the browser, ?lang= from its
+      // server, where the query string also keeps cached pages apart per language).
+      locale: normalizeLocale(req.get("x-locale") ?? req.query.lang ?? req.cookies?.locale),
       currency: (req.cookies?.currency as string) || "BDT",
     };
   }
@@ -135,6 +138,12 @@ export default async function tenantMiddleware(
     } else {
       req.store = { id: forcedStoreId, status: "active" };
     }
+  }
+
+  // A storefront request that doesn't say which language gets the shop's default.
+  const namedLocale = req.get("x-locale") ?? req.query.lang ?? req.cookies?.locale;
+  if (!namedLocale && req.ctx.storeId && req.path.startsWith("/api/storefront")) {
+    req.ctx.locale = await defaultLocale(req.ctx.storeId).catch(() => "en" as const);
   }
 
   const needsStore = /^\/api\/(admin|store\/(?!(currencies|countries|states|find-domain)))/i.test(req.path);

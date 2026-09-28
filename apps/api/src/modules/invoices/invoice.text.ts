@@ -1,0 +1,107 @@
+/** Invoice wording in the languages a customer can shop in (the order's `locale` picks one). */
+
+export type InvoiceLang = "en" | "bn"
+
+export interface InvoiceText {
+  invoice: string
+  invoiceNumber: string
+  invoiceDate: string
+  orderNumber: string
+  orderDate: string
+  billTo: string
+  shipTo: string
+  payment: string
+  delivery: string
+  tracking: string
+  item: string
+  qty: string
+  unitPrice: string
+  total: string
+  orderNote: string
+  subtotal: string
+  discount: string
+  deliveryCharge: string
+  free: string
+  tax: string
+  paymentFee: string
+  paidFromWallet: string
+  amountPaid: string
+  amountDue: string
+  refunded: string
+  paid: string
+  dueOnDelivery: string
+  paymentDue: string
+  thanks: (store: string) => string
+  page: (n: number, of: number) => string
+  /** Dates as "28 September 2026" / "২৮ সেপ্টেম্বর, ২০২৬". */
+  date: (d: Date) => string
+}
+
+export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
+  en: {
+    invoice: "INVOICE",
+    invoiceNumber: "Invoice number",
+    invoiceDate: "Invoice date",
+    orderNumber: "Order number",
+    orderDate: "Order date",
+    billTo: "Bill to",
+    shipTo: "Ship to",
+    payment: "Payment",
+    delivery: "Delivery",
+    tracking: "Tracking",
+    item: "Item",
+    qty: "Qty",
+    unitPrice: "Unit price",
+    total: "Total",
+    orderNote: "Order note",
+    subtotal: "Subtotal",
+    discount: "Discount",
+    deliveryCharge: "Delivery",
+    free: "Free",
+    tax: "Tax",
+    paymentFee: "Payment fee",
+    paidFromWallet: "Paid from wallet",
+    amountPaid: "Amount paid",
+    amountDue: "Amount due",
+    refunded: "Refunded",
+    paid: "Paid",
+    dueOnDelivery: "Due on delivery",
+    paymentDue: "Payment due",
+    thanks: (store) => `Thank you for shopping with ${store}.`,
+    page: (n, of) => `Page ${n} of ${of}`,
+    date: (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+  },
+  bn: {
+    invoice: "চালান",
+    invoiceNumber: "চালান নম্বর",
+    invoiceDate: "চালানের তারিখ",
+    orderNumber: "অর্ডার নম্বর",
+    orderDate: "অর্ডারের তারিখ",
+    billTo: "বিল প্রাপক",
+    shipTo: "ডেলিভারির ঠিকানা",
+    payment: "পেমেন্ট",
+    delivery: "ডেলিভারি",
+    tracking: "ট্র্যাকিং",
+    item: "পণ্য",
+    qty: "পরিমাণ",
+    unitPrice: "একক মূল্য",
+    total: "মোট",
+    orderNote: "অর্ডার নোট",
+    subtotal: "সাবটোটাল",
+    discount: "ছাড়",
+    deliveryCharge: "ডেলিভারি চার্জ",
+    free: "ফ্রি",
+    tax: "কর",
+    paymentFee: "পেমেন্ট ফি",
+    paidFromWallet: "ওয়ালেট থেকে পরিশোধ",
+    amountPaid: "পরিশোধিত",
+    amountDue: "পরিশোধ বাকি",
+    refunded: "ফেরত দেওয়া হয়েছে",
+    paid: "পরিশোধিত",
+    dueOnDelivery: "ডেলিভারির সময় পরিশোধ",
+    paymentDue: "পেমেন্ট বাকি",
+    thanks: (store) => `${store} থেকে কেনাকাটার জন্য ধন্যবাদ।`,
+    page: (n, of) => `পৃষ্ঠা ${n} / ${of}`,
+    date: (d) => d.toLocaleDateString("bn-BD", { day: "numeric", month: "long", year: "numeric" }),
+  },
+}

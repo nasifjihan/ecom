@@ -8,7 +8,15 @@
 import { Prisma } from "@prisma/client"
 import { slugify } from "@ecom/utils"
 import { prisma } from "../../config"
-import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  mergeTranslations,
+  translationsFor,
+  type RequestContext,
+} from "../../core"
+import { storeLanguages } from "../settings/languages"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
 import {
   HomepageSectionDto,
@@ -306,6 +314,7 @@ export class ContentService {
     openInNewTab: true,
     sortOrder: true,
     parentId: true,
+    translations: true,
   } as const
 
   /** Items come back as a two-level tree in display order. */
@@ -317,11 +326,13 @@ export class ContentService {
       openInNewTab: boolean
       sortOrder: number
       parentId: bigint | null
+      translations: Prisma.JsonValue
     }[],
   ) {
     const byOrder = [...items].sort((a, b) => a.sortOrder - b.sortOrder)
     const leaf = (i: (typeof items)[number]) => ({
       title: i.title,
+      titleBn: translationsFor(i.translations, "bn").title ?? "",
       url: i.url ?? "/",
       openInNewTab: i.openInNewTab,
     })
@@ -394,6 +405,7 @@ export class ContentService {
             menuId: id,
             type: "link",
             title: item.title,
+            translations: mergeTranslations(null, { bn: { title: item.titleBn } }),
             url: item.url,
             openInNewTab: item.openInNewTab,
             sortOrder: i,
@@ -406,6 +418,7 @@ export class ContentService {
               parentId: root.id,
               type: "link",
               title: c.title,
+              translations: mergeTranslations(null, { bn: { title: c.titleBn } }),
               url: c.url,
               openInNewTab: c.openInNewTab,
               sortOrder: j,
@@ -504,7 +517,7 @@ export class ContentService {
 
   /** Everything the header and footer need, in one request. */
   async site() {
-    const [theme, menus, footerPages] = await Promise.all([
+    const [theme, menus, footerPages, languages] = await Promise.all([
       this.getTheme(),
       this.listMenus(),
       prisma.cmsPage.findMany({
@@ -512,10 +525,36 @@ export class ContentService {
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
         select: { title: true, slug: true },
       }),
+      storeLanguages(this.storeId),
     ])
+    // Menu links in the shopper's language (Bangla titles where the shop gave them).
+    interface Link {
+      title: string
+      titleBn: string
+      url: string
+      openInNewTab: boolean
+      children?: Link[]
+    }
+    interface Shown {
+      title: string
+      url: string
+      openInNewTab: boolean
+      children?: Shown[]
+    }
+    const inLocale = (l: Link): Shown => {
+      const { titleBn, children, ...rest } = l
+      return {
+        ...rest,
+        title: this.ctx.locale === "bn" && titleBn ? titleBn : l.title,
+        ...(children ? { children: children.map(inLocale) } : {}),
+      }
+    }
+    for (const m of menus) m.items = m.items.map(inLocale) as typeof m.items
     const header = menus.find((m) => m.location === "header")
     return {
       theme,
+      /** Languages the storefront offers; the switcher shows when there's more than one. */
+      languages,
       headerMenu: header?.items.length ? header.items : null,
       footerMenus: menus
         .filter((m) => m.location === "footer" && m.items.length)

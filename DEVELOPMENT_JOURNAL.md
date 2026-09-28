@@ -2489,3 +2489,93 @@ Customers now have a wallet they can pay from at checkout, earn cashback when an
 - No wallet top-up with money, withdrawals, or cashback expiry.
 - No referral fraud checks beyond same-phone and "new customers only"; no payout to anything other than the wallet.
 - Emails / SMS for cashback and referral rewards.
+
+## ✅ BATCH #31 — Bangla storefront and a Unicode invoice font (2026-09-28)
+Shoppers can switch the storefront between English and বাংলা. Every button, form, checkout step, account page and message is translated. Product, category, brand and menu names show in Bangla wherever the shop has entered them. Invoices and shipping labels now print Bangla and the ৳ sign properly (before, Bangla came out as "?" and ৳ as "Tk"), and an order's invoice is in the language it was placed in.
+
+### 31.1 Invoice and label font (`modules/invoices/pdf-fonts.ts`)
+- **One font:**
+  - `assets/fonts/InvoiceSans-{Regular,Bold}.ttf` is Noto Sans (Latin, punctuation, currency) merged with Noto Sans Bengali (Bangla and ৳), about 150 KB each, SIL OFL (`assets/fonts/OFL.txt`);
+  - `scripts/build-invoice-font.py` rebuilds it from the Noto sources with fontTools.
+- **Shaping:**
+  - pdfkit lays text out with fontkit, which gets some Bangla joined letters wrong ("চন্দ্র" lost its ra-phala, and a space after it disappeared). This was checked with the original Noto font too, so the merge isn't the cause;
+  - the font's layout is swapped for HarfBuzz (`harfbuzzjs`, WebAssembly), the shaper browsers use; pdfkit still wraps, aligns, subsets and embeds.
+- **Copying text:**
+  - each glyph copies as its own letter, and letters merged into a joined glyph go on that glyph, so copying from the PDF gives readable Bangla (vowel signs come out in the order they're drawn, as in most Bangla PDFs);
+  - a glyph with no letter of its own copies as an invisible ZWNJ, since an empty entry made PDF viewers paste junk.
+- **What prints:**
+  - `pdfText` keeps Bangla, ৳ and Latin, and turns what the font can't draw (emoji, other scripts) into "?";
+  - BDT amounts print as ৳4,290.00 on invoices and labels.
+- **Bangla invoices:**
+  - `Order.locale` (migration `order_locale`) records the language the customer shopped in;
+  - that order's invoice uses Bangla labels and Bangla dates (`invoice.text.ts`);
+  - letter spacing is off for Bangla headings, because it pulls vowel signs away from their letters.
+
+### 31.2 API
+- **Picking the language:** `ctx.locale` comes from the `X-Locale` header (browser) or `?lang=` (storefront server, where it also keeps cached pages apart per language). A storefront request that names no language gets the shop's default (`settings/languages.ts`, cached for a minute).
+- **Translated rows:**
+  - `core/translations.ts` (`tr`, `mergeTranslations`, `normalizeLocale`, with unit tests);
+  - rows keep other languages in their `translations` JSON (`{ "bn": { "name": … } }`), and anything not translated falls back to the row's own text;
+  - applied to product cards, product pages (name, short and long description, breadcrumbs), categories, brands, search suggestions and header/footer menus.
+- **Search** also matches Bangla product and category names ("শাড়ি" finds the Jamdani saree).
+- **Saving:**
+  - products, categories and brands take `translations.bn` (blank removes a text);
+  - menu links take `titleBn`.
+- **Settings:** `GET/PUT /api/admin/settings/languages` (English always on, Bangla on/off, default language). The storefront's `/content/site` returns the languages it offers.
+- **Seed:** Bangla names for the demo catalogue, and Bangla switched on.
+
+### 31.3 Storefront
+- **Translation module (`storefront-base/src/i18n`):**
+  - `translate()` / `useT()` with the English text as the key and `{placeholders}`; a missing translation shows the English;
+  - `bn.ts` holds about 760 Bangla texts;
+  - `msg("…")` marks English kept in lists (sort options, status words, gateway descriptions) so it's checked too.
+- **Coverage test:** `tests/i18n.test.ts` reads every `t("…")` and `msg("…")` in both storefronts and fails if one has no Bangla, or if its placeholders differ.
+- **Language switch:**
+  - an "English / বাংলা" button in the header (and the mobile menu), shown when the shop offers both;
+  - the choice is kept in a `lang` cookie for a year;
+  - server pages read it, `<html lang>` follows it, and API calls send it.
+- **What's translated:**
+  - navbar, footer, cart drawer, product cards, product list and filters, product page (including the review and question forms), cart, the whole checkout (steps, address, delivery, payment methods, wallet, coupons, summary), thank-you page;
+  - the account area (log-in, register, password reset, profile, orders, order detail with parcels and returns, addresses, wallet, refer a friend), order tracking, search, wishlist, flash sale, FAQ, blog list, CMS pages, home sections and toasts.
+- **Shop-written text:** the default homepage and menu words ("Home", "Shop", "Fast Delivery"…) are in the dictionary, so a shop that kept the defaults reads in Bangla too.
+- **Dates and prices:** dates in Bangla (`bn-BD`); prices keep Latin digits (৳ / BDT 4,290), as most Bangladeshi shops show them.
+- **Web font:** Noto Sans Bengali (100 KB WOFF2, weight axis only) is served by the shop and loaded only for Bangla characters (`unicode-range`), so English pages don't fetch it.
+- **Removed:** an old placeholder "Write a Review" card on the product page. It sat next to the real review form and only showed a toast saying reviews weren't open.
+- **Fix:** the thank-you page no longer says "Thank you for shopping with Fashion BD" on every store.
+
+### 31.4 Store admin
+- **Settings → Languages:** offer Bangla, and choose which language the storefront opens in.
+- **Product editor (new and edit):** an "In Bangla (বাংলা)" box for name, short and long description.
+- **Categories and brands:** Bangla name and description.
+- **Menus:** a Bangla label beside each link.
+
+### 31.5 Checked
+- **Tests:** 510/510 API tests, including:
+  - translation helpers and language settings;
+  - a Bangla invoice renders;
+  - HarfBuzz shaping keeps every character copyable, and "চন্দ্র" shapes to fewer glyphs;
+  - 4 storefront-base tests (every one of 720 texts has Bangla with matching placeholders).
+  - The same 2 old unhandled errors from the batch-9 smoke test remain.
+- **PDFs, rendered and looked at:**
+  - an invoice with Bangla names and addresses ("চন্দ্রিমা", "স্ত্রী", "ক্ষেত্রপাড়া") and ৳;
+  - a real Bangla order's invoice, with Bangla labels and dates.
+- **By API:**
+  - products, categories, brands and breadcrumbs come back in Bangla with `X-Locale: bn` or `?lang=bn`, and in English without;
+  - a Bangla search finds products;
+  - language settings drop unknown codes and fall back to English for a bad default.
+- **Chromium:**
+  - the header switch (English → বাংলা) sets `lang="bn"` and reloads in Bangla: home page, product page, cart, full checkout;
+  - a guest order placed in Bangla, with the thank-you page in Bangla and the order stored as `bn`;
+  - log-in and wallet pages in Bangla;
+  - admin Languages page; saving a Bangla short description on a product (stored; the empty box was dropped); category and menu editors;
+  - no failed requests or page errors.
+- **Lint and builds:**
+  - new files lint clean, and edited files have no more lint errors than before (two checkout components now import `cn` / `formatMoney` from `@ecom/utils`, which removed some existing errors too);
+  - API typecheck passes; admin and storefront build.
+
+### 31.6 Not done
+- **Messages worded by the API** stay English: cart problems, promotion nudges such as "Add ৳710 more for free delivery", coupon summaries, and SMS/email templates.
+- **Order lines** keep the product name as it was when ordered (English), on the order, invoice and account pages.
+- **Shop-written text** such as the announcement bar, promotion headlines, CMS page bodies, blog posts and FAQs has no Bangla field yet; it shows as entered. The About page is fixed English text.
+- **Admin panel** is English only.
+- **Other:** no Arabic or right-to-left layout; no Bangla digits for prices; SEO metadata stays English.

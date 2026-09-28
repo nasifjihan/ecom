@@ -28,6 +28,7 @@ const corsMw = cors({
     "X-Request-Id",
     "X-Store-Id",
     "X-CSRF-Token",
+    "X-Locale",
   ],
   exposedHeaders: ["X-Request-Id", "X-Total-Count", "Link"],
   maxAge: 86400,

@@ -222,9 +222,10 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
         id: menu.id,
         items: items.map((it) => ({
           title: it.title.trim(),
+          titleBn: it.titleBn?.trim() ?? "",
           url: it.url.trim(),
           openInNewTab: it.openInNewTab,
-          children: it.children.map((c) => ({ title: c.title.trim(), url: c.url.trim(), openInNewTab: c.openInNewTab })),
+          children: it.children.map((c) => ({ title: c.title.trim(), titleBn: c.titleBn?.trim() ?? "", url: c.url.trim(), openInNewTab: c.openInNewTab })),
         })),
       }).unwrap();
       toast.success("Menu saved");
@@ -250,6 +251,14 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
       <div className={cn("flex flex-wrap items-center gap-2 rounded-md border bg-background p-2", path.length === 2 && "ml-8", bad && "border-rose-300")}>
         {path.length === 2 && <CornerDownRight className="h-4 w-4 text-slate-400" />}
         <Input aria-label="Label" className="h-9 w-40 flex-1 min-w-[8rem]" placeholder="Label" value={l.title} onChange={(e) => patch(path, { title: e.target.value })} />
+        <Input
+          aria-label="Label in Bangla"
+          lang="bn"
+          className="h-9 w-32 flex-1 min-w-[7rem]"
+          placeholder="বাংলা (optional)"
+          value={l.titleBn ?? ""}
+          onChange={(e) => patch(path, { titleBn: e.target.value })}
+        />
         <Input aria-label="Address" className="h-9 w-56 flex-[2] min-w-[10rem]" placeholder="/products or https://..." value={l.url} onChange={(e) => patch(path, { url: e.target.value })} />
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
           <Checkbox checked={l.openInNewTab} onCheckedChange={(v) => patch(path, { openInNewTab: v })} /> New tab

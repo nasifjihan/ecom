@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { MapPin, Plus } from "lucide-react";
-import { Badge, Button, Card, CardContent, Skeleton, apiErrorMessage, toast } from "@ecom/storefront-base";
+import { Badge, Button, Card, CardContent, Skeleton, apiErrorMessage, msg, toast, useT } from "@ecom/storefront-base";
 import {
   useAddMyAddressMutation,
   useDeleteMyAddressMutation,
@@ -16,7 +16,7 @@ import { AccountShell, AddressForm, emptyAddress, toAddressInput } from "../_com
 
 export default function AddressesPage() {
   return (
-    <AccountShell title="Addresses" description="Your default address fills in automatically at checkout.">
+    <AccountShell title={msg("Addresses")} description={msg("Your default address fills in automatically at checkout.")}>
       <AddressBook />
     </AccountShell>
   );
@@ -29,14 +29,15 @@ function AddressBook() {
   const [remove] = useDeleteMyAddressMutation();
   const [setDefault] = useSetMyDefaultAddressMutation();
   const [editing, setEditing] = React.useState<CustomerAddress | "new" | null>(null);
+  const t = useT();
 
   const run = async (fn: () => Promise<unknown>, ok: string, fail: string) => {
     try {
       await fn();
-      toast.success(ok);
+      toast.success(t(ok));
       return true;
     } catch (err) {
-      toast.error(fail, { description: apiErrorMessage(err) });
+      toast.error(t(fail), { description: apiErrorMessage(err) });
       return false;
     }
   };
@@ -44,22 +45,22 @@ function AddressBook() {
   const save = async (a: AddressInput) => {
     const done =
       editing === "new"
-        ? await run(() => add(a).unwrap(), "Address added", "Couldn't add the address")
-        : await run(() => update({ id: (editing as CustomerAddress).id, ...a }).unwrap(), "Address updated", "Couldn't update the address");
+        ? await run(() => add(a).unwrap(), msg("Address added"), msg("Couldn't add the address"))
+        : await run(() => update({ id: (editing as CustomerAddress).id, ...a }).unwrap(), msg("Address updated"), msg("Couldn't update the address"));
     if (done) setEditing(null);
   };
 
   if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;
-  if (isError || !addresses) return <p className="text-sm text-destructive">Couldn't load your addresses. Please refresh the page.</p>;
+  if (isError || !addresses) return <p className="text-sm text-destructive">{t("Couldn't load your addresses. Please refresh the page.")}</p>;
 
   if (editing) {
     return (
       <Card>
         <CardContent className="p-6">
-          <h2 className="font-semibold mb-4">{editing === "new" ? "New address" : "Edit address"}</h2>
+          <h2 className="font-semibold mb-4">{editing === "new" ? t("New address") : t("Edit address")}</h2>
           <AddressForm
             initial={editing === "new" ? { ...emptyAddress(), isDefault: addresses.length === 0 } : toAddressInput(editing)}
-            submitLabel={editing === "new" ? "Add address" : "Save address"}
+            submitLabel={editing === "new" ? msg("Add address") : msg("Save address")}
             busy={adding || updating}
             onSubmit={save}
             onCancel={() => setEditing(null)}
@@ -72,13 +73,13 @@ function AddressBook() {
   return (
     <div className="space-y-4">
       <Button onClick={() => setEditing("new")}>
-        <Plus className="h-4 w-4 mr-2" /> Add address
+        <Plus className="h-4 w-4 mr-2" /> {t("Add address")}
       </Button>
       {addresses.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center space-y-2">
             <MapPin className="h-10 w-10 mx-auto text-muted-foreground" />
-            <p className="font-medium">No saved addresses yet.</p>
+            <p className="font-medium">{t("No saved addresses yet.")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -91,7 +92,7 @@ function AddressBook() {
                     {a.firstName} {a.lastName}
                   </p>
                   {a.label && <Badge variant="outline">{a.label}</Badge>}
-                  {a.isDefault && <Badge className="border-0 bg-primary/10 text-primary">Default</Badge>}
+                  {a.isDefault && <Badge className="border-0 bg-primary/10 text-primary">{t("Default")}</Badge>}
                 </div>
                 <div className="text-muted-foreground">
                   <p>{[a.address1, a.address2].filter(Boolean).join(", ")}</p>
@@ -100,20 +101,20 @@ function AddressBook() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => setEditing(a)}>
-                    Edit
+                    {t("Edit")}
                   </Button>
                   {!a.isDefault && (
-                    <Button size="sm" variant="outline" onClick={() => run(() => setDefault({ id: a.id, type: a.type }).unwrap(), "Default address updated", "Couldn't change the default")}>
-                      Make default
+                    <Button size="sm" variant="outline" onClick={() => run(() => setDefault({ id: a.id, type: a.type }).unwrap(), msg("Default address updated"), msg("Couldn't change the default"))}>
+                      {t("Make default")}
                     </Button>
                   )}
                   <Button
                     size="sm"
                     variant="ghost"
                     className="text-destructive"
-                    onClick={() => window.confirm("Delete this address?") && run(() => remove(a.id).unwrap(), "Address deleted", "Couldn't delete the address")}
+                    onClick={() => window.confirm(t("Delete this address?")) && run(() => remove(a.id).unwrap(), msg("Address deleted"), msg("Couldn't delete the address"))}
                   >
-                    Delete
+                    {t("Delete")}
                   </Button>
                 </div>
               </CardContent>

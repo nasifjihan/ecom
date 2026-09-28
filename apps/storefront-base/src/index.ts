@@ -125,3 +125,5 @@ export { cn, formatMoney, moneyAdd, moneyMul, slugify, newId, deepClone, wait } 
 export type { ClassValue } from "clsx";
 
 export { toast, Toaster } from "sonner";
+
+export * from "./i18n";

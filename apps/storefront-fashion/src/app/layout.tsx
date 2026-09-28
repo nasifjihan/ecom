@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Footer } from "@ecom/storefront-base";
+import { Footer, translatorFor } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
-import { getSite, getSlotPromotions, hexToHslVar } from "@/lib/content";
+import { getSite, getSlotPromotions, hexToHslVar, pageLocale } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 
@@ -124,41 +124,43 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [site, barPromos] = await Promise.all([getSite(), getSlotPromotions("announcement_bar")]);
+  const [site, barPromos, locale] = await Promise.all([getSite(), getSlotPromotions("announcement_bar"), pageLocale()]);
+  const t = translatorFor(locale);
+  const languages = site?.languages?.enabled ?? ["en"];
   const theme = site?.theme;
   const storeName = theme?.brand.storeName ?? "Fashion BD";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
   const announcement = theme?.announcement.enabled && theme.announcement.text ? theme.announcement : null;
   // Shop pages every store has, next to the store's own footer menus.
   const quickLinks = {
-    title: "Shop",
+    title: t("Shop"),
     links: [
-      { label: "Track your order", href: "/track" },
-      { label: "Flash sale", href: "/flash-sale" },
-      { label: "Wishlist", href: "/wishlist" },
-      { label: "Search", href: "/search" },
+      { label: t("Track your order"), href: "/track" },
+      { label: t("Flash sale"), href: "/flash-sale" },
+      { label: t("Wishlist"), href: "/wishlist" },
+      { label: t("Search"), href: "/search" },
     ],
   };
   const footerColumns = site
     ? [
         quickLinks,
         ...site.footerMenus.map((m) => ({
-          title: m.title,
-          links: m.links.map((l) => ({ label: l.title, href: l.url, external: l.openInNewTab || /^https?:/i.test(l.url) })),
+          title: t(m.title),
+          links: m.links.map((l) => ({ label: t(l.title), href: l.url, external: l.openInNewTab || /^https?:/i.test(l.url) })),
         })),
-        ...(site.footerPages.length ? [{ title: "Information", links: site.footerPages.map((p) => ({ label: p.title, href: p.url })) }] : []),
+        ...(site.footerPages.length ? [{ title: t("Information"), links: site.footerPages.map((p) => ({ label: p.title, href: p.url })) }] : []),
       ]
     : undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
         {/* The store's brand colour, from the admin theme settings; hexToHslVar only ever returns digits and %. */}
         {primary && <style>{`:root{--primary:${primary};--ring:${primary}}`}</style>}
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
-        <Providers>
+        <Providers locale={locale} languages={languages}>
           {announcement && (
             <div className="bg-primary text-primary-foreground text-center text-xs sm:text-sm font-medium px-4 py-2">
               {announcement.link ? (
@@ -171,7 +173,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           )}
           {barPromos.length > 0 && (
-            <div className="bg-foreground text-background text-center text-xs sm:text-sm font-medium px-4 py-2" aria-label="Offers">
+            <div className="bg-foreground text-background text-center text-xs sm:text-sm font-medium px-4 py-2" aria-label={t("Offers")}>
               {barPromos.map((p, i) => (
                 <span key={p.id}>
                   {i > 0 && <span className="mx-2 opacity-50" aria-hidden="true">·</span>}

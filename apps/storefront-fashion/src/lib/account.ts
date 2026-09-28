@@ -10,7 +10,7 @@
  */
 import { api, fileResponse, toPaginated, type Paginated } from "@ecom/api-client";
 import type { AppDispatch } from "@/lib/store";
-import type { OrderPayment, TransferInput } from "@ecom/storefront-base";
+import { msg, type OrderPayment, type TransferInput } from "@ecom/storefront-base";
 
 const TOKEN_KEY = "accessToken";
 const CUSTOMER_KEY = "customer";
@@ -114,12 +114,12 @@ export interface MyOrder {
 }
 
 export const RETURN_REASONS = [
-  { value: "wrong_size", label: "Wrong size" },
-  { value: "damaged", label: "Damaged or faulty" },
-  { value: "not_as_described", label: "Not as described" },
-  { value: "wrong_item", label: "Wrong item sent" },
-  { value: "changed_mind", label: "Changed my mind" },
-  { value: "other", label: "Other" },
+  { value: "wrong_size", label: msg("Wrong size") },
+  { value: "damaged", label: msg("Damaged or faulty") },
+  { value: "not_as_described", label: msg("Not as described") },
+  { value: "wrong_item", label: msg("Wrong item sent") },
+  { value: "changed_mind", label: msg("Changed my mind") },
+  { value: "other", label: msg("Other") },
 ] as const;
 
 export interface ReturnRequestInput {

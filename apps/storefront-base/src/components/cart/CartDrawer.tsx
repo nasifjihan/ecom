@@ -17,6 +17,7 @@ import {
 } from "../ui";
 import { useCart, type CartItem } from "./CartProvider";
 import { cn, formatMoney, moneyMul } from "@ecom/utils";
+import { useT } from "../../i18n/provider";
 
 export type CartDrawerProps = {
   storeName?: string;
@@ -37,6 +38,7 @@ function CartItemRow({
   onRemove: () => void;
 }) {
   const lineTotal = moneyMul(item.price, item.qty);
+  const t = useT();
   return (
     <div className="flex gap-3 py-4">
       <Link
@@ -56,7 +58,7 @@ function CartItemRow({
           <button
             onClick={onRemove}
             className="p-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors flex-shrink-0"
-            aria-label="Remove item"
+            aria-label={t("Remove item")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -67,7 +69,7 @@ function CartItemRow({
             <button
               onClick={() => onUpdateQty(item.qty - 1)}
               className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-l-md transition-colors"
-              aria-label="Decrease quantity"
+              aria-label={t("Decrease quantity")}
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
@@ -77,7 +79,7 @@ function CartItemRow({
             <button
               onClick={() => onUpdateQty(item.qty + 1)}
               className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-r-md transition-colors"
-              aria-label="Increase quantity"
+              aria-label={t("Increase quantity")}
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -85,7 +87,7 @@ function CartItemRow({
           <div className="text-right">
             <span className="font-bold">{formatMoney(lineTotal, currency)}</span>
             <div className="text-[11px] text-muted-foreground">
-              {formatMoney(item.price, currency)} each
+              {t("{price} each", { price: formatMoney(item.price, currency) })}
             </div>
           </div>
         </div>
@@ -128,6 +130,7 @@ export function CartDrawer({
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
+  const t = useT();
 
   const defaultGoToCheckout = React.useCallback(() => {
     window.location.href = "/checkout";
@@ -141,14 +144,14 @@ export function CartDrawer({
             <div>
               <SheetTitle className="flex items-center gap-2 text-lg">
                 <ShoppingCart className="h-5 w-5 text-primary" />
-                Your Cart {itemCount > 0 && <span className="text-sm font-normal text-muted-foreground">({itemCount} items)</span>}
+                {t("Your Cart")} {itemCount > 0 && <span className="text-sm font-normal text-muted-foreground">({t("{n} items", { n: itemCount })})</span>}
               </SheetTitle>
-              <SheetDescription className="sr-only">Review your {storeName} cart before checkout.</SheetDescription>
+              <SheetDescription className="sr-only">{t("Review your {store} cart before checkout.", { store: storeName })}</SheetDescription>
             </div>
             <button
               onClick={closeCart}
               className="p-2 rounded-md hover:bg-accent text-muted-foreground transition-colors"
-              aria-label="Close cart"
+              aria-label={t("Close cart")}
             >
               <X className="h-5 w-5" />
             </button>
@@ -160,14 +163,14 @@ export function CartDrawer({
             <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
               <ShoppingCart className="h-10 w-10 text-primary/60" />
             </div>
-            <h3 className="font-semibold text-lg mb-1">Your cart is empty</h3>
+            <h3 className="font-semibold text-lg mb-1">{t("Your cart is empty")}</h3>
             <p className="text-muted-foreground text-sm mb-6 max-w-xs">
-              Looks like you haven't added anything yet. Start shopping to fill your cart!
+              {t("Looks like you haven't added anything yet. Start shopping to fill your cart!")}
             </p>
             <Button onClick={closeCart} asChild>
               <Link href="/products">
                 <ShoppingCart className="h-4 w-4 mr-2" />
-                Start Shopping
+                {t("Start Shopping")}
               </Link>
             </Button>
           </div>
@@ -201,15 +204,15 @@ export function CartDrawer({
               <Separator />
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
+                  <span className="text-muted-foreground">{t("Subtotal ({n} items)", { n: itemCount })}</span>
                   <span className="font-medium">{formatMoney(subtotal, currency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium text-muted-foreground">Calculated at checkout</span>
+                  <span className="text-muted-foreground">{t("Shipping")}</span>
+                  <span className="font-medium text-muted-foreground">{t("Calculated at checkout")}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t font-bold text-base">
-                  <span>Total</span>
+                  <span>{t("Total")}</span>
                   <span>{formatMoney(subtotal, currency)}</span>
                 </div>
               </div>
@@ -217,7 +220,7 @@ export function CartDrawer({
               <SheetFooter className="!flex-row space-y-0 gap-2">
                 <Button variant="outline" asChild className="flex-1">
                   <Link href="/cart" onClick={closeCart}>
-                    View Cart
+                    {t("View Cart")}
                   </Link>
                 </Button>
                 <Button
@@ -227,7 +230,7 @@ export function CartDrawer({
                     (onProceedToCheckout ?? defaultGoToCheckout)();
                   }}
                 >
-                  Proceed to Checkout
+                  {t("Proceed to Checkout")}
                   <Trash2 className="hidden" />
                 </Button>
               </SheetFooter>

@@ -7,6 +7,7 @@
  */
 import * as React from "react";
 import { useGetLocationsQuery, type StoreLocation } from "../../lib/features/checkout/checkout-api-slice";
+import { useT } from "../../i18n/provider";
 
 export type LocationValue = {
   division?: string;
@@ -101,6 +102,7 @@ export function LocationSelects({
   }, [rows.length, expectedId, value.locationId, value.district]);
 
   const label = (r: StoreLocation) => `${r.en} · ${r.bn}`;
+  const t = useT();
   const divisions = children.get(null) ?? [];
   const districts = division ? children.get(division.id) ?? [] : [];
   const upazilas = district ? children.get(district.id) ?? [] : [];
@@ -108,7 +110,7 @@ export function LocationSelects({
   return (
     <>
       {renderField(
-        "Division *",
+        t("Division *"),
         <select
           id={`${idPrefix}-division`}
           className={selectClassName}
@@ -117,7 +119,7 @@ export function LocationSelects({
           disabled={isLoading}
           onChange={(e) => emit(byId.get(e.target.value))}
         >
-          <option value="">{isLoading ? "Loading…" : "Select division"}</option>
+          <option value="">{isLoading ? t("Loading…") : t("Select division")}</option>
           {divisions.map((r) => (
             <option key={r.id} value={r.id}>
               {label(r)}
@@ -127,7 +129,7 @@ export function LocationSelects({
         `${idPrefix}-division`,
       )}
       {renderField(
-        "District *",
+        t("District *"),
         <select
           id={`${idPrefix}-district`}
           className={selectClassName}
@@ -136,7 +138,7 @@ export function LocationSelects({
           disabled={!division}
           onChange={(e) => emit(division, byId.get(e.target.value))}
         >
-          <option value="">{division ? "Select district" : "Select a division first"}</option>
+          <option value="">{division ? t("Select district") : t("Select a division first")}</option>
           {districts.map((r) => (
             <option key={r.id} value={r.id}>
               {label(r)}
@@ -146,7 +148,7 @@ export function LocationSelects({
         `${idPrefix}-district`,
       )}
       {renderField(
-        "Upazila / Thana",
+        t("Upazila / Thana"),
         <select
           id={`${idPrefix}-upazila`}
           className={selectClassName}
@@ -154,10 +156,10 @@ export function LocationSelects({
           disabled={!district || upazilas.length === 0}
           onChange={(e) => emit(division, district, byId.get(e.target.value))}
         >
-          <option value="">{district ? "Select area (optional)" : "Select a district first"}</option>
+          <option value="">{district ? t("Select area (optional)") : t("Select a district first")}</option>
           {upazilas.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.type === "THANA" ? `${label(r)} (thana)` : label(r)}
+              {r.type === "THANA" ? `${label(r)} (${t("thana")})` : label(r)}
             </option>
           ))}
         </select>,

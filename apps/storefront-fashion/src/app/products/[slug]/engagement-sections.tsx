@@ -4,7 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { MessageCircleQuestion, Star } from "lucide-react";
-import { Button, Input, Label, apiErrorMessage, cn, toast } from "@ecom/storefront-base";
+import { Button, DATE_LOCALES, Input, Label, apiErrorMessage, cn, toast, useLocale, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import { useAskQuestionMutation, useMyReviewQuery, useSubmitReviewMutation } from "@/lib/engagement";
 
@@ -16,15 +16,16 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
   const [hover, setHover] = React.useState(0);
   const [title, setTitle] = React.useState("");
   const [body, setBody] = React.useState("");
+  const t = useT();
 
   if (!allowReviews) return null;
   if (!signedIn) {
     return (
       <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
         <Link href={`/account/login?next=${encodeURIComponent(`/products/${slug}#reviews`)}`} className="font-medium text-primary hover:underline">
-          Log in
+          {t("Log in")}
         </Link>{" "}
-        to write a review.
+        {t("to write a review.")}
       </p>
     );
   }
@@ -33,8 +34,8 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
     return (
       <p className="rounded-xl border bg-muted/40 p-4 text-sm">
         {mine.status === "approved"
-          ? "Thanks for your review!"
-          : "Thanks for your review! It will appear here once the shop has checked it."}
+          ? t("Thanks for your review!")
+          : t("Thanks for your review! It will appear here once the shop has checked it.")}
       </p>
     );
   }
@@ -44,22 +45,22 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
     if (!rating) return;
     try {
       const r = await submit({ productId, rating, title: title.trim() || undefined, body: body.trim() || undefined }).unwrap();
-      toast.success(r.status === "approved" ? "Review posted" : "Review sent", {
-        description: r.verified ? "Marked as a verified purchase." : "It will appear once the shop has checked it.",
+      toast.success(r.status === "approved" ? t("Review posted") : t("Review sent"), {
+        description: r.verified ? t("Marked as a verified purchase.") : t("It will appear once the shop has checked it."),
       });
       if (r.status === "approved") setTimeout(() => window.location.reload(), 800);
     } catch (err) {
-      toast.error(apiErrorMessage(err, "Couldn't send your review"));
+      toast.error(apiErrorMessage(err, t("Couldn't send your review")));
     }
   };
 
   const shown = hover || rating;
   return (
     <form onSubmit={send} className="space-y-4 rounded-xl border p-5">
-      <h4 className="font-semibold">Write a review</h4>
+      <h4 className="font-semibold">{t("Write a review")}</h4>
       <div>
         <span className="mb-1 block text-sm font-medium" id="rating-label">
-          Your rating
+          {t("Your rating")}
         </span>
         <div role="radiogroup" aria-labelledby="rating-label" className="flex gap-1" onMouseLeave={() => setHover(0)}>
           {[1, 2, 3, 4, 5].map((i) => (
@@ -68,7 +69,7 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
               type="button"
               role="radio"
               aria-checked={rating === i}
-              aria-label={`${i} star${i > 1 ? "s" : ""}`}
+              aria-label={t("{n} stars", { n: i })}
               onClick={() => setRating(i)}
               onMouseEnter={() => setHover(i)}
               className="p-0.5"
@@ -79,11 +80,11 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="review-title">Title (optional)</Label>
+        <Label htmlFor="review-title">{t("Title (optional)")}</Label>
         <Input id="review-title" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="review-body">Your review (optional)</Label>
+        <Label htmlFor="review-body">{t("Your review (optional)")}</Label>
         <textarea
           id="review-body"
           rows={4}
@@ -94,7 +95,7 @@ export function ReviewForm({ productId, slug, allowReviews }: { productId: strin
         />
       </div>
       <Button type="submit" disabled={!rating || sending}>
-        {sending ? "Sending…" : "Post review"}
+        {sending ? t("Sending…") : t("Post review")}
       </Button>
     </form>
   );
@@ -112,6 +113,8 @@ export function QuestionsSection({
   const [name, setName] = React.useState("");
   const [question, setQuestion] = React.useState("");
   const [sent, setSent] = React.useState(false);
+  const t = useT();
+  const { locale } = useLocale();
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +123,7 @@ export function QuestionsSection({
       setSent(true);
       setQuestion("");
     } catch (err) {
-      toast.error(apiErrorMessage(err, "Couldn't send your question"));
+      toast.error(apiErrorMessage(err, t("Couldn't send your question")));
     }
   };
 
@@ -131,37 +134,37 @@ export function QuestionsSection({
           {questions.map((q) => (
             <li key={q.id} className="rounded-xl border p-4">
               <p className="font-medium">
-                <span className="mr-2 text-primary">Q</span>
+                <span className="mr-2 text-primary">{t("Q")}</span>
                 {q.question}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                <span className="mr-2 font-semibold text-foreground">A</span>
+                <span className="mr-2 font-semibold text-foreground">{t("A")}</span>
                 {q.answer}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Asked by {q.name} · {new Date(q.askedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {t("Asked by {name}", { name: q.name })} · {new Date(q.askedAt).toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "short", year: "numeric" })}
               </p>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">No questions yet. Ask about size, fabric, delivery or anything else.</p>
+        <p className="text-sm text-muted-foreground">{t("No questions yet. Ask about size, fabric, delivery or anything else.")}</p>
       )}
       {sent ? (
-        <p className="rounded-xl border bg-muted/40 p-4 text-sm">Thanks! Your question was sent. The answer will show here once the shop replies.</p>
+        <p className="rounded-xl border bg-muted/40 p-4 text-sm">{t("Thanks! Your question was sent. The answer will show here once the shop replies.")}</p>
       ) : (
         <form onSubmit={send} className="space-y-3 rounded-xl border p-5">
           <h4 className="flex items-center gap-2 font-semibold">
-            <MessageCircleQuestion className="h-5 w-5 text-primary" /> Ask a question
+            <MessageCircleQuestion className="h-5 w-5 text-primary" /> {t("Ask a question")}
           </h4>
           {!customerName && (
             <div className="space-y-1.5">
-              <Label htmlFor="q-name">Your name (optional)</Label>
+              <Label htmlFor="q-name">{t("Your name (optional)")}</Label>
               <Input id="q-name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
           )}
           <div className="space-y-1.5">
-            <Label htmlFor="q-text">Question</Label>
+            <Label htmlFor="q-text">{t("Question")}</Label>
             <textarea
               id="q-text"
               rows={3}
@@ -174,7 +177,7 @@ export function QuestionsSection({
             />
           </div>
           <Button type="submit" disabled={isLoading || question.trim().length < 5}>
-            {isLoading ? "Sending…" : "Send question"}
+            {isLoading ? t("Sending…") : t("Send question")}
           </Button>
         </form>
       )}

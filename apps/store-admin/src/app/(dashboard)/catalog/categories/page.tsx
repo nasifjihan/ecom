@@ -77,6 +77,7 @@ import {
   useDeleteCategoryMutation,
   type Category,
 } from "@/lib/features/catalog/catalog-api-slice";
+import { banglaOf, bnTexts } from "@/components/catalog/bangla-fields";
 
 const categorySchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }).max(255),
@@ -90,6 +91,9 @@ const categorySchema = z.object({
     .or(z.literal("")),
   parentId: z.string().optional().or(z.literal("")),
   description: z.string().max(5000).optional().or(z.literal("")),
+  /** The name and description in Bangla (optional; the storefront shows them in Bangla). */
+  nameBn: z.string().max(255).optional().or(z.literal("")),
+  descriptionBn: z.string().max(5000).optional().or(z.literal("")),
   imageUrl: z.string().max(500).optional().or(z.literal("")),
   displayMode: z.enum(["products", "children", "both"]).default("products"),
   sortOrder: z.coerce.number().int().default(0),
@@ -205,6 +209,8 @@ export default function CategoriesPage() {
     slug: "",
     parentId: "",
     description: "",
+    nameBn: "",
+    descriptionBn: "",
     imageUrl: "",
     displayMode: "products",
     sortOrder: 0,
@@ -237,6 +243,8 @@ export default function CategoriesPage() {
           slug: editing.slug,
           parentId: editing.parentId ? String(editing.parentId) : "",
           description: editing.description || "",
+          nameBn: banglaOf(editing).name ?? "",
+          descriptionBn: banglaOf(editing).description ?? "",
           imageUrl: editing.imageUrl || "",
           displayMode: (editing.displayMode as any) || "products",
           sortOrder: editing.sortOrder ?? 0,
@@ -257,6 +265,7 @@ export default function CategoriesPage() {
         slug: values.slug || slugify(values.name),
         parentId: values.parentId ? (BigInt(values.parentId) as any) : null,
         description: values.description || null,
+        translations: bnTexts({ name: values.nameBn, description: values.descriptionBn }),
         imageUrl: values.imageUrl || null,
         displayMode: values.displayMode,
         sortOrder: values.sortOrder,
@@ -591,6 +600,31 @@ export default function CategoriesPage() {
                         <FormLabel>Description</FormLabel>
                         <FormControl>
                           <Textarea rows={3} placeholder="Briefly describe this category..." {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={control}
+                    name="nameBn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name in Bangla (বাংলা)</FormLabel>
+                        <FormControl>
+                          <Input lang="bn" placeholder="Optional: shown when a shopper picks বাংলা" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="descriptionBn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description in Bangla</FormLabel>
+                        <FormControl>
+                          <Textarea lang="bn" rows={2} {...field} />
                         </FormControl>
                       </FormItem>
                     )}

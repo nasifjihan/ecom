@@ -1,4 +1,4 @@
-import { PrismaClient, PlanType } from "@prisma/client";
+import { Prisma, PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
 import { syncLocations } from "../src/modules/locations/locations.data";
@@ -757,6 +757,45 @@ async function seedFashionBDStore() {
     }
   }
   console.log(`  ✅ Storefront demo catalog ready (${demoProducts.length} products, ${demoCreated} newly created)`);
+
+  // ===== BATCH #31: Bangla names for the demo catalog (only where none are set yet) =====
+  const bangla: Record<"category" | "brand" | "product", Record<string, string>> = {
+    category: {
+      women: "নারী", men: "পুরুষ", accessories: "এক্সেসরিজ", dresses: "ড্রেস", sarees: "শাড়ি ও সালোয়ার",
+      shirts: "শার্ট", panjabi: "পাঞ্জাবি", bags: "ব্যাগ", watches: "ঘড়ি",
+    },
+    brand: { richman: "রিচম্যান", "cats-eye": "ক্যাটস আই", aarong: "আড়ং", bata: "বাটা" },
+    product: {
+      "richman-formal-cotton-shirt-navy": "রিচম্যান ফরমাল কটন শার্ট — নেভি",
+      "richman-slim-fit-shirt-white": "রিচম্যান স্লিম ফিট অক্সফোর্ড শার্ট — সাদা",
+      "cats-eye-casual-denim-shirt": "ক্যাটস আই ক্যাজুয়াল ডেনিম শার্ট — ইন্ডিগো",
+      "cats-eye-premium-linen-shirt": "ক্যাটস আই প্রিমিয়াম লিনেন শার্ট — বেইজ",
+      "richman-party-wear-satin-shirt": "রিচম্যান পার্টি ওয়্যার স্যাটিন শার্ট — কালো",
+      "aarong-cotton-panjabi-white": "আড়ং প্রিমিয়াম কটন পাঞ্জাবি — সাদা",
+      "aarong-embroidered-panjabi-maroon": "আড়ং এমব্রয়ডারি পাঞ্জাবি — মেরুন",
+      "aarong-floral-maxi-dress": "আড়ং ফ্লোরাল ম্যাক্সি ড্রেস — সামার এডিশন",
+      "cats-eye-jamdani-saree": "ক্যাটস আই হ্যান্ডলুম জামদানি শাড়ি",
+      "aarong-three-piece-salwar": "আড়ং প্রিন্টেড থ্রি-পিস সালোয়ার কামিজ",
+      "bata-leather-tote-bag-tan": "বাটা জেনুইন লেদার টোট ব্যাগ — ট্যান",
+      "richman-classic-steel-watch": "রিচম্যান ক্লাসিক স্টেইনলেস স্টিল ঘড়ি",
+    },
+  };
+  for (const [slug, name] of Object.entries(bangla.category)) {
+    await prisma.category.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  for (const [slug, name] of Object.entries(bangla.brand)) {
+    await prisma.brand.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  for (const [slug, name] of Object.entries(bangla.product)) {
+    await prisma.product.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  await prisma.storeLocalizationSetting.upsert({
+    where: { storeId: catalogStoreId },
+    update: {},
+    create: { storeId: catalogStoreId, defaultCurrency: "BDT", defaultLanguage: "en", allowedLanguages: ["en", "bn"] },
+  });
+  console.log("  ✅ Bangla names for the demo catalog");
+
 
   // ===== BATCH #8 BASELINE: Customer Groups, 20 demo customers, 2 coupons, 1 flash sale, 30 reviews =====
   const demoStoreId = store.id;

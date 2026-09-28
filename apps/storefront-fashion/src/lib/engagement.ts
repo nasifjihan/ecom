@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import { api } from "@ecom/api-client";
-import { toast, type ProductSummary } from "@ecom/storefront-base";
+import { msg, toast, useT, type ProductSummary } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 
 export interface SearchSuggestions {
@@ -148,6 +148,7 @@ export function useWishlist() {
   }, [signedIn, add]);
 
   const ids = React.useMemo(() => new Set(signedIn ? (serverIds ?? []) : guest), [signedIn, serverIds, guest]);
+  const t = useT();
 
   const toggle = React.useCallback(
     async (id: string, title?: string) => {
@@ -160,13 +161,22 @@ export function useWishlist() {
           const cur = readGuest();
           writeGuest(on ? [...new Set([id, ...cur])] : cur.filter((x) => x !== id));
         }
-        toast.success(on ? "Saved to your wishlist" : "Removed from your wishlist", title ? { description: title } : undefined);
+        toast.success(on ? t("Saved to your wishlist") : t("Removed from your wishlist"), title ? { description: title } : undefined);
       } catch {
-        toast.error("Couldn't update your wishlist. Please try again.");
+        toast.error(t("Couldn't update your wishlist. Please try again."));
       }
     },
-    [ids, signedIn, add, remove],
+    [ids, signedIn, add, remove, t],
   );
 
   return { ids, count: ids.size, has: (id: string) => ids.has(id), toggle, signedIn, guestIds: guest };
 }
+
+/** The tracking steps the API names (api engagement.rules.ts), listed so their Bangla is checked. */
+export const TRACK_STEP_LABELS = [
+  msg("Order placed"),
+  msg("Confirmed and being packed"),
+  msg("Handed to the courier"),
+  msg("Out for delivery"),
+  msg("Delivered"),
+];

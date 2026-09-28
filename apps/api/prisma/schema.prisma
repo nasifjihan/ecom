@@ -1304,6 +1304,8 @@ model Order {
   memberLevel            String?
   /// Paid from the customer's wallet; grandTotal is what's left to pay by the payment method.
   walletUsed             Decimal              @default(0) @db.Decimal(12, 2)
+  /// The language the customer shopped in ("en" / "bn"): their invoice uses it.
+  locale                 String               @default("en") @db.VarChar(5)
   /// Cashback credited when delivered (less any taken back after refunds).
   cashbackAmount         Decimal              @default(0) @db.Decimal(12, 2)
   cashbackAt             DateTime?

@@ -40,6 +40,8 @@ export interface Product {
   barcode?: string | null;
   shortDescription?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, shortDescription, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   regularPrice?: number | null;
   salePrice?: number | null;
   /** What one unit cost the shop (purchases set it to the average). */
@@ -117,6 +119,8 @@ export interface Category {
   imageUrl?: string | null;
   bannerUrl?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   displayMode?: string;
   sortOrder?: number;
   isActive?: boolean;
@@ -143,6 +147,8 @@ export interface Brand {
   bannerUrl?: string | null;
   websiteUrl?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   sortOrder?: number;
   isActive?: boolean;
   seoTitle?: string | null;

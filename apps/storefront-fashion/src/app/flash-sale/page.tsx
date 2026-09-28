@@ -4,15 +4,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { Zap } from "lucide-react";
-import { Button, ProductGrid } from "@ecom/storefront-base";
+import { Button, ProductGrid, useT } from "@ecom/storefront-base";
 import { useFlashSalePageQuery } from "@/lib/engagement";
 import { useProductGridActions } from "../_components/product-actions";
 
 function Countdown({ endsAt }: { endsAt: string }) {
   const [now, setNow] = React.useState(() => Date.now());
+  const t = useT();
   React.useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
   const left = Math.max(0, new Date(endsAt).getTime() - now);
   const d = Math.floor(left / 86_400_000);
@@ -21,8 +22,8 @@ function Countdown({ endsAt }: { endsAt: string }) {
   const s = Math.floor((left % 60_000) / 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
-    <span className="font-mono tabular-nums" aria-label="Time left">
-      {left === 0 ? "Ended" : `${d ? `${d}d ` : ""}${pad(h)}:${pad(m)}:${pad(s)}`}
+    <span className="font-mono tabular-nums" aria-label={t("Time left")}>
+      {left === 0 ? t("Ended") : `${d ? `${d}d ` : ""}${pad(h)}:${pad(m)}:${pad(s)}`}
     </span>
   );
 }
@@ -30,19 +31,20 @@ function Countdown({ endsAt }: { endsAt: string }) {
 export default function FlashSalePage() {
   const { data, isLoading } = useFlashSalePageQuery();
   const actions = useProductGridActions();
+  const t = useT();
 
   return (
     <div className="container space-y-10 py-6 md:py-10">
       <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
-        <Zap className="h-7 w-7 text-rose-500" /> Flash sale
+        <Zap className="h-7 w-7 text-rose-500" /> {t("Flash sale")}
       </h1>
       {isLoading ? (
         <ProductGrid loading skeletonCount={8} />
       ) : !data?.length ? (
         <div className="rounded-2xl border p-10 text-center">
-          <p className="mb-4 text-muted-foreground">No flash sale is running right now. Check back soon.</p>
+          <p className="mb-4 text-muted-foreground">{t("No flash sale is running right now. Check back soon.")}</p>
           <Button asChild>
-            <Link href="/products">Browse products</Link>
+            <Link href="/products">{t("Browse products")}</Link>
           </Button>
         </div>
       ) : (
@@ -57,7 +59,7 @@ export default function FlashSalePage() {
                 {sale.description && <p className="text-sm text-muted-foreground">{sale.description}</p>}
               </div>
               <p className="text-sm">
-                Ends in <span className="text-lg font-bold text-rose-600"><Countdown endsAt={sale.endsAt} /></span>
+                {t("Ends in")} <span className="text-lg font-bold text-rose-600"><Countdown endsAt={sale.endsAt} /></span>
               </p>
             </div>
             <ProductGrid products={sale.products} cols={4} {...actions} />

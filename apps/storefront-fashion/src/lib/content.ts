@@ -2,8 +2,9 @@
  * Store content from the API (/storefront/content/*): theme, menus, pages, blog, FAQs
  * and homepage sections. Server-side only; pages re-fetch at most once a minute.
  */
-import { serverApi } from "@/lib/server-api";
+import { cookieLocale, serverApi, withLang } from "@/lib/server-api";
 import type { SlotPromotion } from "@/lib/promotions";
+import { DATE_LOCALES, translatorFor, type Locale, type Translator } from "@ecom/storefront-base";
 
 export interface ThemeSettings {
   brand: { storeName: string; tagline: string; logoUrl: string | null };
@@ -22,6 +23,8 @@ export interface MenuLink {
 
 export interface SiteContent {
   theme: ThemeSettings;
+  /** Languages the storefront offers and the one it opens in. */
+  languages?: { enabled: Locale[]; default: Locale };
   headerMenu: MenuLink[] | null;
   footerMenus: { title: string; links: MenuLink[] }[];
   footerPages: { title: string; url: string }[];
@@ -118,8 +121,9 @@ const API_BASE = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_BAS
 const STORE_ORIGIN = process.env.STOREFRONT_ORIGIN ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 async function serverApiWithMeta<T>(path: string): Promise<{ data: T; meta: { page: number; totalPages: number; total: number } } | null> {
+  const url = `${API_BASE}${await withLang(path)}`;
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(url, {
       headers: { Accept: "application/json", Origin: STORE_ORIGIN },
       next: { revalidate: REVALIDATE },
     });
@@ -153,10 +157,23 @@ export function hexToHslVar(hex: string): string | null {
   return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-export const formatDate = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+export const formatDate = (iso: string | null | undefined, locale: Locale = "en") =>
+  iso ? new Date(iso).toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "long", year: "numeric" }) : "";
 
 /** Live promotions for a display slot (Marketing > Promotions in the admin). */
 export async function getSlotPromotions(slot: SlotPromotion["slots"][number]) {
   return (await serverApi<SlotPromotion[]>(`/storefront/promotions?slot=${encodeURIComponent(slot)}`)) ?? [];
+}
+
+/** The page's language: the shopper's choice when the shop offers it, else the shop's default. */
+export async function pageLocale(): Promise<Locale> {
+  const [chosen, site] = await Promise.all([cookieLocale(), getSite()]);
+  const offered = site?.languages?.enabled ?? ["en"];
+  if (chosen && offered.includes(chosen)) return chosen;
+  return site?.languages?.default ?? "en";
+}
+
+/** `t()` for server components, in the page's language. */
+export async function serverT(): Promise<Translator> {
+  return translatorFor(await pageLocale());
 }

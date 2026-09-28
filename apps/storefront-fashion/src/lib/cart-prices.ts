@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import { api } from "@ecom/api-client";
-import { formatMoney, toast, useCart, type CartPriceQuote } from "@ecom/storefront-base";
+import { formatMoney, toast, useCart, useT, type CartPriceQuote } from "@ecom/storefront-base";
 import type { CartPromotions } from "./promotions";
 import { useAppSelector } from "./store";
 
@@ -49,6 +49,7 @@ export const cartLineKey = (productId: string, variantId?: string | null) => `${
  */
 export function useCartPriceCheck(opts: { couponCode?: string; email?: string } = {}) {
   const { items, syncPrices } = useCart();
+  const t = useT();
   const [check] = useCartPricesMutation();
   const [problems, setProblems] = React.useState<Record<string, string>>({});
   const [checking, setChecking] = React.useState(false);
@@ -89,11 +90,11 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
         );
         if (changes.length) {
           const first = changes[0]!;
-          toast.info(changes.length === 1 ? "A price in your cart changed" : "Prices in your cart changed", {
+          toast.info(changes.length === 1 ? t("A price in your cart changed") : t("Prices in your cart changed"), {
             description:
               changes.length === 1
-                ? `${first.item.title} is now ${formatMoney(first.newPrice, "BDT")} (was ${formatMoney(first.oldPrice, "BDT")}).`
-                : `${changes.length} items now have new prices. Your totals are up to date.`,
+                ? t("{title} is now {price} (was {was}).", { title: first.item.title, price: formatMoney(first.newPrice, "BDT"), was: formatMoney(first.oldPrice, "BDT") })
+                : t("{n} items now have new prices. Your totals are up to date.", { n: changes.length }),
           });
         }
       } catch {

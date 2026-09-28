@@ -41,6 +41,8 @@ import {
   SheetHeader,
   SheetTitle,
   useCart,
+  useT,
+  msg,
   useGetProductsQuery,
   useGetCategoriesTreeQuery,
   useGetBrandsQuery,
@@ -50,11 +52,11 @@ import { cn, formatMoney } from "@ecom/utils";
 import { toast } from "sonner";
 
 const SORT_OPTIONS = [
-  { value: "popular", label: "Most Popular" },
-  { value: "newest", label: "Newest First" },
-  { value: "price_asc", label: "Price: Low to High" },
-  { value: "price_desc", label: "Price: High to Low" },
-  { value: "rating", label: "Top Rated" },
+  { value: "popular", label: msg("Most Popular") },
+  { value: "newest", label: msg("Newest First") },
+  { value: "price_asc", label: msg("Price: Low to High") },
+  { value: "price_desc", label: msg("Price: High to Low") },
+  { value: "rating", label: msg("Top Rated") },
 ] as const;
 
 const PRICE_MAX = 20000;
@@ -72,6 +74,7 @@ export default function ProductsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { addItem } = useCart();
+  const t = useT();
 
   const [priceRange, setPriceRange] = React.useState<number[]>([0, PRICE_MAX]);
   const [selectedCats, setSelectedCats] = React.useState<Set<string>>(new Set());
@@ -122,12 +125,12 @@ export default function ProductsPage() {
   const handleAddToCart = React.useCallback(
     (p: ProductCardData) => {
       if ((p as ProductSummary).hasVariants) {
-        toast.info("Choose a size first", { description: p.title.slice(0, 40) });
+        toast.info(t("Choose a size first"), { description: p.title.slice(0, 40) });
         router.push(`/products/${p.slug}`);
         return;
       }
       addItem({ productId: p.id, variantId: undefined, title: p.title, slug: p.slug, image: p.image, price: p.price, weightKG: (p as ProductSummary).weightKG });
-      toast.success("Added to cart", { description: p.title.slice(0, 40) });
+      toast.success(t("Added to cart"), { description: p.title.slice(0, 40) });
     },
     [addItem, router],
   );
@@ -155,18 +158,18 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-2">
-          <Filter className="h-4 w-4" /> Filters
+          <Filter className="h-4 w-4" /> {t("Filters")}
         </h3>
         {activeFiltersCount > 0 && (
           <button onClick={clearAll} className="text-sm text-primary hover:underline flex items-center gap-1">
-            <X className="h-3.5 w-3.5" /> Clear all
+            <X className="h-3.5 w-3.5" /> {t("Clear all")}
           </button>
         )}
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="font-medium text-sm">Price Range (৳)</h4>
+          <h4 className="font-medium text-sm">{t("Price Range (৳)")}</h4>
           <span className="text-xs text-muted-foreground">
             {formatMoney(priceRange[0]!)} – {formatMoney(priceRange[1]!)}
           </span>
@@ -177,7 +180,7 @@ export default function ProductsPage() {
       <Separator />
 
       <div>
-        <h4 className="font-medium text-sm mb-3">Categories</h4>
+        <h4 className="font-medium text-sm mb-3">{t("Categories")}</h4>
         <ScrollArea className="max-h-56 pr-2 -mr-2">
           <div className="space-y-3">
             {categoryTree.map((cat) => (
@@ -219,7 +222,7 @@ export default function ProductsPage() {
       <Separator />
 
       <div>
-        <h4 className="font-medium text-sm mb-3">Brands</h4>
+        <h4 className="font-medium text-sm mb-3">{t("Brands")}</h4>
         <ScrollArea className="max-h-56 pr-2 -mr-2">
           <div className="space-y-2">
             {brands.map((b) => (
@@ -241,7 +244,7 @@ export default function ProductsPage() {
       <Separator />
 
       <div>
-        <h4 className="font-medium text-sm mb-3">Customer Rating</h4>
+        <h4 className="font-medium text-sm mb-3">{t("Customer Rating")}</h4>
         <div className="space-y-2">
           {[4, 3, 2, 1].map((r) => (
             <button
@@ -259,7 +262,7 @@ export default function ProductsPage() {
                     className={cn("h-3.5 w-3.5", i <= r ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")}
                   />
                 ))}
-                <span className="ml-1">& up</span>
+                <span className="ml-1">{t("& up")}</span>
               </div>
             </button>
           ))}
@@ -271,8 +274,8 @@ export default function ProductsPage() {
   return (
     <div className="container py-6 md:py-10">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{tag ? `Tagged “${tag}”` : "All Products"}</h1>
-        <p className="text-muted-foreground">{total > 0 ? `Browse ${total} fashion item${total === 1 ? "" : "s"}` : "Browse our catalog"}</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{tag ? t("Tagged “{tag}”", { tag }) : t("All Products")}</h1>
+        <p className="text-muted-foreground">{total > 0 ? t("Browse {n} items", { n: total }) : t("Browse our catalog")}</p>
       </div>
 
       {categorySlug && <PromoSlotStrip slot="category_banner" categorySlug={categorySlug} className="mb-6" />}
@@ -289,7 +292,7 @@ export default function ProductsPage() {
         <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
           <SheetContent className="!left-0 !right-auto border-r w-full sm:w-80 p-6 overflow-y-auto">
             <SheetHeader className="mb-4">
-              <SheetTitle>Filters</SheetTitle>
+              <SheetTitle>{t("Filters")}</SheetTitle>
             </SheetHeader>
             {FiltersSidebar}
           </SheetContent>
@@ -301,7 +304,7 @@ export default function ProductsPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search products..."
+                  placeholder={t("Search products...")}
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   className="pl-10 pr-10"
@@ -317,7 +320,7 @@ export default function ProductsPage() {
               </div>
               <Button variant="outline" className="md:hidden" onClick={() => setMobileFiltersOpen(true)}>
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
-                Filters
+                {t("Filters")}
                 {activeFiltersCount > 0 && <Badge className="ml-2 px-1.5">{activeFiltersCount}</Badge>}
               </Button>
             </div>
@@ -325,11 +328,11 @@ export default function ProductsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 p-3 border rounded-xl bg-card">
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-muted-foreground">
-                  {loading ? <Skeleton className="h-4 w-28 inline-block" /> : total === 0 ? "No results" : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, total)} of ${total} results`}
+                  {loading ? <Skeleton className="h-4 w-28 inline-block" /> : total === 0 ? t("No results") : t("Showing {from}–{to} of {total} results", { from: (page - 1) * perPage + 1, to: Math.min(page * perPage, total), total })}
                 </span>
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="md:hidden">
-                    {activeFiltersCount} filters
+                    {t("{n} filters", { n: activeFiltersCount })}
                   </Badge>
                 )}
               </div>
@@ -337,7 +340,7 @@ export default function ProductsPage() {
                 <div className="w-[180px]">
                   <Select value={sort} onValueChange={(v) => setSort(v as any)}>
                     {SORT_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>
                     ))}
                   </Select>
                 </div>
@@ -345,14 +348,14 @@ export default function ProductsPage() {
                   <button
                     onClick={() => setViewMode("grid")}
                     className={cn("h-9 w-9 flex items-center justify-center transition-colors", viewMode === "grid" ? "bg-primary text-white" : "hover:bg-accent")}
-                    aria-label="Grid view"
+                    aria-label={t("Grid view")}
                   >
                     <Grid3X3 className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setViewMode("list")}
                     className={cn("h-9 w-9 flex items-center justify-center transition-colors", viewMode === "list" ? "bg-primary text-white" : "hover:bg-accent")}
-                    aria-label="List view"
+                    aria-label={t("List view")}
                   >
                     <List className="h-4 w-4" />
                   </button>
@@ -406,15 +409,15 @@ export default function ProductsPage() {
               <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-4">
                 <Search className="h-10 w-10 text-muted-foreground" />
               </div>
-              <h3 className="font-semibold text-xl mb-1">{isError ? "Could not load products" : "No products found"}</h3>
+              <h3 className="font-semibold text-xl mb-1">{isError ? t("Could not load products") : t("No products found")}</h3>
               <p className="text-muted-foreground mb-6 max-w-sm">
                 {isError
-                  ? "The store is not reachable right now. Please try again in a moment."
-                  : "Try adjusting your filters, clearing some, or searching for something else."}
+                  ? t("The store is not reachable right now. Please try again in a moment.")
+                  : t("Try adjusting your filters, clearing some, or searching for something else.")}
               </p>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={clearAll}>Clear all filters</Button>
-                <Button onClick={() => (window.location.href = "/products")}>Show all</Button>
+                <Button variant="outline" onClick={clearAll}>{t("Clear all filters")}</Button>
+                <Button onClick={() => (window.location.href = "/products")}>{t("Show all")}</Button>
               </div>
             </motion.div>
           ) : viewMode === "grid" ? (
@@ -454,7 +457,7 @@ export default function ProductsPage() {
                         )}
                         {p.flashSale && (
                           <Badge variant="destructive" className="text-[10px] bg-gradient-to-r from-orange-500 to-rose-600 border-0">
-                            ⚡ Flash sale
+                            ⚡ {t("Flash sale")}
                           </Badge>
                         )}
                       </div>
@@ -462,7 +465,7 @@ export default function ProductsPage() {
                         size="sm"
                         onClick={(e) => { e.preventDefault(); handleAddToCart(p); }}
                       >
-                        Add to Cart
+                        {t("Add to Cart")}
                       </Button>
                     </div>
                   </div>
@@ -476,7 +479,7 @@ export default function ProductsPage() {
               <Pagination>
                 <PaginationItem>
                   <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                    <ChevronLeft className="h-4 w-4 mr-1" /> {t("Prev")}
                   </PaginationPrevious>
                 </PaginationItem>
 
@@ -496,7 +499,7 @@ export default function ProductsPage() {
 
                 <PaginationItem>
                   <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                    {t("Next")} <ChevronRight className="h-4 w-4 ml-1" />
                   </PaginationNext>
                 </PaginationItem>
               </Pagination>

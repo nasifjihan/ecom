@@ -78,6 +78,8 @@ export type FaqInput = Omit<Faq, "id">;
 export type MenuLocation = "header" | "footer";
 export interface MenuLink {
   title: string;
+  /** The link's text in Bangla; empty shows `title` to Bangla shoppers too. */
+  titleBn?: string;
   url: string;
   openInNewTab: boolean;
 }

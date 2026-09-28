@@ -11,6 +11,7 @@ import {
   NotFoundError,
   RateLimitError,
   UnauthorizedError,
+  tr,
   type RequestContext,
 } from "../../core"
 import { bdMobile, phoneVariants } from "../sms/sms.rules"
@@ -94,6 +95,7 @@ export class StorefrontEngagement {
           status: "published",
           OR: [
             { name: { contains: q, mode: "insensitive" } },
+            { translations: { path: ["bn", "name"], string_contains: q } },
             { sku: { equals: q, mode: "insensitive" } },
             { tags: { has: lower } },
           ],
@@ -106,10 +108,13 @@ export class StorefrontEngagement {
         where: {
           storeId: this.storeId,
           isActive: true,
-          name: { contains: q, mode: "insensitive" },
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { translations: { path: ["bn", "name"], string_contains: q } },
+          ],
         },
         take: 4,
-        select: { name: true, slug: true },
+        select: { name: true, slug: true, translations: true },
       }),
       prisma.searchTerm.findMany({
         where: {
@@ -133,7 +138,7 @@ export class StorefrontEngagement {
         price: c.price,
         compareAtPrice: c.compareAtPrice,
       })),
-      categories,
+      categories: categories.map((c) => ({ name: tr(c, this.ctx.locale, "name"), slug: c.slug })),
       terms: terms.map((t) => t.term),
     }
   }
