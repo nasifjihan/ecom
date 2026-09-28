@@ -92,11 +92,11 @@ These are our advantages. Keep them.
 | Customers list/detail, groups, store credit, loyalty points | ✅ | |
 | Admin creates a customer (no login), source, ban | 🟡 | |
 | CRM leads (Facebook/Instagram handle, salesperson, tags) | ❌ | |
-| Loyalty levels (Bronze/Silver/Gold, auto discount by lifetime spend) | ❌ | We have points, not levels |
-| Referrals + payout sweep | 🟡 | Affiliate models exist, no screens |
+| Loyalty levels (Bronze/Silver/Gold, auto discount by lifetime spend) | ✅ | Batch 30: levels by delivered spend, member % off at checkout, extra cashback per level |
+| Referrals + payout sweep | ✅ | Batch 30: refer-a-friend link, both sides rewarded to the wallet when the friend's first order is delivered; admin referral list |
 | Product questions (Q&A) | ✅ | Batch 26: ask on product page, answer in Marketing → Questions |
 | Reviews: public submit form, reported / hidden tabs | ✅ | Batch 26: storefront form, verified buyers auto-approved, ratings kept current |
-| Wallet + cashback % | 🟡 | `storeCredit` exists; no cashback or wallet page |
+| Wallet + cashback % | ✅ | Batch 30: wallet ledger, pay from wallet at checkout (capped %), cashback on delivery, taken back on refund |
 
 ### Shipping (reference 15, 07.9)
 | Feature | Status | Note |
@@ -182,7 +182,7 @@ Commission rates (product > category > salesperson extra), monthly targets, "my 
 | `/search` page + suggestions | ✅ Batch 26 |
 | `/track` order by code + phone | ✅ Batch 26 |
 | `/flash-sale` listing page | ✅ Batch 26 |
-| Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; wallet / my coupons not yet |
+| Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; Batch 30: wallet + refer pages; my coupons not yet |
 | Bangla / Arabic language switch | ❌ |
 | Low-stock label, sales count, Q&A on product page | ✅ Batch 26 |
 | Data-saver mode (lighter images) | ❌ |
@@ -220,7 +220,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 27 ✅ | **Purchasing + suppliers + bank accounts** (cost price → COGS) | Needed for profit reports | L |
 | 28 ✅ | **Reports**: sales with gross profit, COD, couriers, products, coupons, customers, VAT | Owners ask for these | L |
 | 29 ✅ | **Warehouses + stock transfers + reservations** | Multi-location shops | L |
-| 30 | **Loyalty levels, wallet cashback, referrals** | Retention | M |
+| 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings) | Reference's core idea; big change | XL |
 | 33 | Wholesale/B2B, sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |

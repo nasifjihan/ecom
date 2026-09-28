@@ -16,6 +16,7 @@ import type { PaymentMethod } from "../../services/payments/types";
 import { OrdersService, STATUS_TRANSITIONS } from "../orders/orders.service";
 import { recordParcelCash } from "../payments/payments.records";
 import { defaultWarehouseId, moveStock, releaseOrderStock, splitBack } from "../stock";
+import { onOrderClosed, onOrderRefunded, walletMove } from "../loyalty/loyalty.ledger";
 import {
   RETURN_WINDOW_DAYS,
   canMoveParcel,
@@ -560,9 +561,12 @@ export class FulfilmentService {
         }
       }
       // Fully refunded: nothing more ships, so whatever is still held goes back on sale.
-      if (full) await releaseOrderStock(t, this.storeId, orderId, "ORDER_REFUNDED", true);
+      if (full) {
+        await releaseOrderStock(t, this.storeId, orderId, "ORDER_REFUNDED", true);
+        await onOrderClosed(t, this.storeId, orderId);
+      }
       if (dto.method === "store_credit") {
-        await t.customer.update({ where: { id: o.customerId! }, data: { storeCredit: { increment: priced.amount } } });
+        await walletMove(t, { storeId: this.storeId, customerId: o.customerId!, amount: priced.amount, kind: "refund", orderId, note: `Refund on order ${o.number}`, adminId: this.adminId });
       }
       await t.order.update({
         where: { id: orderId },
@@ -572,6 +576,8 @@ export class FulfilmentService {
           ...(full ? { status: "REFUNDED" } : {}),
         },
       });
+      // Loyalty: the refunded share of the cashback comes back; spend and level follow.
+      await onOrderRefunded(t, this.storeId, orderId, priced.amount, Math.max(0, num(o.itemsSubtotal) - num(o.discountTotal) - num(o.refundedTotal)));
       await t.orderStatusLog.create({
         data: {
           orderId,

@@ -197,6 +197,7 @@ export default function NewOrderPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [coupon, setCoupon] = useState("");
   const [applyPromotions, setApplyPromotions] = useState(true);
+  const [useWallet, setUseWallet] = useState(false);
   const [gateway, setGateway] = useState("cod");
   const [paid, setPaid] = useState(false);
   const [trx, setTrx] = useState("");
@@ -228,6 +229,7 @@ export default function NewOrderPage() {
               : { type: "pickup" },
       couponCode: coupon.trim() || undefined,
       applyPromotions,
+      useWallet,
       discount: Number(discountValue) > 0 ? { type: discountType, value: Number(discountValue) } : null,
       paymentGateway: gateway,
       paid,
@@ -238,7 +240,7 @@ export default function NewOrderPage() {
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, discountType, discountValue, gateway, paid, trx, source, confirmed, customerNote, staffNote, notify],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, confirmed, customerNote, staffNote, notify],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -546,6 +548,14 @@ export default function NewOrderPage() {
                 label="Apply the store's promotions"
                 hint="Automatic discounts, free gifts and free delivery, as on the website."
               />
+              {result?.customer && result.wallet.enabled && result.wallet.balance > 0 && (
+                <Toggle
+                  checked={useWallet}
+                  onChange={setUseWallet}
+                  label={`Pay from the customer's wallet (${taka(result.wallet.balance)})`}
+                  hint={result.wallet.maxPercent < 100 ? `Up to ${result.wallet.maxPercent}% of the order; the rest by the payment method.` : "The rest, if any, by the payment method."}
+                />
+              )}
               <Toggle checked={paid} onChange={setPaid} label="Already paid" hint={gateway === "cod" ? "Cash received now (e.g. walk-in)." : "The customer has sent the money."} />
               {paid && gateway !== "cod" && (
                 <Field label="Transaction ID" htmlFor="trx" hint="From the bKash / Nagad / bank message.">
@@ -578,6 +588,7 @@ export default function NewOrderPage() {
                 ...(result?.promotions.bxgy ?? []).map((b) => [`${b.name}: ${b.freeUnits} free`, `−${taka(b.amount)}`]),
                 ...(t?.couponDiscount ? [["Coupon", `−${taka(t.couponDiscount)}`]] : []),
                 ...(t?.manualDiscount ? [["Discount", `−${taka(t.manualDiscount)}`]] : []),
+                ...(t?.memberDiscount ? [[`${result?.member?.level ?? "Member"} discount (${result?.member?.percent ?? 0}%)`, `−${taka(t.memberDiscount)}`]] : []),
                 [
                   "Delivery",
                   deliveryType === "method" && !methodId
@@ -589,6 +600,7 @@ export default function NewOrderPage() {
                         : "Free",
                 ],
                 ["Tax", t ? taka(t.taxTotal) : "—"],
+                ...(t?.walletUsed ? [["Paid from wallet", `−${taka(t.walletUsed)}`]] : []),
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-slate-500">{k}</span>

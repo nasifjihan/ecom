@@ -101,6 +101,8 @@ export const PlaceOrderDto = z.object({
   couponCodes: z.array(z.string().trim().toUpperCase().max(40)).max(1).optional().default([]),
   items: z.array(CartLineDto.passthrough()).min(1).max(100),
   customerNote: safeText(2000).optional(),
+  /** Signed-in customers: pay what the store allows from the wallet balance. */
+  useWallet: z.boolean().optional(),
   termsAgreed: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
 });
 export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;

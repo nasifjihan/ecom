@@ -305,10 +305,16 @@ export default function ThankYouPage() {
                       <span className="font-medium">-{formatBDT(p.amount)}</span>
                     </div>
                   ))}
-                {order.discountTotal - (order.promotionDiscount ?? 0) > 0.004 && (
+                {order.discountTotal - (order.promotionDiscount ?? 0) - (order.memberDiscount ?? 0) > 0.004 && (
                   <div className="flex justify-between text-green-600">
                     <span>{order.couponUsed ? `Coupon "${order.couponUsed}"` : "Discount"}</span>
-                    <span className="font-medium">-{formatBDT(order.discountTotal - (order.promotionDiscount ?? 0))}</span>
+                    <span className="font-medium">-{formatBDT(order.discountTotal - (order.promotionDiscount ?? 0) - (order.memberDiscount ?? 0))}</span>
+                  </div>
+                )}
+                {(order.memberDiscount ?? 0) > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>{order.memberLevel ?? "Member"} discount</span>
+                    <span className="font-medium">-{formatBDT(order.memberDiscount ?? 0)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -327,9 +333,15 @@ export default function ThankYouPage() {
                     <span className="font-medium">{formatBDT(order.feeTotal)}</span>
                   </div>
                 )}
+                {(order.walletUsed ?? 0) > 0 && (
+                  <div className="flex justify-between text-primary">
+                    <span>Paid from your wallet</span>
+                    <span className="font-medium">-{formatBDT(order.walletUsed ?? 0)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between items-baseline pt-1">
-                  <span className="font-semibold">Grand Total</span>
+                  <span className="font-semibold">{(order.walletUsed ?? 0) > 0 ? "Left to pay" : "Grand Total"}</span>
                   <span className="text-2xl font-black text-primary">{formatBDT(order.grandTotal)}</span>
                 </div>
               </div>

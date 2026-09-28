@@ -53,6 +53,7 @@ storefrontCheckoutRouter.post(
 
 storefrontCheckoutRouter.post(
   "/cart/prices",
+  authMiddleware("optional"),
   validate({ body: CartPricesDto }),
   storefrontController.cartPrices,
 );

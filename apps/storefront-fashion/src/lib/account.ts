@@ -78,6 +78,12 @@ export interface MyOrder {
   promotionDiscount?: number;
   promotions?: { name: string; type: string; amount: number }[];
   couponUsed: string | null;
+  /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
+  memberDiscount?: number;
+  memberLevel?: string | null;
+  walletUsed?: number;
+  cashback?: number;
+
   shippingTotal: number;
   taxTotal: number;
   feeTotal: number;

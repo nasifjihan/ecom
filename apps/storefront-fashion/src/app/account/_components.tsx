@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MapPin, Package, User } from "lucide-react";
+import { Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
 import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import {
@@ -49,6 +49,8 @@ const NAV = [
   { href: "/account", label: "Profile", icon: User },
   { href: "/account/orders", label: "Orders", icon: Package },
   { href: "/account/addresses", label: "Addresses", icon: MapPin },
+  { href: "/account/wallet", label: "Wallet", icon: Wallet },
+  { href: "/account/refer", label: "Refer a friend", icon: Gift },
 ];
 
 export function AccountShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {

@@ -6,6 +6,7 @@ import { Footer } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
 import { getSite, getSlotPromotions, hexToHslVar } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
+import { ReferralCapture } from "@/lib/loyalty";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -201,6 +202,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
           <CartDrawerSlot storeName={storeName} />
           <EntryPopup />
+          <ReferralCapture />
         </Providers>
       </body>
     </html>

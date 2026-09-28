@@ -84,6 +84,11 @@ export type OrderDetail = {
   items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
   itemsSubtotal: number;
   discountTotal: number;
+  /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
+  memberDiscount?: number;
+  memberLevel?: string | null;
+  walletUsed?: number;
+  cashback?: number;
   /** Part of discountTotal from automatic promotions, listed in `promotions`. */
   promotionDiscount?: number;
   promotions?: { name: string; type: string; amount: number }[];
@@ -194,6 +199,8 @@ export type PlaceOrderBody = {
   currency?: string;
   customerNote?: string;
   termsAgreed?: boolean;
+  /** Signed-in customers: pay what the shop allows from the wallet. */
+  useWallet?: boolean;
 };
 
 export type OrderResult = {

@@ -76,6 +76,8 @@ const Base = z.object({
   customerNote: text(2000).optional(),
   staffNote: text(2000).optional(),
   notifyCustomer: z.boolean().default(true),
+  /** Take what the store allows from the customer's wallet (known customers only). */
+  useWallet: z.boolean().default(false),
 });
 
 export const ManualOrderQuoteDto = Base;
@@ -200,6 +202,9 @@ export class ManualOrderService {
       // Staff may record any payment method the store has set up, even ones not offered online.
       requireEnabledGateway: false,
       applyGatewayFee: false,
+      // A known customer gets their loyalty level's discount; staff can take payment from their wallet.
+      customerId: customer?.id ?? null,
+      useWallet: dto.useWallet && !!customer,
     };
     const quote = await this.storefront.quoteOrder(input);
 
@@ -251,6 +256,8 @@ export class ManualOrderService {
       couponError: quote.couponError,
       promotions: quote.promotions,
       discountCapPct: cap,
+      member: quote.member,
+      wallet: quote.wallet,
       totals: quote.totals,
       problems: quote.problems,
     };

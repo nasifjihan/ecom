@@ -9,6 +9,7 @@ import * as React from "react";
 import { api } from "@ecom/api-client";
 import { formatMoney, toast, useCart, type CartPriceQuote } from "@ecom/storefront-base";
 import type { CartPromotions } from "./promotions";
+import { useAppSelector } from "./store";
 
 type CartPriceLine = Omit<CartPriceQuote, "price"> & {
   price: number | null;
@@ -20,7 +21,7 @@ type CartPriceLine = Omit<CartPriceQuote, "price"> & {
 const cartPricesApi = api.injectEndpoints({
   endpoints: (builder) => ({
     cartPrices: builder.mutation<
-      { items: CartPriceLine[]; promotions: CartPromotions },
+      { items: CartPriceLine[]; promotions: CartPromotions; member: MemberDiscount | null },
       { items: Array<{ productId: string; variantId?: string; qty: number }>; couponCode?: string; email?: string }
     >({
       query: (body) => ({ url: "/storefront/checkout/cart/prices", method: "POST", body }),
@@ -30,6 +31,13 @@ const cartPricesApi = api.injectEndpoints({
 });
 
 export const { useCartPricesMutation } = cartPricesApi;
+
+/** A signed-in customer's loyalty level discount on this cart (after promotions and the coupon). */
+export interface MemberDiscount {
+  level: string;
+  percent: number;
+  discount: number;
+}
 
 export const cartLineKey = (productId: string, variantId?: string | null) => `${productId}:${variantId ?? ""}`;
 
@@ -45,6 +53,9 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
   const [problems, setProblems] = React.useState<Record<string, string>>({});
   const [checking, setChecking] = React.useState(false);
   const [promotions, setPromotions] = React.useState<CartPromotions | null>(null);
+  const [member, setMember] = React.useState<MemberDiscount | null>(null);
+  // Signing in (or out) changes the member discount.
+  const signedIn = useAppSelector((s) => s.auth.isAuthenticated);
   const { couponCode, email } = opts;
   const [round, setRound] = React.useState(0);
 
@@ -57,6 +68,7 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
     if (!lines.length) {
       setProblems({});
       setPromotions(null);
+      setMember(null);
       return;
     }
     let cancelled = false;
@@ -66,6 +78,7 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
         const res = await check({ items: lines, ...(couponCode ? { couponCode } : {}), ...(email ? { email } : {}) }).unwrap();
         if (cancelled) return;
         setPromotions(res.promotions ?? null);
+        setMember(res.member && res.member.discount > 0 ? res.member : null);
         const changes = syncPrices(
           res.items.filter((l): l is CartPriceLine & { price: number } => l.price !== null),
         );
@@ -93,8 +106,8 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [key, round, check, syncPrices, couponCode, email]);
+  }, [key, round, check, syncPrices, couponCode, email, signedIn]);
 
   const recheck = React.useCallback(() => setRound((r) => r + 1), []);
-  return { problems, hasProblems: Object.keys(problems).length > 0, checking, recheck, promotions };
+  return { problems, hasProblems: Object.keys(problems).length > 0, checking, recheck, promotions, member };
 }

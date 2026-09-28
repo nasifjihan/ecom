@@ -29,6 +29,8 @@ import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./fla
 import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
 import { FulfilmentService } from "../fulfilment/fulfilment.service";
 import { chooseWarehouse, moveStock } from "../stock";
+import { checkoutLoyalty, onOrderPlaced } from "../loyalty/loyalty.ledger";
+import { memberDiscount as memberDiscountFor, walletUse } from "../loyalty/loyalty.rules";
 import { PaymentsService } from "../payments/payments.service";
 import { recordPaidAtEntry } from "../payments/payments.records";
 import { isManualCapable, normalizeBdMobile, normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
@@ -147,6 +149,10 @@ export type OrderDraft = {
   paymentGateway: string;
   requireEnabledGateway: boolean;
   applyGatewayFee: boolean;
+  /** The customer the order is for: their loyalty level's discount applies. */
+  customerId?: bigint | null;
+  /** Pay what the wallet allows from the customer's balance. */
+  useWallet?: boolean;
 };
 
 export type OrderQuote = Awaited<ReturnType<StorefrontService["quoteOrder"]>>;
@@ -575,8 +581,16 @@ export class StorefrontService {
     const promo = await this.promotionQuote(priced);
     const coupon = couponCode ? await this.evaluateCoupon(couponCode, priced, email, promo.lineOff) : null;
     const dropped = !!coupon?.ok && !coupon.coupon.worksWithPromotions;
+    const promotions = this.promotionsView(promo, dropped);
+    // A signed-in customer's loyalty level: its % off what's left after promotions and the coupon.
+    const loyalty = await checkoutLoyalty(prisma, this.storeId, this.ctx.customer?.id);
+    const subtotal = round2(priced.reduce((a, l) => a + l.lineSubtotal, 0));
+    const afterOthers = round2(subtotal - promotions.total - (coupon?.ok ? coupon.discount : 0));
     return {
-      promotions: this.promotionsView(promo, dropped),
+      member: loyalty.level
+        ? { level: loyalty.level.name, percent: loyalty.level.discountPercent, discount: memberDiscountFor(afterOthers, loyalty.level.discountPercent) }
+        : null,
+      promotions,
       items: quoted.map((q) => ({
         productId: String(q.line.productId),
         variantId: q.line.variantId ? String(q.line.variantId) : null,
@@ -964,7 +978,10 @@ export class StorefrontService {
           ),
         )
       : 0;
-    const discountTotal = round2(promotionDiscount + couponDiscount + manualDiscount);
+    // Loyalty level: its % off what's left after promotions, the coupon and any staff discount.
+    const loyalty = await checkoutLoyalty(prisma, storeId, input.customerId);
+    const memberDiscount = loyalty.level ? memberDiscountFor(round2(afterCoupon - manualDiscount), loyalty.level.discountPercent) : 0;
+    const discountTotal = round2(promotionDiscount + couponDiscount + manualDiscount + memberDiscount);
     const shippingTotal = freeShipping ? 0 : round2(delivery?.fee ?? 0);
 
     // Tax on the discounted subtotal + shipping (same inputs the checkout page shows).
@@ -981,7 +998,10 @@ export class StorefrontService {
       input.applyGatewayFee && gateway
         ? round2(num(gateway.feeFixed) + ((itemsSubtotal - discountTotal) * num(gateway.feePercent)) / 100)
         : 0;
-    const grandTotal = round2(itemsSubtotal - discountTotal + shippingTotal + taxTotal + feeTotal);
+    const orderTotal = round2(itemsSubtotal - discountTotal + shippingTotal + taxTotal + feeTotal);
+    // The wallet pays part or all of it; grandTotal is what's left for the payment method.
+    const walletUsed = input.useWallet ? walletUse(orderTotal, loyalty.balance, Number(loyalty.settings.walletMaxPercent)) : 0;
+    const grandTotal = round2(orderTotal - walletUsed);
 
     return {
       problems,
@@ -999,7 +1019,9 @@ export class StorefrontService {
       freeDeliveryApplied,
       promoLineOff,
       gifts,
-      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal, qty, weightKG },
+      member: loyalty.level ? { level: loyalty.level.name, percent: loyalty.level.discountPercent } : null,
+      wallet: { balance: loyalty.balance, enabled: loyalty.settings.walletEnabled, maxPercent: Number(loyalty.settings.walletMaxPercent) },
+      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, memberDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, orderTotal, walletUsed, grandTotal, qty, weightKG },
     };
   }
 
@@ -1154,9 +1176,13 @@ export class StorefrontService {
           promotionDiscount,
           promotions: applied.length ? (applied as Prisma.InputJsonValue) : undefined,
           manualDiscount: q.totals.manualDiscount,
+          memberDiscount: q.totals.memberDiscount,
+          memberLevel: q.member?.level ?? null,
+          walletUsed: q.totals.walletUsed,
           paymentGatewayCode: gateway.code,
-          paymentStatus: meta.paid ? "paid" : "unpaid",
-          paidAt: meta.paid ? new Date() : null,
+          // Paid in full from the wallet: nothing left to collect.
+          paymentStatus: meta.paid || (q.totals.walletUsed > 0 && grandTotal <= 0) ? "paid" : "unpaid",
+          paidAt: meta.paid || (q.totals.walletUsed > 0 && grandTotal <= 0) ? new Date() : null,
           transactionId: meta.transactionId ?? null,
           items: {
             create: [
@@ -1192,6 +1218,13 @@ export class StorefrontService {
         },
       });
       if (meta.paid) await recordPaidAtEntry(t, order, meta.createdByAdminId ?? null);
+      await onOrderPlaced(t, storeId, {
+        id: order.id,
+        number: order.number,
+        customerId: meta.customerId,
+        walletUsed: q.totals.walletUsed,
+        itemsNet: round2(itemsSubtotal - discountTotal),
+      });
       // A bKash / Nagad / bank payment the customer reported at checkout waits for staff to check it.
       if (meta.transfer) {
         await t.paymentRecord.create({
@@ -1236,6 +1269,8 @@ export class StorefrontService {
       paymentGateway: dto.paymentGateway,
       requireEnabledGateway: true,
       applyGatewayFee: true,
+      customerId: this.ctx.customer?.id ?? null,
+      useWallet: !!dto.useWallet && !!this.ctx.customer,
     });
     const manual = quote.gateway!.mode === "manual" && isManualCapable(quote.gateway!.code);
     const transfer = manual && dto.payment?.transactionId ? await this.checkTransfer(quote.gateway!.code, dto.payment) : undefined;
@@ -1510,6 +1545,11 @@ function orderView(o: OrderWithItems) {
     taxTotal: num(o.taxTotal),
     feeTotal: num(o.feeTotal),
     grandTotal: num(o.grandTotal),
+    /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
+    memberDiscount: num(o.memberDiscount),
+    memberLevel: o.memberLevel,
+    walletUsed: num(o.walletUsed),
+    cashback: num(o.cashbackAmount),
     currency: o.currencyCode,
   };
 }

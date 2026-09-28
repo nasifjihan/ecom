@@ -164,6 +164,8 @@ export default function OrderDetailPage() {
 
   const { data: orderRaw, isLoading } = useGetOrderQuery(orderId);
   // Placeholder keeps the hooks below safe until the order loads (or turns out not to exist).
+  // Loyalty lines, read from the typed order.
+  const loyalty = { discount: orderRaw?.memberDiscount ?? 0, level: orderRaw?.memberLevel, wallet: orderRaw?.walletUsed ?? 0, cashback: orderRaw?.cashback ?? 0 };
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
 
   const [updateStatus] = useUpdateOrderStatusMutation();
@@ -429,12 +431,18 @@ export default function OrderDetailPage() {
                     <span className="font-medium text-red-600">-{formatCurrency(p.amount)}</span>
                   </div>
                 ))}
-              {order.discountAmount - order.manualDiscount - order.promotionDiscount > 0.004 && (
+              {order.discountAmount - order.manualDiscount - order.promotionDiscount - loyalty.discount > 0.004 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">
                     Discount {order.couponCode && <span className="text-indigo-600 dark:text-indigo-400 font-mono text-xs ml-1">({order.couponCode})</span>}
                   </span>
-                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount - order.manualDiscount - order.promotionDiscount)}</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(order.discountAmount - order.manualDiscount - order.promotionDiscount - loyalty.discount)}</span>
+                </div>
+              )}
+              {loyalty.discount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">{loyalty.level ?? "Member"} discount</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(loyalty.discount)}</span>
                 </div>
               )}
               {order.manualDiscount > 0 && (
@@ -450,11 +458,18 @@ export default function OrderDetailPage() {
               )}
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Shipping ({order.shippingMethod})</span><span className="font-medium">{formatCurrency(order.shippingCost)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">VAT (15%)</span><span className="font-medium">{formatCurrency(order.vatAmount)}</span></div>
+              {loyalty.wallet > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">Paid from wallet</span>
+                  <span className="font-medium text-indigo-600">-{formatCurrency(loyalty.wallet)}</span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between items-baseline pt-1">
-                <span className="font-semibold text-slate-900 dark:text-white">Grand Total</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{loyalty.wallet > 0 ? "To pay" : "Grand Total"}</span>
                 <span className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(order.grandTotal)}</span>
               </div>
+              {loyalty.cashback > 0 && <p className="text-xs text-emerald-700">{formatCurrency(loyalty.cashback)} cashback credited to the customer&apos;s wallet.</p>}
             </div>
 
             {order.refundedTotal > 0 && (

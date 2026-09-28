@@ -117,6 +117,9 @@ model Store {
   moneyAccounts        MoneyAccount[]
   moneyTransactions    MoneyTransaction[]
   qualityGrades        QualityGrade[]
+  loyaltySettings      LoyaltySettings?
+  loyaltyLevels        LoyaltyLevel[]
+  walletTransactions   WalletTransaction[]
   warehouses           Warehouse[]
   warehouseStock       WarehouseStock[]
   stockTransfers       StockTransfer[]
@@ -1038,6 +1041,12 @@ model Customer {
   purchasedGiftCards    GiftCard[]
   returnRequests        ReturnRequest[]
   affiliateProfile      Affiliate?             @relation("CustomerAffiliateProfile")
+  /// Loyalty level from qualifyingSpend (Batch 30).
+  loyaltyLevelId        BigInt?
+  loyaltyLevel          LoyaltyLevel?          @relation(fields: [loyaltyLevelId], references: [id], onDelete: SetNull)
+  /// Items less discounts and refunds over delivered orders; decides the loyalty level.
+  qualifyingSpend       Decimal                @default(0) @db.Decimal(14, 2)
+  walletTransactions    WalletTransaction[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -1290,6 +1299,14 @@ model Order {
   promotions             Json?
   /// Discount a staff member gave on a manual order (part of discountTotal).
   manualDiscount         Decimal              @default(0) @db.Decimal(12, 2)
+  /// Loyalty level discount (part of discountTotal) and the level's name at the time.
+  memberDiscount         Decimal              @default(0) @db.Decimal(12, 2)
+  memberLevel            String?
+  /// Paid from the customer's wallet; grandTotal is what's left to pay by the payment method.
+  walletUsed             Decimal              @default(0) @db.Decimal(12, 2)
+  /// Cashback credited when delivered (less any taken back after refunds).
+  cashbackAmount         Decimal              @default(0) @db.Decimal(12, 2)
+  cashbackAt             DateTime?
   /// Where the order came from: website, phone, facebook, instagram, whatsapp, messenger, walk_in, other.
   source                 String               @default("website")
   /// Warehouse the order ships from; its stock is reserved there until a parcel is packed.
@@ -2641,4 +2658,75 @@ model StockTransferItem {
   qtySent     Int
   /// Set on receipt; qtySent - qtyReceived is the shortfall.
   qtyReceived Int?
+}
+
+// ============================================================
+// LOYALTY, WALLET AND REFERRALS (Batch 30)
+// ============================================================
+
+/// One per store: cashback, wallet use at checkout, and the refer-a-friend rewards.
+model LoyaltySettings {
+  id                  BigInt   @id @default(autoincrement())
+  storeId             BigInt   @unique
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Customers can pay part or all of an order from their wallet.
+  walletEnabled       Boolean  @default(true)
+  /// Most of an order's total the wallet may pay, in %.
+  walletMaxPercent    Decimal  @default(100) @db.Decimal(5, 2)
+  cashbackEnabled     Boolean  @default(false)
+  /// % of the items (after discounts) credited to the wallet when an order is delivered.
+  cashbackPercent     Decimal  @default(0) @db.Decimal(5, 2)
+  cashbackMinOrder    Decimal  @default(0) @db.Decimal(12, 2)
+  /// Largest cashback on one order (null = no limit).
+  cashbackMaxPerOrder Decimal? @db.Decimal(12, 2)
+  levelsEnabled       Boolean  @default(false)
+  referralEnabled     Boolean  @default(false)
+  /// Wallet credit for the customer who shared the link, when the friend's first order is delivered.
+  referrerReward      Decimal  @default(0) @db.Decimal(12, 2)
+  /// Wallet credit for the new customer on that same first order.
+  refereeReward       Decimal  @default(0) @db.Decimal(12, 2)
+  /// The friend's first order must be at least this (items after discounts).
+  referralMinOrder    Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt           DateTime @updatedAt
+}
+
+/// Bronze / Silver / Gold…: reached by spend on delivered orders; gives a discount and extra cashback.
+model LoyaltyLevel {
+  id              BigInt     @id @default(autoincrement())
+  storeId         BigInt
+  store           Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String
+  /// Spend (items less discounts and refunds, delivered orders) needed to reach it.
+  minSpend        Decimal    @db.Decimal(14, 2)
+  /// Off the items at checkout, after promotions and coupons.
+  discountPercent Decimal    @default(0) @db.Decimal(5, 2)
+  /// Added to the store's cashback %.
+  cashbackPercent Decimal    @default(0) @db.Decimal(5, 2)
+  color           String?
+  customers       Customer[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([storeId, name])
+}
+
+/// The wallet ledger: every credit and debit; Customer.storeCredit is the running balance.
+model WalletTransaction {
+  id               BigInt   @id @default(autoincrement())
+  storeId          BigInt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId       BigInt
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// + in, − out
+  amount           Decimal  @db.Decimal(12, 2)
+  /// cashback | cashback_reversed | order_payment | order_payment_returned | refund | referral | adjustment
+  kind             String
+  orderId          BigInt?
+  note             String?
+  balanceAfter     Decimal  @db.Decimal(12, 2)
+  createdByAdminId BigInt?
+  createdAt        DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([storeId, kind])
 }

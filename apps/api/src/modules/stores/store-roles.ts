@@ -42,6 +42,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   marketing: [
     ...g("dashboard"),
     ...g("promotions"),
+    ...g("loyalty"),
     ...g("coupons"),
     ...g("flash_sales"),
     ...g("reviews"),
@@ -62,6 +63,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   finance: [
     ...g("reports"),
+    ...g("loyalty", "view"),
     ...g("payments"),
     ...g("purchasing"),
     ...g("money_accounts"),

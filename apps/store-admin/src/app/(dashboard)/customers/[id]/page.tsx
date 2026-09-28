@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerWalletPanel } from "@/components/customers/wallet-panel";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -221,7 +222,7 @@ export default function CustomerDetailPage() {
                 <TabsTrigger value="addresses">Addresses</TabsTrigger>
                 <TabsTrigger value="wishlist">Wishlist ({c.wishlistCount ?? 0})</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
-                <TabsTrigger value="points">Points & Credit</TabsTrigger>
+                <TabsTrigger value="points">Wallet & level</TabsTrigger>
               </TabsList>
             </div>
             <div className="p-5">
@@ -389,20 +390,7 @@ export default function CustomerDetailPage() {
               </TabsContent>
 
               <TabsContent value="points" className="mt-2">
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardContent className="p-8 text-center">
-                    <Gift className="h-12 w-12 text-amber-500 mx-auto mb-3" />
-                    <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Points & Store Credit</h3>
-                    <div className="flex flex-wrap justify-center gap-3">
-                      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold">
-                        Loyalty points: <span className="text-xl">{(c.loyaltyPoints ?? 0).toLocaleString()}</span>
-                      </div>
-                      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold">
-                        Store credit: <span className="text-xl">{fc(c.storeCredit ?? 0)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <CustomerWalletPanel customerId={cid} loyaltyPoints={c.loyaltyPoints ?? 0} />
               </TabsContent>
 
             </div>

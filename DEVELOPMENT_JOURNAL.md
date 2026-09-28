@@ -2392,3 +2392,100 @@ Stock is now counted per warehouse, and an order holds (reserves) its units unti
 - Shelf / bin locations are stored but not editable yet.
 - The storefront shows total availability across all warehouses; there's no "available in Chattogram" per branch.
 - A full stock count (stocktake) screen per warehouse.
+
+## ✅ BATCH #30 — Loyalty levels, wallet with cashback, and refer a friend (2026-09-28)
+Customers now have a wallet they can pay from at checkout, earn cashback when an order is delivered, move up loyalty levels (Bronze / Silver / Gold) that give a discount on every order, and can share a referral link that rewards both friends. Staff set it all up on a new **Loyalty & wallet** page and can add to or take from a customer's wallet.
+
+### 30.1 Schema and data (migration `loyalty`)
+- **`LoyaltySettings`** (one per store):
+  - wallet on/off and the most of an order it may pay (%);
+  - cashback on/off, %, minimum order, cap per order;
+  - levels on/off;
+  - referrals on/off, the sharer's and friend's rewards, and the friend's minimum first order.
+- **`LoyaltyLevel`:** name (unique per store), minimum spend, discount %, extra cashback %, colour.
+- **`WalletTransaction`:** the wallet ledger: amount, kind (cashback, paid for an order, returned from an order, refund, referral, staff), order, note, balance after, staff member.
+- **New fields:**
+  - `Customer.loyaltyLevelId`, `qualifyingSpend`;
+  - `Order.memberDiscount`, `memberLevel`, `walletUsed`, `cashbackAmount`, `cashbackAt`.
+- **Data conversion:**
+  - every store got settings (all off) and Bronze ৳0 / Silver ৳10,000 (2% off, +1% cashback) / Gold ৳30,000 (5% off, +2%);
+  - existing store credit became an opening wallet entry, so every balance has a history;
+  - spend was counted from delivered orders (items less discounts and refunds, never below zero per order) and levels assigned.
+- **Permissions:** a new `loyalty` area (view / edit). Marketing gets both; finance and viewer get view. Custom roles follow their promotions permissions.
+
+### 30.2 Rules and the ledger (`modules/loyalty`)
+- **`loyalty.rules.ts` (43 table tests):** level for a spend and the next level, an order's spend, member discount, how much the wallet may pay, cashback, how much cashback a refund takes back, why a referral code can't be used, referral codes.
+- **`loyalty.ledger.ts`:**
+  - `walletMove` is the only code that changes a balance: one guarded update that can never go below zero, plus a ledger row;
+  - **order placed:** takes the wallet part (refused if the balance changed meanwhile) and links a referred friend's first qualifying order;
+  - **delivered:** pays cashback (store % + level %), rewards both friends for a referral, recounts spend and level;
+  - **refunded:** takes back the refunded share of the cashback and recounts spend;
+  - **cancelled / refunded in full / failed:** gives the wallet part back once, takes back cashback, and frees the referral for a later order.
+
+### 30.3 Checkout and orders
+- **Order totals:**
+  - the **member discount** is the level's % off the items after promotions, the coupon and any manual discount, and counts in the order's discounts;
+  - the **wallet** is recorded as `walletUsed`, and the grand total is what's left for the payment method. So bKash / COD / gateways work unchanged, and an order paid entirely from the wallet counts as paid.
+- **Where it applies:**
+  - the storefront quote and the cart prices return the level and the wallet balance for a signed-in customer;
+  - staff-entered orders can use the customer's wallet too.
+- **Refunds:** "refund to store credit" now goes through the wallet ledger.
+- **Invoices** show a "Paid from wallet" line.
+
+### 30.4 API
+- **Admin (`/api/admin/loyalty`):**
+  - overview with stats (in wallets, cashback given, spent from wallets, referral rewards);
+  - settings;
+  - levels (add / edit / delete; customers are re-levelled after a change);
+  - referrals by status;
+  - a customer's wallet, level and referral;
+  - add to or take from a wallet with a note.
+- **Storefront (`/api/storefront/account`):**
+  - `/loyalty`: balance, level, progress, history;
+  - `/referral`: code (made on first ask), friends and earnings;
+  - `/referral/claim`: only for a new customer with someone else's code.
+
+### 30.5 Screens
+- **Store admin:**
+  - **Marketing → Loyalty & wallet:** stats, settings, the levels table with an add / edit dialog, and the referral list;
+  - the customer page's **Wallet & level** tab: balance with Add / Take, level with progress, referral code and the wallet history;
+  - the order page shows the member discount, wallet and cashback;
+  - the new order form has a "use wallet" toggle and shows the member discount.
+- **Storefront:**
+  - **Account → Wallet** (balance, cashback rate, level progress, history) and **Refer a friend** (link with Copy / WhatsApp / Share, friends and earnings);
+  - a `?ref=CODE` link is remembered and claimed once the visitor signs in or registers;
+  - checkout shows the member discount line and a **Pay from my wallet** option;
+  - the thank-you and order pages show member discount, wallet and cashback.
+
+### 30.6 Checked
+- **Tests:** 498/498 API tests:
+  - 43 rule tests;
+  - a new database test (`tests/integration/loyalty.db.test.ts`) through the real order status changes:
+    - the ledger and the below-zero refusal;
+    - wallet taken at order and given back once on cancel;
+    - cashback only on delivery;
+    - the level-up and a partial refund taking back a share;
+    - the member discount;
+    - both referral rewards, including own-code and double-claim refusals;
+    - spending a whole balance with paisa in it.
+  - The same 2 old unhandled errors from the batch-9 smoke test remain.
+- **Bug found by the browser check:** paying with a wallet's entire balance (৳95.76) was refused as "balance changed". The amount went to Postgres as a float, and adding it to the exact decimal balance missed zero by a hair. The amount is now sent as an exact decimal; the new test above fails without the fix.
+- **By API (dev data):**
+  - the wallet paid ৳1,500 (the smaller of the balance and 50% of a ৳3,670.80 order);
+  - cashback was 3% of ৳3,192 = ৳95.76 on delivery;
+  - the Silver 2% discount was right;
+  - overdrawing, own-code referrals and duplicate level names were refused.
+- **Chromium:**
+  - admin Loyalty & wallet page and the customer's Wallet & level tab;
+  - storefront Wallet and Refer pages;
+  - a signed-in checkout with the Silver discount (−৳77.22) and "Pay from my wallet" (−৳95.76), placed, with both lines on the thank-you page;
+  - a `?ref=` link remembered;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean (only warnings shared with the other database tests); edited files have no more lint errors than before. API typecheck passes; admin and storefront build.
+
+### 30.7 Not done
+- Loyalty points (the older points fields) are left as they were; the wallet and cashback replace them in practice.
+- Levels don't expire or drop with time (spend is lifetime, less refunds).
+- No wallet top-up with money, withdrawals, or cashback expiry.
+- No referral fraud checks beyond same-phone and "new customers only"; no payout to anything other than the wallet.
+- Emails / SMS for cashback and referral rewards.

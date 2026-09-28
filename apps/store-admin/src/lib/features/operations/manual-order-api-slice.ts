@@ -28,6 +28,8 @@ export interface ManualOrderInput {
   couponCode?: string;
   /** The store's automatic promotions; on unless staff switch them off. */
   applyPromotions?: boolean;
+  /** Take what the store allows from the customer's wallet (known customers). */
+  useWallet?: boolean;
   discount?: { type: "percent" | "fixed"; value: number } | null;
   paymentGateway: string;
   paid: boolean;
@@ -72,14 +74,20 @@ export interface ManualOrderQuote {
   couponError: string | null;
   promotions: OrderPromotions;
   discountCapPct: number;
+  /** The customer's loyalty level discount, and their wallet (known customers). */
+  member: { level: string; percent: number } | null;
+  wallet: { balance: number; enabled: boolean; maxPercent: number };
   totals: {
     itemsSubtotal: number;
     promotionDiscount: number;
     couponDiscount: number;
     manualDiscount: number;
+    memberDiscount: number;
     discountTotal: number;
     shippingTotal: number;
     taxTotal: number;
+    orderTotal: number;
+    walletUsed: number;
     grandTotal: number;
     qty: number;
   };

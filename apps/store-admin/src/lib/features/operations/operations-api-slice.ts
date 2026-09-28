@@ -153,6 +153,11 @@ export interface Order {
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
+  /** Loyalty level discount (part of discountAmount), paid from the wallet, cashback credited. */
+  memberDiscount: number;
+  memberLevel?: string;
+  walletUsed: number;
+  cashback: number;
   promotionDiscount: number;
   promotions: AppliedPromotion[];
   /** From the order's parcels: unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned. */
@@ -568,6 +573,10 @@ interface ApiOrder {
   couponUsed: string | null;
   source?: string;
   manualDiscount?: string;
+  memberDiscount?: string;
+  memberLevel?: string | null;
+  walletUsed?: string;
+  cashbackAmount?: string;
   promotionDiscount?: string;
   promotions?: AppliedPromotion[] | null;
   createdByAdmin?: { id: string; name: string } | null;
@@ -669,6 +678,10 @@ export function fromApiOrder(o: ApiOrder): Order {
     source: o.source ?? "website",
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
+    memberDiscount: Number(o.memberDiscount ?? 0),
+    memberLevel: o.memberLevel ?? undefined,
+    walletUsed: Number(o.walletUsed ?? 0),
+    cashback: Number(o.cashbackAmount ?? 0),
     promotionDiscount: Number(o.promotionDiscount ?? 0),
     promotions: o.promotions ?? [],
     fulfillmentStatus: o.fulfillmentStatus ?? "unfulfilled",

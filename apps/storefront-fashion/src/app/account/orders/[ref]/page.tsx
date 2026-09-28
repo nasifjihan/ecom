@@ -66,12 +66,14 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
   const rows: [string, number][] = [
     ["Items", o.itemsSubtotal],
     ...(o.promotions ?? []).filter((p) => p.amount > 0).map((p) => [p.name, -p.amount] as [string, number]),
-    ...(o.discountTotal - (o.promotionDiscount ?? 0) > 0.004
-      ? ([[`Discount${o.couponUsed ? ` (${o.couponUsed})` : ""}`, -(o.discountTotal - (o.promotionDiscount ?? 0))]] as [string, number][])
+    ...(o.discountTotal - (o.promotionDiscount ?? 0) - (o.memberDiscount ?? 0) > 0.004
+      ? ([[`Discount${o.couponUsed ? ` (${o.couponUsed})` : ""}`, -(o.discountTotal - (o.promotionDiscount ?? 0) - (o.memberDiscount ?? 0))]] as [string, number][])
       : []),
+    ...((o.memberDiscount ?? 0) > 0 ? ([[`${o.memberLevel ?? "Member"} discount`, -(o.memberDiscount ?? 0)]] as [string, number][]) : []),
     ["Delivery", o.shippingTotal],
     ...(o.taxTotal > 0 ? ([["Tax", o.taxTotal]] as [string, number][]) : []),
     ...(o.feeTotal > 0 ? ([["Payment fee", o.feeTotal]] as [string, number][]) : []),
+    ...((o.walletUsed ?? 0) > 0 ? ([["Paid from wallet", -(o.walletUsed ?? 0)]] as [string, number][]) : []),
   ];
 
   return (
@@ -127,6 +129,9 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
               <dt>Total</dt>
               <dd className="tabular-nums">{formatBDT(o.grandTotal, o.currency)}</dd>
             </div>
+            {(o.cashback ?? 0) > 0 && (
+              <p className="pt-1 text-xs text-green-700">{formatBDT(o.cashback ?? 0, o.currency)} cashback added to your wallet.</p>
+            )}
           </dl>
         </CardContent>
       </Card>

@@ -210,7 +210,13 @@ export class InvoiceService {
       },
       ...(num(order.taxTotal) > 0 ? [{ label: "Tax", value: money(order.taxTotal) }] : []),
       ...(num(order.feeTotal) > 0 ? [{ label: "Payment fee", value: money(order.feeTotal) }] : []),
-      { label: "Total", value: money(order.grandTotal), strong: true },
+      // Paid from the wallet: the order total, the wallet part, then what the payment method covers.
+      ...(num(order.walletUsed) > 0
+        ? [
+            { label: "Total", value: money(num(order.grandTotal) + num(order.walletUsed)), strong: true },
+            { label: "Paid from wallet", value: `-${money(order.walletUsed)}` },
+          ]
+        : [{ label: "Total", value: money(order.grandTotal), strong: true }]),
       payment.status === "paid"
         ? { label: "Amount paid", value: money(order.grandTotal) }
         : payment.status === "due"

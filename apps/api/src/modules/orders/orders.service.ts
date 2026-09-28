@@ -9,6 +9,7 @@ import { newId, slugify } from "@ecom/utils";
 import { Prisma } from "@prisma/client";
 import { emitOrderStatusChanged } from "../notifications";
 import { releaseOrderStock } from "../stock";
+import { onOrderClosed, onOrderDelivered } from "../loyalty/loyalty.ledger";
 
 export const STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["PROCESSING", "ON_HOLD", "CANCELLED"],
@@ -87,6 +88,11 @@ export class OrdersService extends BaseService {
       }
 
       await t.order.update({ where: { id: oid }, data: updateData as any });
+      // Loyalty: cashback, referral rewards and level on delivery; wallet and cashback back on closing.
+      if (this.ctx.storeId !== undefined) {
+        if (newStatus === "DELIVERED") await onOrderDelivered(t, this.ctx.storeId, oid);
+        if (newStatus === "CANCELLED" || newStatus === "REFUNDED" || newStatus === "FAILED") await onOrderClosed(t, this.ctx.storeId, oid);
+      }
       // Cash on delivery handed over without a parcel carrying it: count it as cash in hand.
       if (newStatus === "DELIVERED") await recordOrderCash(t, oid);
 

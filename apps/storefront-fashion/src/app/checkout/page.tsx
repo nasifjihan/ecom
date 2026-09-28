@@ -62,6 +62,7 @@ import {
   AddressFormData,
 } from "@ecom/storefront-base";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
+import { useMyLoyaltyQuery } from "@/lib/loyalty";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
 import { passwordProblem } from "@/app/account/_components";
 import { useCartPriceCheck } from "@/lib/cart-prices";
@@ -119,8 +120,13 @@ export default function CheckoutPage() {
     hasProblems: cartHasProblems,
     recheck: recheckCart,
     promotions,
+    member,
   } = useCartPriceCheck({ couponCode: appliedCoupon?.valid ? appliedCoupon.couponCode : undefined, email: contactEmail || undefined });
   const promoDiscount = promotions && !promotions.droppedForCoupon ? promotions.total : 0;
+  // A signed-in customer's loyalty level discount (worked out by the server with the coupon applied).
+  const memberDiscount = member?.discount ?? 0;
+  const { data: loyalty } = useMyLoyaltyQuery(undefined, { skip: !isAuthenticated });
+  const [payFromWallet, setPayFromWallet] = React.useState(false);
   const { data: availableCoupons = [] } = useAvailableCouponsQuery();
 
   const [termsChecked, setTermsChecked] = React.useState(false);
@@ -237,10 +243,10 @@ export default function CheckoutPage() {
       countryCode: shippingAddress.country ?? "BD",
       division: shippingAddress.division,
       district: shippingAddress.district,
-      subtotal: Math.max(0, subtotal - couponDiscount - promoDiscount),
+      subtotal: Math.max(0, subtotal - couponDiscount - promoDiscount - memberDiscount),
       shipping: shippingAmount,
     }),
-    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, promoDiscount, shippingAmount],
+    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, promoDiscount, memberDiscount, shippingAmount],
   );
 
   const {
@@ -256,7 +262,7 @@ export default function CheckoutPage() {
 
   const gatewayFee = selectedGatewayConfig
     ? Math.round(
-        (selectedGatewayConfig.feeFixed + ((subtotal - couponDiscount - promoDiscount) * selectedGatewayConfig.feePercent) / 100) * 100,
+        (selectedGatewayConfig.feeFixed + ((subtotal - couponDiscount - promoDiscount - memberDiscount) * selectedGatewayConfig.feePercent) / 100) * 100,
       ) / 100
     : 0;
   const discountsArr: OrderSummaryLineItem[] = promotionLines(promotions).map((l) => ({
@@ -277,7 +283,27 @@ export default function CheckoutPage() {
     });
   }
 
-  const grandTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount - promoDiscount);
+  if (memberDiscount > 0) {
+    discountsArr.push({
+      id: "member",
+      label: `${member!.level} member (${member!.percent}% off)`,
+      amount: memberDiscount,
+      isDiscount: true,
+      color: "text-green-600 font-medium",
+    });
+  }
+
+  const orderTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount - promoDiscount - memberDiscount);
+  // The wallet pays what the shop allows; the payment method covers the rest.
+  const walletBalance = loyalty?.wallet.enabled ? loyalty.wallet.balance : 0;
+  const walletUsed =
+    payFromWallet && walletBalance > 0
+      ? Math.round(Math.min(walletBalance, (orderTotal * (loyalty?.wallet.maxPercent ?? 100)) / 100, orderTotal) * 100) / 100
+      : 0;
+  if (walletUsed > 0) {
+    discountsArr.push({ id: "wallet", label: "Paid from your wallet", amount: walletUsed, isDiscount: true, color: "text-primary font-medium" });
+  }
+  const grandTotal = Math.max(0, Math.round((orderTotal - walletUsed) * 100) / 100);
 
   const [applyCoupon, { isLoading: applyingCoupon }] = useApplyCouponMutation();
   const [placeOrder, { isLoading: placingOrder }] = usePlaceOrderMutation();
@@ -507,10 +533,11 @@ export default function CheckoutPage() {
         subtotal,
         shippingTotal: shippingAmount,
         taxTotal: actualTaxTotal,
-        discountTotal: couponDiscount + promoDiscount,
+        discountTotal: couponDiscount + promoDiscount + memberDiscount,
         grandTotal,
         currency: CURRENCY,
         termsAgreed: true,
+        useWallet: walletUsed > 0,
       }).unwrap();
 
       toast.success("Order placed!", { description: `Order #${result.orderRef} created successfully` });
@@ -1049,6 +1076,27 @@ export default function CheckoutPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {isAuthenticated && walletBalance > 0 && (
+                    <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border bg-muted/40 p-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-primary"
+                        checked={payFromWallet}
+                        onChange={(e) => setPayFromWallet(e.target.checked)}
+                      />
+                      <span className="text-sm">
+                        <span className="font-medium">Pay from my wallet</span>{" "}
+                        <span className="text-muted-foreground">({formatBDT(walletBalance)} available)</span>
+                        {payFromWallet && (
+                          <span className="block text-xs text-muted-foreground">
+                            {formatBDT(walletUsed)} from your wallet
+                            {grandTotal > 0 ? `, ${formatBDT(grandTotal)} by the method below` : ". Nothing more to pay"}
+                            {(loyalty?.wallet.maxPercent ?? 100) < 100 ? ` (the wallet can pay up to ${loyalty!.wallet.maxPercent}% of an order)` : ""}.
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  )}
                   <PaymentMethodList
                     gateways={paymentGateways}
                     selectedMethod={selectedPaymentMethod}
