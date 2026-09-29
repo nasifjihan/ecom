@@ -38,6 +38,8 @@ import { categoryLineage, livePromotionRules } from "../marketing/promotions.ser
 import { evaluatePromotions, type PromoResult } from "../marketing/promotions.rules";
 import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.context";
 import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
+import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
+import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -574,11 +576,11 @@ export class StorefrontService {
    * Re-prices cart lines from the DB, flash sales included. Never throws for a bad line: each
    * line carries its `problem` (gone, out of stock, too few left) for the cart page to show.
    */
-  async quoteLines(lines: CartLineDto[]) {
+  async quoteLines(lines: CartLineDto[], buyerId: bigint | null | undefined = this.ctx.customer?.id) {
     const productIds = [...new Set(lines.map((l) => l.productId))];
     // Shoppers can only buy what their storefront sells; staff taking an order can sell anything.
     const sf = await this.storefront();
-    const [products, flashSales] = await Promise.all([
+    const [products, flashSales, tiers, business] = await Promise.all([
       prisma.product.findMany({
         where: { storeId: this.storeId, id: { in: productIds }, status: "published", ...(this.ctx.admin ? {} : inRange(sf)) },
         include: {
@@ -589,6 +591,8 @@ export class StorefrontService {
         },
       }),
       FlashSales.load(this.storeId, productIds),
+      tiersByProduct(this.storeId, productIds),
+      isBusinessBuyer(this.storeId, buyerId),
     ]);
     const byId = new Map(products.map((p) => [p.id, p]));
 
@@ -606,7 +610,17 @@ export class StorefrontService {
       } else if (p.variants.length > 0) {
         return { line, problem: { message: `Please choose an option for "${p.name}"`, code: "CART_INVALID" as const } };
       }
-      const priced = pricedWith(flashSales, p, variant?.id ?? null, this.sfRow(sf, p, variant ? variantPriceRow(p, variant) : p));
+      const base = pricedWith(flashSales, p, variant?.id ?? null, this.sfRow(sf, p, variant ? variantPriceRow(p, variant) : p));
+      // Bulk price: the tier this product's quantity in the cart reaches, when cheaper.
+      const productTiers = tiers.get(p.id) ?? [];
+      const vId = variant?.id ?? null;
+      const sameProduct = lines.filter((l) => l.productId === p.id).map((l) => ({ variantId: l.variantId ?? null, qty: l.qty }));
+      const bulk = productTiers.length
+        ? withTier(base.price, tierFor(productTiers, vId, tierQty(productTiers, sameProduct, vId), business))
+        : { price: base.price, tier: null };
+      const priced = bulk.tier
+        ? { price: bulk.price, compareAtPrice: base.compareAtPrice ?? base.price, flash: null }
+        : base;
       const stockRow = variant ?? p;
       const what = `"${p.name}"${variant ? ` (${variantLabel(variant.attributeValues)})` : ""}`;
       const left = available(stockRow);
@@ -627,6 +641,7 @@ export class StorefrontService {
           unitPrice: priced.price,
           compareAtPrice: priced.compareAtPrice,
           flash: priced.flash,
+          tier: bulk.tier,
           onSale: priced.compareAtPrice !== null,
           lineSubtotal: round2(priced.price * line.qty),
           weightKG: num(variant?.weight ?? p.weight) * line.qty,
@@ -670,6 +685,7 @@ export class StorefrontService {
         price: q.priced ? q.priced.unitPrice : null,
         compareAtPrice: q.priced?.compareAtPrice ?? null,
         flashSale: flashView(q.priced?.flash ?? null),
+        bulk: q.priced?.tier ? { minQty: q.priced.tier.minQty, business: !q.priced.tier.forEveryone } : null,
         problem: q.problem?.message ?? null,
       })),
     };
@@ -964,7 +980,7 @@ export class StorefrontService {
       fail(`Payment method "${input.paymentGateway}" is not available for this store`, "PAYMENT_GATEWAY_ERROR");
     }
 
-    const quoted = await this.quoteLines(input.items);
+    const quoted = await this.quoteLines(input.items, input.customerId ?? this.ctx.customer?.id);
     const lines: PricedLine[] = [];
     for (const q of quoted) {
       if (q.problem || !q.priced) fail(q.problem?.message ?? "A product is no longer available", q.problem?.code ?? "CART_INVALID");

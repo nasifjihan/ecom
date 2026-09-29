@@ -18,6 +18,7 @@ import {
   X,
   AlertTriangle,
   Zap,
+  Layers,
 } from "lucide-react";
 import {
   Card,
@@ -143,7 +144,7 @@ export default function CartPage() {
             <div className="space-y-3">
               <div className="hidden md:grid grid-cols-[120px_1fr_auto] gap-4 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 rounded-t-2xl border border-b-0">
                 <span>{t("Product")}</span>
-                <div className="grid grid-cols-[1fr_100px_140px_80px_40px] gap-4">
+                <div className="grid grid-cols-[1fr_100px_140px_120px_40px] gap-4">
                   <span>{t("Details")}</span>
                   <span>{t("Unit Price")}</span>
                   <span>{t("Quantity")}</span>
@@ -162,7 +163,7 @@ export default function CartPage() {
                         <img src={item.image} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
                       </Link>
 
-                      <div className="md:grid md:grid-cols-[1fr_100px_140px_80px_40px] md:gap-4 md:items-center min-w-0">
+                      <div className="md:grid md:grid-cols-[1fr_100px_140px_120px_40px] md:gap-4 md:items-center min-w-0">
                         <div className="min-w-0 mb-3 md:mb-0">
                           <Link href={`/products/${item.slug}`} className="block">
                             <h3 className="font-medium md:text-sm leading-snug line-clamp-2 hover:text-primary transition-colors">{item.title}</h3>
@@ -171,6 +172,12 @@ export default function CartPage() {
                           {item.flashSale && (
                             <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10">
                               <Zap className="h-3 w-3" /> {item.flashSale.name}
+                            </div>
+                          )}
+                          {item.bulk && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10">
+                              <Layers className="h-3 w-3" />{" "}
+                              {item.bulk.business ? t("Business price, {n}+", { n: item.bulk.minQty }) : t("Bulk price, {n}+", { n: item.bulk.minQty })}
                             </div>
                           )}
                           {problem && (

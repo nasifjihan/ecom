@@ -108,8 +108,13 @@ These are our advantages. Keep them.
 | Courier adapters: Steadfast, Pathao, RedX (book, track, label) | ✅ | Batch 22: booking, webhooks + scheduled sync, 4x6 labels with barcode. Built to the couriers' published API shapes and a local mock; not yet run against the live APIs |
 | Customer picks courier at checkout (toggle) | ❌ | |
 
-### Wholesale / B2B (reference 16) — all ❌
-Business accounts (approve/reject/suspend), quotations (draft → sent → became order), bulk price tiers per variant, cost + margin → sale price screen.
+### Wholesale / B2B (reference 16)
+| Feature | Status | Notes |
+|---|---|---|
+| Business accounts (apply, approve / reject / suspend) | ✅ | Batch 33: Customers → Business accounts; storefront Account → Business account |
+| Bulk price tiers per product or option (businesses or everyone) | ✅ | Batch 33: Product → Pricing → Bulk prices; used in cart, checkout and staff orders |
+| Cost + margin → sale price screen | ✅ | Batch 33: Catalog → Price by margin |
+| Quotations (draft → sent → became order) | ❌ | Batch 33 part 2 |
 
 ### Purchasing (reference 17)
 | Feature | Status | Notes |
@@ -223,6 +228,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 | Wholesale/B2B, sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
+| 33 🟡 | Wholesale/B2B (part 1 ✅: accounts, bulk prices, margin screen; quotations next), sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

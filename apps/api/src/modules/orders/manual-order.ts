@@ -258,6 +258,7 @@ export class ManualOrderService {
         unitPrice: q.priced?.unitPrice ?? null,
         compareAtPrice: q.priced?.compareAtPrice ?? null,
         flashSale: q.priced?.flash?.name ?? null,
+        bulk: q.priced?.tier ? { minQty: q.priced.tier.minQty, business: !q.priced.tier.forEveryone } : null,
         lineSubtotal: q.priced?.lineSubtotal ?? null,
         problem: q.problem?.message ?? null,
       })),

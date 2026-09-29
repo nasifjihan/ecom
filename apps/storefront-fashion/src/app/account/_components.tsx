@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
+import { Briefcase, Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
 import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney, msg, orderStatusWord, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
+import { useWholesaleStatus } from "@/lib/wholesale";
 import {
   hasStoredToken,
   signOutAndLeave,
@@ -55,6 +56,7 @@ const NAV = [
   { href: "/account/addresses", label: msg("Addresses"), icon: MapPin },
   { href: "/account/wallet", label: msg("Wallet"), icon: Wallet },
   { href: "/account/refer", label: msg("Refer a friend"), icon: Gift },
+  { href: "/account/business", label: msg("Business account"), icon: Briefcase },
 ];
 
 export function AccountShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -64,6 +66,9 @@ export function AccountShell({ title, description, children }: { title: string; 
   const email = useAppSelector((s) => s.auth.customerEmail);
   const [logout] = useCustomerLogoutMutation();
   const t = useT();
+  // "Business account" only for shops that sell to businesses (or customers who already have one).
+  const { data: wholesale } = useWholesaleStatus();
+  const nav = NAV.filter((n) => n.href !== "/account/business" || wholesale?.enabled === true || !!wholesale?.account);
 
   const onLogout = async () => {
     await logout().unwrap().catch(() => undefined);
@@ -83,7 +88,7 @@ export function AccountShell({ title, description, children }: { title: string; 
             {email && <p className="text-xs text-muted-foreground truncate">{email}</p>}
           </div>
           <nav className="rounded-xl border bg-card p-2 flex md:flex-col gap-1 overflow-x-auto">
-            {NAV.map(({ href, label, icon: Icon }) => {
+            {nav.map(({ href, label, icon: Icon }) => {
               const active = href === "/account" ? pathname === href : pathname.startsWith(href);
               return (
                 <Link

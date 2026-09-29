@@ -67,6 +67,8 @@ export interface ManualOrderQuote {
     unitPrice: number | null;
     compareAtPrice: number | null;
     flashSale: string | null;
+    /** A bulk price applied: the tier reached, and whether it's a business-only price. */
+    bulk?: { minQty: number; business: boolean } | null;
     lineSubtotal: number | null;
     problem: string | null;
   }[];

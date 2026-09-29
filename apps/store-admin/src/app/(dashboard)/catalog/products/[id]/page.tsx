@@ -66,6 +66,7 @@ import { ProductStatus, ProductType } from "@ecom/shared-types";
 import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
 import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTexts } from "@/components/catalog/bangla-fields";
 import { ProductStorefronts } from "@/components/catalog/product-storefronts";
+import { ProductBulkPrices } from "@/components/catalog/product-bulk-prices";
 
 const BANGLA_FIELDS: BanglaField[] = [
   { key: "name", label: "Name" },
@@ -931,6 +932,9 @@ export default function EditProductPage() {
                       basePrice={[Number(watch("salePrice")), Number(watch("regularPrice"))].find((n) => n > 0) ?? null}
                       hasOptions={variants.length > 0}
                     />
+                  </div>
+                  <div className="mt-6">
+                    <ProductBulkPrices productId={String(productId)} />
                   </div>
                 </TabsContent>
 

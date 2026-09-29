@@ -3,6 +3,8 @@
 import * as React from "react";
 import { PromoSlotStrip } from "@/app/_components/promotions";
 import { useWishlist } from "@/lib/engagement";
+import { BulkPrices, bulkUnitPrice } from "./bulk-prices";
+import { tiersForOption, useProductBulkPrices } from "@/lib/wholesale";
 import { QuestionsSection, ReviewForm } from "./engagement-sections";
 import Link from "next/link";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -187,15 +189,22 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   );
 
   const hasVariants = product.variants.length > 0;
-  const price = selectedVariant?.price ?? product.price;
-  const compareAtPrice = selectedVariant ? selectedVariant.compareAtPrice ?? null : product.compareAtPrice ?? null;
+  const listPrice = selectedVariant?.price ?? product.price;
+  // Bulk prices depend on the shopper (business accounts see theirs), so they load in the browser.
+  const { data: bulk } = useProductBulkPrices(product.id);
+  const bulkTiers = tiersForOption(bulk, selectedVariant?.id);
+  const price = bulkUnitPrice(listPrice, bulkTiers, qty);
+  const listCompareAt = selectedVariant ? selectedVariant.compareAtPrice ?? null : product.compareAtPrice ?? null;
+  const compareAtPrice = price < listPrice ? listCompareAt ?? listPrice : listCompareAt;
   const flashSale = (hasVariants ? selectedVariant?.flashSale : product.flashSale) ?? null;
   const stockLeft = hasVariants ? selectedVariant?.stockQty ?? null : product.stockQty;
   const inStock = hasVariants ? Boolean(selectedVariant?.inStock) : !product.isOutOfStock;
   const images = product.images.length ? product.images : [product.image].filter(Boolean);
   const discountPct = compareAtPrice ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : 0;
   // A flash sale with a stock limit only sells that many at the sale price.
-  const maxQty = Math.min(stockLeft ?? 99, flashSale?.remaining ?? 99);
+  // Bulk buyers may need more than the usual 99.
+  const cap = bulkTiers.length ? 9999 : 99;
+  const maxQty = Math.min(stockLeft ?? cap, flashSale?.remaining ?? cap);
 
   const handleAddToCart = () => {
     if (hasVariants && !selectedVariant) {
@@ -382,6 +391,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <div className="text-sm font-semibold">{t("৳{amount}/month • bKash Nagad", { amount: Math.round(price / 4) })}</div>
             </div>
           </div>
+          {bulk && <BulkPrices data={bulk} tiers={bulkTiers} listPrice={listPrice} qty={qty} onPick={(n) => setQty(Math.min(maxQty, n))} />}
 
           {product.shortDescription && <p className="text-muted-foreground leading-relaxed mb-6">{product.shortDescription}</p>}
 

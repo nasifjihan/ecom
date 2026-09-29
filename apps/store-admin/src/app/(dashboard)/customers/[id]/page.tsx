@@ -1,6 +1,7 @@
 "use client";
 
 import { CustomerWalletPanel } from "@/components/customers/wallet-panel";
+import { CustomerBusinessPanel } from "@/components/customers/business-account";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -223,6 +224,7 @@ export default function CustomerDetailPage() {
                 <TabsTrigger value="wishlist">Wishlist ({c.wishlistCount ?? 0})</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
                 <TabsTrigger value="points">Wallet & level</TabsTrigger>
+                <TabsTrigger value="business">Business</TabsTrigger>
               </TabsList>
             </div>
             <div className="p-5">
@@ -391,6 +393,10 @@ export default function CustomerDetailPage() {
 
               <TabsContent value="points" className="mt-2">
                 <CustomerWalletPanel customerId={cid} loyaltyPoints={c.loyaltyPoints ?? 0} />
+              </TabsContent>
+
+              <TabsContent value="business" className="mt-2">
+                <CustomerBusinessPanel customerId={cid} />
               </TabsContent>
 
             </div>

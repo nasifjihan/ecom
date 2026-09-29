@@ -405,6 +405,7 @@ export default function NewOrderPage() {
                             {info?.unitPrice != null && <> · {taka(info.unitPrice)} each</>}
                             {info?.compareAtPrice != null && <span className="ml-1 line-through">{taka(info.compareAtPrice)}</span>}
                             {info?.flashSale && <Badge variant="secondary" className="ml-2">{info.flashSale}</Badge>}
+                            {info?.bulk && <Badge variant="secondary" className="ml-2">{info.bulk.business ? "Business" : "Bulk"} price {info.bulk.minQty}+</Badge>}
                           </p>
                           {info?.problem && <p className="text-xs text-rose-600">{info.problem}</p>}
                         </div>

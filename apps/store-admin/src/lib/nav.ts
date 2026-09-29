@@ -33,6 +33,8 @@ import {
   PackagePlus,
   Palette,
   Percent,
+  Briefcase,
+  Calculator,
   Receipt,
   Settings,
   Shield,
@@ -93,6 +95,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/catalog/brands", label: "Brands", icon: Award, perm: "categories.view" },
       { href: "/catalog/attributes", label: "Attributes", icon: SlidersHorizontal, perm: "attributes.view" },
       { href: "/catalog/media", label: "Media", icon: Image, perm: "media.view" },
+      { href: "/catalog/pricing", label: "Price by margin", icon: Calculator, perm: "products.view" },
       { href: "/inventory", label: "Stock", icon: Boxes, perm: "inventory.view" },
       { href: "/inventory/warehouses", label: "Warehouses", icon: Warehouse, perm: "inventory.view" },
       { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "inventory.view" },
@@ -107,7 +110,13 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/purchasing/accounts", label: "Accounts", icon: Landmark, perm: "money_accounts.view" },
     ],
   },
-  { title: "Customers", items: [{ href: "/customers", label: "Customers", icon: User2, perm: "customers.view" }] },
+  {
+    title: "Customers",
+    items: [
+      { href: "/customers", label: "Customers", icon: User2, perm: "customers.view" },
+      { href: "/customers/business", label: "Business accounts", icon: Briefcase, perm: "customers.view" },
+    ],
+  },
   {
     title: "Marketing",
     items: [

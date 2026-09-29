@@ -868,16 +868,22 @@ export function Select({
   defaultValue,
   onValueChange,
   className,
+  id,
+  "aria-label": ariaLabel,
 }: {
   children: React.ReactNode;
   value?: string;
   defaultValue?: string;
   onValueChange?: (v: string) => void;
   className?: string;
+  id?: string;
+  "aria-label"?: string;
 }) {
   return (
     <div className={cn("relative", className)}>
       <select
+        id={id}
+        aria-label={ariaLabel}
         value={value}
         defaultValue={value === undefined ? defaultValue : undefined}
         onChange={(e) => onValueChange?.(e.target.value)}

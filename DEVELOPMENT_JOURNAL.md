@@ -2764,3 +2764,120 @@ Each storefront can now choose its own payment methods, delivery charges and cou
 - **Still shared by every storefront:** SMS and email settings, invoice details and flash sales.
 - **Staff limits** cover orders, parcels, returns, payment records, reports and storefront content. Other pages (customers, stock, dashboard figures, the COD / settlement pages) still show the whole store.
 - **Per-option prices:** there are no per-option own prices per storefront.
+
+## ✅ BATCH #33 (part 1) — Wholesale: business accounts, bulk prices, price by margin (2026-09-29)
+Shops can now sell to businesses. A customer applies for a business account from their account page, staff approve it, and approved accounts get business prices. Any product (or single option) can have bulk prices ("10 or more at ৳3,090 each"), either for business accounts only or for every shopper. A new "Price by margin" screen shows cost, price and margin for everything and works out new prices from a target margin. Quotations are part 2.
+
+### 33.1 Data (migration `wholesale`)
+- **`WholesaleSettings`** (one per store):
+  - `enabled`: the shop sells to businesses (off by default);
+  - `autoApprove`: approve applications without review;
+  - `intro`: text shown above the application form.
+- **`BusinessAccount`** (one per customer):
+  - business name and type, phone, address, trade licence, VAT registration (BIN), the applicant's note;
+  - `status`: PENDING, APPROVED, REJECTED or SUSPENDED;
+  - `reviewNote` (the reason the customer sees), `reviewedAt`, `reviewedById`.
+- **`PriceTier`:**
+  - `productId`, optional `variantId`, `minQty`, `price`;
+  - `forEveryone`: false means business accounts only.
+- **Permissions:** no new ones. Business accounts use `customers.view` / `customers.edit`; bulk prices and the margin screen use `products.view` / `products.edit`.
+
+### 33.2 Rules (`wholesale.rules.ts`)
+- **Which tiers apply:** an option uses its own tiers if it has any, otherwise the product's. Business-only tiers need an approved account *and* wholesale switched on.
+- **How much counts:**
+  - product-wide tiers count every option of the product in the cart together (5 M + 5 L reach "10+");
+  - an option with its own tiers counts alone.
+- **Which tier wins:** the highest minimum reached; if both audiences share a minimum, the cheaper one. A tier is used only when it is cheaper than the line's current price, so a better sale or flash-sale price still wins.
+- **Bulk vs storefront prices:** tier prices are fixed amounts; the storefront % adjustment doesn't change them.
+- **Checks before saving tiers:**
+  - minimum of 2 or more, and a price above zero;
+  - no two tiers for the same option and audience at the same minimum;
+  - prices can't rise as the minimum rises.
+- **Reviews:**
+  - approve works from waiting, rejected or suspended;
+  - reject works only from waiting, suspend only from approved;
+  - reject and suspend need a reason.
+- **Margin:**
+  - margin = (price − cost) ÷ price;
+  - the price for a target margin = cost ÷ (1 − margin), rounded **up** (whole taka, next ৳5, next ৳10, or ending in 9), so rounding never lowers the margin.
+
+### 33.3 Where bulk prices apply
+- **Pricing:** `quoteLines` applies tiers for the buyer, so the cart page, checkout and staff-entered orders all use the same prices. A manual order for a business customer gets business prices; a walk-in customer doesn't.
+- **What the line reports:** `tier` (in `cartPrices` as `bulk: { minQty, business }`). A bulk line's compare-at price is its price before the bulk price, and a bulk price replaces any flash-sale price, so flash-sale stock limits don't count it.
+
+### 33.4 API
+- **Admin, under `/api/admin/wholesale`:**
+  - `settings`;
+  - `accounts` (list with status and search, add, edit, review, remove);
+  - `customers/:id` (a customer's account);
+  - `products/:id/tiers` (get, and replace all);
+  - `margins` (list and summary) and `margins/apply` (new regular prices).
+- **Storefront, under `/api/storefront/wholesale`:**
+  - `GET /`: whether the shop sells to businesses, plus my account;
+  - `POST /apply`: apply, or apply again after a rejection (auto-approved when that's on; refused while suspended);
+  - `GET /tiers/:productId`: the tiers this shopper gets, and whether business prices exist.
+
+### 33.5 Store admin
+- **Customers → Business accounts:**
+  - settings (sell to businesses, auto-approve, intro text);
+  - status tabs with counts (Waiting, Approved, Suspended, Rejected, All) and search;
+  - a review dialog showing all the details, with approve / reject / suspend and a reason field;
+  - staff without edit rights see the details only.
+- **Customer page → Business tab:** the account and its status, with review, edit and remove; or "Make business account" (approved straight away).
+- **Product → Pricing → Bulk prices:** rows of which option, minimum, price and who gets it. Each row shows its margin against the cost, and flags a price that isn't below the normal price.
+- **Catalog → Price by margin:**
+  - totals (rows, average margin, no cost yet, priced below cost);
+  - filters for search, category and cost set / not set;
+  - tick rows, set the margin and rounding, press "Work out prices", check and edit the new prices, then save them together.
+  - Only the normal price changes; sale, storefront and bulk prices stay as they are.
+- **New order:** lines show "Business price 10+" or "Bulk price 5+".
+- **`Select`** now passes `id` and `aria-label` through to the native `<select>`, so its labels connect.
+
+### 33.6 Storefront
+- **Account → Business account:**
+  - the application form, with the shop's intro text;
+  - status: waiting, approved, not approved with the shop's reason (and the form to apply again), or suspended;
+  - shown in the account menu only when the shop sells to businesses (or the customer already has an account).
+- **Product page:**
+  - bulk prices load in the browser, because they depend on who is signed in. Business accounts see "Your business prices"; others see "Buy more, pay less";
+  - tapping a tier sets the quantity, the reached tier is highlighted, and the price and Add to Cart total use it;
+  - shoppers who could apply see "Buying for a shop or business? … Apply for a business account";
+  - the quantity limit rises from 99 to 9,999 when a product has tiers.
+- **Cart:**
+  - lines show "Business price, 10+" or "Bulk price, 5+";
+  - a price that changes because the quantity reached or left a tier doesn't trigger the "price changed" notice;
+  - the Total column is wider so bulk totals fit.
+- **Bangla:** 36 new strings.
+
+### 33.7 Checked
+- **Tests:** 565/565 API tests. New ones:
+  - 11 unit tests: tier choice, options vs whole product, audience, counting quantities, save checks, reviews, margin and rounding;
+  - 10 database tests:
+    - off until switched on;
+    - apply, then approve;
+    - reject, apply again, auto-approve;
+    - tier checks;
+    - business vs everyone prices;
+    - option counting;
+    - suspended or switched off;
+    - a staff order at business prices;
+    - the storefront tier view;
+    - the margin list and saving prices.
+- **Storefront translation test:** passes.
+- **Chromium:**
+  - owner switched wholesale on and gave the denim shirt "5+ ৳3,490, everyone" and "10+ ৳3,090, businesses";
+  - a new customer applied (form checked in Bangla too) and saw "Waiting for review";
+  - owner approved from the Waiting tab;
+  - the customer saw "Your business prices", chose 10+ and added ৳30,900; the cart showed "Business price, 10+";
+  - a guest on a phone-sized screen saw only 5+ and the invitation to apply;
+  - on Price by margin, 40% on a ৳2,200 cost with "ending in 9" worked out ৳3,669;
+  - no page errors or failed requests.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before; typechecks pass; admin and storefront build.
+- **Dev database:** the container reset emptied Postgres. The role and databases were recreated, migrations applied and the seed re-run. The Batch 32 dev data (Kids Corner storefront and staff) is gone; the default storefront is created on first use.
+
+### 33.8 Not done
+- **Quotations** (draft → sent → accepted → order): part 2.
+- **Wholesale extras not built:** tax exemption, credit terms / pay later, and a minimum order for business accounts.
+- **Listings:** product lists and cards don't show bulk prices, only the product page does.
+- **Order lines:** the bulk price used isn't recorded as such on the order line (the unit price is).
+- **Notifications:** no email or SMS when an application is approved or rejected; the customer sees the result in their account.
