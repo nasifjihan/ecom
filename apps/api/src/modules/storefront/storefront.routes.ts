@@ -53,6 +53,7 @@ storefrontCheckoutRouter.post(
 
 storefrontCheckoutRouter.post(
   "/cart/prices",
+  authMiddleware("optional"),
   validate({ body: CartPricesDto }),
   storefrontController.cartPrices,
 );
@@ -62,6 +63,8 @@ storefrontCheckoutRouter.post(
   validate({ body: ApplyCouponDto }),
   storefrontController.applyCoupon,
 );
+
+storefrontCheckoutRouter.get("/coupons/available", authMiddleware("optional"), storefrontController.availableCoupons);
 
 storefrontCheckoutRouter.get("/payment-methods", storefrontController.paymentMethods);
 

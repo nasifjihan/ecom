@@ -3,13 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { Package } from "lucide-react";
-import { Button, Card, CardContent, Skeleton } from "@ecom/storefront-base";
+import { Button, Card, CardContent, Skeleton, msg, useT } from "@ecom/storefront-base";
 import { useGetMyOrdersQuery } from "@/lib/account";
 import { AccountShell, OrderStatusBadge, formatBDT, formatDate } from "../_components";
 
 export default function OrdersPage() {
   return (
-    <AccountShell title="My Orders" description="Every order you've placed while signed in.">
+    <AccountShell title={msg("My Orders")} description={msg("Every order you've placed while signed in.")}>
       <OrdersList />
     </AccountShell>
   );
@@ -18,17 +18,18 @@ export default function OrdersPage() {
 function OrdersList() {
   const [page, setPage] = React.useState(1);
   const { data, isLoading, isError, isFetching } = useGetMyOrdersQuery({ page, perPage: 10 });
+  const t = useT();
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
-  if (isError || !data) return <p className="text-sm text-destructive">Couldn't load your orders. Please refresh the page.</p>;
+  if (isError || !data) return <p className="text-sm text-destructive">{t("Couldn't load your orders. Please refresh the page.")}</p>;
   if (data.items.length === 0) {
     return (
       <Card>
         <CardContent className="p-10 text-center space-y-3">
           <Package className="h-10 w-10 mx-auto text-muted-foreground" />
-          <p className="font-medium">You haven't placed any orders yet.</p>
+          <p className="font-medium">{t("You haven't placed any orders yet.")}</p>
           <Button asChild>
-            <Link href="/products">Start shopping</Link>
+            <Link href="/products">{t("Start shopping")}</Link>
           </Button>
         </CardContent>
       </Card>
@@ -51,9 +52,9 @@ function OrdersList() {
                 </div>
                 <p className="text-sm text-muted-foreground truncate">
                   {o.firstItem?.title}
-                  {o.itemCount > 1 ? ` and ${o.itemCount - 1} more` : ""}
+                  {o.itemCount > 1 ? ` ${t("and {n} more", { n: o.itemCount - 1 })}` : ""}
                 </p>
-                <p className="text-xs text-muted-foreground">Placed {formatDate(o.createdAt)}</p>
+                <p className="text-xs text-muted-foreground">{t("Placed {date}", { date: formatDate(o.createdAt) })}</p>
               </div>
               <p className="font-semibold tabular-nums">{formatBDT(o.grandTotal, o.currency)}</p>
             </CardContent>
@@ -63,13 +64,13 @@ function OrdersList() {
       {data.totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
+            {t("Previous")}
           </Button>
           <span className="text-sm text-muted-foreground">
-            Page {data.page} of {data.totalPages}
+            {t("Page {page} of {pages}", { page: data.page, pages: data.totalPages })}
           </span>
           <Button variant="outline" size="sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
+            {t("Next")}
           </Button>
         </div>
       )}

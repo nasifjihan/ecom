@@ -60,7 +60,8 @@ function readResetToken(kind: Kind, token: string, storeId: bigint) {
 
 const changedKey = (aud: TokenAudience, id: string) => `pwchanged:${aud}:${id}`
 
-async function markPasswordChanged(aud: TokenAudience, id: bigint) {
+/** Ends sessions issued before now (refresh tokens older than this are refused). */
+export async function markPasswordChanged(aud: TokenAudience, id: bigint) {
   try {
     await cacheSet(
       changedKey(aud, String(id)),
@@ -106,7 +107,7 @@ export class PasswordResetService {
       passwordHash: c.passwordHash,
     })
     inBackground("customer password reset", () =>
-      new EmailService(this.storeId).customerPasswordReset(c, token, RESET_TTL_MIN),
+      new EmailService(this.storeId).customerPasswordReset({ ...c, email }, token, RESET_TTL_MIN),
     )
   }
 

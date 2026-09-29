@@ -3,7 +3,6 @@ import { envelope, ctrl, BaseController, type RequestContext } from "../../core"
 import { InventoryService } from "./inventory.service";
 import type {
   StockAdjustmentDto as StockAdjustmentDtoType,
-  StockTransferDto as StockTransferDtoType,
   MovementQueryDto as MovementQueryDtoType,
   LowStockReportDto as LowStockReportDtoType,
   VariantIdParamDto as VariantIdParamDtoType,
@@ -23,13 +22,6 @@ class InventoryController extends BaseController {
     const dto = req.body as StockAdjustmentDtoType;
     const result = await svc.adjustStock(dto);
     envelope(res, { status: 201, data: result, message: "Stock adjusted successfully" });
-  });
-
-  transferStock = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const dto = req.body as StockTransferDtoType;
-    const result = await svc.transferStock(dto);
-    envelope(res, { status: 201, data: result, message: "Stock transferred successfully" });
   });
 
   stockList = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

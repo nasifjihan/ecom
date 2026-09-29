@@ -55,3 +55,20 @@
 .cms-prose img { max-width: 100%; height: auto; border-radius: 0.75rem; }
 .cms-prose figure img { width: 100%; }
 .cms-prose figcaption { margin-top: 0.4em; font-size: 0.85em; color: hsl(var(--muted-foreground)); text-align: center; }
+
+/* Printing one document (a quotation): only #print-doc shows. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-doc,
+  #print-doc * {
+    visibility: visible;
+  }
+  #print-doc {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+  }
+}

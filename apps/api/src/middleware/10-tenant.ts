@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config";
 import type { RequestContext } from "../core";
-import { ForbiddenError, UnauthorizedError } from "../core";
+import { ForbiddenError, UnauthorizedError, normalizeLocale } from "../core";
+import { defaultLocale } from "../modules/settings/languages";
+import { resolveStorefrontId } from "../modules/storefronts/storefronts.context";
 
 declare global {
   namespace Express {
@@ -27,6 +29,11 @@ function hostCandidates(origin?: string): string[] {
   hostPort = hostPort.replace(/^www\./, "").toLowerCase();
   const bare = hostPort.split(":")[0] ?? "";
   return [...new Set([hostPort, bare].filter(Boolean))];
+}
+
+/** The cached domain lookup (resolveStoreByOrigin): the storefront its address is linked to, if any. */
+interface ResolvedDomain {
+  storefrontId?: string | null;
 }
 
 function extractHost(origin?: string): string | null {
@@ -64,6 +71,7 @@ async function resolveStoreByOrigin(host: string) {
       ? {
           id: String(row.storeId),
           hostname: host,
+          storefrontId: row.storefrontId === null ? null : String(row.storefrontId),
           store: { ...row.store, id: String(row.store.id), planId: row.store.planId === null ? null : String(row.store.planId) },
         }
       : null;
@@ -85,7 +93,9 @@ export default async function tenantMiddleware(
       storeId: undefined,
       requestId: req.requestId,
       ip: req.ip,
-      locale: String(req.headers["accept-language"] || req.cookies?.locale || "en").split(",")[0] || "en",
+      // The storefront says which language it shows (header from the browser, ?lang= from its
+      // server, where the query string also keeps cached pages apart per language).
+      locale: normalizeLocale(req.get("x-locale") ?? req.query.lang ?? req.cookies?.locale),
       currency: (req.cookies?.currency as string) || "BDT",
     };
   }
@@ -135,6 +145,19 @@ export default async function tenantMiddleware(
     } else {
       req.store = { id: forcedStoreId, status: "active" };
     }
+  }
+
+  // Which storefront: the one the web address is linked to, else the store's default.
+  if (req.ctx.storeId) {
+    const linkedId = (resolved as ResolvedDomain | null)?.storefrontId;
+    const linked = linkedId ? BigInt(linkedId) : null;
+    req.ctx.storefrontId = await resolveStorefrontId(req.ctx.storeId, linked).catch(() => undefined);
+  }
+
+  // A storefront request that doesn't say which language gets the shop's default.
+  const namedLocale = req.get("x-locale") ?? req.query.lang ?? req.cookies?.locale;
+  if (!namedLocale && req.ctx.storeId && req.path.startsWith("/api/storefront")) {
+    req.ctx.locale = await defaultLocale(req.ctx.storeId).catch(() => "en" as const);
   }
 
   const needsStore = /^\/api\/(admin|store\/(?!(currencies|countries|states|find-domain)))/i.test(req.path);

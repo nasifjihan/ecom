@@ -10,13 +10,15 @@
  */
 import { api, fileResponse, toPaginated, type Paginated } from "@ecom/api-client";
 import type { AppDispatch } from "@/lib/store";
+import { msg, type OrderPayment, type TransferInput } from "@ecom/storefront-base";
 
 const TOKEN_KEY = "accessToken";
 const CUSTOMER_KEY = "customer";
 
 export interface Customer {
   id: string;
-  email: string;
+  /** Null for accounts made by signing in with a phone code. */
+  email: string | null;
   firstName: string;
   lastName: string;
   phone: string | null;
@@ -36,6 +38,9 @@ export interface CustomerAddress {
   address2: string | null;
   city: string;
   state: string | null;
+  upazila?: string | null;
+  /** Deepest area picked (upazila/thana, else district). */
+  locationId?: string | null;
   postcode: string | null;
   countryCode: string;
   phone: string | null;
@@ -66,11 +71,19 @@ export interface MyOrder {
   email: string;
   phone: string | null;
   shippingMethodName: string | null;
-  shipping: { name: string; address: string; city: string | null; division: string | null; postcode: string | null; country: string | null };
-  items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
+  shipping: { name: string; address: string; city: string | null; upazila?: string | null; division: string | null; postcode: string | null; country: string | null };
+  items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
   itemsSubtotal: number;
   discountTotal: number;
+  promotionDiscount?: number;
+  promotions?: { name: string; type: string; amount: number }[];
   couponUsed: string | null;
+  /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
+  memberDiscount?: number;
+  memberLevel?: string | null;
+  walletUsed?: number;
+  cashback?: number;
+
   shippingTotal: number;
   taxTotal: number;
   feeTotal: number;
@@ -78,6 +91,42 @@ export interface MyOrder {
   currency: string;
   canCancel: boolean;
   history: { status: string; note: string | null; at: string }[];
+  /** unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned */
+  fulfillmentStatus: string;
+  parcels: {
+    code: string;
+    status: string;
+    courier: string | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    items: { title: string; quantity: number }[];
+  }[];
+  returns: { code: string; status: string; reason: string | null; createdAt: string; amount: number; items: { title: string; quantity: number }[] }[];
+  /** Last day a return can be asked for (7 days after delivery), once delivered. */
+  returnWindowUntil: string | null;
+  canRequestReturn: boolean;
+  /** Units per line that can still be returned. */
+  returnable: { orderItemId: string; title: string; variantLabel: string; quantity: number }[];
+  /** Paying by bKash / Nagad / Rocket / bank by hand: where to send it and the transaction IDs sent. */
+  payment: OrderPayment;
+}
+
+export const RETURN_REASONS = [
+  { value: "wrong_size", label: msg("Wrong size") },
+  { value: "damaged", label: msg("Damaged or faulty") },
+  { value: "not_as_described", label: msg("Not as described") },
+  { value: "wrong_item", label: msg("Wrong item sent") },
+  { value: "changed_mind", label: msg("Changed my mind") },
+  { value: "other", label: msg("Other") },
+] as const;
+
+export interface ReturnRequestInput {
+  orderRef: string;
+  items: { orderItemId: string; quantity: number }[];
+  reason: string;
+  note?: string;
 }
 
 interface AuthResult {
@@ -196,6 +245,16 @@ export const accountApi = api.injectEndpoints({
     customerLogin: builder.mutation<AuthResult, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/customer/login", method: "POST", body }),
     }),
+    /** How customers can sign in here (phone codes are turned on in the admin's Settings → SMS). */
+    loginMethods: builder.query<{ email: boolean; phoneOtp: boolean }, void>({
+      query: () => "/auth/customer/login-methods",
+    }),
+    requestPhoneCode: builder.mutation<{ sent: boolean; expiresInMinutes: number }, { phone: string }>({
+      query: (body) => ({ url: "/auth/customer/otp/request", method: "POST", body }),
+    }),
+    verifyPhoneCode: builder.mutation<AuthResult & { created: boolean }, { phone: string; code: string; firstName?: string; lastName?: string }>({
+      query: (body) => ({ url: "/auth/customer/otp/verify", method: "POST", body: clean(body) }),
+    }),
     customerRegister: builder.mutation<AuthResult, RegisterInput>({
       query: (body) => ({ url: "/auth/customer/register", method: "POST", body: clean(body) }),
     }),
@@ -252,6 +311,22 @@ export const accountApi = api.injectEndpoints({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/cancel`, method: "POST", body: {} }),
       invalidatesTags: ["Order"],
     }),
+    submitMyOrderPayment: builder.mutation<{ transactionId: string; status: string; amount: number }, TransferInput & { orderRef: string }>({
+      query: ({ orderRef, ...body }) => ({
+        url: `/storefront/account/orders/${encodeURIComponent(orderRef)}/payments`,
+        method: "POST",
+        body: clean(body),
+      }),
+      invalidatesTags: (_r, _e, { orderRef }) => [{ type: "Order", id: orderRef }],
+    }),
+    requestReturn: builder.mutation<{ code: string; status: string }, ReturnRequestInput>({
+      query: ({ orderRef, ...body }) => ({
+        url: `/storefront/account/orders/${encodeURIComponent(orderRef)}/returns`,
+        method: "POST",
+        body: clean(body),
+      }),
+      invalidatesTags: (_r, _e, { orderRef }) => [{ type: "Order", id: orderRef }],
+    }),
     /** Invoice PDFs, as object URLs for openFile() from @ecom/api-client. */
     myOrderInvoice: builder.mutation<string, string>({
       query: (ref) => ({ url: `/storefront/account/orders/${encodeURIComponent(ref)}/invoice`, responseHandler: fileResponse }),
@@ -265,6 +340,9 @@ export const accountApi = api.injectEndpoints({
 
 export const {
   useCustomerLoginMutation,
+  useLoginMethodsQuery,
+  useRequestPhoneCodeMutation,
+  useVerifyPhoneCodeMutation,
   useCustomerRegisterMutation,
   useCustomerLogoutMutation,
   useForgotPasswordMutation,
@@ -280,6 +358,8 @@ export const {
   useGetMyOrdersQuery,
   useGetMyOrderQuery,
   useCancelMyOrderMutation,
+  useRequestReturnMutation,
+  useSubmitMyOrderPaymentMutation,
   useMyOrderInvoiceMutation,
   useOrderInvoiceByKeyMutation,
 } = accountApi;

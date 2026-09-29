@@ -24,7 +24,8 @@ import {
 } from "./email.templates"
 
 interface SendOptions {
-  to: string[]
+  /** Blank entries (customers without an email) are skipped. */
+  to: (string | null | undefined)[]
   vars?: Record<string, string>
   order?: OrderSummary | null
   tracking?: TrackingInfo | null
@@ -191,7 +192,11 @@ export class EmailService {
   /** Renders, logs and queues an email. Returns the log id, or null when it wasn't sent. */
   async send(key: TemplateKey, opts: SendOptions): Promise<bigint | null> {
     const to = [
-      ...new Set(opts.to.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))),
+      ...new Set(
+        opts.to
+          .map((e) => (e ?? "").trim())
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+      ),
     ]
     if (!to.length) return null
     if (!opts.force && !(await this.templateConfig(key)).enabled) return null
@@ -243,7 +248,7 @@ export class EmailService {
     const vars: Record<string, string> = {
       "customer.name": `${order.billingFirstName} ${order.billingLastName}`.trim(),
       "customer.first_name": first,
-      "customer.email": order.billingEmail,
+      "customer.email": order.billingEmail ?? "",
       "order.number": order.number,
       "order.date": order.createdAt.toLocaleDateString("en-GB", {
         day: "numeric",
@@ -288,7 +293,12 @@ export class EmailService {
         `${order.shippingFirstName ?? order.billingFirstName} ${order.shippingLastName ?? order.billingLastName}`.trim(),
         order.shippingAddress1 ?? order.billingAddress1,
         order.shippingAddress2 ?? "",
-        [order.shippingCity ?? order.billingCity, order.shippingPostcode ?? order.billingPostcode]
+        [
+          [order.shippingCity ? order.shippingUpazila : order.billingUpazila, order.shippingCity ?? order.billingCity]
+            .filter(Boolean)
+            .join(", "),
+          order.shippingPostcode ?? order.billingPostcode,
+        ]
           .filter(Boolean)
           .join(" "),
         order.shippingPhone ?? order.billingPhone ?? "",
@@ -307,18 +317,24 @@ export class EmailService {
   }
 
   /** Order confirmation to the customer and a new-order alert to the team. */
-  async orderPlaced(orderId: bigint, only?: "customer"): Promise<boolean> {
+  async orderPlaced(
+    orderId: bigint,
+    only?: "customer",
+    who: { customer: boolean; staff: boolean } = { customer: true, staff: true },
+  ): Promise<boolean> {
     const d = await this.orderDetails(orderId)
     if (!d) return false
     const common = { vars: d.vars, order: d.summary, orderId }
-    await this.send("order_new_customer", {
-      ...common,
-      to: [d.order.billingEmail],
-      recipientType: "customer",
-      recipientId: d.order.customerId,
-      force: only === "customer",
-    })
-    if (only) return true
+    if (who.customer) {
+      await this.send("order_new_customer", {
+        ...common,
+        to: [d.order.billingEmail],
+        recipientType: "customer",
+        recipientId: d.order.customerId,
+        force: only === "customer",
+      })
+    }
+    if (only || !who.staff) return true
     await this.send("order_new_admin", {
       ...common,
       to: await this.staffRecipients("order_new_admin"),
@@ -353,7 +369,7 @@ export class EmailService {
       vars: {
         "customer.name": `${c.firstName} ${c.lastName}`.trim(),
         "customer.first_name": c.firstName,
-        "customer.email": c.email,
+        "customer.email": c.email ?? "",
       },
       recipientType: "customer",
       recipientId: c.id,
@@ -371,7 +387,7 @@ export class EmailService {
       vars: {
         "customer.name": `${c.firstName} ${c.lastName}`.trim(),
         "customer.first_name": c.firstName,
-        "customer.email": c.email,
+        "customer.email": c.email ?? "",
         "reset.url": `${urls.storefront}/account/reset-password?token=${encodeURIComponent(token)}`,
         "reset.expires_minutes": String(minutes),
       },
@@ -398,6 +414,77 @@ export class EmailService {
       recipientType: "staff",
       recipientId: a.id,
       force: true,
+    })
+  }
+
+  // ------------------------------------------------------------------ quotations
+
+  /** The quote as an order-summary block (lines, totals). */
+  private async quoteDetails(id: bigint) {
+    const q = await prisma.quotation.findFirst({
+      where: { id, storeId: this.storeId },
+      include: { items: { orderBy: { sortOrder: "asc" } }, customer: true },
+    })
+    if (!q) return null
+    const totals = [
+      { label: "Items", value: money(q.subtotal) },
+      ...(Number(q.discount) > 0 ? [{ label: "Discount", value: `−${money(q.discount)}` }] : []),
+      ...(Number(q.deliveryFee) > 0 ? [{ label: "Delivery", value: money(q.deliveryFee) }] : []),
+      { label: "Total", value: money(q.total), strong: true },
+    ]
+    const order: OrderSummary = {
+      items: q.items.map((i) => ({
+        name: i.name,
+        detail: [i.option, `${money(i.unitPrice)} each`].filter(Boolean).join(" · "),
+        qty: i.qty,
+        total: money(i.lineTotal),
+        imageUrl: null,
+      })),
+      totals,
+      shipTo: [],
+    }
+    const c = q.customer
+    const vars = {
+      "customer.name": `${c.firstName} ${c.lastName}`.trim(),
+      "customer.first_name": c.firstName,
+      "customer.email": c.email ?? "",
+      "quote.number": q.number,
+      "quote.total": money(q.total),
+      "quote.valid_until": q.validUntil
+        ? q.validUntil.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" })
+        : "further notice",
+      "quote.terms": q.terms ?? "",
+    }
+    return { q, order, vars }
+  }
+
+  async quoteSent(id: bigint) {
+    const d = await this.quoteDetails(id)
+    if (!d) return
+    const { urls } = await this.context()
+    await this.send("quote_sent_customer", {
+      to: [d.q.customer.email],
+      vars: { ...d.vars, "quote.url": `${urls.storefront}/account/quotes/${d.q.number}` },
+      order: d.order,
+      recipientType: "customer",
+      recipientId: d.q.customerId,
+    })
+  }
+
+  async quoteUpdate(id: bigint, event: "requested" | "accepted" | "declined") {
+    const d = await this.quoteDetails(id)
+    if (!d) return
+    const { urls } = await this.context()
+    await this.send("quote_update_admin", {
+      to: await this.staffRecipients("quote_update_admin"),
+      vars: {
+        ...d.vars,
+        "quote.event": { requested: "new request", accepted: "accepted", declined: "declined" }[event],
+        "quote.note": d.q.customerNote ?? "",
+        "quote.admin_url": `${urls.admin}/orders/quotations/${d.q.id}`,
+      },
+      order: d.order,
+      recipientType: "staff",
     })
   }
 
@@ -511,6 +598,14 @@ export class EmailService {
         "reset.expires_minutes": "60",
         "staff.name": "Rahim",
         "staff.email": "rahim@example.com",
+        "quote.number": "Q-000012",
+        "quote.total": money(30900),
+        "quote.valid_until": "15 Oct 2026",
+        "quote.terms": "Half in advance, the rest on delivery.",
+        "quote.url": `${urls.storefront}/account/quotes/Q-000012`,
+        "quote.event": "accepted",
+        "quote.note": "",
+        "quote.admin_url": `${urls.admin}/orders/quotations`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },

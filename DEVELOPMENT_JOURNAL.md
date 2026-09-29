@@ -1434,3 +1434,1642 @@ Order invoice PDF, order email, order notes, shipping tracking update, refunds U
 - **Store admin:** Marketing > Flash Sales create/edit rebuilt: search and add products (each with an optional sale price and stock limit), or pick categories, or apply to everything; times are entered in the admin's own time zone. The list shows what each sale applies to and real units sold and revenue (from order lines stamped with the sale, cancelled orders left out); a stopped sale shows as Stopped under Ended. Removed the settings that did nothing (min/max quantity, per-customer limit) and the dead Duplicate, View Stats and Shop Now buttons.
 - **Admin API:** `rules`, nullable discounts (switching between % and fixed clears the other), items optional for category and store-wide sales, checks that a sale has a discount and something to apply to. Editing a sale keeps the sold counts of products that stay in it. `GET /flash-sales/:id` includes product names and prices; the list includes `stats { unitsSold, revenue }`.
 - Verified in Chromium: created a product sale with the picker (own price on one product, a 3-unit limit on another) and a category sale; the listing and product page show the sale prices and countdown; stopping a sale while its product sat in the cart re-priced the cart with a toast; going over the 3-unit limit blocked checkout; a guest COD order charged the flash prices and stamped the sales; the product returned to its normal price after the 3 units sold; cancelling the order gave them back. New unit tests (`tests/unit/flash-pricing.test.ts`); API tests pass (41 passed, 7 skipped); `next build --no-lint` passes for the storefront and store admin.
+
+## ✅ BATCH #18 — Bangladesh delivery areas and zone rules (2026-09-27)
+First batch from `FEATURE_COMPARISON.md`. Addresses and delivery prices now use Bangladesh's real divisions, districts and upazilas instead of free text.
+
+### 18.1 Locations
+- **Data:** `apps/api/prisma/data/bd-locations.json` holds 616 areas: 8 divisions, 64 districts, 494 upazilas (from github.com/nuhil/bangladesh-geocode, MIT) and 50 Dhaka metro thanas added by hand (the dataset's Dhaka district only has Savar, Dhamrai, Keraniganj, Nawabganj and Dohar). Every area has an English and a Bangla name. Spellings follow the 2018 official forms (Chattogram, Barishal, Cumilla, Cox's Bazar, Jhalokati); older spellings (Chittagong, Barisal, Comilla, Jessore, Bogra…) are still understood when matching saved names.
+- **Schema (migration `20260927053859_bd_locations`, additive only):** `Location` (platform-wide tree with a stable `code` such as `dhaka/dhaka/dhanmondi`), `StoreLocationOff` (areas a store doesn't deliver to), `ShippingZoneLocation` (zone ↔ area), `ShippingZone.enabled`, `upazila` + `locationId` on `CustomerAddress`, `billingUpazila`, `shippingUpazila` + `shippingLocationId` on `Order`.
+- **Loading:** `syncLocations()` adds missing areas and fixes renamed ones, never deletes. It runs in the seed and on every API start, so a fresh database (including Docker, where the seed is manual) gets the areas without extra steps.
+- **API:** `GET /api/storefront/locations` (the store's open areas, flat, parents first), `GET /api/admin/locations` (every area with its delivery switch and the zones that name it), `PUT /api/admin/locations/:id/delivery {enabled}`. Switching an area off switches off everything under it.
+
+### 18.2 Zones and delivery prices
+- A zone names countries plus optional areas (division, district or upazila/thana) and postcodes. **The most specific zone wins**: thana/upazila beats district beats division beats a whole-country zone; ties go to the zone with the cheaper option. A zone with nothing for this cart (e.g. every option needs a bigger order) steps aside for the next one. Zones saved before areas existed still match by their place names.
+- Delivery options gained **weight rows** (`weightTiers`: up to N kg costs ৳X; each extra kg above the last row), and **"only for orders from ৳"** (`minSubtotal`); both live in `costRules`, no schema change. Free-from, per-item, per-kg and minimum price work as before.
+- Rules are pure functions in `modules/shipping/shipping.rules.ts` with table tests (`tests/unit/shipping-rules.test.ts`, 32 cases).
+- **Fixed:** creating or editing a zone or delivery option always failed, because the DTOs and repository wrote `zoneType`, `enabled`, `provider` and `methodType` columns that don't exist (Batch 10 known gap). Method updates also reset unsent fields to their defaults (`.partial()` keeps zod defaults); they now change only what's sent.
+- Demo data: "Dhaka Metro" now covers Dhaka district and "Rest of Bangladesh" the 8 divisions, so Dhanmondi gets Dhaka rates and Gazipur (Dhaka division, outside Dhaka district) gets the rest-of-country rates. Before, both zones listed "Dhaka" and the first one won.
+
+### 18.3 Checkout and addresses
+- The checkout and the account address book use a Division → District → Upazila/Thana picker (`LocationSelects` in storefront-base), showing "Dhanmondi · ধানমন্ডি". District is required, upazila optional, postcode now optional (the API never needed it). Areas a store switched off aren't listed. Other countries keep plain text fields.
+- The API trusts the picked area over typed text: orders and saved addresses store the area's own names and its id, and an order to a switched-off area is refused ("Sorry, we don't deliver to Sylhet yet.").
+- Upazila shows on the order page, thank-you page, invoice PDF and order emails.
+
+### 18.4 Store admin
+- **Shipping → Zones** (was a "coming soon" page): each zone with its areas, countries and delivery options; add/edit zones with a searchable area tree (English or Bangla, picking a division covers everything in it); add/edit options with weight rows, free-from, minimum order and delivery days; switch zones and options on or off.
+- **Shipping → Delivery areas** (new; replaces the dead "Rates" link): the whole tree with a delivery switch per area and the zones covering it.
+
+### 18.5 Verification
+- API: `tsc` clean; 80/80 tests with `RUN_DB_TESTS=1` (new rule tests; the Batch 9 smoke test updated for the new zone body and free-delivery wording).
+- curl against Postgres 16: area resolution by id, by name and by old spelling; most-specific zone; weight rows (0.8 kg ৳70, 2 kg ৳110, 4.2 kg ৳160); fall-through when the thana zone has nothing for a ৳200 order; switching Sylhet off (45 areas hidden, rates and checkout refused); bad area id refused; option update keeps its rules.
+- Chromium: admin Delivery areas (Bangla search), created a zone for Chattogram district and a weight-row option through the dialogs; storefront checkout picked Dhaka → Dhaka → Dhanmondi and got that thana's option, Cumilla got rest-of-country options, changing division clears the district, a COD order stored Dhaka / Dhaka / Dhanmondi with its area id; a new customer saved "Adamdighi, Bogura, Rajshahi" with its area id.
+- `store-admin`, `storefront-fashion` and `super-admin` typecheck clean.
+
+### 18.6 Not done / next
+- Stores can switch areas off but can't add their own sub-areas (e.g. "Mirpur 10"). Chattogram and other city corporations have no thanas yet.
+- Courier area ids (Pathao, Steadfast, RedX) aren't mapped to these areas; that comes with courier integration.
+- Delivery time slots (reference spec §15) are not part of this batch.
+
+## ✅ BATCH #19 — Manual orders and order source (2026-09-27)
+Staff can now enter orders customers placed by phone, Facebook, WhatsApp, Messenger, Instagram or in the shop, and every order records where it came from.
+
+### 19.1 One pricing path for checkout and manual orders
+- `StorefrontService.placeOrder` is split into `quoteOrder` (prices lines with flash sales, delivery, coupon, staff discount, tax and gateway fee; with `strict` it throws on the first problem, otherwise it collects problems) and `createOrder` (the stock, flash-sale limit, coupon usage and order-row transaction). Storefront checkout and manual orders both use them, so they charge the same way. Checkout behaviour is unchanged (verified with a coupon order: website source, both emails sent).
+
+### 19.2 Schema (migrations `manual_orders`, `manual_order_permission`)
+- `Order.source` (default `website`; indexed with storeId), `Order.createdByAdminId` (→ AdminUser), `Order.manualDiscount` (part of `discountTotal`).
+- `Role.maxManualDiscountPct`: the most a role may knock off by hand, as % of the items subtotal. Defaults: owner 100, order manager 10, customer support 5, everyone else 0 (existing stores via the migration, new stores via `STORE_ROLE_MANUAL_DISCOUNT`). There's no roles screen yet (Batch 25); the value can be changed on the Role row.
+- `Customer.email` and `Order.billingEmail` are now optional, because phone and Facebook customers often have none. Emails to a customer without an address are skipped (`send()` drops blank recipients).
+- `orders.create` permission, granted to the order manager and customer support roles.
+
+### 19.3 API (`modules/orders/manual-order.ts`)
+- `POST /api/admin/orders/manual/quote`: prices a draft without saving; returns lines (with stock/flash problems), the zone's delivery options for the picked area, totals, the staff member's discount cap, the matched customer and the store's payment methods.
+- `POST /api/admin/orders/manual`: creates it. The customer is an existing one (by id), else found by phone (`+8801…`, `8801…` and `01…` are the same number) or email, else created without a login. Delivery is a zone method, a fee typed by staff, or pickup/walk-in (no address needed). Payment can be any method the store has set up (even ones not offered online); "already paid" needs a transaction ID for non-cash methods. Start as Pending or Processing. The staff discount is refused above the role's cap (`DISCOUNT_OVER_LIMIT`). The first history entry reads "Order entered by <name> (facebook order)" plus the staff note. The customer gets the confirmation email (optional); staff don't get a "new order" alert for orders they entered. The customer's order count and total spent go up.
+- `GET /api/admin/orders/manual/{products,products/:id/variants,customers,areas}`: the order form's own searches, gated by `orders.create`, so an order taker doesn't need full catalog or customer access.
+- Order list: `?source=phone,facebook` filter. **Fixed:** order search used a `shippingEmail` column that doesn't exist; it now searches number, email, phone and name. Order detail includes the creator.
+
+### 19.4 Store admin
+- **Orders → New order** (`/orders/new`): find a customer or type name/phone/email (a phone that matches an existing customer shows "This matches Jamal Uddin (8 orders)"); search products and pick options (sold-out options disabled); division/district/upazila picker; zone price, own price or pickup; % or ৳ discount showing the role's limit; coupon; payment method, "already paid" + transaction ID; source; "confirmed" (starts as Processing); customer and staff notes; live summary re-priced by the server on every change, with problems listed and Create disabled until they're fixed.
+- Orders list: **New order** button, source filter, "via Facebook · by <staff>" under the customer. Order detail: Source and Entered by in Payment Details, the staff discount on its own line, upazila in addresses. Unknown payment codes (e.g. bank transfer) no longer crash the payment badge.
+
+### 19.5 Verification
+- API: `tsc` clean; 94/94 tests with `RUN_DB_TESTS=1` (new `tests/unit/manual-order.test.ts`: phone normalisation and the order rules). Seed re-runs clean.
+- curl: new phone customer with no email (Facebook, 15% off, pickup); the same phone typed as `01819-000111` finds them; order manager refused at 12% ("at most 10% off (৳489 on this order)"), refused "paid by bKash" without a transaction ID, created at 10% with bKash BK8XY12 (paid, whatsapp, created by them); only the customer email went out; source filter and phone search on the order list.
+- Chromium: owner created an order (variable + simple product, Dhaka → Dhaka → Mirpur, 16 options, 5% off, Facebook) and landed on its detail page with the staff discount, source and creator; the list's Facebook filter shows it. Order manager: phone match banner, 20% blocked with Create disabled, then a Cumilla delivery order at 10% created.
+- All web apps typecheck clean (storefront-base keeps its 10 older errors).
+
+### 19.6 Known gaps
+- **RBAC (for Batch 25):** almost every admin route checks a wildcard (`orders.*`, `products.*`, `customers.*`, ...), while built-in roles hold specific codes (`orders.read`, ...), so only the owner can use most of the admin. An order manager can now create orders but can't open the orders list, an order's page (they land on an error after creating one) or the dashboard. The roles batch should make route checks and role codes agree, and add a screen for the discount cap.
+- A customer created here has no password; if they later register on the storefront with the same email, registration says the email is taken. Claiming such an account needs an email check (comes with OTP login, Batch 24).
+
+## ✅ BATCH #25 — Roles, staff and activity log (2026-09-27)
+Done ahead of Batch 20 because the permission checks didn't match the roles: almost every admin route asked for a wildcard such as `orders.*` or `products.*`, while built-in roles held codes like `orders.read`, so in practice only the owner could use the admin.
+
+### 25.1 One permission catalogue
+- `PERMISSION_AREAS` in `@ecom/shared-types` (new `permissions.ts`): 23 areas (dashboard, orders, products, categories and brands, attributes, media, stock, customers, reviews, coupons, flash sales, pages, blog, FAQs, menus, theme and homepage, shipping, taxes, store settings, emails, staff, roles, activity log), each with the actions it has among view / create / edit / delete. Codes are `area.action`; the owner holds `*`. `hasPermission()` matches `*`, `area.*` or the exact code (the old check also let `pages.*` pass `pages_extra…` and required *all* codes of an array, which only `*` satisfied).
+- Every store-admin route (157 checks) now asks for one catalogue code: GET → view, POST → create, PUT/PATCH → edit, DELETE → delete, with sensible exceptions (order status, refunds and emails are `orders.edit`; product variants and image order are `products.edit`; review moderation is `reviews.edit`; exports are view). `tests/unit/permissions.test.ts` scans the route files and fails if any store route uses a code outside the catalogue, or a built-in role holds one.
+- Built-in roles rewritten on the catalogue (`store-roles.ts`), e.g. Order Manager: dashboard, orders view/create/edit, customers view/create/edit, products/stock/shipping view. Viewer gets every view except staff, roles and the activity log.
+- Migration `role_permission_catalogue` (generated from the TypeScript lists): built-in roles get the new lists; roles a store made itself have old codes translated (`orders.read` → `orders.view`, `products.*` → every products action, `customers.update` → `customers.edit`, …; unknown ones such as `tickets.*` are dropped).
+- **Permission cache fixed:** the auth middleware cached permissions under one key and role edits cleared another, so changes waited up to 5 minutes. Permissions are now cached per staff member (`config/admin-permissions.ts`), cleared for everyone holding a role when it changes and for a person when their role or status changes, and a deactivated account holds no permissions.
+
+### 25.2 Team API (`modules/team`, replaces the unused store-level `/admin/users` and `/admin/roles`)
+- `GET /api/admin/permissions` (catalogue), `GET|POST /api/admin/roles` (create, optionally copying a role), `GET|PATCH|DELETE /api/admin/roles/:id`, `GET|POST /api/admin/staff`, `PATCH /api/admin/staff/:id` (name, phone, role, active/inactive), `POST /api/admin/staff/:id/password`.
+- Rules: the owner role always has `*` and can't be edited; built-in roles keep their names (copy to rename) and can't be deleted; a role with staff can't be deleted; unknown codes are refused; the discount limit (Batch 19) is edited here. Someone who isn't an owner can only grant codes they hold, can't make anyone an owner and can't change an owner's account. Nobody changes their own role or deactivates themselves, and the last active owner can't be removed. Staff passwords need 10+ characters with a letter and a number. Setting a password or deactivating someone ends their existing sessions (`markPasswordChanged`, now exported); a deactivated account can't sign in.
+- The old role service wrote a `description` column the Role table doesn't have, so creating a role would have failed; the new module doesn't use it.
+
+### 25.3 Activity log
+- `auditMiddleware` on `/api/admin`: every successful POST/PUT/PATCH/DELETE writes an `AuditLog` row after the response: action (`orders.status`, `products.update`, `marketing.coupons.create`, …), record type and id (a create records the id it returned), staff member (null + "platform team" for the super admin), IP, browser and the request body with passwords, secrets, tokens and keys replaced by `[hidden]` and long values trimmed. Read-only POSTs (quote, preview, export, validate) and failed requests aren't logged.
+- `GET /api/admin/audit-logs` (`audit_logs.view`): filter by type, staff member, text, date range; paged.
+
+### 25.4 Store admin
+- **Settings → Roles & permissions:** role list with member counts; editor with name, largest manual discount %, and an area × view/create/edit/delete grid grouped like the menu (ticking create/edit/delete adds view; removing view removes the rest; an "All" column per area). Copy, delete, undo. The owner role shows "can't be changed"; your own role is read-only; codes you don't hold are greyed out.
+- **Settings → Staff:** list with role, status, last sign-in; add staff (starting password), edit name/phone/role, set a new password, deactivate / turn on.
+- **Settings → Activity log:** filters, paging, and each entry opens to show the request (method, path, redacted body, browser).
+- **Menus follow permissions:** one list of pages and the code each needs (`lib/nav.ts`) drives the sidebar and the settings menu (links to pages that never existed — Shipments, Returns, Loyalty, Billing, Webhooks… — are gone). `PageGuard` in the dashboard layout shows "You don't have access to this page" instead of a page full of errors, and Dashboard sends people without `dashboard.view` to the first page they can open. After entering a manual order, staff who can't open orders get a fresh form instead of an error page. `useCan()` reads permissions from `/auth/me/admin` (which now also returns `roleId`).
+
+### 25.5 Verification
+- API: `tsc` clean; 106/106 tests with `RUN_DB_TESTS=1` (new permission and activity-log tests). A fresh database migrates and seeds cleanly with the new roles; the conversion migration was also run against a store with a custom role holding old codes.
+- curl: order manager can now open orders, an order, the dashboard, customers and products, and still gets 403 on coupons, staff and settings. Copy role, add a permission, unknown code, edit owner role, rename built-in, weak password, delete role with staff, owner deactivating/demoting themselves — all behave as described; with staff/roles rights the order manager still can't grant `coupons.edit`, make an owner, edit the owner or change their own role; a deactivated account can't sign in. Activity log shows each change with the right staff member, redacted password and record id.
+- Chromium: owner edited the Facebook Sales role in the grid and saved, added staff with that role, opened an activity entry. Signed in as that staff member: landed on Orders, the menu shows only Orders, New order, Products, Customers, Coupons, Flash Sales, Reviews and Settings (Profile, Password), and Categories shows the no-access card. No failed requests.
+
+### 25.6 Not done
+- Staff who may edit staff but not view roles see an empty role list in the staff dialog (no built-in role has that combination).
+- Pages still show action buttons (e.g. Delete) the API will refuse for someone with view-only access; the refusal message is shown. Hiding them page by page is follow-up work.
+- Two-factor sign-in for staff, per-site staff access (multi-storefront) and an order-manager view of "my orders" are not in this batch.
+
+## ✅ BATCH #20 — Parcels, returns and refunds (2026-09-27)
+An order now has four separate states: the order status, the payment status, a **fulfilment status** worked out from its parcels (not packed, partly packed, packed, shipped, delivered, delivery failed, returned) and a **return status** from its newest return (none, requested, approved, received, refunded, rejected). Parcels and returns each keep their own status history.
+
+### 20.1 Schema (migration `parcels_returns`)
+- `Shipment` (a parcel): store, code (`<order number>-P1`, unique per store), status (ready, picked_up, in_transit, out_for_delivery, delivered, failed, returned, cancelled), courier, tracking number and link, cash to collect, weight, failure reason, who created it, returned date. `ShipmentEvent` is its history.
+- `ReturnRequest`: code (`-R1`), who asked (customer or staff), approved / received / closed dates; `ReturnEvent` history; `ReturnItem.restocked`; refunds can point at the return they pay.
+- `Refund.method` (original, cash, bKash, Nagad, bank, store credit); `Order.fulfillmentStatus`, `returnStatus`, `refundedTotal`.
+- Existing shipments get a code, store and status from their dates, and `refundedTotal` is filled from existing refunds. Tested on a copy with old rows.
+
+### 20.2 Rules (`modules/fulfilment/fulfilment.rules.ts`, 30 table tests)
+- Parcel moves: ready → picked up / in transit / cancelled; on the way → out for delivery / delivered / failed / returned; failed → sent out again or returned. Delivered, returned and cancelled are final. "Failed" needs a note.
+- Parcel changes move the order forward along the allowed order transitions (never through hold or cancel), one step at a time with the usual emails, and only the last step emails the customer. When every parcel is delivered the order becomes Delivered, which marks a cash-on-delivery order paid.
+- A parcel takes what's left of each line; items in a cancelled parcel, or one the courier brought back, can be packed again. On a cash-on-delivery order the parcel collects what's still due by default.
+- Returns: requested → approved / received / rejected / cancelled; approved → received / cancelled; received → refunded (only by refunding) or rejected (needs a reason). A customer can ask within **7 days of delivery**, only for their own order and only for units not already in a return. Staff can open one once the order has gone out.
+- Receiving a return puts the items back in stock unless staff untick them. Refunds skip items a return already restocked.
+- Refunds: items at the price actually paid (line total ÷ quantity, so discounts and VAT are included), plus an optional extra amount (e.g. the delivery charge). A refund can't exceed what's left of each line or of the order total, and needs a reason. It works only on paid orders: cash on delivery counts as paid once delivered. "Original method" goes back through the payment gateway where it's online. Store credit is added to the customer's balance. The payment status becomes partially refunded or refunded, and a full refund sets the order to Refunded.
+
+### 20.3 API
+- `POST /api/admin/orders/:id/shipments`, `GET /api/admin/shipments` (status, search, paging and counts per status), `GET|PATCH /api/admin/shipments/:id`, `POST /api/admin/shipments/:id/status`.
+- `POST /api/admin/orders/:id/returns`, `GET /api/admin/returns`, `GET /api/admin/returns/:id`, `POST /api/admin/returns/:id/status`.
+- `POST|GET /api/admin/orders/:id/refunds` replaces the old refund endpoint, which wrote columns the Refund table doesn't have (`refundMethod`, `totalAmount`, `gatewayRefund`) and so always failed.
+- `POST /api/storefront/account/orders/:ref/returns` for customers. The customer's order detail now includes parcels (courier, tracking), returns, the return deadline and what can still be returned.
+- All admin changes are `orders.edit`, lists are `orders.view`, and every change is in the activity log.
+
+### 20.4 Store admin
+- **Order page:** the fake "Shipping Details" box (carrier and tracking saved to an endpoint that never existed) is replaced by a **Parcels** card. It lets staff split the order into parcels, choose the courier (Pathao, Steadfast, RedX, Paperfly, eCourier, Sundarban, SA Paribahan, own delivery, other), set tracking, a link and the cash to collect, move each parcel along, edit its courier details, and see its history.
+- The placeholder Refunds and Shipping labels tabs and the old refund dialog are replaced by a **Returns & refunds** card:
+  - start a return;
+  - approve, receive (with a restock tick per item), reject or cancel it;
+  - refund by item and/or amount, by method, optionally against a received return;
+  - see the refunds list and how much can still be refunded.
+- The header shows fulfilment and return badges, and the totals show the refunded amount.
+- **Shipments** and **Returns** pages under Orders: status tabs with counts, search by code, tracking number, order number, name or phone, and paging. Parcels can be moved from the list.
+- The orders list shows the fulfilment and return state under the order status.
+- Layout fix: wide pages no longer push the whole admin sideways (`min-w-0` on the content column).
+
+### 20.5 Storefront (fashion)
+- The order page shows each parcel (courier, tracking link, items, sent/delivered date) and each return with its state in plain words.
+- **Request a return:** choose items and quantities (only what can still be returned), a reason and a note, until the deadline shown.
+
+### 20.6 Verification
+- API: `tsc` clean. 136/136 tests with `RUN_DB_TESTS=1`, including 30 new rule tests. The two "errors" vitest reports come from the Redis mock in the Batch 9 smoke test and also happen without this batch's changes. The seed runs cleanly.
+- curl, on a cash-on-delivery order with two lines:
+  - Two parcels (Pathao with the full COD, Steadfast with 0). The order moved Pending → Processing → Shipped → Out for delivery → Delivered and was marked paid.
+  - A failed attempt and resend recorded in the parcel's history.
+  - The customer's return was refused for too many units, and a refund before receiving was refused.
+  - Receiving restocked 48 → 49 with no second restock at refund.
+  - bKash refund, then store credit (the customer's balance went up), then line and order caps enforced, then a full refund set the order to Refunded.
+- Chromium (admin + storefront), no failed requests or page errors:
+  - Packed a Steadfast parcel and marked it picked up, then delivered.
+  - The customer requested a return on the storefront.
+  - Staff saw it on Returns, approved it, marked it received with restock, and refunded it by bKash from the return.
+  - The order page, the Shipments list and the orders list show the new states.
+- Typecheck: api, store-admin, storefront-fashion, super-admin and packages are clean. `storefront-base` fails as before on its own self-imports; it has no changes in this batch. Production builds of the three Next apps pass (`next build --no-lint`: the apps have older lint errors, e.g. in super-admin; the files added in this batch lint clean).
+
+### 20.7 Not done
+- Courier bookings, labels and tracking from the courier (Batch 22). Parcel status is set by hand for now.
+- No emails yet for return approved/rejected or refund issued (the order-status emails still go out).
+- Order notes (`/admin/orders/:id/notes`) and the order page's Audit log tab are still placeholders built from the status history. The API has no notes endpoint yet.
+- Exchanges (return one item, send another) and photos with a return request.
+- storefront-base's account pages don't show parcels or returns (the fashion storefront does).
+
+## ✅ BATCH #21 — Payment verification and cash on delivery (2026-09-27)
+Most Bangladeshi customers pay in one of two ways:
+- They send money to the shop's bKash/Nagad/Rocket number and type the transaction ID (TrxID).
+- They pay cash to the courier, who pays the shop later.
+
+Neither could be tracked before. There was also no screen to set payment methods up: only cash on delivery was on, and bKash, Nagad, Rocket and bank transfer couldn't be turned on.
+
+### 21.1 Schema (migration `payment_verification`)
+- **`PaymentRecord`** holds money staff have to check. Each record has:
+  - the order and method (bkash, nagad, rocket, bank_transfer, cod, cash) and the amount;
+  - the transaction ID and the number it was sent from;
+  - a status. Transfers are to_verify, verified or rejected. COD cash is with_courier, cash_in_hand, received or not_collected;
+  - where the money is (customer, courier, office);
+  - the parcel and courier, the payout that settled it, who submitted it, and who checked it and when;
+  - the rejection reason.
+- **`CourierSettlement`** records a COD payout: code (`PAY-0001`), courier, reference, date, expected cash, charges the courier kept, amount received, shortfall and status (balanced, short, over, resolved), plus the note that resolved it.
+- `PaymentGatewayConfig` gains:
+  - `mode`: "manual" means send money and give the TrxID; "online" means the gateway's payment page;
+  - `accountNumber` and `accountType`: personal = Send Money, agent = Cash Out, merchant = Make Payment.
+- Backfill:
+  - bKash, Nagad, Rocket and bank transfer start in manual mode (also in the seed);
+  - cash on parcels already delivered is "with courier";
+  - transfers already marked paid with a transaction ID count as verified.
+- New permission area **`payments`** (view / edit):
+  - Order Manager and Finance get both; Shipper, Reports and Viewer get view.
+  - Roles a store made get `payments.view` / `payments.edit` if they had `orders.view` / `orders.edit`, so nobody loses access.
+
+### 21.2 Rules (`modules/payments/payments.rules.ts`, 37 table tests)
+- Transaction IDs are cleaned up (spaces removed, upper case) and must look like one (6–20 letters and digits including a digit; bank references 4–40). Bangladeshi mobile numbers accept `+880…`, `880…` or `1…` and are stored as `01XXXXXXXXX`.
+- An order's payment status comes from verified transfers:
+  - paid once they cover the total;
+  - partially paid when some money arrived;
+  - refund states are left alone.
+- A payout's shortfall is expected − charges − received. Anything over 1 paisa either way is flagged short or over.
+
+### 21.3 API (`modules/payments`)
+- `GET /api/admin/payments`: the queue, with status/method/courier/search filters, counts and amounts per status. `kind=cod` lists COD cash.
+- `POST /api/admin/payments/:id/verify`: takes the amount that actually arrived, so partial payments work.
+- `POST /api/admin/payments/:id/reject`: takes a reason. `POST /api/admin/payments/:id/not-collected`.
+- `GET|POST /api/admin/orders/:id/payments`: staff record a transfer, e.g. a TrxID sent on WhatsApp, and can verify it straight away.
+- `GET /api/admin/cod/summary`:
+  - cash with couriers, cash in hand, still to deliver, received, not collected;
+  - short payouts;
+  - owed by courier, with the oldest item's age.
+- `POST /api/admin/cod/confirm`: marks cash in hand as received.
+- `GET|POST /api/admin/cod/settlements`, `GET …/:id`, `POST …/:id/resolve`.
+- `GET|PATCH /api/admin/payment-methods`:
+  - checks the wallet number and requires bank details before bank transfer can be turned on;
+  - keeps at least one method on;
+  - never returns merchant credentials.
+- Storefront:
+  - checkout takes `payment: { transactionId, senderNumber }` for manual methods and skips the online redirect for them;
+  - `POST /api/storefront/account/orders/:ref/payments` for signed-in customers;
+  - `POST /api/storefront/checkout/orders/:orderKey/payment` for guests on the thank-you page;
+  - payment methods and order views now include where to pay, what's due and each TrxID with its state.
+- Rules enforced:
+  - a TrxID can't be used twice in a store (a rejected one can be sent again);
+  - a customer can have one payment waiting at a time;
+  - nothing can be sent for a paid, cancelled or refunded order.
+- Each change adds a line to the order's history. When a transfer makes a pending order paid, the order moves to Processing, which sends the usual email.
+- Cash is recorded automatically:
+  - A delivered parcel with cash to collect creates a "with courier" record, or "cash in hand" for own delivery.
+  - A cash-on-delivery order marked delivered without such a parcel records the order's cash as "cash in hand".
+  - A manual order entered as paid records verified money (or received cash for a walk-in). The same duplicate-TrxID check applies.
+- **Removed / fixed:**
+  - The old `/api/admin/payments` router (an order list and an `offline-confirm`) was unused. Its confirm path, the online-gateway confirm and the IPN path wrote a `paymentTxnId` column that doesn't exist; they now write `transactionId`.
+
+### 21.4 Store admin
+- **Orders → Payments to verify:**
+  - tabs To verify / Verified / Rejected with counts and the total waiting;
+  - method filter and search by TrxID, number, order or name;
+  - Verify dialog with the amount that arrived (warns when it's less);
+  - Reject dialog with common reasons or your own. The customer sees the reason.
+- **Orders → Cash & couriers:**
+  - cards for with couriers, cash in hand, still to deliver and short payouts;
+  - "Owed by courier" table, with the age going red after 7 days and a **Record payout** button. The payout dialog lets staff untick parcels and enter charges, amount received, reference, date and note, and shows the shortfall as they type;
+  - parcel cash by stage, with bulk "Mark received" for cash in hand, and "Not collected";
+  - payouts list: short payouts show the difference in red, and "Mark settled" takes a note.
+- **Settings → Payment methods:**
+  - turn each method on or off;
+  - for bKash, Nagad and Rocket: mode (send to our number / online page), the number and the account type;
+  - bank details for bank transfer;
+  - checkout name, instructions and fees.
+- **Order page:** Payment Details lists the order's payments (TrxID, sender, courier, payout code, rejection reason) with Verify / Reject, and "Record a payment" while money is due.
+
+### 21.5 Storefront
+- **Checkout:** the bKash, Nagad and Rocket panel shows the store's real number, how to send (Send Money / Cash Out / Make Payment) and the amount, then asks for the number paid from and the TrxID. Both are optional: customers can pay after ordering.
+- Bank transfer shows the store's bank details and asks for the reference.
+- **Checkout fix:** the old panel showed hardcoded fake wallet numbers (01700-000000…) and two invented bank accounts, and had a slip upload nothing received. Customers could have sent money there. These are gone. The payment form's card fields are no longer sent to the API with the order.
+- **Thank-you page and account order page:** a payment card shows where to send the money and what's due. It lists each TrxID sent (Checking / Received / Not accepted, with the reason) and has a form to send one, or the correct one after a rejection.
+
+### 21.6 Verification
+- API: `tsc` clean; 173/173 tests with `RUN_DB_TESTS=1` (37 new rule tests; the two vitest "errors" are the existing Batch 9 Redis-mock ones). Migration applied to the dev database with the backfill checked; seed runs.
+- curl:
+  - Settings: turning on without a number, a bad number, or bank transfer without details is refused; `+880 1712-345678` is saved as `01712345678`.
+  - Checkout: a bad TrxID is refused. A good one creates "to verify". Reusing an ID at checkout, on the thank-you page or on a manual order is refused.
+  - A second submission while one is waiting is refused.
+  - Verified ৳4000 of ৳4324 gave partially paid. Staff recorded the rest as verified, and the order became paid and moved to Processing.
+  - A rejection with no reason is refused. With a reason, the customer sees it and can send again.
+  - A COD order delivered without a parcel gave cash in hand ৳4324, then Received; confirming it again is refused.
+  - A RedX parcel marked delivered gave one "with courier" record.
+  - Pathao payout of ৳15,617 − ৳120 charges with ৳15,000 received was flagged short by ৳497, then resolved. The Steadfast payout balanced. A second payout with nothing owed is refused, and charges above the cash are refused.
+  - Walk-in manual orders paid in cash / bKash recorded received / verified.
+- Chromium, no failed requests or page errors:
+  - A customer checked out with bKash and saw the store's number, the amount and the TrxID fields; the thank-you page showed "Checking".
+  - Staff verified it from Payments to verify.
+  - Cash & couriers, Settings → Payment methods and the order page (a rejected and a waiting TrxID with Verify / Reject / Record) render.
+- Typecheck: every app and package except `storefront-base`, which fails as before on its self-imports. My changes there (checkout panel, checkout slice) compile in the fashion storefront. Production builds of the three Next apps pass (`next build --no-lint`; the apps have older lint errors, and the files added in this batch lint clean).
+
+### 21.7 Not done
+- No emails or SMS yet for "payment received" or "payment not accepted". Customers see the state on their order page; the order's move to Processing does send the usual status email.
+- Online bKash / Nagad / SSLCommerz checkout for a store's own merchant account; credentials are still platform-wide environment variables.
+- Importing a courier's payout statement (CSV) to match parcels automatically. That comes with the courier integrations in Batch 22.
+- Payment slips (photos) with a bank transfer, and matching transfers against an SMS or statement feed.
+- COD refunds after delivery still use the Batch 20 refund flow; nothing links them to cash that is still with the courier.
+
+## ✅ BATCH #22 — Courier integrations: Steadfast, Pathao, RedX (2026-09-27)
+Parcels can now be booked with a courier from the admin. Statuses then come back on their own, and every parcel gets a printable label. Couriers without an API (Paperfly, Sundarban, own riders…) still work by hand as in Batch 20.
+
+**Important:** this container can't reach the couriers' servers. The adapters follow each courier's published API. I checked what I could from open-source clients (Steadfast packages, Pathao's own WooCommerce plugin, RedX packages). They were tested against a local mock of all three APIs, but **not yet against a real sandbox or live account**. Before relying on them, connect a sandbox account for each courier and book one test parcel.
+
+### 22.1 Schema (migration `courier_accounts`)
+- **`CourierAccount`** (per store):
+  - courier (steadfast / pathao / redx), name, on/off, sandbox or live;
+  - credentials as encrypted JSON (AES-256-GCM, `config/encryption.ts`);
+  - non-secret settings: Pathao pickup store, delivery type, item type; RedX pickup store; default weight;
+  - a webhook URL token, an encrypted webhook secret, and encrypted Pathao access/refresh tokens;
+  - last test time and error.
+- **`Shipment`** gains: courier account, consignment id, the courier's own status word and message, booked / last-checked times, and the courier's delivery charge.
+
+### 22.2 Adapters (`modules/couriers/couriers.adapters.ts`)
+- **Steadfast** (`portal.packzy.com/api/v1`, headers `Api-Key` / `Secret-Key`):
+  - `create_order` sends the invoice (our parcel code), recipient, phone, address, COD, note, items and home delivery;
+  - status comes from `status_by_cid`; the connection test reads `get_balance`.
+- **Pathao** (`api-hermes.pathao.com`, sandbox `courier-api-sandbox.pathao.com`):
+  - logs in with the OAuth password grant and caches the tokens encrypted; it refreshes them, logs in again on expiry, and retries once after a 401;
+  - booking sends store, merchant order id, recipient, city / zone (area optional), delivery and item type, weight (0.5–10 kg) and amount to collect;
+  - status comes from `orders/{id}/info`; city, zone and area lists are used for matching.
+- **RedX** (`openapi.redx.com.bd/v1.0.0-beta`, sandbox `sandbox.redx.com.bd`, header `API-ACCESS-TOKEN: Bearer …`):
+  - books with `/parcel` (delivery area id and name, COD, weight in grams, invoice);
+  - status comes from `/parcel/info/{id}`; areas come from `/areas?district_name=`.
+- Each adapter has a 20-second timeout and turns the courier's validation messages into readable errors. `fetch` is injectable for tests.
+- `STEADFAST_BASE_URL`, `PATHAO_API_URL` and `REDX_API_URL` point the adapters at a test server; blank means the real API.
+
+### 22.3 Rules (`couriers.rules.ts`, 56 tests with the adapter tests)
+- Each courier's status words map to our parcel statuses. Unknown words and on-hold/payment events don't move the parcel. A cancellation before pickup cancels the parcel; after pickup it counts as returned.
+- **Steadfast:** in_review → ready; pending → in transit; delivered and partial_delivered, including the "approval pending" forms → delivered.
+- **Pathao:** Pickup_Requested / Assigned_for_Pickup → ready; Picked → picked up; sorting hub, in transit and last-mile hub → in transit; Assigned_for_Delivery → out for delivery; Delivered / Partial_Delivery → delivered; Delivery_Failed → failed; Return / paid_return → returned. `order.*` webhook names are handled too.
+- **RedX:** ready-for-delivery → in transit; delivery-in-progress → out for delivery; delivered; agent-returning → failed; returned.
+- A parcel is walked to the courier's status along the allowed parcel moves (`parcelPath`; e.g. ready → picked up → delivered). The order status follows, the COD cash is recorded "with courier" (Batch 21), and emails go out as before.
+- **Area matching** (`matchArea`) turns our district and upazila into the courier's city/zone or area:
+  - it handles old and new spellings (Chittagong/Chattogram, Comilla/Cumilla…) and ignores "Sadar", "City" and similar words;
+  - it keeps numbers, so "Mirpur 1" and "Mirpur 10" stay distinct, and it never guesses between two close matches.
+- Tracking links for each courier, Bangladeshi mobile number clean-up, and a Code 128 barcode encoder for labels.
+
+### 22.4 API
+- **Accounts**
+  - `GET|POST /api/admin/couriers`, `PATCH|DELETE /:id`, `POST /:id/test`, `POST /:id/rotate-webhook`: `settings.view` / `settings.edit`.
+  - Credentials are never returned (only the last 4 characters), and the activity log hides them.
+  - An account with parcels still on the way can't be deleted, only turned off.
+- **Booking**
+  - `POST /api/admin/shipments/:id/book` books a ready parcel. Pathao and RedX areas are matched from the address, or given by staff.
+  - `GET /api/admin/shipments/:id/courier-area` returns the suggested area. `GET /api/admin/couriers/active`, plus Pathao cities/zones/areas and RedX areas for the dialog.
+- **Bulk**
+  - `POST /api/admin/orders/book-courier` handles up to 100 orders. It uses each order's ready parcel, or packs everything not yet in a parcel, then books it.
+  - Each order gets its own result, so one failing doesn't stop the others. An order that's already booked says so.
+- **Status**
+  - `POST /api/admin/shipments/:id/sync` re-checks one parcel; `POST /api/admin/shipments/sync` re-checks every booked parcel still on the way.
+  - A BullMQ job scheduler (`couriers.sync.ts`) runs every `COURIER_SYNC_MINUTES` (default 30) in the process that sends emails, or in `pnpm worker`. Only one process runs it; without Redis nothing is scheduled.
+- **Webhooks:** `POST /api/webhooks/couriers/:courier/:token`
+  - The token in the URL picks the account. Steadfast must also send the account's secret as a Bearer token, and Pathao as `X-PATHAO-Signature`. RedX has no documented signature, so its unguessable URL is the secret.
+  - The body only names the parcel: its status is always read again from the courier's API before anything changes. (Pathao's integration secret is one public constant for every merchant, so a webhook body alone proves nothing.)
+  - Replies are what each courier expects: Pathao gets 202 with its integration header; Steadfast gets `{status:"success"}`.
+- **Labels:** `GET /api/admin/shipments/labels?ids=…` makes a 4×6 in PDF with one page per parcel:
+  - shop name and phone, courier, "COLLECT Tk X" or "PAID";
+  - a Code 128 barcode of the tracking or consignment code;
+  - recipient name, phone and address, order and parcel codes, items, and weight.
+- **Fixed on the way:** everything under `/api/webhooks` arrives as raw bytes (for payment signature checks), so courier webhook bodies are now parsed in the route (JSON or form-encoded).
+- **Mock couriers:** `pnpm --filter @ecom/api couriers:mock` (`apps/api/scripts/mock-couriers.mjs`) serves all three APIs on :4010 for local testing. `POST /__advance` moves a parcel and fires the courier's webhook with the right headers. `.env.example` explains the base-URL variables.
+
+### 22.5 Store admin
+- **Settings → Couriers:**
+  - add, edit, test, turn on/off and remove accounts;
+  - the fields each courier needs, with where to find them;
+  - sandbox/live; Pathao store, delivery and item type; RedX pickup store; default weight;
+  - the webhook URL and secret with copy buttons, instructions per courier, and "make a new URL and secret".
+- **Order page → Parcels:**
+  - **Book** opens a dialog with the courier and, pre-filled from the address, the Pathao city/zone/area or the RedX area (with a warning when there's no clear match), plus weight;
+  - once booked, the parcel shows "Courier says …", when it was last checked and the courier's charge, with a refresh button;
+  - a label button on every parcel; the manual courier/tracking edit is hidden for booked parcels.
+- **Shipments:**
+  - "Sync statuses";
+  - checkboxes with "Print N labels" (one PDF);
+  - the courier's own status under ours;
+  - **Book** on parcels ready to go.
+- **Orders list:** a **Book courier** bulk action with per-order results. It replaces a "Mark as paid" button that only showed a success message and changed nothing.
+
+### 22.6 Verification
+- **Tests:**
+  - API `tsc` clean; 229/229 tests with `RUN_DB_TESTS=1` (56 new courier tests). The two vitest "errors" are the existing Batch 9 Redis-mock ones.
+  - The new courier module lints clean.
+  - The tests clear the courier base-URL variables so a local `.env` can't change what they check.
+- **Against the mock (curl):**
+  - Missing keys are refused. Each account's test connection reports the balance, the pickup store, or the areas.
+  - Credentials are stored encrypted, never in plain text.
+  - Bookings with each courier: Pathao was matched to Dhaka / Dhanmondi, RedX to Dhanmondi. Double booking is refused.
+  - **Steadfast webhook:** a wrong secret gets 404. Pending moved the parcel to in transit and the order to Shipped; delivered_approval_pending moved them to delivered and Delivered, marked the order paid and recorded the cash "with Steadfast".
+  - **Pathao webhook:** a failed delivery took the parcel ready → picked up → failed, then Return → returned. A bad signature gets 404. Replies are 202 with the integration header.
+  - **RedX:** a manual sync moved the parcel to out for delivery; "agent-hold" only added a history line; a webhook moved it to delivered.
+  - A webhook with an unknown token, or the wrong courier in the URL, gets 404.
+  - Bulk booking with Pathao worked; running it again said "Already booked". Bulk with RedX flagged a Bogura order as needing its area chosen.
+  - Labels PDF: 5 pages, checked visually (rendered with pdf.js).
+  - With `COURIER_SYNC_MINUTES=1` the scheduled job ran by itself ("checked 5").
+- **Chromium:**
+  - Settings → Couriers with three accounts and a test result.
+  - Booking from the order page with Pathao city/zone pre-filled.
+  - Bulk booking three orders with RedX (two booked, one flagged).
+  - Shipments "Sync statuses" and print-all.
+  - No failed requests or page errors.
+- **Typecheck:** every app and package except `storefront-base`, which fails as before on its self-imports. Production builds of the three Next apps pass (`next build --no-lint`, as in earlier batches: the apps have older lint errors, and the files added in this batch lint clean).
+
+### 22.7 Not done
+- **Real sandbox runs.** Pathao city/zone ids and RedX area names need a real account to check the matching against real data.
+- Cancelling a booking with the courier. Cancel the parcel with the courier's panel, then mark it cancelled here.
+- Steadfast's bulk endpoint: bulk booking books one parcel at a time, which is slower but simpler to report on.
+- Couriers' own PDF labels (their APIs don't offer them); our label carries their tracking code instead.
+- Paperfly, eCourier, Sundarban and other APIs.
+- Customers choosing a courier at checkout, and courier reports (Batch 28).
+- Payment-gateway keys per store are still environment variables (only courier keys are stored encrypted per store).
+
+---
+
+## ✅ BATCH #23 — Automatic promotions (2026-09-27)
+The store can now run offers that apply by themselves at checkout, with no code: money off, a free gift above a spend, buy X get Y free, and free delivery. Each can be shown in storefront "slots" (announcement bar, home, product page, cart, checkout, a pop-up). Coupons gain "who can use it" and a "works with promotions" switch.
+
+### 23.1 Schema (migration `promotions`)
+- **`Promotion`** (per store): name, type (`discount` / `free_gift` / `bxgy` / `free_delivery`); percentage or fixed value with an optional cap; minimum order and minimum quantity; scope by products or categories (both empty = whole store); "also discount items already on sale"; buy / get quantities; the gift product, option and quantity; display slots with headline, message, image and link; start / end; active; how many orders used it.
+- **`Coupon`** gains `audience` (`private` / `public` / `given`) and `worksWithPromotions` (default on). Existing coupons limited to customer emails became `given`.
+- **`Order`** gains `promotionDiscount` (part of `discountTotal`) and `promotions` (what applied, gifts included). Gift lines are ordinary order items at ৳0 with `meta.gift`.
+- New permission area **`promotions`** (view/create/edit/delete). The Marketing role gets all of it and Viewer can view. Custom roles get the same actions they already had on coupons.
+
+### 23.2 Rules (`modules/marketing/promotions.rules.ts`, 42 table tests)
+- **One discount per order:** of the discount-type promotions that qualify, the one worth most applies.
+- **Buy X get Y** stacks with it and is worked out first. It applies per product, with all its options counted together, and the cheapest units are the free ones. When two such offers cover a product, the better one wins. The discount then comes off what's left to pay.
+- **Free gifts:** every gift whose threshold is reached is added. **Free delivery** applies when any qualifying offer gives it.
+- **Scope:** minimum order and quantity are measured on the items in scope. By default, items already on a flash sale or marked down neither get a discount nor count toward its minimum, but they do count toward free-gift and free-delivery thresholds.
+- Choosing a category covers its subcategories: an offer on "Men" covers "Men > Shirts".
+- **Nudges** tell the customer how close the next offer is, closest first, three at most. Examples: "Add ৳500 more for free delivery", "Add 1 more Satin Shirt: it's free (Buy 2 get 1 free)". There are none for a smaller discount than the one already applied, or for a scoped offer with nothing in the cart.
+- The discount is split over the lines it covers, and the last line takes the rounding.
+
+### 23.3 Checkout and orders (`StorefrontService`)
+- **Order of discounts:** prices (flash sales included), then promotions, then one coupon on what's left, then the staff discount on manual orders, then VAT on the rest.
+- **A coupon with "works with promotions" off** removes the automatic promotions from the order, is worked out on full prices, and doesn't count flash-sale items. The customer is told why.
+- **Gifts** come out of stock like a sale, with the same oversell guard. A gift that has run out is left off with a note, and the order still goes through.
+- **Free delivery** zeroes the zone's delivery price. A delivery fee typed by staff is left alone.
+- Each order line stores its share of the promotion discount, and each promotion counts the orders it was used on.
+- The storefront's `POST /cart/prices` now also returns `promotions`: what applies, gifts, free delivery, nudges and notes. It takes the applied coupon, so the cart and checkout show what checkout will charge.
+- `POST /coupons/apply` takes promotions into account and reports `worksWithPromotions`.
+- **Manual orders** (Batch 19) get the same promotions, with a switch to leave them off.
+- **Coupon form:** the Buy X Get Y coupon type, which checkout never supported, is hidden from new coupons, with a pointer to Promotions.
+
+### 23.4 API
+- **Admin** (`/api/admin/marketing/promotions`, `promotions.*` permissions):
+  - `GET` (filter by state/type/search), `POST`, `GET|PATCH|DELETE /:id`, and `POST /:id/end` to end it now;
+  - the form's own product, option and category pickers under `/pick/*`, so marketing staff don't need catalog or order permissions.
+- **Validation per type:** a discount needs a value (percentages ≤ 100); buy X get Y needs both quantities; a gift needs a product, and its option when the product has options; the end must be after the start. Products, categories and gifts must belong to the store. Fields another type used are cleared on save.
+- **Storefront:**
+  - `GET /api/storefront/promotions?slot=&productId=&categorySlug=` lists live promotions for a slot. The product page only gets offers that cover the product; the category page gets offers for it, a parent of it, or the whole store. Customers see the headline, or the offer itself ("Free delivery over ৳1,500"), never the internal name.
+  - `GET /api/storefront/checkout/coupons/available` lists public coupons and, for a signed-in customer, coupons given to them. Private codes are never listed.
+
+### 23.5 Store admin
+- **Marketing → Promotions:**
+  - a list with what each offer does, what it applies to, where it shows, dates, orders and status (live / scheduled / paused / ended);
+  - tabs by status; pause/resume, end now, edit and delete;
+  - quick-start templates: Eid Sale, Pohela Boishakh, Durga Puja, Winter Sale.
+- **The promotion form:**
+  - type cards and per-type fields;
+  - a gift product search with an option chooser;
+  - scope as whole store, chosen products or a category tree;
+  - slot checkboxes with headline, message, link and image;
+  - dates and an active switch.
+- **Coupons:** "Who can use it" (private code / public / given to customers with their emails), "Works with promotions and flash sale prices", and a column for both in the list.
+- **Order page:** each promotion's discount, free-delivery note and "Free gift" badge on gift lines.
+- **New order form:** promotion lines, gifts and nudges in the summary, and a switch to leave promotions off.
+
+### 23.6 Storefront
+- **Announcement bar:** promotions in that slot show under the theme's announcement.
+- **Home:** home-hero banners after the hero, below-categories banners after categories, and an "Offers" section after the first product section.
+- **Product and category pages:** the product page lists offers that cover the product; the product list filtered by a category shows that category's banner.
+- **Pop-up:** shown once per visit, a second after arriving. It closes with Esc or a click outside.
+- **Cart:** each promotion's discount, gifts with pictures, free delivery, nudges, the cart slot, and an "After offers" total.
+- **Checkout:**
+  - promotion lines in the summary; VAT and payment fee worked out after them; free delivery;
+  - gifts and the checkout slot;
+  - "Coupons you can use" with an Apply button, and a note when a coupon replaced the promotions.
+- **Thank-you and account order pages:** each promotion and gift lines.
+
+### 23.7 Checked
+- **Tests:** 271/271 API tests, including 42 new promotion tests.
+- **By API:**
+  - A manual order of 3 × Satin Shirt + a Jamdani Saree with coupon STACK5 got:
+    - buy 2 get 1 −৳3,990 and 10% off capped at −৳1,500 (৳5,490 from promotions);
+    - the coupon on what was left, −৳949;
+    - a free Salwar Kameez, which took one from stock, with every promotion counted once.
+  - Line discounts add up to the total, and VAT was charged on the reduced amount.
+  - A coupon not working with promotions dropped them and was worked out on full prices.
+  - A promotion on "Men" applied to a product in "Men > Shirts" and showed on the Shirts category page.
+  - Bad input was refused: a 150% discount, and a gift product with options but none chosen.
+- **Chromium:**
+  - admin list, a festival template turned into a free-gift promotion (gift option chosen, category ticked), the coupon form's audience section, and the order page with the gift badge;
+  - storefront pop-up, home, product page slot, the cart at 2 items (the "it's free" nudge) and 3 items (1 free, 10% on the rest, gifts, free delivery), and checkout with a public coupon that removed the promotions;
+  - no failed requests or page errors.
+- **Typecheck and lint:** clean except `storefront-base`, which fails as before on its self-imports. New files lint clean. Edited files have no new lint errors: `storefront.service.ts` went from 107 to 94 once the coupon was properly typed. Production builds of the three Next apps pass (`next build --no-lint`).
+
+### 23.8 Not done
+- Returns don't claw back a gift or re-check a threshold when a returned item drops the order below it; staff decide case by case.
+- A promotion per storefront (we have one storefront per store).
+- Limits per promotion (total uses, per customer) and "first order only".
+- Promotion ROI in reports (Batch 28).
+- A page-builder "Promotion slot" block; the home slots sit at fixed places for now.
+
+---
+
+## ✅ BATCH #24 — Phone sign-in by SMS code, SMS provider and order SMS (2026-09-27)
+Customers can sign in with a 6-digit code sent to their mobile number. A new number gets an account automatically. The shop connects a Bangladeshi bulk-SMS account, and customers get order updates by SMS. Staff can send the invoice link by SMS, and every SMS is logged.
+
+**Important:** the SMS providers couldn't be reached from this container. The adapters follow each provider's published API and open-source clients:
+- BulkSMSBD: `GET bulksmsbd.net/api/smsapi`, success is `response_code` 202;
+- Alpha SMS / sms.net.bd: `POST api.sms.net.bd/sendsms`, success is `error` 0;
+- SSL Wireless SMS Plus: `POST smsplus.sslwireless.com/api/v3/send-sms` with `api_token`, `sid`, `msisdn`, `sms` and `csms_id`, success is `status_code` 200.
+
+They were tested against a local mock (`pnpm --filter @ecom/api sms:mock`). **Send one real test SMS with the shop's account before relying on them.**
+
+### 24.1 Schema (migration `sms_phone_otp`)
+- **`StoreSmsSetting`** (one per store): provider (`log` / `bulksmsbd` / `alphasms` / `sslwireless`), sender ID, credentials as encrypted JSON, per-event on/off and template, the phone sign-in switch, and the last test result.
+- **`SmsMessage`**: every SMS, with number, text, type, order, provider, status (sent / failed / logged), the provider's message id, error and number of parts. Sign-in codes are stored masked.
+- **`PhoneOtp`**: an HMAC of the code (keyed with the app secret and bound to store and number, so the code itself is never stored), tries, expiry, used time and IP.
+
+### 24.2 Rules (`modules/sms/sms.rules.ts`) and providers (`sms.providers.ts`); 40 tests
+- **Numbers:** Bangladeshi mobiles in any form (`+880 1712-345678`, `8801…`, `1712…`) become `01XXXXXXXXX`, and are sent to providers as `8801…`. A customer can be found by any stored form of the number.
+- **Length:** SMS parts are 160 / 153 characters for plain text and 70 / 67 once there's any Bangla or symbol. The admin shows the count as you type.
+- **Amounts:** written as "Tk 4,588.50". The ৳ sign alone turns a message Unicode, which about doubles its cost; an early test caught this. The default templates are all plain text, and a test checks that.
+- **Templates:** placeholders `{name} {order} {total} {store} {phone} {courier} {tracking} {link}`, with tidy spacing when one is empty. Defaults: order placed, shipped and cancelled on; confirmed and delivered off.
+- **Codes:** 6 digits, valid for 5 minutes, used once, 5 wrong tries end the code. A new code for the same number only once a minute and 5 an hour. The existing strict rate limit (20/min/IP) also covers `/auth/customer/otp`.
+- **Providers:**
+  - BulkSMSBD needs an API key and an approved sender ID. Alpha SMS needs an API key and optionally a sender ID. SSL Wireless needs an API token and SID, and gets our message id as `csms_id`.
+  - "Record only" logs messages without sending, for checking wording before an account is connected.
+  - Errors are the provider's own words, or plain wording for BulkSMSBD's codes; a network failure or non-JSON reply gets a readable message. 15-second timeout. Base URLs can point at the mock (`BULKSMSBD_API_URL`, `ALPHASMS_API_URL`, `SSLWIRELESS_API_URL`).
+
+### 24.3 API
+- **Settings:** `GET|PUT /api/admin/sms/settings` (`settings.view` / `settings.edit`).
+  - Keys are never returned, only their last 4 characters. A blank key keeps the stored one; switching provider starts afresh.
+  - Phone sign-in can't be turned on with "Record only".
+- **Test and log:** `POST /api/admin/sms/test`; `GET /api/admin/sms/log` (filter by type, status or text; also returns SMS parts sent in the last 30 days); `POST /api/admin/sms/log/:id/resend` (not for sign-in codes).
+- **Per order:** `GET /api/admin/orders/:id/sms` (`orders.view`) and `POST /api/admin/orders/:id/sms-invoice` (`orders.edit`), which sends the order and invoice link.
+- **Order SMS:** listens to the same events as order emails.
+  - Order placed; Processing → confirmed; Shipped (with the courier and tracking link from the parcel); Delivered; Cancelled.
+  - Nothing is sent when staff choose not to tell the customer. Each event goes to an order at most once.
+- **Phone sign-in:**
+  - `GET /api/auth/customer/login-methods`, `POST /api/auth/customer/otp/request` `{phone}`, `POST /api/auth/customer/otp/verify` `{phone, code, firstName?, lastName?}`. Verify signs in like email login (access token plus refresh cookie).
+  - **Which account:** an account with a password or email is used first, then the latest record with that number, for example one the shop made for a phone order. So a phone-order customer sees their orders once they sign in.
+  - A suspended account is refused. A new number gets an account, named "Customer" if no name is given, and the welcome email event fires.
+- The old global `SMS_DRIVER` / `SSLWIRELESS_*` env settings were never used and are superseded by the per-store settings.
+
+### 24.4 Store admin
+- **Settings → SMS:**
+  - provider, sender ID and keys (shown masked), with a test send and its result;
+  - the phone sign-in switch;
+  - each order update with on/off and an editable message (Bangla works) with a live character and part count;
+  - the "Sent SMS" log with filters, failures and why, resend, and parts sent in the last 30 days.
+- **Order page:** an SMS card with the messages sent for the order and "Send invoice by SMS" (the number can be changed).
+
+### 24.5 Storefront
+- **Log in:** "Mobile number" and "Email" tabs, with mobile first when the shop turns it on.
+  - Number, then "Send code by SMS". The code box uses the phone's one-time-code autofill. There's an optional name for new accounts, a 60-second resend timer, and "Change number".
+- **Profile:** phone-only accounts show "You sign in with a code sent to your mobile number" instead of an empty email field.
+
+### 24.6 Checked
+- **Tests:** 311/311 API tests, including 40 new SMS tests.
+- **Against the mock:**
+  - **Provider errors:** a missing sender ID, an invalid number and a bad key are refused with a clear reason. Keys are stored encrypted, and "Record only" can't be used for phone sign-in.
+  - **Sign-in codes:** the SMS log has the code masked. Asking again at once is refused ("wait 60 seconds"). A wrong code is refused, and 5 wrong codes end the code, so even the right one no longer works. A used code doesn't work twice.
+  - **Accounts:** a new number made an account named from the form. The shop's phone-order customer signed in to their existing record and saw their order.
+  - **Order SMS:** a manual order sent "order placed". Processing sent a Bangla "confirmed" template (Unicode, 2 parts). Cancelled and the invoice link were sent. The per-order list and the log show all of them.
+- **Chromium:**
+  - admin: turn on "delivered" and edit it, save, send a test, and send the invoice by SMS from the order page;
+  - storefront: sign in with a phone code as a new customer, landing on the account page;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean. Edited files have no new lint errors except one in `auth.controller.ts`, from the `omitPasswordHash(any)` pattern the file already uses. The three Next apps build.
+
+### 24.7 Not done
+- **Real provider runs.** Each provider's exact error codes and delivery reports need a real account.
+- **Delivery reports.** A "sent" message was accepted by the provider, not confirmed delivered.
+- **Checkout still asks for an email.** Phone-only customers type one at checkout (Batch 26).
+- Email one-time codes and Google/Facebook sign-in.
+- Marketing SMS and campaigns.
+- WhatsApp.
+- A per-event × channel notification matrix.
+
+---
+
+## ✅ BATCH #26 — Storefront gaps: search, order tracking, wishlist, flash sale, reviews and questions, tags and specifications (2026-09-27)
+The storefront pages customers expected but didn't have. Staff get the matching screens: product questions to answer, what customers search for, and product tags and specifications.
+
+### 26.1 Schema (migration `storefront_gaps`)
+- **`Product`:**
+  - `tags`: lower-case words, with a GIN index;
+  - `specifications`: a list of `{group?, label, value}` rows;
+  - its questions.
+- **`SearchTerm`**: per store and term, with searches, products found last time, and when it was last searched. Counted per term, not per person.
+- **`ProductQuestion`**: product, asker's name, optional customer, question, answer, who answered and when, status (pending / published / hidden), and IP for rate limiting.
+- **Ratings:** product ratings and review counts were never kept up to date. The migration fills them from approved reviews; submitting and moderating reviews now keep them current (`refreshProductRating`).
+
+### 26.2 API
+- **Search:**
+  - The product list's `search` now also matches tags and brand names, and there's a new `tag` filter.
+  - The first page of a search is recorded as a search term (`engagement.rules.ts`):
+    - lower-cased, with punctuation removed but Bangla vowel signs kept (the tests caught those being stripped);
+    - phone and order numbers aren't recorded.
+  - `GET /api/storefront/search/suggest?q=` returns up to 6 products, matching categories, and terms other customers searched at least twice that found something. `GET /api/storefront/search/popular` returns the top terms.
+- **Order tracking:** `GET /api/storefront/track?number=&phone=`.
+  - The phone can be in any format.
+  - It returns the order's progress (placed → confirmed → handed to courier → out for delivery → delivered, with times), a closed state for cancelled, refunded or failed orders, parcels with courier and tracking link, and items.
+  - It never returns the address, email or payments. A wrong number and a wrong phone get the same answer.
+  - It is rate-limited like login (20 a minute per IP).
+- **Wishlist:** `GET|POST /api/storefront/account/wishlist`, `GET /wishlist/ids` and `DELETE /wishlist/:productId`. POST takes several ids, so a guest's saved list moves to the account on login. The product list takes `ids=` for guests' saved products.
+- **Flash-sale page:** `GET /api/storefront/flash-sales` lists running sales with their products (listed products, whole categories including subcategories, or the whole store). Only products currently getting that sale's price are shown.
+- **Reviews:** `POST /api/storefront/products/:id/reviews` (signed-in customers) and `GET /products/:id/my-review`.
+  - A customer with a delivered order containing the product is a verified buyer, and their review shows at once. Others wait for approval.
+  - One review per product per customer, and the product must allow reviews.
+- **Questions:** `POST /api/storefront/products/:id/questions` (anyone, 5 an hour per IP). The product page includes published answers.
+- **Admin:**
+  - `/api/admin/marketing/questions` (`reviews.*`): list with a count waiting for an answer, answer (which publishes), hide, delete. Publishing without an answer is refused.
+  - `/api/admin/marketing/search-terms` (`products.view`): a "found nothing" filter.
+- **Product save:** takes `tags` (trimmed, lower-cased, no duplicates, at most 30) and `specifications` (at most 60 rows).
+- **Checkout:** email is optional. Many customers here give only a phone number, and order emails are skipped without one.
+- **Product page data:** adds tags, specification rows (the shop's own first, then brand / SKU / attributes / weight), sales count, low-stock threshold, whether reviews are allowed, and published questions.
+
+### 26.3 Storefront
+- **Header search:** suggestions as you type (popular terms, categories, products with price, "See all results"), and a **`/search`** page with results, paging, and popular searches when empty or nothing matches. The mobile search icon and menu search go there too.
+- **`/track`:** order number + phone, then the progress steps, parcels with the courier's tracking link, and items. Linked from the thank-you page (order number pre-filled) and a new "Shop" footer column: Track your order, Flash sale, Wishlist, Search.
+- **Wishlist:**
+  - The hearts on product cards and the product page work, and the header shows the count.
+  - Guests' saved products are kept in the browser and move to their account when they log in.
+  - **`/wishlist`** shows them.
+- **`/flash-sale`:** each running sale with its banner, a live countdown and its products.
+- **Product page:**
+  - "Hurry, only N left" at the product's low-stock threshold, and "75+ sold" once it has sold 10;
+  - tag chips linking to `/products?tag=`;
+  - specifications grouped under headings;
+  - a review form with stars (or a login link), and a note when a review is waiting for approval;
+  - a new **Questions** tab with answered questions and an "Ask a question" form.
+- **Checkout:** "Email Address (optional)"; an email is still needed to create an account.
+
+### 26.4 Store admin
+- **Product editor:**
+  - The tags box already existed but **never saved**. It now loads and saves on both the new and edit pages.
+  - New **Specifications** card: group, label and value rows you can reorder.
+- **Marketing → Questions:** tabs for to answer / published / hidden / all, answer and publish, hide, delete, and a link to the product.
+- **Marketing → Search terms:** most searched first, "Only searches that found nothing" (what to stock or tag), and "See results" on the storefront.
+
+### 26.5 Checked
+- **Tests:** 337/337 API tests, including 26 new tests for search terms, tracking steps and public names.
+- **By API:**
+  - tags saved lower-cased and de-duplicated, and the tag filter works; search matches tags;
+  - searches were counted, phone and order numbers ignored; suggestions and popular terms work;
+  - tracking works with a wrong phone refused and the phone in "+880 1555-123456" form;
+  - wishlist add, list and remove;
+  - the flash-sale page, with a dev sale extended to run;
+  - a review went to pending, a second one was refused, and approving it moved the product to 5 reviews averaging 3.80;
+  - a question went pending, publishing it without an answer was refused, and answering published it.
+- **Chromium:**
+  - storefront: header suggestions, search results, a no-results page, the product page (tags, sold count, wishlist, Questions tab, review login prompt), guest wishlist page, flash sale, and tracking (wrong phone, then right phone);
+  - admin: answering the question (which then showed on the product page), search terms, and adding a tag and a specification row in the product editor and saving;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The three Next apps build.
+
+### 26.6 Not done
+- Bangla / Arabic language switch, data-saver mode, and wallet / "my coupons" pages.
+- Guests' wishlists live only in the browser until they log in.
+- Search is a simple "contains" match. There's no typo tolerance or ranking beyond sales count; a search engine can come later.
+- Review photos and "helpful" votes.
+- Answering a question doesn't notify the asker.
+
+---
+
+## ✅ BATCH #27 — Purchasing: suppliers, purchases, supplier payments and money accounts (2026-09-27)
+Staff can now record the stock they buy. A purchase adds the stock, sets each product's cost price (including shipping, customs and other charges), and tracks what the shop owes each supplier. Money is paid out of named accounts (cash box, bank, bKash) that keep a ledger. Every new order line now saves its cost, which Batch 28's profit reports will use.
+
+### 27.1 Schema (migration `purchasing`)
+- **Cost prices:**
+  - `Product.costPrice` and `ProductVariant.costPrice`; the product's is filled from the old `supplierCost`;
+  - `OrderItem.unitCost`, saved when an order is placed (option's cost, else the product's).
+- **`Supplier`:**
+  - email is now optional;
+  - adds opening balance and notes.
+- **`Purchase`:**
+  - number `PUR-000001`, supplier;
+  - local / import, country of origin, where it was bought, invoice reference, date;
+  - items subtotal, shipping, customs, other charges, discount, total;
+  - payment term, status received / cancelled, notes.
+- **`PurchaseItem`:** product and option, name, quality grade, qty, unit cost, discount % and ৳, line total, landed unit cost.
+- **`SupplierPayment`:** supplier, optional purchase, account, amount, method, date, reference.
+- **`MoneyAccount`:** name, type (bank / cash / mobile), details, opening balance, in use.
+- **`MoneyTransaction`:** signed amount, kind, what it refers to, note and date. An account's balance is its opening balance plus its transactions and is never edited directly.
+- **`QualityGrade`:** six are seeded per store.
+- **Permissions:**
+  - new areas `purchasing` (view / create / edit / delete) and `money_accounts` (view / create / edit);
+  - finance gets both in full; product managers can view and record purchases; reports and viewer roles can view;
+  - custom roles that could edit stock get purchasing view and create.
+
+### 27.2 Rules (`purchasing.rules.ts`, 37 table tests)
+- **Line total:** qty × unit cost, less the discount %, then less the discount amount. A discount bigger than the line is refused.
+- **Landed cost:**
+  - shipping, customs and other charges, less the purchase discount, are shared over the lines by value, or by quantity when every line is free;
+  - the last line takes the rounding, so the lines always add up to the total.
+- **Cost price:** becomes the weighted average of the stock on hand and what was bought. Stock at zero or below takes the new cost.
+- **Payment terms:**
+  - paid in full now;
+  - part paid (must be above 0 and below the total);
+  - credit, with nothing paid now;
+  - advance, already paid, so nothing now.
+- **Supplier balance:** opening balance + received purchases − payments. A negative balance means paid ahead.
+
+### 27.3 API (`/api/admin/purchasing`)
+- **Suppliers:**
+  - the list comes with balances;
+  - a detail view shows their purchases and payments;
+  - add and edit are available; delete is refused once they have history (turn them off instead).
+- **Purchases:**
+  - `POST /purchases`, all in one transaction:
+    - checks every line (products with options must name one);
+    - adds the stock and moves the cost price to the average;
+    - writes a stock log line (`PURCHASE`, with the purchase number);
+    - records any payment made now.
+  - `POST /purchases/:id/cancel`:
+    - takes the stock back out, and is refused if some was already sold;
+    - logs `PURCHASE_CANCELLED`;
+    - keeps payments on the supplier's account;
+    - leaves cost prices as they are.
+- **Payments:**
+  - Record takes the money out of the account and refuses to take an account below zero or pay from one not in use.
+  - Undo puts the money back as a reversal line.
+- **Accounts:**
+  - list, add, edit;
+  - a ledger with the balance after each line;
+  - `POST /accounts/move` for deposit, withdrawal, transfer (two lines) or correction (can be negative).
+- **Other:**
+  - quality grades (list / add / delete);
+  - a product picker for purchase lines (drafts included, with stock and cost for each option).
+- **Product save:** takes `costPrice`. An option's cost is only changed when it's sent, so saving a product doesn't wipe the cost a purchase set.
+- **Stock value:** now uses the cost price.
+
+### 27.4 Store admin (new "Purchasing" menu)
+- **Purchases:**
+  - the list can be filtered by search, supplier, status and dates, and shows the total received;
+  - **Record purchase** form:
+    - supplier, with an inline "add supplier";
+    - date, invoice number, local / import, and where it was bought;
+    - a product search that adds lines, each with an option choice, grade (with "+ Add grade…"), qty, unit cost, and discount % / ৳;
+    - line totals and **landed cost per unit** as you type;
+    - charges and total;
+    - payment term, the amount paid now, account and method.
+  - The detail page shows items with landed cost, charges, and payments against the purchase, with **Pay supplier** (pre-filled with what's left) and **Cancel purchase**.
+- **Suppliers:** each supplier shows what you owe them (red), have paid ahead (green) or settled. Opening one shows a statement (opening balance, bought, paid, balance, purchases, payments) with Pay, Edit and Delete.
+- **Supplier payments:** a list filtered by supplier, **Pay**, and **Undo**.
+- **Accounts:** account cards with balances, a ledger (in / out / balance), **Move money** (deposit, withdraw, transfer, correct), and add / edit.
+- **Product editor:** the "COGS" box had never been connected to anything. It is now **Cost price**: it saves, and shows the margin against the selling price.
+
+### 27.5 Checked
+- **Tests:** 374/374 API tests, including 37 new purchasing tests.
+  - Vitest also reports 2 unhandled errors from the old batch-9 smoke test: its mocked database has no audit log. They happen on the previous commit too.
+- **By API:**
+  - landed cost (35,000 of items + 500 of charges gave 1,927.14 and 8,114.29 a unit);
+  - stock added and average cost applied;
+  - supplier balance 20,500 (opening balance 5,000 + 35,500 − 20,000);
+  - these were refused: paying more than the cash box held, a missing option, and part-paying without an account;
+  - a transfer, and ledger balances after each line;
+  - undoing a payment returned the money;
+  - cancelling took the stock back out; cancelling twice and deleting a supplier with history were refused.
+- **Chromium:**
+  - recorded an import purchase:
+    - two items, one with an option, and a new grade added from the form;
+    - 10% line discount; shipping, customs and a purchase discount;
+    - part paid; landed costs ৳1,521.43 and ৳1,014.29;
+  - paid the rest from its page (pre-filled 25,500);
+  - the supplier then showed Settled;
+  - moved ৳5,000 between accounts, and the ledger showed it;
+  - the product's cost price showed 1,014.29 with its margin;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The Next apps build.
+
+### 27.6 Not done
+- Purchase orders before the goods arrive, part-received deliveries, and returns to a supplier.
+- Cancelling a purchase doesn't reverse the cost price change (reversing an average after later sales isn't exact).
+- Sales money isn't posted into accounts automatically yet (COD settlements and gateway payments stay in the Batch 21 screens).
+- Editing a recorded purchase isn't possible: cancel it and record it again.
+
+---
+
+## ✅ BATCH #28 — Reports: sales and gross profit, products, discounts, customers, couriers, returns, tax, stock value (2026-09-28)
+A new **Reports** section answers what owners ask most: how much did we sell, what did we make, which products and coupons earned it, which couriers bring parcels back, how much COD is still out, and what the stock is worth. Every table downloads as CSV.
+
+### 28.1 Permission and data (migration `reports`)
+- **New permission `reports.view`.** Reports show cost prices and profit, so this is separate from the dashboard.
+  - Granted to the finance, reports and viewer roles.
+  - Also granted to custom roles that can already see purchasing, since they see costs anyway.
+  - The owner has everything.
+- **Past order lines:** lines sold before Batch 27 had no cost, so the migration filled them from today's cost price (the option's, else the product's). New orders keep the cost from the time of sale.
+
+### 28.2 Rules (`reports.rules.ts`, 37 table tests)
+- **Dates are shop calendar days** in the store's time zone (settings; default Asia/Dhaka, and a mistyped zone falls back to it).
+  - "From" and "to" are both included, and turn into a UTC range for the queries.
+  - With no dates, the range is the last 30 days. Ranges longer than 3 years, reversed dates and impossible dates are refused.
+- **Charts group by** day (up to 2 months), week starting Monday (up to 6 months), or month. Every period gets a row, so gaps show as zero.
+- **Comparison:** the previous period of the same length.
+- **Net sales** = items − discounts − refunds. Delivery charges and tax are not the shop's income.
+- **Gross profit** = net sales − the cost of the units kept (sold − restocked by a refund), at their cost when sold.
+- **Cost coverage** is the share of units sold that had a cost. Below 100% the pages warn that profit is shown too high.
+- **Which orders:** "all placed" means everything except cancelled and failed; "delivered only" means delivered and completed.
+
+### 28.3 API (`/api/admin/reports`, all read-only SQL)
+- **`/sales`:** totals with % change vs the previous period, a series by period, and breakdowns by order source and by payment method.
+- **`/products`:** per product: orders, units, units returned, net sales (after line discounts and line refunds), cost of goods, gross profit, margin, cost coverage. Sort by net sales, units or profit. Also totals per main category.
+- **`/discounts`:**
+  - totals for coupons, automatic promotions and staff discounts;
+  - per coupon: orders, discount given, sales, average order, sales per ৳1 off, and customers whose first order used it;
+  - per promotion, read from what each order recorded.
+- **`/customers`:** customers who ordered (new vs returning), repeat rate, guest orders, the top 50 customers, and orders by district.
+- **`/couriers`:**
+  - per courier: parcels, delivered, returned or failed, still on the way, delivered %, average days to deliver, COD delivered, courier fees, payouts and unresolved shortfall;
+  - COD status totals, including what's still with couriers or staff.
+- **`/returns`:** refunds by method and reason, returns by status and reason, most-refunded products, and the return rate against orders placed.
+- **`/tax`:** tax per day or month, with sales and delivery charged.
+- **`/stock`:** stock on hand at cost and at selling price, per category and per product (options use their own cost and price), with units that have no cost counted.
+- **Counting dates:** orders count on the day they were placed, and a refund counts against its order's day, so a past period's profit doesn't change when a refund comes in later. The returns report lists refunds by the day they were given.
+
+### 28.4 Store admin
+- **Reports** in the Overview menu, with tabs: Sales & profit, Products, Coupons & promotions, Customers, Couriers & COD, Returns & refunds, Tax, Stock value.
+- **Date bar:** Today, 7 days, 30 days, This month, Last month, This year, or custom dates, plus "All placed orders" / "Delivered orders only".
+  - The choice is kept in the URL, so switching tabs keeps it and a report can be reloaded or shared.
+- **Sales & profit:**
+  - 8 summary tiles, with changes vs the previous period;
+  - a line chart of net sales and gross profit, with a hover tooltip showing both values, orders and margin;
+  - tables by source, by payment method and by period.
+  - The two chart colours passed the colour-blindness and contrast checks, with separate steps for dark mode.
+- **Warnings and CSV:** a warning appears when some units sold had no cost price. Every table has **CSV**: a UTF-8 file with a BOM so Excel shows ৳ and Bangla, named with the date range.
+
+### 28.5 Checked
+- **Tests:** 411/411 API tests, including 37 new report tests (time zones, including daylight saving; ranges; weeks and months across year ends; profit maths).
+  - The same 2 unhandled errors from the old batch-9 smoke test remain; they were there before this batch.
+- **By API:**
+  - every report ran on the dev data;
+  - sales totals and cost of goods matched a hand-written SQL query exactly (36 orders, ৳220,610 items, ৳23,531.41 cost);
+  - reversed and impossible dates were refused, "delivered only" cut the orders to 5, and a request without sign-in got 401.
+- **Chromium:**
+  - opened Reports from the menu and chose "This year" (the URL updated);
+  - the chart tooltip showed;
+  - downloaded a CSV and checked its header and rows;
+  - opened every tab (the date range carried over) and switched to delivered orders only.
+  - The only error was the admin's missing `favicon.ico`.
+  - Fixed along the way: month labels said "Aug 26" (now "Aug 2026"), and the by-source / by-payment tables were cramped side by side (now stacked unless the screen is very wide).
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before. The admin apps build.
+
+### 28.6 Not done
+- Reports per storefront (waits for multi-storefront), reports e-mailed on a schedule, and PDF export.
+- VAT-inclusive pricing: tax is still added on top.
+- Refunds don't reduce the tax report.
+- Past lines' costs are today's cost prices (the migration's best guess).
+- At phone width the admin sidebar stays open and the header is wider than the screen, on every admin page. That needs a separate layout fix.
+
+---
+
+## ✅ BATCH #29 — Warehouses, stock held for orders, and transfers (2026-09-28)
+Stock is now counted per warehouse, and an order holds (reserves) its units until a parcel is packed, instead of taking them at checkout. Staff can add warehouses, send stock between them (recording anything that went missing on the way), choose which warehouse an order ships from, and receive purchases into a chosen warehouse. All stock changes now go through one ledger, so the numbers stay consistent.
+
+### 29.1 Schema and data (migration `warehouses`)
+- **`Warehouse`:** name, code (unique per store), address, phone, default, in use, sort order.
+- **`WarehouseStock`:** one row per product (no options) or option per warehouse: **on hand**, **held for orders**, and a shelf / bin note.
+  - A product's and option's `stockQty` / `reservedStock` are the **totals over all warehouses**, so the storefront and reports keep working.
+  - A product with options now always totals its options (before, the two had drifted apart: 50 vs 48 and so on).
+- **`StockTransfer` / `StockTransferItem`:** `TR-0001`, from, to, status (on the way / received / cancelled), sent and received quantities, notes.
+- **New fields:**
+  - `Order.warehouseId` (ships from);
+  - `OrderItem.qtyReserved` (still held);
+  - `Shipment.warehouseId` (packed at);
+  - `Purchase.warehouseId` (received into);
+  - `InventoryLog.warehouseId`.
+- **Data conversion:**
+  - every store got a "Main warehouse" (MAIN) holding all current stock;
+  - open orders' units that weren't in a parcel yet went back on the shelf and are now held for those orders, so what's available didn't change. On the dev data, on hand went from 375 to 411 with 36 held;
+  - existing orders, parcels, purchases and stock logs belong to MAIN.
+
+### 29.2 Rules and the ledger (`modules/stock`)
+- **`stock.rules.ts` (32 table tests):**
+  - which warehouse an order ships from: the default one if it has everything free, otherwise the first that does, otherwise the default;
+  - splitting refunded units into "stop holding" and "back on the shelf";
+  - checking a transfer receipt and its shortfall;
+  - transfer checks, codes and warehouse codes.
+- **`stock.ledger.ts`:** the only code that changes stock.
+  - Every move updates the warehouse row, the option or product totals and the parent product together, and logs on-hand changes with the warehouse.
+  - Guards are single conditional updates, and the guarded one runs first, so a refused move changes nothing:
+    - **available**, for placing orders: the total must have the units free, unless the product allows backorders;
+    - **on shelf**, for packing, adjustments and cancelled purchases;
+    - **free**, for sending transfers: on the shelf and not held for orders.
+  - Stock written before warehouses existed (seed data, imports) is adopted into the default warehouse the first time it's touched.
+
+### 29.3 Every stock flow moved onto the ledger
+- **Checkout and staff-entered orders:**
+  - the order picks its warehouse and **holds** each line (and free gift);
+  - selling more than is free is refused; a gift that ran out is left off, as before.
+- **Packing a parcel** takes the units off that warehouse's shelf and ends their hold. It is refused when that warehouse doesn't have them on the shelf.
+- **A parcel coming back:** a **cancelled** or **returned** parcel puts its goods back on the shelf where it was packed, and holds them again while the order is open.
+- **Cancelling an order** releases what it still holds and unpacks parcels not yet handed to a courier. Refunded and failed orders release their holds too. Units already with a courier or the customer come back through a returned parcel or a return (before, cancelling or refunding a shipped or delivered order put everything back on the shelf even though the goods weren't there).
+- **Returns and refunds:**
+  - a return received puts the goods back on the order's warehouse shelf;
+  - a refund with restock first stops holding units that never left, then puts the rest back;
+  - a full refund releases anything still held.
+- **Purchases** go into a chosen warehouse (default otherwise). Cancelling one takes them back out of that warehouse, and is refused if they're no longer on its shelf.
+- **Stock adjustments:** each line can name a warehouse, and can't take a shelf below zero.
+- **Product editor:**
+  - saving no longer overwrites stock: the stock box sets the total by adding or removing the difference in the default warehouse;
+  - new products and options get their opening stock the same way;
+  - a product's totals are recalculated when its options change.
+- **Removed:**
+  - the old unused cart-checkout routes (`POST /api/admin/orders`, `/checkout/from-cart`), which took stock outside all of this;
+  - five unused repository methods that wrote stock directly;
+  - the old `/inventory/transfer` endpoint, which subtracted and re-added to the same total and did nothing.
+
+### 29.4 API (`/api/admin/warehouses`)
+- **Warehouses:**
+  - list with on hand, held, available, value at cost and incoming transfers;
+  - add, edit, **make default**;
+  - turn off only when empty and not the default; delete only if never used.
+- **Stock by warehouse:** `GET /stock?search=&warehouseId=`, each product / option with its stock in every warehouse.
+- **Transfers:**
+  - send (stock leaves at once; only free units);
+  - receive with actual counts (a shortfall needs a note and is written off);
+  - cancel while on the way (everything goes back);
+  - list and detail.
+- **Orders:**
+  - `GET /orders/:id`: each line's held units against what's on that warehouse's shelf, and what's free elsewhere;
+  - `POST /orders/:id`: ship from another warehouse (the holds move there).
+- **Stock list and permissions:** the stock list (`/admin/inventory/stock`) adds a per-warehouse breakdown. Permissions reuse `inventory.view` / `inventory.edit` (and `orders.view` / `orders.edit` for an order's warehouse).
+
+### 29.5 Store admin
+- **Catalog menu:** Stock, **Warehouses** and **Transfers**. The sidebar now highlights only the most specific item, so Warehouses no longer lights up Stock as well.
+- **Warehouses:** a card per warehouse (on the shelf, held for orders, value at cost, products in stock, transfers on the way) with Edit, Make default and Delete, and an add / edit dialog.
+- **Transfers:**
+  - tabs for on the way / received / cancelled / all;
+  - **New transfer**: from / to, search what's free in the source, quantities checked against what's free, a note;
+  - the detail dialog receives with per-line "arrived" counts (a shortfall needs a reason) or cancels.
+- **Stock page:** with several warehouses, each row shows per-warehouse chips (e.g. `MAIN 47/5 · CTG 2`, meaning 47 on hand, 5 held), and the Adjust sheet asks which warehouse; "set to" counts use that warehouse's own shelf. With one warehouse it works as before.
+- **Order page:** a new **Ships from** card, shown when there's a choice or a problem. It shows each line's held units against what's on the shelf, what's free elsewhere, a warning with a transfer link when the warehouse is short, and a warehouse picker while the order is open.
+- **Record purchase:** "Receive into" warehouse; the purchase page shows it.
+
+### 29.6 Checked
+- **Tests:** 449/449 API tests:
+  - 32 stock rule tests;
+  - a new database test (`tests/integration/stock.db.test.ts`) that runs the real services and checks after every step that the warehouse rows add up to the product's totals:
+    - holding and the oversell refusal (a refused order changes nothing);
+    - packing, a cancelled parcel held again, cancelling the order;
+    - cancelling with a packed parcel unpacks it;
+    - a transfer of free stock only, a receipt with a shortfall (refused without a note), and a cancelled transfer;
+    - an order that can't be packed where the stock isn't, until it's moved;
+    - the editor's stock box.
+  - The same 2 unhandled errors from the old batch-9 smoke test remain; they were there before.
+- **By API (dev data), each step's numbers checked:**
+  - a staff order held 3 units;
+  - a transfer of 10 took them off MAIN, and 9 were received at CTG (1 short with a note; refused without one);
+  - the order moved to CTG and its holds moved with it;
+  - packing took 3 off CTG's shelf;
+  - a cancelled parcel put them back, held;
+  - cancelling the order released them;
+  - an oversized order was refused, and a cancelled transfer returned its stock;
+  - turning off or deleting a warehouse with stock was refused.
+  - A database-wide check found **0** options or products whose warehouse rows don't add up, and the units held in warehouses match what open order lines hold.
+- **Chromium:**
+  - Warehouses page;
+  - a new transfer (picker, quantities, note), then receiving it with 1 missing (the button stayed off until a reason was given) and the transfer list;
+  - Stock page per-warehouse chips;
+  - the order's Ships from card: moving the order to CTG moved its 2 held units there;
+  - the purchase form's warehouse choice;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before (several have fewer). The admin and storefront build.
+
+### 29.7 Not done
+- One order ships from one warehouse (no splitting one order across warehouses), and orders don't pick the warehouse nearest the customer.
+- Stock on its way between warehouses isn't counted anywhere until received, so stock value dips while a transfer is on the road.
+- Shelf / bin locations are stored but not editable yet.
+- The storefront shows total availability across all warehouses; there's no "available in Chattogram" per branch.
+- A full stock count (stocktake) screen per warehouse.
+
+## ✅ BATCH #30 — Loyalty levels, wallet with cashback, and refer a friend (2026-09-28)
+Customers now have a wallet they can pay from at checkout, earn cashback when an order is delivered, move up loyalty levels (Bronze / Silver / Gold) that give a discount on every order, and can share a referral link that rewards both friends. Staff set it all up on a new **Loyalty & wallet** page and can add to or take from a customer's wallet.
+
+### 30.1 Schema and data (migration `loyalty`)
+- **`LoyaltySettings`** (one per store):
+  - wallet on/off and the most of an order it may pay (%);
+  - cashback on/off, %, minimum order, cap per order;
+  - levels on/off;
+  - referrals on/off, the sharer's and friend's rewards, and the friend's minimum first order.
+- **`LoyaltyLevel`:** name (unique per store), minimum spend, discount %, extra cashback %, colour.
+- **`WalletTransaction`:** the wallet ledger: amount, kind (cashback, paid for an order, returned from an order, refund, referral, staff), order, note, balance after, staff member.
+- **New fields:**
+  - `Customer.loyaltyLevelId`, `qualifyingSpend`;
+  - `Order.memberDiscount`, `memberLevel`, `walletUsed`, `cashbackAmount`, `cashbackAt`.
+- **Data conversion:**
+  - every store got settings (all off) and Bronze ৳0 / Silver ৳10,000 (2% off, +1% cashback) / Gold ৳30,000 (5% off, +2%);
+  - existing store credit became an opening wallet entry, so every balance has a history;
+  - spend was counted from delivered orders (items less discounts and refunds, never below zero per order) and levels assigned.
+- **Permissions:** a new `loyalty` area (view / edit). Marketing gets both; finance and viewer get view. Custom roles follow their promotions permissions.
+
+### 30.2 Rules and the ledger (`modules/loyalty`)
+- **`loyalty.rules.ts` (43 table tests):** level for a spend and the next level, an order's spend, member discount, how much the wallet may pay, cashback, how much cashback a refund takes back, why a referral code can't be used, referral codes.
+- **`loyalty.ledger.ts`:**
+  - `walletMove` is the only code that changes a balance: one guarded update that can never go below zero, plus a ledger row;
+  - **order placed:** takes the wallet part (refused if the balance changed meanwhile) and links a referred friend's first qualifying order;
+  - **delivered:** pays cashback (store % + level %), rewards both friends for a referral, recounts spend and level;
+  - **refunded:** takes back the refunded share of the cashback and recounts spend;
+  - **cancelled / refunded in full / failed:** gives the wallet part back once, takes back cashback, and frees the referral for a later order.
+
+### 30.3 Checkout and orders
+- **Order totals:**
+  - the **member discount** is the level's % off the items after promotions, the coupon and any manual discount, and counts in the order's discounts;
+  - the **wallet** is recorded as `walletUsed`, and the grand total is what's left for the payment method. So bKash / COD / gateways work unchanged, and an order paid entirely from the wallet counts as paid.
+- **Where it applies:**
+  - the storefront quote and the cart prices return the level and the wallet balance for a signed-in customer;
+  - staff-entered orders can use the customer's wallet too.
+- **Refunds:** "refund to store credit" now goes through the wallet ledger.
+- **Invoices** show a "Paid from wallet" line.
+
+### 30.4 API
+- **Admin (`/api/admin/loyalty`):**
+  - overview with stats (in wallets, cashback given, spent from wallets, referral rewards);
+  - settings;
+  - levels (add / edit / delete; customers are re-levelled after a change);
+  - referrals by status;
+  - a customer's wallet, level and referral;
+  - add to or take from a wallet with a note.
+- **Storefront (`/api/storefront/account`):**
+  - `/loyalty`: balance, level, progress, history;
+  - `/referral`: code (made on first ask), friends and earnings;
+  - `/referral/claim`: only for a new customer with someone else's code.
+
+### 30.5 Screens
+- **Store admin:**
+  - **Marketing → Loyalty & wallet:** stats, settings, the levels table with an add / edit dialog, and the referral list;
+  - the customer page's **Wallet & level** tab: balance with Add / Take, level with progress, referral code and the wallet history;
+  - the order page shows the member discount, wallet and cashback;
+  - the new order form has a "use wallet" toggle and shows the member discount.
+- **Storefront:**
+  - **Account → Wallet** (balance, cashback rate, level progress, history) and **Refer a friend** (link with Copy / WhatsApp / Share, friends and earnings);
+  - a `?ref=CODE` link is remembered and claimed once the visitor signs in or registers;
+  - checkout shows the member discount line and a **Pay from my wallet** option;
+  - the thank-you and order pages show member discount, wallet and cashback.
+
+### 30.6 Checked
+- **Tests:** 498/498 API tests:
+  - 43 rule tests;
+  - a new database test (`tests/integration/loyalty.db.test.ts`) through the real order status changes:
+    - the ledger and the below-zero refusal;
+    - wallet taken at order and given back once on cancel;
+    - cashback only on delivery;
+    - the level-up and a partial refund taking back a share;
+    - the member discount;
+    - both referral rewards, including own-code and double-claim refusals;
+    - spending a whole balance with paisa in it.
+  - The same 2 old unhandled errors from the batch-9 smoke test remain.
+- **Bug found by the browser check:** paying with a wallet's entire balance (৳95.76) was refused as "balance changed". The amount went to Postgres as a float, and adding it to the exact decimal balance missed zero by a hair. The amount is now sent as an exact decimal; the new test above fails without the fix.
+- **By API (dev data):**
+  - the wallet paid ৳1,500 (the smaller of the balance and 50% of a ৳3,670.80 order);
+  - cashback was 3% of ৳3,192 = ৳95.76 on delivery;
+  - the Silver 2% discount was right;
+  - overdrawing, own-code referrals and duplicate level names were refused.
+- **Chromium:**
+  - admin Loyalty & wallet page and the customer's Wallet & level tab;
+  - storefront Wallet and Refer pages;
+  - a signed-in checkout with the Silver discount (−৳77.22) and "Pay from my wallet" (−৳95.76), placed, with both lines on the thank-you page;
+  - a `?ref=` link remembered;
+  - no failed requests or page errors.
+- **Lint and builds:** new files lint clean (only warnings shared with the other database tests); edited files have no more lint errors than before. API typecheck passes; admin and storefront build.
+
+### 30.7 Not done
+- Loyalty points (the older points fields) are left as they were; the wallet and cashback replace them in practice.
+- Levels don't expire or drop with time (spend is lifetime, less refunds).
+- No wallet top-up with money, withdrawals, or cashback expiry.
+- No referral fraud checks beyond same-phone and "new customers only"; no payout to anything other than the wallet.
+- Emails / SMS for cashback and referral rewards.
+
+## ✅ BATCH #31 — Bangla storefront and a Unicode invoice font (2026-09-28)
+Shoppers can switch the storefront between English and বাংলা. Every button, form, checkout step, account page and message is translated. Product, category, brand and menu names show in Bangla wherever the shop has entered them. Invoices and shipping labels now print Bangla and the ৳ sign properly (before, Bangla came out as "?" and ৳ as "Tk"), and an order's invoice is in the language it was placed in.
+
+### 31.1 Invoice and label font (`modules/invoices/pdf-fonts.ts`)
+- **One font:**
+  - `assets/fonts/InvoiceSans-{Regular,Bold}.ttf` is Noto Sans (Latin, punctuation, currency) merged with Noto Sans Bengali (Bangla and ৳), about 150 KB each, SIL OFL (`assets/fonts/OFL.txt`);
+  - `scripts/build-invoice-font.py` rebuilds it from the Noto sources with fontTools.
+- **Shaping:**
+  - pdfkit lays text out with fontkit, which gets some Bangla joined letters wrong ("চন্দ্র" lost its ra-phala, and a space after it disappeared). This was checked with the original Noto font too, so the merge isn't the cause;
+  - the font's layout is swapped for HarfBuzz (`harfbuzzjs`, WebAssembly), the shaper browsers use; pdfkit still wraps, aligns, subsets and embeds.
+- **Copying text:**
+  - each glyph copies as its own letter, and letters merged into a joined glyph go on that glyph, so copying from the PDF gives readable Bangla (vowel signs come out in the order they're drawn, as in most Bangla PDFs);
+  - a glyph with no letter of its own copies as an invisible ZWNJ, since an empty entry made PDF viewers paste junk.
+- **What prints:**
+  - `pdfText` keeps Bangla, ৳ and Latin, and turns what the font can't draw (emoji, other scripts) into "?";
+  - BDT amounts print as ৳4,290.00 on invoices and labels.
+- **Bangla invoices:**
+  - `Order.locale` (migration `order_locale`) records the language the customer shopped in;
+  - that order's invoice uses Bangla labels and Bangla dates (`invoice.text.ts`);
+  - letter spacing is off for Bangla headings, because it pulls vowel signs away from their letters.
+
+### 31.2 API
+- **Picking the language:** `ctx.locale` comes from the `X-Locale` header (browser) or `?lang=` (storefront server, where it also keeps cached pages apart per language). A storefront request that names no language gets the shop's default (`settings/languages.ts`, cached for a minute).
+- **Translated rows:**
+  - `core/translations.ts` (`tr`, `mergeTranslations`, `normalizeLocale`, with unit tests);
+  - rows keep other languages in their `translations` JSON (`{ "bn": { "name": … } }`), and anything not translated falls back to the row's own text;
+  - applied to product cards, product pages (name, short and long description, breadcrumbs), categories, brands, search suggestions and header/footer menus.
+- **Search** also matches Bangla product and category names ("শাড়ি" finds the Jamdani saree).
+- **Saving:**
+  - products, categories and brands take `translations.bn` (blank removes a text);
+  - menu links take `titleBn`.
+- **Settings:** `GET/PUT /api/admin/settings/languages` (English always on, Bangla on/off, default language). The storefront's `/content/site` returns the languages it offers.
+- **Seed:** Bangla names for the demo catalogue, and Bangla switched on.
+
+### 31.3 Storefront
+- **Translation module (`storefront-base/src/i18n`):**
+  - `translate()` / `useT()` with the English text as the key and `{placeholders}`; a missing translation shows the English;
+  - `bn.ts` holds about 760 Bangla texts;
+  - `msg("…")` marks English kept in lists (sort options, status words, gateway descriptions) so it's checked too.
+- **Coverage test:** `tests/i18n.test.ts` reads every `t("…")` and `msg("…")` in both storefronts and fails if one has no Bangla, or if its placeholders differ.
+- **Language switch:**
+  - an "English / বাংলা" button in the header (and the mobile menu), shown when the shop offers both;
+  - the choice is kept in a `lang` cookie for a year;
+  - server pages read it, `<html lang>` follows it, and API calls send it.
+- **What's translated:**
+  - navbar, footer, cart drawer, product cards, product list and filters, product page (including the review and question forms), cart, the whole checkout (steps, address, delivery, payment methods, wallet, coupons, summary), thank-you page;
+  - the account area (log-in, register, password reset, profile, orders, order detail with parcels and returns, addresses, wallet, refer a friend), order tracking, search, wishlist, flash sale, FAQ, blog list, CMS pages, home sections and toasts.
+- **Shop-written text:** the default homepage and menu words ("Home", "Shop", "Fast Delivery"…) are in the dictionary, so a shop that kept the defaults reads in Bangla too.
+- **Dates and prices:** dates in Bangla (`bn-BD`); prices keep Latin digits (৳ / BDT 4,290), as most Bangladeshi shops show them.
+- **Web font:** Noto Sans Bengali (100 KB WOFF2, weight axis only) is served by the shop and loaded only for Bangla characters (`unicode-range`), so English pages don't fetch it.
+- **Removed:** an old placeholder "Write a Review" card on the product page. It sat next to the real review form and only showed a toast saying reviews weren't open.
+- **Fix:** the thank-you page no longer says "Thank you for shopping with Fashion BD" on every store.
+
+### 31.4 Store admin
+- **Settings → Languages:** offer Bangla, and choose which language the storefront opens in.
+- **Product editor (new and edit):** an "In Bangla (বাংলা)" box for name, short and long description.
+- **Categories and brands:** Bangla name and description.
+- **Menus:** a Bangla label beside each link.
+
+### 31.5 Checked
+- **Tests:** 510/510 API tests, including:
+  - translation helpers and language settings;
+  - a Bangla invoice renders;
+  - HarfBuzz shaping keeps every character copyable, and "চন্দ্র" shapes to fewer glyphs;
+  - 4 storefront-base tests (every one of 720 texts has Bangla with matching placeholders).
+  - The same 2 old unhandled errors from the batch-9 smoke test remain.
+- **PDFs, rendered and looked at:**
+  - an invoice with Bangla names and addresses ("চন্দ্রিমা", "স্ত্রী", "ক্ষেত্রপাড়া") and ৳;
+  - a real Bangla order's invoice, with Bangla labels and dates.
+- **By API:**
+  - products, categories, brands and breadcrumbs come back in Bangla with `X-Locale: bn` or `?lang=bn`, and in English without;
+  - a Bangla search finds products;
+  - language settings drop unknown codes and fall back to English for a bad default.
+- **Chromium:**
+  - the header switch (English → বাংলা) sets `lang="bn"` and reloads in Bangla: home page, product page, cart, full checkout;
+  - a guest order placed in Bangla, with the thank-you page in Bangla and the order stored as `bn`;
+  - log-in and wallet pages in Bangla;
+  - admin Languages page; saving a Bangla short description on a product (stored; the empty box was dropped); category and menu editors;
+  - no failed requests or page errors.
+- **Lint and builds:**
+  - new files lint clean, and edited files have no more lint errors than before (two checkout components now import `cn` / `formatMoney` from `@ecom/utils`, which removed some existing errors too);
+  - API typecheck passes; admin and storefront build.
+
+### 31.6 Not done
+- **Messages worded by the API** stay English: cart problems, promotion nudges such as "Add ৳710 more for free delivery", coupon summaries, and SMS/email templates.
+- **Order lines** keep the product name as it was when ordered (English), on the order, invoice and account pages.
+- **Shop-written text** such as the announcement bar, promotion headlines, CMS page bodies, blog posts and FAQs has no Bangla field yet; it shows as entered. The About page is fixed English text.
+- **Admin panel** is English only.
+- **Other:** no Arabic or right-to-left layout; no Bangla digits for prices; SEO metadata stays English.
+
+## ✅ BATCH #32 (part 1) — Several storefronts in one store (2026-09-28)
+A store can now run more than one shop front, for example a main shop and a kids' shop on another web address. Each storefront has its own web addresses, look (name, logo, colour, announcement, footer), homepage, menus, product range and prices. Stock, customers, staff and orders stay shared, and every order records the storefront it was placed on. A store with one storefront works exactly as before. Part 2 will add payment methods, delivery and couriers, promotions, staff access and reports per storefront.
+
+### 32.1 Data (migration `storefronts`)
+- **`Storefront`:**
+  - name, code (e.g. `KIDS`), default flag, open/closed;
+  - a price change in % (`priceAdjustPercent`);
+  - "sell every product here" (`includeNewProducts`).
+- **Every existing store** gets one default storefront, `MAIN`, named after the store, and its past orders are put on it. A store without one gets it made on first use (`storefronts.context.ts`).
+- **Links to a storefront (`storefrontId`):**
+  - `Domain.storefrontId`: which storefront a web address opens (none: the default one);
+  - `Menu` and `HomepageSection`: none means the default storefront's, which the others fall back to;
+  - `Order.storefrontId`.
+- **`ProductStorefront`:** one row per product and storefront, holding whether it's sold there and an optional own price (regular and sale).
+- **The look:** a storefront's own look is saved as its own `ThemeConfig` row (`storefront-<id>`); without one, it shows the default storefront's.
+
+### 32.2 Which storefront a request is for
+- **Resolution:**
+  - the tenant middleware already finds the store from the request's web address, and now also its storefront (`ctx.storefrontId`);
+  - an address not linked to a storefront, or linked to a closed one, opens the default storefront;
+  - storefront settings are cached for a minute.
+- **The storefront app** now sends the address the visitor opened (`Host` / `X-Forwarded-Host`) on its server-side API calls, instead of one fixed address. One running app can therefore serve several storefronts, and Next's cache keeps their pages apart.
+- **Links in the sitemap, robots file and product page** use that address too.
+
+### 32.3 Range and prices (`storefronts.rules.ts`, `storefront.service.ts`)
+- **Price, in this order:**
+  1. the product's own price in that storefront (applies to all its options);
+  2. otherwise the product's or option's price with the storefront's % change, rounded to whole taka, keeping the sale window;
+  3. otherwise the price as it is.
+- **What is sold:**
+  - the product's row decides;
+  - with no row, the storefront's "sell every product here" setting decides (always on for the default storefront).
+- **Where it applies:**
+  - product lists, sorting and filtering by price (done on the storefront's own prices when it has any), product pages, product cards (wishlist, search suggestions, flash-sale page, recommendations);
+  - cart prices and checkout: a shopper can't buy a product their storefront doesn't sell. Staff taking an order by hand can still sell anything.
+- **Flash sales:** a flash sale with a set price charges that price in every storefront; a percentage flash sale works from the storefront's price.
+
+### 32.4 Store admin
+- **Online Store → Storefronts:**
+  - one card per storefront, showing its prices, product range, web addresses and number of orders;
+  - add, edit (name, code, price change, sell every product, open), make default, delete (only with no orders);
+  - add a web address, or move an address to another storefront;
+  - links to that storefront's look, homepage, menus and orders.
+- **Storefront picker** on Theme, Homepage and Menus, shown once there is more than one storefront:
+  - it says whether the chosen storefront has its own version or uses the default one's;
+  - "Use default look" and homepage "Reset" go back to the default storefront's.
+- **Product editor (Pricing tab):** a "Storefronts" box with, for each storefront, "Sold on …", an own price and sale price, and the price it shows otherwise.
+- **Orders:**
+  - the list has a storefront filter (the Storefronts page links to it) and a storefront code beside each order number;
+  - the order page shows the storefront.
+
+### 32.5 API
+- **`/api/admin/storefronts`:**
+  - `GET` / `POST`, `PATCH` / `DELETE /:id`, `POST /:id/default`;
+  - `POST /:id/domains`, `PATCH /domains/:domainId`;
+  - `POST /:id/products` (add many / take many off);
+  - `GET` / `PUT /products/:productId`.
+- **Permissions:** Online Store view/edit; Products view/edit for product rows.
+- **Content endpoints:** `theme`, `homepage` and `menus` take `?storefrontId=`, and `DELETE /theme?storefrontId=` removes a storefront's own look.
+- **Orders:** the admin order list takes `storefrontId=`; list and detail include the storefront.
+
+### 32.6 Checked
+- **Tests:** 532/532 API tests. New ones:
+  - 9 unit tests: prices, range, codes, web addresses;
+  - 13 database tests:
+    - default storefront made on first use;
+    - codes, and the % change and own prices on product lists;
+    - a hidden product is missing from the list, product page and cart, but staff can still sell it;
+    - filtering and sorting on storefront prices;
+    - a storefront that doesn't sell every product;
+    - unchanged rows removed;
+    - the look, homepage and menus fall back to the default storefront's and go back on reset;
+    - web addresses: clean-up, duplicates, closed storefront;
+    - one default that can't be closed or deleted;
+    - no deleting a storefront that has orders.
+- **By API:**
+  - a second storefront "Kids Corner" (+10%) opened at `127.0.0.1:3000`, with `localhost:3000` staying on the main one;
+  - the same product list returned the Kids prices (own price ৳899/৳999, others +10%) and left out the hidden product;
+  - cart prices refused the hidden product;
+  - `/content/site` returned each storefront's own name, colour and announcement.
+- **Chromium:**
+  - admin Storefronts page; the theme editor switching between storefronts; the homepage note ("Shows the default storefront's homepage");
+  - the product Storefronts box, saved and then cleared;
+  - the orders page filtered by storefront.
+  - On the storefront, `127.0.0.1:3000` shows Kids Corner (blue, own announcement, ৳899 for the shirt that is ৳3,690 on the main shop), with the hidden shirt left out;
+  - a guest order there was stored with the Kids storefront at ৳899;
+  - no failed requests or page errors.
+- **Lint and builds:**
+  - new files lint clean, and edited files have no more lint errors than before;
+  - API typecheck passes; admin and storefront build.
+
+### 32.7 Not done (part 2 and later)
+- **Still shared by every storefront:** payment methods, delivery zones and couriers, promotions and coupons, SMS/email settings and invoice details.
+- **Staff access:** can't be limited to some storefronts yet.
+- **Reports:** can't be split by storefront yet.
+- **Admin manual orders** go on the default storefront; there is no picker yet.
+- **Per-option prices:** there are no per-option own prices per storefront.
+- **Category and brand product counts** on the storefront count every published product, not just the storefront's range.
+- **Web addresses:**
+  - a shop can add one without proof that it owns the domain; it only works once the domain's DNS points at us, and a taken address is refused;
+  - the admin's "View store" uses a storefront's first web address.
+- **Hard-coded store name:** the about page and default site metadata still name the demo store.
+
+## ✅ BATCH #32 (part 2) — Payments, delivery, couriers, promotions, staff and reports per storefront (2026-09-28)
+Each storefront can now choose its own payment methods, delivery charges and courier, and run its own promotions and coupons. Staff can be limited to some storefronts, reports split by storefront, and staff taking an order by phone pick which storefront it's for. With one storefront nothing changes.
+
+### 32.8 Data (migration `storefront_settings`)
+- **`Storefront.paymentGateways`:** the payment methods offered there (empty: every enabled one).
+- **`Storefront.courierAccountId`:** the courier suggested for its parcels.
+- **"Only on these storefronts" lists (`storefrontIds`, empty: all):** on `ShippingZone`, `Promotion`, `Coupon` and `AdminUser`.
+- **Deleting a storefront:**
+  - it is taken out of those lists;
+  - deleting is refused while something is limited to that storefront alone, because an emptied list would mean "every storefront" (for a staff member, full access).
+
+### 32.9 Checkout (`storefronts.rules.ts`)
+- **Payment:** the checkout lists only the storefront's methods, and placing an order with another one is refused. Staff recording a manual order can still use any method the store has.
+- **Delivery:**
+  - a zone limited to some storefronts is used only there;
+  - where a storefront has its own zone for an address, that zone replaces the shared ones, even when a shared zone is more specific. So "Kids Corner delivery" (all of Bangladesh, ৳40) wins over "Dhaka Metro" on the Kids storefront.
+- **Promotions and coupons:**
+  - promotions limited to other storefronts don't apply and aren't shown in the storefront's slots;
+  - a coupon for another storefront reads "This coupon code is not valid" and isn't listed in the cart.
+- **Couriers:**
+  - the booking dialog picks the order's storefront courier first;
+  - bulk booking has "Each storefront's courier", which sends each order to its storefront's courier (an order whose storefront has none fails with a clear reason).
+
+### 32.10 Staff limited to storefronts
+- **Setting it:**
+  - in Settings → Staff, "Works on" ticks storefronts (none: all); owners always work on every storefront;
+  - the list shows "Kids Corner only";
+  - someone limited can only add or change staff within their own storefronts, can't make anyone unlimited, and can't change their own.
+- **What they see:**
+  - only their storefronts' orders (list, tab counts, detail, status changes), parcels, returns and payment records;
+  - only their storefronts in reports;
+  - only their storefronts on the Storefronts page, and they can edit only those storefronts' look, homepage, menus and product rows.
+- **What they can't do:** add, delete or change the default storefront, or move web addresses.
+- **Mechanics:**
+  - the limit is cached with the permissions (5 minutes, cleared when the staff member is saved) and carried on each request (`ctx.admin.storefrontIds`);
+  - `staffOrderScope` and `assertStaffStorefront` apply it.
+- **Storefront names:** `GET /api/admin/storefronts/options` gives the names any staff member may filter by, so an order manager without Online Store access still gets the storefront filter.
+
+### 32.11 Reports and manual orders
+- **Reports:**
+  - every report takes `storefrontId` (limited staff always get theirs);
+  - order, parcel, COD, refund and return figures follow it;
+  - courier settlements aren't per order, so they are left out when looking at some storefronts only;
+  - Sales adds a "By storefront" table;
+  - the report bar has a storefront picker.
+- **Manual orders:** the New order page has a Storefront field. Its prices, product range, promotions, coupons and delivery zones apply, and the order is recorded on it (limited staff: one of theirs).
+
+### 32.12 Store admin
+- **Storefront dialog:** payment methods (ticks) and courier.
+- **"Storefronts" ticks:** on delivery zones, promotions, coupons and staff.
+- **Other screens:** the report storefront picker, the New order storefront field, and the courier preselect and bulk option.
+
+### 32.13 Checked
+- **Tests:** 544/544 API tests. New ones:
+  - 3 unit tests: storefront lists, payment methods, own zones before shared;
+  - 9 database tests:
+    - payment methods and unknown codes;
+    - own vs shared delivery;
+    - promotion and coupon per storefront;
+    - staff order list and detail;
+    - reports split and refused for another storefront;
+    - limited staff editing storefronts;
+    - a manual order at the Kids price and promotion;
+    - a limited editor giving access;
+    - the delete guard, and removal from shared lists.
+- **Chromium, as the owner:**
+  - set Kids Corner to cash on delivery only;
+  - limited "Eid Sale" to the main storefront;
+  - added "Kids Staff" (Order Manager, Kids Corner only);
+  - Sales shows "By storefront".
+- **Chromium, on the storefronts:**
+  - Kids checkout (`127.0.0.1:3000`) offers no bKash, has "Kids delivery" ৳40 and no Eid Sale, and an order was placed;
+  - the main checkout still has bKash, courier delivery and Eid Sale.
+- **Chromium, as the Kids staff member:** the order list shows only the two Kids orders, with no errors.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before; API typecheck passes; admin and storefront build.
+
+### 32.14 Not done
+- **Payment and courier accounts:** a storefront can pick which methods it offers, but not its own bKash / Nagad number or gateway keys. Couriers are the store's accounts, with one suggested per storefront.
+- **Still shared by every storefront:** SMS and email settings, invoice details and flash sales.
+- **Staff limits** cover orders, parcels, returns, payment records, reports and storefront content. Other pages (customers, stock, dashboard figures, the COD / settlement pages) still show the whole store.
+- **Per-option prices:** there are no per-option own prices per storefront.
+
+## ✅ BATCH #33 (part 1) — Wholesale: business accounts, bulk prices, price by margin (2026-09-29)
+Shops can now sell to businesses. A customer applies for a business account from their account page, staff approve it, and approved accounts get business prices. Any product (or single option) can have bulk prices ("10 or more at ৳3,090 each"), either for business accounts only or for every shopper. A new "Price by margin" screen shows cost, price and margin for everything and works out new prices from a target margin. Quotations are part 2.
+
+### 33.1 Data (migration `wholesale`)
+- **`WholesaleSettings`** (one per store):
+  - `enabled`: the shop sells to businesses (off by default);
+  - `autoApprove`: approve applications without review;
+  - `intro`: text shown above the application form.
+- **`BusinessAccount`** (one per customer):
+  - business name and type, phone, address, trade licence, VAT registration (BIN), the applicant's note;
+  - `status`: PENDING, APPROVED, REJECTED or SUSPENDED;
+  - `reviewNote` (the reason the customer sees), `reviewedAt`, `reviewedById`.
+- **`PriceTier`:**
+  - `productId`, optional `variantId`, `minQty`, `price`;
+  - `forEveryone`: false means business accounts only.
+- **Permissions:** no new ones. Business accounts use `customers.view` / `customers.edit`; bulk prices and the margin screen use `products.view` / `products.edit`.
+
+### 33.2 Rules (`wholesale.rules.ts`)
+- **Which tiers apply:** an option uses its own tiers if it has any, otherwise the product's. Business-only tiers need an approved account *and* wholesale switched on.
+- **How much counts:**
+  - product-wide tiers count every option of the product in the cart together (5 M + 5 L reach "10+");
+  - an option with its own tiers counts alone.
+- **Which tier wins:** the highest minimum reached; if both audiences share a minimum, the cheaper one. A tier is used only when it is cheaper than the line's current price, so a better sale or flash-sale price still wins.
+- **Bulk vs storefront prices:** tier prices are fixed amounts; the storefront % adjustment doesn't change them.
+- **Checks before saving tiers:**
+  - minimum of 2 or more, and a price above zero;
+  - no two tiers for the same option and audience at the same minimum;
+  - prices can't rise as the minimum rises.
+- **Reviews:**
+  - approve works from waiting, rejected or suspended;
+  - reject works only from waiting, suspend only from approved;
+  - reject and suspend need a reason.
+- **Margin:**
+  - margin = (price − cost) ÷ price;
+  - the price for a target margin = cost ÷ (1 − margin), rounded **up** (whole taka, next ৳5, next ৳10, or ending in 9), so rounding never lowers the margin.
+
+### 33.3 Where bulk prices apply
+- **Pricing:** `quoteLines` applies tiers for the buyer, so the cart page, checkout and staff-entered orders all use the same prices. A manual order for a business customer gets business prices; a walk-in customer doesn't.
+- **What the line reports:** `tier` (in `cartPrices` as `bulk: { minQty, business }`). A bulk line's compare-at price is its price before the bulk price, and a bulk price replaces any flash-sale price, so flash-sale stock limits don't count it.
+
+### 33.4 API
+- **Admin, under `/api/admin/wholesale`:**
+  - `settings`;
+  - `accounts` (list with status and search, add, edit, review, remove);
+  - `customers/:id` (a customer's account);
+  - `products/:id/tiers` (get, and replace all);
+  - `margins` (list and summary) and `margins/apply` (new regular prices).
+- **Storefront, under `/api/storefront/wholesale`:**
+  - `GET /`: whether the shop sells to businesses, plus my account;
+  - `POST /apply`: apply, or apply again after a rejection (auto-approved when that's on; refused while suspended);
+  - `GET /tiers/:productId`: the tiers this shopper gets, and whether business prices exist.
+
+### 33.5 Store admin
+- **Customers → Business accounts:**
+  - settings (sell to businesses, auto-approve, intro text);
+  - status tabs with counts (Waiting, Approved, Suspended, Rejected, All) and search;
+  - a review dialog showing all the details, with approve / reject / suspend and a reason field;
+  - staff without edit rights see the details only.
+- **Customer page → Business tab:** the account and its status, with review, edit and remove; or "Make business account" (approved straight away).
+- **Product → Pricing → Bulk prices:** rows of which option, minimum, price and who gets it. Each row shows its margin against the cost, and flags a price that isn't below the normal price.
+- **Catalog → Price by margin:**
+  - totals (rows, average margin, no cost yet, priced below cost);
+  - filters for search, category and cost set / not set;
+  - tick rows, set the margin and rounding, press "Work out prices", check and edit the new prices, then save them together.
+  - Only the normal price changes; sale, storefront and bulk prices stay as they are.
+- **New order:** lines show "Business price 10+" or "Bulk price 5+".
+- **`Select`** now passes `id` and `aria-label` through to the native `<select>`, so its labels connect.
+
+### 33.6 Storefront
+- **Account → Business account:**
+  - the application form, with the shop's intro text;
+  - status: waiting, approved, not approved with the shop's reason (and the form to apply again), or suspended;
+  - shown in the account menu only when the shop sells to businesses (or the customer already has an account).
+- **Product page:**
+  - bulk prices load in the browser, because they depend on who is signed in. Business accounts see "Your business prices"; others see "Buy more, pay less";
+  - tapping a tier sets the quantity, the reached tier is highlighted, and the price and Add to Cart total use it;
+  - shoppers who could apply see "Buying for a shop or business? … Apply for a business account";
+  - the quantity limit rises from 99 to 9,999 when a product has tiers.
+- **Cart:**
+  - lines show "Business price, 10+" or "Bulk price, 5+";
+  - a price that changes because the quantity reached or left a tier doesn't trigger the "price changed" notice;
+  - the Total column is wider so bulk totals fit.
+- **Bangla:** 36 new strings.
+
+### 33.7 Checked
+- **Tests:** 565/565 API tests. New ones:
+  - 11 unit tests: tier choice, options vs whole product, audience, counting quantities, save checks, reviews, margin and rounding;
+  - 10 database tests:
+    - off until switched on;
+    - apply, then approve;
+    - reject, apply again, auto-approve;
+    - tier checks;
+    - business vs everyone prices;
+    - option counting;
+    - suspended or switched off;
+    - a staff order at business prices;
+    - the storefront tier view;
+    - the margin list and saving prices.
+- **Storefront translation test:** passes.
+- **Chromium:**
+  - owner switched wholesale on and gave the denim shirt "5+ ৳3,490, everyone" and "10+ ৳3,090, businesses";
+  - a new customer applied (form checked in Bangla too) and saw "Waiting for review";
+  - owner approved from the Waiting tab;
+  - the customer saw "Your business prices", chose 10+ and added ৳30,900; the cart showed "Business price, 10+";
+  - a guest on a phone-sized screen saw only 5+ and the invitation to apply;
+  - on Price by margin, 40% on a ৳2,200 cost with "ending in 9" worked out ৳3,669;
+  - no page errors or failed requests.
+- **Lint and builds:** new files lint clean, and edited files have no more lint errors than before; typechecks pass; admin and storefront build.
+- **Dev database:** the container reset emptied Postgres. The role and databases were recreated, migrations applied and the seed re-run. The Batch 32 dev data (Kids Corner storefront and staff) is gone; the default storefront is created on first use.
+
+### 33.8 Not done
+- **Quotations** (draft → sent → accepted → order): part 2.
+- **Wholesale extras not built:** tax exemption, credit terms / pay later, and a minimum order for business accounts.
+- **Listings:** product lists and cards don't show bulk prices, only the product page does.
+- **Order lines:** the bulk price used isn't recorded as such on the order line (the unit price is).
+- **Notifications:** no email or SMS when an application is approved or rejected; the customer sees the result in their account.
+
+## ✅ BATCH #33 (part 2) — Quotations (2026-09-29)
+Staff can send customers a price quote, customers accept or decline it in their account, and staff turn an accepted quote into an order at the agreed prices. Approved business accounts can also ask for a quote straight from their cart.
+
+### 33.9 Data (migration `quotations`)
+- **`Quotation`:**
+  - `number` (Q-000001, per store), customer, storefront;
+  - `status`, `validUntil`, `terms` (the customer sees them), `staffNote` (staff only), `customerNote` (what the customer wrote when asking or answering);
+  - `discount` and `deliveryFee` (fixed amounts), `subtotal`, `total`;
+  - `orderId` once it's an order;
+  - `sentAt`, `respondedAt`, `createdById`.
+- **`QuotationItem`:** product, option, name, SKU, qty, `unitPrice` (agreed), `listPrice` (what the customer would normally pay), `lineTotal`.
+
+### 33.10 Rules (`quotation.rules.ts`)
+- **Statuses:**
+  - REQUESTED: the customer asked from their cart;
+  - DRAFT: staff are preparing it, and the customer can't see it;
+  - SENT: the customer can answer until the end of `validUntil`, Dhaka time; after that it reads EXPIRED (worked out on read, not stored);
+  - ACCEPTED, DECLINED, ORDERED, CANCELLED.
+- **Editing:** a quote that was sent or answered goes back to DRAFT and must be sent again; a request stays a request until sent.
+- **Sending:** allowed from requested, draft or sent (sending again). If no date is set, or the date has passed, the quote is valid for 14 days.
+- **Ordering:** allowed from accepted, or sent and not expired. Otherwise the reason is given ("expired, send it again", "declined", "already an order", "send it first").
+- **Totals:** lines at the agreed prices, minus the discount (never more than the items), plus delivery. The quote also shows how far below the customer's normal prices it is.
+
+### 33.11 API
+- **Staff, under `/api/admin/quotations`** (`orders.view` to look, `orders.create` to change):
+  - the list has status counts, including EXPIRED, and search by number, customer or business;
+  - `preview` gives names and the customer's normal prices (business and bulk prices included). A product that's gone is refused; low stock only adds a note;
+  - create, change, send (emails the customer), cancel, and delete a draft that was never sent.
+- **Discount limit:** lower prices plus the discount together may not go past the staff member's role limit (the same limit as manual orders).
+- **Customers, under `/api/storefront/account/quotes`:**
+  - my quotes (drafts, and cancelled quotes never sent, stay hidden);
+  - one quote;
+  - `request`: approved business accounts only, priced at their current prices, emails staff;
+  - `respond`: accept or decline with a note, emails staff.
+- **Emails:**
+  - "Price quote" goes to the customer, with the lines and totals and a button to the quote;
+  - "Quote request or answer" goes to staff: the template's recipients, else the owners;
+  - both can be edited under Settings → Emails like the others.
+
+### 33.12 Quote → order
+- **Request:** `POST /api/admin/orders/manual` takes `quotationId`.
+- **What the order takes from the quote:** the customer, storefront, lines and quantities, the agreed unit prices, and the discount as a fixed amount. The discount isn't checked against the role limit again, since it was checked when the quote was saved.
+- **What doesn't apply:** coupons and promotions. Stock and delivery work as usual.
+- **Mechanics:**
+  - `quoteOrder` takes `unitPrices`, which replace the shop's prices for those lines. A price below normal shows the normal price as the compare-at price, and flash-sale and bulk prices don't apply;
+  - the quote is claimed first, so two people can't make it into two orders; it's handed back if the order fails (for example, stock ran out);
+  - it then records the order id, and the order history says "From quotation Q-…";
+  - the form's live pricing lists a quote that can't become an order as a problem, instead of failing.
+
+### 33.13 Store admin
+- **Orders → Quotations:** status tabs with counts, search, the total and valid-until date, and links to the order.
+- **Quote editor** (new and existing):
+  - customer search;
+  - products at the customer's normal price, which you change per line. Prices follow the normal price as quantities change until you type one;
+  - quantity, "৳X less each", and stock notes;
+  - discount, delivery charge, valid until, terms, staff note;
+  - a summary with the total and "% less than normal prices", and a note that VAT is added on the order;
+  - Save, Save and send, Cancel quote, Delete draft, Make order, Print. Print uses a plain document layout: store name, customer, lines, totals, terms.
+- **New order `?quotation=ID`:**
+  - fills in the customer, lines, delivery charge, storefront and the customer's note;
+  - locks products, quantities, prices, discount, coupon and promotions;
+  - shows "From quote Q-…".
+- **Shared search boxes:** the customer and product searches moved to `components/orders/order-pickers.tsx` for both forms.
+
+### 33.14 Storefront
+- **Account → Quotes:**
+  - the list, with status and valid-until date;
+  - each quote: its lines (quoted price, with the normal price struck through), discount, delivery, total and savings, the VAT note and terms;
+  - Accept or Decline with an optional note while it's open;
+  - once ordered, a link to the order.
+- **Cart:** "Ask for a quote instead", with an optional note, for approved business accounts. It opens the new quote.
+- **Bangla:** 37 new strings.
+
+### 33.15 Checked
+- **Tests:** 579/579 API tests. New ones:
+  - 7 unit tests: expiry and end of day, allowed moves, why a quote can't become an order, totals, numbering;
+  - 7 database tests:
+    - normal prices with business tiers, and low-stock notes;
+    - a draft hidden until sent;
+    - the role's discount limit;
+    - accept, then a change goes back to draft;
+    - quote → order at 840 each, and never twice;
+    - expiry blocks answers and orders, and sending again renews the date;
+    - requests from business accounts only.
+- **Chromium, run twice with no errors:**
+  - a business customer asked for a quote on 12 shirts from the cart, with a note;
+  - staff opened the request, set ৳2,990 each, ৳150 delivery and terms, then saved and sent;
+  - the customer saw "Waiting for your answer" and accepted with a note;
+  - staff printed it and pressed Make order, which filled in the customer, the locked lines and the customer's note; they chose pickup and created the order;
+  - the order line is 12 × 2,990, the quote shows Ordered with the order number, and the customer's quote links to the order;
+  - each run created three emails: request to staff, quote to customer, acceptance to staff.
+- **Found and fixed during the check:**
+  - quote totals left out VAT, which the order adds, so the editor, print, customer page and email now say VAT is added on the order;
+  - the form's live pricing failed once the quote was ordered, and now reports it as a problem instead;
+  - the promotions switch showed on quote orders, where promotions never apply, so it's hidden there;
+  - the printed heading had no store name, which the quote API now provides.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.16 Not done
+- **VAT:** quotes don't work out VAT (it depends on the delivery address); the order adds it.
+- **PDF:** no PDF quote attached to the email; staff can print or save as PDF from the browser.
+- **Quote changes:** customers can't propose changes except in the note, and there's no history of each version sent.
+- **Paying from the quote:** customers can't pay a quote themselves online; staff make the order.
+
+## ✅ BATCH #33 (part 3) — Sales team commission (2026-09-29)
+Staff who sell earn commission on the orders credited to them. The rate is the product's, else its category's, else the store's default, plus each salesperson's extra %. Commission is earned when the order is delivered and paid. There are monthly targets, payouts, a Sales team page for managers and a My commission page for each salesperson.
+
+### 33.17 Data (migration `sales_commission`)
+- **`SalesSettings`:** `enabled` (off by default) and `defaultRate` %.
+- **`AdminUser`:** `isSalesperson`, `commissionExtraPct`, and `salesCode` (unique per store; used in share links).
+- **Rates:** `Product.commissionRate` and `Category.commissionRate` (null means fall back).
+- **`Order.salespersonId`:** who the order is credited to.
+- **`SalesCommission`** (one per order):
+  - `base` (items after discounts) and `amount`;
+  - `lines`: per product, its base, rate and where the rate came from;
+  - `paidOutAt`, `paidOutById`.
+- **`SalesTarget`:** `salespersonId`, `month` (YYYY-MM), `amount`.
+- **Permission area `commissions`** (view / edit):
+  - Finance gets edit; Order Manager, Reports and Viewer get view;
+  - roles a store made get view if they can view reports.
+
+### 33.18 Rules (`sales/commission.rules.ts`)
+- **Rate:** the product's rate, else the rate of its first category that has one (main category first), else the store default, plus the salesperson's extra.
+- **Base:** each line's value minus its share of the order's discounts (shared by value, with rounding kept in the last line).
+- **Fixed when credited:** commission is worked out when the order is credited, so later rate changes don't touch past orders.
+- **State** is read from the order each time, not stored:
+  - PENDING until the order is delivered or completed AND paid (or partly refunded);
+  - then EARNED, dated the later of delivery and payment;
+  - PAID once paid out;
+  - CANCELLED (nothing) when the order is cancelled, failed or fully refunded.
+- **Refunds:** they take back their share of the amount and the base.
+- **Why read, not stored:** no hooks were needed in the places an order becomes delivered or paid (status changes, couriers, payment checks).
+- **Months:** in Dhaka time. Target progress is sales (the earned base) ÷ target.
+
+### 33.19 Who gets credit
+- **Staff orders:** the salesperson picked on the New order page; "Nobody"; or by default the person entering it, if they're on the sales team.
+- **Quotes:** orders made from a quote default to whoever made the quote.
+- **Online orders:** the storefront remembers `?sp=CODE` from a share link for 30 days and sends it with the order. The code is ignored if it isn't an active salesperson's.
+- **Changing it:** staff with commission edit rights can change an order's salesperson on the order page, until its commission is paid out.
+- **Commission switched off:** the salesperson is recorded, but no commission.
+- **Never blocks the order:** a failure while crediting is logged and the order goes ahead.
+
+### 33.20 API (`/api/admin/sales`)
+- **Team page:** `team?month` returns salespeople with sales, earned, waiting, to pay, target and progress, plus staff not on the team.
+- **Changes:** `settings`, `salespeople/:id` (join or leave, extra %, code; a code is made when someone joins), `salespeople/:id/target`.
+- **Payout:** `salespeople/:id/payout` marks everything earned up to the end of the month as paid out.
+- **Lists:** `commissions?month&salespersonId&state`.
+- **For forms:** `salespeople` (names for the order form), and `orders/:id` (read or change an order's salesperson).
+- **`me?month`:** my commission.
+- **Sign-in data:** the staff sign-in data now says whether someone is a salesperson, so only salespeople see "My commission".
+
+### 33.21 Store admin
+- **Orders → Sales team:**
+  - a month picker;
+  - commission on/off and the default rate;
+  - totals: sales, earned, waiting, to pay out;
+  - a salespeople table: share-link code (click to copy the link), target with progress bar, sales, earned, waiting, to pay, and Pay out / Edit / Remove;
+  - "Add someone from staff";
+  - a commission-by-order list filtered by salesperson and state. Hovering an amount shows each line: base × rate, and where the rate came from.
+- **My commission** (in the menu for salespeople only): the same figures for me, my target progress, my share link with Copy, and my orders.
+- **Rate fields:** "Sales commission (%)" on the product Pricing tab (edit and new) and on the category form.
+- **Order page:** a Salesperson card with the commission, its state and the rates, and Change.
+- **New order:** a Salesperson field ("Me, if I'm on the sales team" / "Whoever made the quote", Nobody, or a name).
+- **Menu:** nav items can be `salesOnly` (shown only to salespeople).
+
+### 33.22 Checked
+- **Tests:** 594/594 API tests. New ones:
+  - 8 unit tests: rate order, discount sharing, states, refunds, Dhaka months, target progress;
+  - 7 database tests:
+    - crediting whoever enters the order, with the three rate sources and the extra;
+    - picking a salesperson or nobody, and clerks off the team;
+    - earned only when delivered and paid, refunds, cancelled;
+    - the team's month with targets;
+    - payout, and then no reassigning;
+    - share-link codes (made automatically, unique, checked, dropped when someone leaves the team);
+    - commission switched off.
+- **Chromium:**
+  - the owner switched commission on at 5%, joined the team, and set 1% extra, code OWNER1 and a ৳20,000 target;
+  - they set the denim shirt to 10%;
+  - a shopper came by `/?sp=owner1`, bought the shirt and the linen shirt and paid cash on delivery;
+  - the order was credited to the owner: ৳645.30 on ৳7,680 (11% and 6%), shown on the order page as Waiting;
+  - after delivery and payment, Sales team and My commission showed it earned at 38.4% of target;
+  - Pay out marked it paid;
+  - no page errors.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.23 Not done
+- **Team bonuses:** no bonus for reaching a target (targets show progress only), and no split commission between two people.
+- **Category rates:** a parent category's rate isn't inherited.
+- **Payouts:** a payout isn't recorded in Purchasing → Accounts as money out; it only marks the commission paid.
+- **Share links:** the link is checked only when the order is placed (last link used within 30 days wins); there's no report of visits per link.

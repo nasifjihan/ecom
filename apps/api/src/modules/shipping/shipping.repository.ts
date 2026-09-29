@@ -1,6 +1,9 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config";
 import type { RequestContext } from "../../core";
-import { NotFoundError, ConflictError } from "../../core";
+import { BadRequestError, NotFoundError, ConflictError } from "../../core";
+import { parseRules, zoneSpecificity, type AddressForMatch } from "./shipping.rules";
+import { checkStorefrontIds } from "../storefronts/storefronts.context";
 import type {
   CreateShippingZoneDto,
   UpdateShippingZoneDto,
@@ -9,66 +12,99 @@ import type {
   BulkImportMethodsDto,
 } from "./shipping.dto";
 
-export class ShippingZoneRepository {
-  get model() { return prisma.shippingZone as any; }
+const ZONE_INCLUDE = {
+  locations: { select: { location: { select: { id: true, code: true, type: true, nameEn: true, nameBn: true } } } },
+  _count: { select: { methods: true } },
+} as const;
 
-  private scope(storeId: bigint | undefined, extra: Record<string, any> = {}) {
-    const where: any = { ...extra };
-    if (storeId !== undefined) where.storeId = BigInt(storeId as any);
-    return where;
+/** API shape: `locations` flattened from the join rows. */
+const shapeZone = (z: any) => z && {
+  ...z,
+  locations: (z.locations ?? []).map((l: any) => l.location),
+  locationIds: (z.locations ?? []).map((l: any) => String(l.location.id)),
+};
+
+export class ShippingZoneRepository {
+  get model() { return prisma.shippingZone; }
+
+  private storeOf(ctx: RequestContext): bigint {
+    if (ctx.storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED");
+    return BigInt(ctx.storeId as any);
   }
 
-  async list(ctx: RequestContext, query: { search?: string; enabled?: boolean; page?: number; perPage?: number }) {
-    const where: any = this.scope(ctx.storeId);
-    if (query.enabled !== undefined) where.enabled = query.enabled;
+  async list(ctx: RequestContext, query: { search?: string; enabled?: string | boolean; page?: number; perPage?: number }) {
+    const where: Prisma.ShippingZoneWhereInput = { storeId: this.storeOf(ctx) };
+    if (query.enabled !== undefined) where.enabled = String(query.enabled) === "true";
     if (query.search) where.name = { contains: query.search, mode: "insensitive" };
     const perPage = Number(query.perPage ?? 20);
     const page = Number(query.page ?? 1);
-    const skip = (page - 1) * perPage;
     const [rows, total] = await Promise.all([
       this.model.findMany({
-        where, include: { _count: { select: { methods: true } } },
-        skip, take: perPage, orderBy: { createdAt: "desc" },
+        where, include: ZONE_INCLUDE,
+        skip: (page - 1) * perPage, take: perPage, orderBy: { id: "asc" },
       }),
       this.model.count({ where }),
     ]);
-    return { rows, total, page, perPage };
+    return { rows: rows.map(shapeZone), total, page, perPage };
   }
 
   async get(ctx: RequestContext, id: bigint) {
     const row = await this.model.findFirst({
-      where: { ...this.scope(ctx.storeId), id }, include: { methods: true },
+      where: { storeId: this.storeOf(ctx), id },
+      include: { ...ZONE_INCLUDE, methods: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
     });
     if (!row) throw new NotFoundError("Shipping zone", String(id));
-    return row;
+    return shapeZone(row);
+  }
+
+  private async checkLocations(ids: bigint[]) {
+    if (!ids.length) return;
+    const found = await prisma.location.count({ where: { id: { in: ids } } });
+    if (found !== new Set(ids.map(String)).size) throw new BadRequestError("One or more areas don't exist", "LOCATION_NOT_FOUND");
   }
 
   async create(ctx: RequestContext, dto: CreateShippingZoneDto) {
-    return this.model.create({
-      data: {
-        storeId: ctx.storeId !== undefined ? BigInt(ctx.storeId as any) : (dto as any).storeId,
-        name: dto.name,
-        enabled: dto.enabled,
-        zoneType: (dto as any).zoneType ?? "suburban",
-        countries: dto.regions.map((r) => r.countryCode),
-        states: dto.regions.flatMap((r) => [...(r.divisions || []), ...(r.districts || [])]),
-        postcodes: dto.regions.flatMap((r) => r.postcodeRanges || []),
-      },
+    const storeId = this.storeOf(ctx);
+    await this.checkLocations(dto.locationIds);
+    await checkStorefrontIds(storeId, dto.storefrontIds);
+    const zone = await prisma.$transaction(async (t) => {
+      const z = await t.shippingZone.create({
+        data: { storeId, name: dto.name, enabled: dto.enabled, storefrontIds: dto.storefrontIds, countries: dto.countries, states: [], postcodes: dto.postcodes },
+      });
+      if (dto.locationIds.length) {
+        await t.shippingZoneLocation.createMany({
+          data: dto.locationIds.map((locationId) => ({ zoneId: z.id, locationId })),
+          skipDuplicates: true,
+        });
+      }
+      return z;
     });
+    return this.get(ctx, zone.id);
   }
 
   async update(ctx: RequestContext, id: bigint, dto: UpdateShippingZoneDto) {
     await this.get(ctx, id);
-    const patch: any = {};
-    if (dto.name !== undefined) patch.name = dto.name;
-    if ((dto as any).zoneType !== undefined) patch.zoneType = (dto as any).zoneType;
-    if (dto.enabled !== undefined) patch.enabled = dto.enabled;
-    if (dto.regions !== undefined) {
-      patch.countries = dto.regions.map((r) => r.countryCode);
-      patch.states = dto.regions.flatMap((r) => [...(r.divisions || []), ...(r.districts || [])]);
-      patch.postcodes = dto.regions.flatMap((r) => r.postcodeRanges || []);
-    }
-    return this.model.update({ where: { id }, data: patch, include: { methods: true } });
+    if (dto.locationIds) await this.checkLocations(dto.locationIds);
+    await checkStorefrontIds(this.storeOf(ctx), dto.storefrontIds);
+    await prisma.$transaction(async (t) => {
+      const patch: Prisma.ShippingZoneUpdateInput = {};
+      if (dto.name !== undefined) patch.name = dto.name;
+      if (dto.enabled !== undefined) patch.enabled = dto.enabled;
+      if (dto.storefrontIds !== undefined) patch.storefrontIds = dto.storefrontIds;
+      if (dto.countries !== undefined) patch.countries = dto.countries;
+      if (dto.postcodes !== undefined) patch.postcodes = dto.postcodes;
+      if (dto.locationIds !== undefined) {
+        // Locations replace the free-text names zones used before.
+        patch.states = [];
+        await t.shippingZoneLocation.deleteMany({ where: { zoneId: id } });
+        await t.shippingZoneLocation.createMany({
+          data: dto.locationIds.map((locationId) => ({ zoneId: id, locationId })),
+          skipDuplicates: true,
+        });
+      }
+      await t.shippingZone.update({ where: { id }, data: patch });
+    });
+    return this.get(ctx, id);
   }
 
   async delete(ctx: RequestContext, id: bigint) {
@@ -76,41 +112,22 @@ export class ShippingZoneRepository {
     return this.model.delete({ where: { id } });
   }
 
-  async matchZonesForAddress(ctx: RequestContext, address: { countryCode: string; division?: string; district?: string; postcode?: string }) {
-    const rows: any[] = await this.model.findMany({
-      // ShippingZone has no `enabled` column (only ShippingMethod does).
-      where: this.scope(ctx.storeId),
-      include: { methods: { where: { enabled: true }, orderBy: { sortOrder: "asc" } } },
+  /** Every enabled zone that matches the address, with how specifically it matches. */
+  async matchZonesForAddress(ctx: RequestContext, address: AddressForMatch) {
+    const rows = await this.model.findMany({
+      where: { storeId: this.storeOf(ctx), enabled: true },
+      include: {
+        locations: { select: { locationId: true } },
+        methods: { where: { enabled: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      },
       orderBy: { id: "asc" },
     });
-    return rows.filter((z) => {
-      const countries: string[] = Array.isArray(z.countries) ? z.countries : [];
-      if (!countries.includes(address.countryCode) && !countries.includes("*")) return false;
-      const states: string[] = Array.isArray(z.states) ? z.states : [];
-      if (states.length > 0) {
-        const hits = [address.division, address.district].filter(Boolean) as string[];
-        const lower = states.map((s) => String(s).toLowerCase());
-        if (hits.length && !hits.some((h) => lower.includes(String(h).toLowerCase()))) return false;
-      }
-      const pcs: string[] = Array.isArray(z.postcodes) ? z.postcodes : [];
-      if (pcs.length > 0 && address.postcode) {
-        const pc = String(address.postcode);
-        const ok = pcs.some((p) => {
-          if (p === "*") return true;
-          if (p === pc) return true;
-          if (p.includes("-")) {
-            const parts = p.split("-");
-            const a = parseInt(parts[0] ?? "", 10);
-            const b = parseInt(parts[1] ?? "", 10);
-            const n = parseInt(pc, 10);
-            if (!Number.isNaN(a) && !Number.isNaN(b) && !Number.isNaN(n)) return n >= a && n <= b;
-          }
-          return false;
-        });
-        if (!ok) return false;
-      }
-      return true;
-    });
+    const out: (typeof rows[number] & { specificity: number })[] = [];
+    for (const z of rows) {
+      const specificity = zoneSpecificity({ ...z, locationIds: z.locations.map((l) => l.locationId) }, address);
+      if (specificity !== null) out.push({ ...z, specificity });
+    }
+    return out;
   }
 }
 
@@ -140,15 +157,14 @@ export class ShippingMethodRepository {
   async create(ctx: RequestContext, dto: CreateShippingMethodDto) {
     const exists = await this.model.findFirst({ where: { zoneId: dto.zoneId, code: dto.code } });
     if (exists) throw new ConflictError("Duplicate shipping code in zone", "DUPLICATE_SHIPPING_CODE_ZONE");
-    const rules: any = { perKgExtra: dto.perKgExtra, minimumCost: dto.minimumCost };
+    await new ShippingZoneRepository().get(ctx, dto.zoneId);
+    const rules = { perKgExtra: dto.perKgExtra, minimumCost: dto.minimumCost, weightTiers: dto.weightTiers, minSubtotal: dto.minSubtotal };
     return this.model.create({
       data: {
         zoneId: dto.zoneId,
         code: dto.code,
         name: dto.name,
         description: dto.description ?? null,
-        provider: dto.provider,
-        methodType: dto.methodType,
         enabled: dto.enabled,
         sortOrder: dto.sortOrder,
         baseCost: dto.baseCost,
@@ -164,16 +180,15 @@ export class ShippingMethodRepository {
 
   async update(ctx: RequestContext, id: bigint, dto: UpdateShippingMethodDto) {
     const prev = await this.get(ctx, id);
+    const RULE_KEYS = ["perKgExtra", "minimumCost", "weightTiers", "minSubtotal"] as const;
     const patch: any = {};
     for (const k of Object.keys(dto)) {
       const val = (dto as any)[k];
-      if (val !== undefined) patch[k] = val;
+      if (val !== undefined && !(RULE_KEYS as readonly string[]).includes(k)) patch[k] = val;
     }
-    if (dto.perKgExtra !== undefined || dto.minimumCost !== undefined) {
-      const existing = typeof prev.costRules === "string" ? JSON.parse(prev.costRules || "{}") : prev.costRules || {};
-      const rules: any = { ...existing };
-      if (dto.perKgExtra !== undefined) rules.perKgExtra = dto.perKgExtra;
-      if (dto.minimumCost !== undefined) rules.minimumCost = dto.minimumCost;
+    if (RULE_KEYS.some((k) => (dto as any)[k] !== undefined)) {
+      const rules: any = { ...parseRules(prev.costRules) };
+      for (const k of RULE_KEYS) if ((dto as any)[k] !== undefined) rules[k] = (dto as any)[k];
       patch.costRules = JSON.stringify(rules);
     }
     return this.model.update({ where: { id }, data: patch });

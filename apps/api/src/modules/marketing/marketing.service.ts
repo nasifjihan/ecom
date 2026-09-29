@@ -1,7 +1,9 @@
 import { prisma, tx } from "../../config";
+import { refreshProductRating } from "../storefront/engagement";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, type RequestContext, type Paginated } from "../../core";
 import { CouponRepository, FlashSaleRepository, ReviewRepository } from "./marketing.repository";
 import { couponTypeToDiscountType } from "./marketing.dto";
+import { checkStorefrontIds } from "../storefronts/storefronts.context";
 import type {
   CreateCouponDto,
   UpdateCouponDto,
@@ -110,6 +112,7 @@ export class MarketingService extends BaseService {
     const storeId = this.ctx.storeId;
     const existing = await this.coupons.findByCode(this.ctx, dto.code);
     if (existing) throw new ConflictError(`Coupon code already exists: ${dto.code}`, "DUPLICATE_COUPON_CODE");
+    if (storeId !== undefined) await checkStorefrontIds(storeId, dto.storefrontIds);
 
     const data: Record<string, unknown> = {
       code: dto.code.toUpperCase(),
@@ -133,6 +136,9 @@ export class MarketingService extends BaseService {
       expiresAt: dto.expiresAt ?? null,
       isActive: dto.isActive,
       autoApply: dto.autoApply,
+      audience: dto.audience,
+      worksWithPromotions: dto.worksWithPromotions,
+      storefrontIds: dto.storefrontIds,
     };
     if (storeId !== undefined) data.storeId = storeId;
 
@@ -149,6 +155,7 @@ export class MarketingService extends BaseService {
 
   async updateCoupon(id: bigint | number, dto: UpdateCouponDto): Promise<unknown> {
     const cid = BigInt(id);
+    if (this.ctx.storeId !== undefined) await checkStorefrontIds(this.ctx.storeId, dto.storefrontIds);
     const data: Record<string, unknown> = {};
     for (const key of Object.keys(dto)) {
       if (key === "type" && dto.type !== undefined) {
@@ -353,7 +360,13 @@ export class MarketingService extends BaseService {
 
   async moderateReviews(dto: ReviewModerateDto): Promise<{ count: number; action: string }> {
     const bigIds = dto.ids.map((id) => BigInt(id));
+    // Ratings on the product pages follow what's approved, so re-count the products touched.
+    const touched = await prisma.review.findMany({
+      where: { id: { in: bigIds }, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) },
+      select: { productId: true },
+    });
     const result = await this.reviews.setStatus(this.ctx, bigIds, dto.action);
+    for (const productId of new Set(touched.map((t) => t.productId))) await refreshProductRating(productId);
     return { count: result.count, action: dto.action };
   }
 

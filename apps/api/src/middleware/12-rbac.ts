@@ -2,28 +2,14 @@
  * 12 — RBAC PERMISSION CHECK.
  * Requires `authMiddleware("adminOrSuper")` upstream first.
  *
- * Permissions are strings like "product.create", "order.update.*", "report.read.sales".
- * Wildcards: "*" means everything; "order.*" means all order actions.
+ * Codes are `area.action` from PERMISSION_AREAS in @ecom/shared-types (e.g. "orders.edit").
+ * "*" (the owner) passes everything; "orders.*" passes every orders action.
  *
- * Usage: Router.patch("/:id", requirePerm("order.update"), controller.update)
+ * Usage: router.patch("/:id", rbacMiddleware("orders.edit"), controller.update)
  */
 import type { Request, Response, NextFunction } from "express";
+import { hasPermission } from "@ecom/shared-types";
 import { ForbiddenError } from "../core";
-
-function hasPerm(perms: string[], required: string): boolean {
-  if (!perms.length) return false;
-  if (perms.includes("*")) return true;
-  if (perms.includes(required)) return true;
-  const prefix = required.split(".").slice(0, -1).join(".") + ".*";
-  if (perms.includes(prefix)) return true;
-  for (const p of perms) {
-    if (p.endsWith(".*")) {
-      const base = p.slice(0, -2);
-      if (required.startsWith(base)) return true;
-    }
-  }
-  return false;
-}
 
 export default function rbacMiddleware(required: string | string[]) {
   const needed: string[] = Array.isArray(required) ? required : [required];
@@ -32,7 +18,7 @@ export default function rbacMiddleware(required: string | string[]) {
     if (req.ctx.super) return next();
     const perms = req.ctx.admin?.permissions ?? [];
     const role = req.ctx.admin?.role ?? "UNKNOWN";
-    const ok = needed.every((n) => hasPerm(perms, n));
+    const ok = needed.every((n) => hasPermission(perms, n));
     if (!ok) {
       return next(
         new ForbiddenError(

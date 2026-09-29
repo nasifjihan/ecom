@@ -29,6 +29,12 @@ export interface Coupon {
   isActive?: boolean;
   bogoBuyQty?: number;
   bogoGetQty?: number;
+  /** private = typed code; public = listed in the cart for anyone; given = only allowedEmails. */
+  audience?: "private" | "public" | "given";
+  /** Off: automatic promotions come off the order, and flash-sale items don't count. */
+  worksWithPromotions?: boolean;
+  /** Only on these storefronts (empty: all). */
+  storefrontIds?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -224,6 +230,9 @@ export function fromApiCoupon(c: ApiRow): Coupon {
     validUntil: c.expiresAt ?? undefined,
     usageCount: c.usageCount,
     isActive: c.isActive,
+    audience: c.audience ?? "private",
+    worksWithPromotions: c.worksWithPromotions ?? true,
+    storefrontIds: Array.isArray(c.storefrontIds) ? (c.storefrontIds as unknown[]).map(String) : [],
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
   };
@@ -250,6 +259,9 @@ function toApiCoupon(c: Partial<Coupon>): ApiRow {
     startsAt: c.validFrom || undefined,
     expiresAt: c.validUntil || undefined,
     isActive: c.isActive,
+    audience: c.audience,
+    worksWithPromotions: c.worksWithPromotions,
+    storefrontIds: c.storefrontIds,
   };
   return Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
 }

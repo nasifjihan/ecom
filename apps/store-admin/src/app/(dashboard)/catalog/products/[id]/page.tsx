@@ -63,6 +63,16 @@ import {
   type ProductVariant,
 } from "@/lib/features/catalog/catalog-api-slice";
 import { ProductStatus, ProductType } from "@ecom/shared-types";
+import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
+import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTexts } from "@/components/catalog/bangla-fields";
+import { ProductStorefronts } from "@/components/catalog/product-storefronts";
+import { ProductBulkPrices } from "@/components/catalog/product-bulk-prices";
+
+const BANGLA_FIELDS: BanglaField[] = [
+  { key: "name", label: "Name" },
+  { key: "shortDescription", label: "Short description", rows: 2 },
+  { key: "description", label: "Long description", rows: 6 },
+];
 
 const ProductTypeValues = [
   { value: ProductType.SIMPLE, label: "Simple Product" },
@@ -108,6 +118,8 @@ const productEditSchema = z.object({
     .min(0, { message: "Sale price cannot be negative" })
     .nullable()
     .optional(),
+  costPrice: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0, { message: "Cost can't be negative" }).nullable()),
+  commissionRate: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0).max(100, { message: "Up to 100%" }).nullable()),
   salePriceStartAt: z.string().optional().or(z.literal("")),
   salePriceEndAt: z.string().optional().or(z.literal("")),
   stockQty: z.coerce.number().int().min(0, { message: "Stock cannot be negative" }).optional(),
@@ -179,6 +191,8 @@ export default function EditProductPage() {
       description: "",
       regularPrice: null,
       salePrice: null,
+      costPrice: null,
+    commissionRate: null,
       salePriceStartAt: "",
       salePriceEndAt: "",
       stockQty: 0,
@@ -214,6 +228,8 @@ export default function EditProductPage() {
         description: product.description || "",
         regularPrice: product.regularPrice ?? null,
         salePrice: product.salePrice ?? null,
+        costPrice: product.costPrice ?? null,
+        commissionRate: product.commissionRate ?? null,
         salePriceStartAt: product.salePriceStartAt || "",
         salePriceEndAt: product.salePriceEndAt || "",
         stockQty: product.stockQty ?? 0,
@@ -227,7 +243,7 @@ export default function EditProductPage() {
         isFeatured: !!product.featured,
         categoryIds: (product.categoryIds as any) || [],
         brandId: (product.brandId as any) || null,
-        tagNames: [],
+        tagNames: product.tags ?? [],
         relatedProductIds: [],
         seoTitle: product.seoTitle || "",
         metaDesc: product.metaDesc || "",
@@ -245,11 +261,15 @@ export default function EditProductPage() {
       if (product.variants && product.variants.length > 0) {
         setVariants(product.variants);
       }
+      setSpecs(Array.isArray(product.specifications) ? product.specifications : []);
+      setBangla(banglaOf(product));
     }
   }, [product, reset]);
 
   const typeValue = watch("type");
   const tags = watch("tagNames") || [];
+  const [specs, setSpecs] = useState<SpecRow[]>([]);
+  const [bangla, setBangla] = useState<BanglaTexts>({});
   const relatedIds = watch("relatedProductIds") || [];
 
   const handleSuggestSlug = () => {
@@ -376,9 +396,14 @@ export default function EditProductPage() {
           status: values.status,
           sku: values.sku,
           shortDescription: values.shortDescription || null,
+          tags: values.tagNames,
+          specifications: cleanSpecs(specs),
           description: values.description || null,
+          translations: banglaPayload(BANGLA_FIELDS, bangla),
           regularPrice: values.regularPrice ?? null,
           salePrice: values.salePrice ?? null,
+          costPrice: values.costPrice ?? null,
+          commissionRate: values.commissionRate ?? null,
           salePriceStartAt: values.salePriceStartAt || null,
           salePriceEndAt: values.salePriceEndAt || null,
           manageStock: values.manageStock,
@@ -633,6 +658,7 @@ export default function EditProductPage() {
                           </FormItem>
                         )}
                       />
+                      <BanglaFields fields={BANGLA_FIELDS} value={bangla} onChange={setBangla} />
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -888,12 +914,45 @@ export default function EditProductPage() {
 
                       <Separator />
 
-                      <div className="space-y-1">
-                        <Label>Cost of Goods Sold (COGS)</Label>
-                        <Input type="number" min={0} step="0.01" placeholder="Optional — for profit tracking" />
-                      </div>
+                      <FormField
+                        control={control}
+                        name="costPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cost price (৳)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={0} step="0.01" placeholder="What one unit costs you" {...field} value={watch("costPrice") ?? ""} />
+                            </FormControl>
+                            <FormMessage>{methods.formState.errors.costPrice?.message}</FormMessage>
+                            <CostMargin cost={watch("costPrice")} price={watch("salePrice") ?? watch("regularPrice")} />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="commissionRate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sales commission (%)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={0} max={100} step="0.5" placeholder="Empty: the category's or the store's rate" {...field} value={watch("commissionRate") ?? ""} />
+                            </FormControl>
+                            <FormMessage>{methods.formState.errors.commissionRate?.message}</FormMessage>
+                          </FormItem>
+                        )}
+                      />
                     </CardContent>
                   </Card>
+                  <div className="mt-6">
+                    <ProductStorefronts
+                      productId={String(productId)}
+                      basePrice={[Number(watch("salePrice")), Number(watch("regularPrice"))].find((n) => n > 0) ?? null}
+                      hasOptions={variants.length > 0}
+                    />
+                  </div>
+                  <div className="mt-6">
+                    <ProductBulkPrices productId={String(productId)} />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="inventory">
@@ -1152,6 +1211,9 @@ export default function EditProductPage() {
                       </div>
                     </CardContent>
                   </Card>
+                  <div className="mt-6">
+                    <SpecificationsEditor value={specs} onChange={setSpecs} />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="related">
@@ -1394,5 +1456,20 @@ export default function EditProductPage() {
         </div>
       </Form>
     </FormProvider>
+  );
+}
+
+/** "Margin ৳X (Y%)" from the cost and the selling price; recording a purchase updates the cost. */
+function CostMargin({ cost, price }: { cost: unknown; price: number | null | undefined }) {
+  const c = cost === "" || cost == null ? null : Number(cost);
+  const p = price == null ? null : Number(price);
+  if (c === null || !p || Number.isNaN(c)) {
+    return <p className="text-xs text-muted-foreground">Used for profit reports; not shown to customers. Recording a purchase sets it to the average cost.</p>;
+  }
+  const m = Math.round((p - c) * 100) / 100;
+  return (
+    <p className={m < 0 ? "text-xs text-red-600" : "text-xs text-muted-foreground"}>
+      Margin ৳{m.toLocaleString("en-IN")} ({Math.round((m / p) * 1000) / 10}% of the selling price). Recording a purchase updates the cost.
+    </p>
   );
 }

@@ -22,6 +22,8 @@ import {
   ArrowUpDown,
   Inbox,
   SlidersHorizontal,
+  Plus,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { openFile } from "@ecom/api-client";
@@ -88,8 +90,15 @@ import {
   type PaymentMethod,
   type ShippingZone,
   PAYMENT_METHOD_META,
+  ORDER_SOURCES,
+  sourceLabel,
 } from "@/lib/features/operations/operations-api-slice";
+import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
+import { BulkBookDialog } from "@/components/orders/bulk-book-dialog";
+import { useCan } from "@/lib/permissions";
 import { cn } from "@/components/ui";
+import { useSearchParams } from "next/navigation";
+import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -183,15 +192,25 @@ export default function OrdersPage() {
   const [filterStaff, setFilterStaff] = useState<string>("");
   const [filterCoupon, setFilterCoupon] = useState(false);
   const [filterShippingZone, setFilterShippingZone] = useState<string>("");
+  const [filterSource, setFilterSource] = useState<string>("");
+  // Storefront filter (the Storefronts page links here with ?storefrontId=); shown with 2+ storefronts.
+  const searchParams = useSearchParams();
+  const [filterStorefront, setFilterStorefront] = useState<string>(searchParams.get("storefrontId") ?? "");
+  const { data: storefronts = [] } = useStorefrontOptionsQuery();
+  const severalFronts = storefronts.length > 1;
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [page, setPage] = useState(1);
   const [cancelDialogOrder, setCancelDialogOrder] = useState<Order | null>(null);
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | null>(null);
   const [showBulkStatus, setShowBulkStatus] = useState(false);
+  const [bulkBooking, setBulkBooking] = useState(false);
+  const { can } = useCan();
 
   const { data, isLoading } = useGetOrderListQuery({
     status: activeTab === "ALL" ? undefined : activeTab,
     search: search || undefined,
+    source: filterSource || undefined,
+    storefrontId: filterStorefront || undefined,
     page,
     limit: 20,
   });
@@ -245,6 +264,14 @@ export default function OrdersPage() {
               >
                 {o.orderNumber}
               </Link>
+              {severalFronts && o.storefront && (
+                <span
+                  title={`Placed on ${o.storefront.name}`}
+                  className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  {o.storefront.code}
+                </span>
+              )}
             </div>
           );
         },
@@ -259,6 +286,12 @@ export default function OrdersPage() {
               <div className="font-medium text-slate-900 dark:text-slate-100">
                 {o.customerName}
               </div>
+              {o.source !== "website" && (
+                <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  via {sourceLabel(o.source)}
+                  {o.createdByName ? ` · by ${o.createdByName}` : ""}
+                </div>
+              )}
               {o.customerEmail && (
                 <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {o.customerEmail}
@@ -287,13 +320,24 @@ export default function OrdersPage() {
         header: "Status",
         cell: ({ row }) => {
           const status = row.getValue("status") as OrderStatus;
+          const o = row.original;
+          // Parcel and return state, when there is something to say beyond the order status.
+          const extra = [
+            o.fulfillmentStatus !== "unfulfilled" && o.fulfillmentStatus.toUpperCase() !== status
+              ? FULFILLMENT_LABELS[o.fulfillmentStatus]
+              : null,
+            o.returnStatus !== "none" ? `Return ${RETURN_LABELS[o.returnStatus as ReturnStatus]?.toLowerCase() ?? o.returnStatus}` : null,
+          ].filter(Boolean);
           return (
-            <Badge
-              variant="outline"
-              className={cn(STATUS_STYLES[status], "capitalize font-medium whitespace-nowrap")}
-            >
-              {status.replace(/_/g, " ")}
-            </Badge>
+            <div className="space-y-1">
+              <Badge
+                variant="outline"
+                className={cn(STATUS_STYLES[status], "capitalize font-medium whitespace-nowrap")}
+              >
+                {status.replace(/_/g, " ")}
+              </Badge>
+              {extra.length > 0 && <div className="text-[11px] text-slate-500 whitespace-nowrap">{extra.join(" · ")}</div>}
+            </div>
           );
         },
       },
@@ -311,7 +355,10 @@ export default function OrdersPage() {
         header: "Payment Method",
         cell: ({ row }) => {
           const pm = row.getValue("paymentMethod") as PaymentMethod;
-          const meta = PAYMENT_METHOD_META[pm];
+          const meta = PAYMENT_METHOD_META[pm] ?? {
+            label: String(pm).replace(/_/g, " ").toLowerCase(),
+            color: "bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-300",
+          };
           return (
             <span
               className={cn(
@@ -388,7 +435,7 @@ export default function OrdersPage() {
         },
       },
     ],
-    [],
+    [severalFronts],
   );
 
   const table = useReactTable({
@@ -482,10 +529,19 @@ export default function OrdersPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Orders</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Manage orders, fulfillments, refunds, and customer invoices.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Orders</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Manage orders, fulfillments, refunds, and customer invoices.
+            </p>
+          </div>
+          <Button asChild>
+            <Link href="/orders/new">
+              <Plus className="mr-2 h-4 w-4" /> New order
+            </Link>
+          </Button>
+        </div>
       </motion.div>
 
       <Tabs defaultValue="ALL" value={activeTab as string} onValueChange={(v) => { setActiveTab(v as any); setPage(1); }}>
@@ -538,6 +594,40 @@ export default function OrdersPage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <select
+                aria-label="Filter by source"
+                value={filterSource}
+                onChange={(e) => {
+                  setFilterSource(e.target.value);
+                  setPage(1);
+                }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                <option value="">All sources</option>
+                {ORDER_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              {severalFronts && (
+                <select
+                  aria-label="Filter by storefront"
+                  value={filterStorefront}
+                  onChange={(e) => {
+                    setFilterStorefront(e.target.value);
+                    setPage(1);
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">All storefronts</option>
+                  {storefronts.map((sf) => (
+                    <option key={sf.id} value={sf.id}>
+                      {sf.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
@@ -690,16 +780,12 @@ export default function OrdersPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={selectedCount === 0}
-                onClick={() => toast.success(`Marked ${selectedCount} order(s) as paid`)}
-              >
-                <CheckSquare className="h-4 w-4" />
-                Mark as Paid
-              </Button>
+              {can("orders.edit") && (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={selectedCount === 0} onClick={() => setBulkBooking(true)}>
+                  <Truck className="h-4 w-4" />
+                  Book courier
+                </Button>
+              )}
 
               <Button
                 variant="outline"
@@ -892,6 +978,7 @@ export default function OrdersPage() {
           </DialogContent>
         </Dialog>
       )}
+      {bulkBooking && <BulkBookDialog orderIds={selectedIds} onClose={() => { setBulkBooking(false); setRowSelection({}); }} />}
     </div>
   );
 }

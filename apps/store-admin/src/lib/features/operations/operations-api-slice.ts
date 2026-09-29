@@ -1,6 +1,17 @@
 "use client";
 
 import { api, fileResponse, toPaginated } from "@ecom/api-client";
+import {
+  fromApiParcel,
+  fromApiRefund,
+  fromApiReturn,
+  type ApiParcel,
+  type ApiRefund,
+  type ApiReturn,
+  type Parcel,
+  type RefundRow,
+  type ReturnRequest,
+} from "./fulfilment-api-slice";
 
 /** Mirrors the API OrderStatus enum (prisma/schema.prisma). */
 export type OrderStatus =
@@ -62,10 +73,25 @@ export interface Address {
   country?: string;
   division?: string;
   district?: string;
+  upazila?: string;
   postcode?: string;
   phone?: string;
   email?: string;
 }
+
+/** Where an order came from (Order.source on the API). */
+export const ORDER_SOURCES = [
+  { value: "website", label: "Website" },
+  { value: "phone", label: "Phone call" },
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "messenger", label: "Messenger" },
+  { value: "walk_in", label: "Walk-in" },
+  { value: "other", label: "Other" },
+] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number]["value"];
+export const sourceLabel = (s?: string | null) => ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
 
 export interface OrderLine {
   id: string | number;
@@ -76,6 +102,20 @@ export interface OrderLine {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  /** A free gift from this promotion. */
+  giftFrom?: string;
+}
+
+/** An automatic promotion the order got (Order.promotions). */
+export interface AppliedPromotion {
+  id: string;
+  name: string;
+  type: "discount" | "bxgy" | "free_gift" | "free_delivery";
+  amount: number;
+  productName?: string;
+  freeUnits?: number;
+  gift?: string;
+  qty?: number;
 }
 
 export interface Order {
@@ -87,7 +127,7 @@ export interface Order {
   customerPhone?: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
-  paymentStatus?: "PAID" | "UNPAID" | "PARTIALLY_PAID" | "REFUNDED";
+  paymentStatus?: "PAID" | "UNPAID" | "PENDING" | "PARTIALLY_PAID" | "PARTIALLY_REFUNDED" | "REFUNDED" | "FAILED";
   transactionId?: string;
   paidAt?: string;
   shippingMethod?: string;
@@ -109,6 +149,24 @@ export interface Order {
   updatedAt: string;
   assignedToUserId?: string | number;
   itemsCount: number;
+  source: string;
+  /** The storefront it was placed on. */
+  storefront?: { id: string; name: string; code: string; courierAccountId?: string | null };
+  /** Staff member who entered the order by hand. */
+  createdByName?: string;
+  manualDiscount: number;
+  /** Loyalty level discount (part of discountAmount), paid from the wallet, cashback credited. */
+  memberDiscount: number;
+  memberLevel?: string;
+  walletUsed: number;
+  cashback: number;
+  promotionDiscount: number;
+  promotions: AppliedPromotion[];
+  /** From the order's parcels: unfulfilled, partial, packed, shipped, delivered, delivery_failed, returned. */
+  fulfillmentStatus: string;
+  /** From the newest return: none, requested, approved, received, refunded, rejected. */
+  returnStatus: string;
+  refundedTotal: number;
 }
 
 export interface OrderListFilters {
@@ -122,6 +180,8 @@ export interface OrderListFilters {
   coupon?: boolean;
   shippingZone?: ShippingZone;
   search?: string;
+  source?: string;
+  storefrontId?: string;
   page?: number;
   limit?: number;
 }
@@ -140,23 +200,6 @@ export interface OrderNote {
   type: "INTERNAL" | "CUSTOMER";
   userId?: string | number;
   userName?: string;
-  createdAt: string;
-}
-
-export interface RefundLine {
-  orderLineId: string | number;
-  quantity: number;
-  amount: number;
-}
-
-export interface Refund {
-  id: string | number;
-  orderId: string | number;
-  lines: RefundLine[];
-  reason?: string;
-  amount: number;
-  method?: string;
-  images?: string[];
   createdAt: string;
 }
 
@@ -339,6 +382,16 @@ export interface StockItem {
   unitCost: number;
   lastAdjustedAt?: string;
   lastAdjustedBy?: string;
+  /** On hand and held per warehouse (every warehouse, in the store's order). */
+  byWarehouse?: { warehouseId: string; code: string; onHand: number; reserved: number }[];
+}
+
+export interface StockWarehouse {
+  id: string;
+  code: string;
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
 }
 
 export interface StockFilters {
@@ -387,7 +440,7 @@ export interface StockTransfer {
 export interface AdjustStockInput {
   productId: string;
   variantId: string | null;
-  /** Current on-hand quantity, needed to turn SET / INVENTORY_COUNT into a delta. */
+  /** Current on-hand quantity in that warehouse, needed to turn SET / INVENTORY_COUNT into a delta. */
   currentQty: number;
   productVariantId: string | number;
   warehouseId: string | number;
@@ -422,6 +475,7 @@ interface ApiStockRow {
   lowStockThreshold: number;
   unitCost: number;
   lastAdjustedAt: string | null;
+  byWarehouse?: { warehouseId: string; code: string; onHand: number; reserved: number }[];
 }
 
 interface ApiMovement {
@@ -520,6 +574,16 @@ interface ApiOrder {
   taxTotal: string;
   grandTotal: string;
   couponUsed: string | null;
+  source?: string;
+  storefront?: { id: string; name: string; code: string; courierAccountId?: string | null } | null;
+  manualDiscount?: string;
+  memberDiscount?: string;
+  memberLevel?: string | null;
+  walletUsed?: string;
+  cashbackAmount?: string;
+  promotionDiscount?: string;
+  promotions?: AppliedPromotion[] | null;
+  createdByAdmin?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -535,6 +599,7 @@ interface ApiOrder {
     unitPrice: string;
     lineTotal: string;
     variantValues: Record<string, string> | null;
+    meta?: { gift?: { promotionName?: string } } | null;
   }[];
   statusHistory?: {
     id: string;
@@ -543,7 +608,12 @@ interface ApiOrder {
     createdAt: string;
     admin?: { name: string } | null;
   }[];
-  refunds?: { id: string; amount: string; reason: string | null; createdAt: string; status?: string }[];
+  refunds?: ApiRefund[];
+  shipments?: ApiParcel[];
+  returns?: ApiReturn[];
+  fulfillmentStatus?: string;
+  returnStatus?: string;
+  refundedTotal?: string;
 }
 
 const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
@@ -557,6 +627,7 @@ const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
     country: f("CountryCode"),
     division: f("State"),
     district: f("City"),
+    upazila: f("Upazila"),
     postcode: f("Postcode"),
     phone: f("Phone"),
     email: prefix === "billing" ? f("Email") : undefined,
@@ -579,6 +650,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     quantity: i.quantity,
     unitPrice: Number(i.unitPrice),
     lineTotal: Number(i.lineTotal),
+    giftFrom: i.meta?.gift?.promotionName,
   }));
   return {
     id: o.id,
@@ -607,6 +679,26 @@ export function fromApiOrder(o: ApiOrder): Order {
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
     itemsCount: lines.reduce((n, l) => n + l.quantity, 0),
+    source: o.source ?? "website",
+    storefront: o.storefront
+      ? {
+          id: String(o.storefront.id),
+          name: o.storefront.name,
+          code: o.storefront.code,
+          courierAccountId: o.storefront.courierAccountId == null ? null : String(o.storefront.courierAccountId),
+        }
+      : undefined,
+    createdByName: o.createdByAdmin?.name ?? undefined,
+    manualDiscount: Number(o.manualDiscount ?? 0),
+    memberDiscount: Number(o.memberDiscount ?? 0),
+    memberLevel: o.memberLevel ?? undefined,
+    walletUsed: Number(o.walletUsed ?? 0),
+    cashback: Number(o.cashbackAmount ?? 0),
+    promotionDiscount: Number(o.promotionDiscount ?? 0),
+    promotions: o.promotions ?? [],
+    fulfillmentStatus: o.fulfillmentStatus ?? "unfulfilled",
+    returnStatus: o.returnStatus ?? "none",
+    refundedTotal: Number(o.refundedTotal ?? 0),
   };
 }
 
@@ -625,6 +717,8 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.minTotal !== undefined) params.set("minTotal", String(filters.minTotal));
         if (filters.maxTotal !== undefined) params.set("maxTotal", String(filters.maxTotal));
         if (filters.search) params.set("search", filters.search);
+        if (filters.source) params.set("source", filters.source);
+        if (filters.storefrontId) params.set("storefrontId", filters.storefrontId);
         if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
         params.set("page", String(filters.page ?? 1));
         params.set("perPage", String(filters.limit ?? 20));
@@ -652,7 +746,9 @@ export const operationsApiSlice = api.injectEndpoints({
     getOrder: builder.query<
       Order & {
         notes?: OrderNote[];
-        refunds?: Refund[];
+        refunds?: RefundRow[];
+        parcels?: Parcel[];
+        returns?: ReturnRequest[];
         timeline?: OrderTimelineEntry[];
         auditLog?: AuditLogEntry[];
       },
@@ -676,14 +772,9 @@ export const operationsApiSlice = api.injectEndpoints({
               userName: h.admin?.name ?? "System",
               createdAt: h.createdAt,
             })),
-          refunds: (o.refunds ?? []).map((r) => ({
-            id: r.id,
-            orderId: o.id,
-            lines: [],
-            reason: r.reason ?? undefined,
-            amount: Number(r.amount),
-            createdAt: r.createdAt,
-          })),
+          refunds: (o.refunds ?? []).map(fromApiRefund),
+          parcels: (o.shipments ?? []).map(fromApiParcel),
+          returns: (o.returns ?? []).map(fromApiReturn),
           auditLog: history.slice(1).map((h, i) => ({
             id: h.id,
             action: "Status changed",
@@ -759,46 +850,7 @@ export const operationsApiSlice = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [{ type: "Order", id }],
     }),
 
-    createRefund: builder.mutation<
-      Refund,
-      {
-        orderId: string | number;
-        lines: RefundLine[];
-        reason?: string;
-        amount: number;
-        images?: (File | string)[];
-      }
-    >({
-      query: ({ orderId, ...body }) => ({
-        url: `/admin/orders/${orderId}/refunds`,
-        method: "POST",
-        body,
-      }),
-      invalidatesTags: (_r, _e, { orderId }) => [
-        { type: "Order", id: orderId },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
-
-    updateOrderShippingTracking: builder.mutation<
-      Order,
-      {
-        id: string | number;
-        carrier?: string;
-        trackingNo?: string;
-        shipDate?: string;
-      }
-    >({
-      query: ({ id, ...body }) => ({
-        url: `/admin/orders/${id}/shipping-tracking`,
-        method: "PATCH",
-        body,
-      }),
-      invalidatesTags: (_r, _e, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
+    // Refunds, parcels and returns: fulfilment-api-slice.ts.
 
     getCustomers: builder.query<PaginatedResponse<Customer>, CustomerFilters>({
       query: (filters) => {
@@ -897,7 +949,7 @@ export const operationsApiSlice = api.injectEndpoints({
     }),
 
     getStockList: builder.query<
-      PaginatedResponse<StockItem> & { summary: StockSummary },
+      PaginatedResponse<StockItem> & { summary: StockSummary; warehouses: StockWarehouse[] },
       StockFilters
     >({
       query: (filters) => {
@@ -914,6 +966,7 @@ export const operationsApiSlice = api.injectEndpoints({
       },
       transformResponse: (res: {
         items: ApiStockRow[];
+        warehouses?: StockWarehouse[];
         summary: StockSummary;
         total: number;
         page: number;
@@ -929,6 +982,7 @@ export const operationsApiSlice = api.injectEndpoints({
           lastAdjustedAt: r.lastAdjustedAt ?? undefined,
         })),
         summary: res.summary,
+        warehouses: res.warehouses ?? [],
         total: res.total,
         page: res.page,
         limit: res.perPage,
@@ -944,7 +998,7 @@ export const operationsApiSlice = api.injectEndpoints({
     }),
 
     adjustStock: builder.mutation<unknown, AdjustStockInput>({
-      query: ({ productId, variantId, currentQty, quantity, type, reason, note }) => {
+      query: ({ productId, variantId, currentQty, quantity, type, reason, note, warehouseId }) => {
         const delta =
           type === "SET" || type === "INVENTORY_COUNT"
             ? quantity - currentQty
@@ -958,6 +1012,8 @@ export const operationsApiSlice = api.injectEndpoints({
             lines: [
               {
                 ...(variantId ? { variantId } : { productId }),
+                // A real warehouse id; anything else means the default warehouse.
+                ...(/^\d+$/.test(String(warehouseId)) ? { warehouseId: String(warehouseId) } : {}),
                 delta,
                 reason: reason ?? (type === "DAMAGE" ? "DAMAGED" : undefined),
                 note: note || undefined,
@@ -1025,8 +1081,6 @@ export const {
   useOrderInvoicesMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
-  useCreateRefundMutation,
-  useUpdateOrderShippingTrackingMutation,
   useGetCustomersQuery,
   useGetCustomerGroupsQuery,
   useGetCustomerQuery,

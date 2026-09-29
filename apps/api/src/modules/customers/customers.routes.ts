@@ -25,7 +25,7 @@ export const adminCustomersRouter = Router();
 adminCustomersRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.create"),
   validate({ body: CreateCustomerDto }),
   customersController.createCustomer,
 );
@@ -33,7 +33,7 @@ adminCustomersRouter.post(
 adminCustomersRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   validate({ query: CustomerSearchQueryDto }),
   customersController.listCustomers,
 );
@@ -41,14 +41,14 @@ adminCustomersRouter.get(
 adminCustomersRouter.get(
   "/groups",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   customersController.listGroups,
 );
 
 adminCustomersRouter.get(
   "/export",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   validate({ query: ExportCustomersDto }),
   customersController.exportCustomers,
 );
@@ -56,7 +56,7 @@ adminCustomersRouter.get(
 adminCustomersRouter.post(
   "/import",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.create"),
   multerFallback,
   validate({ body: ImportCustomersDto }),
   customersController.importCustomers,
@@ -65,7 +65,7 @@ adminCustomersRouter.post(
 adminCustomersRouter.post(
   "/bulk-status",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.edit"),
   validate({ body: CustomerStatusTransitionDto }),
   customersController.bulkUpdateStatuses,
 );
@@ -73,7 +73,7 @@ adminCustomersRouter.post(
 adminCustomersRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   validate({ params: CustomerIdParamDto }),
   customersController.getCustomer,
 );
@@ -81,7 +81,7 @@ adminCustomersRouter.get(
 adminCustomersRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.edit"),
   validate({ params: CustomerIdParamDto, body: UpdateCustomerDto }),
   customersController.updateCustomer,
 );
@@ -89,7 +89,7 @@ adminCustomersRouter.patch(
 adminCustomersRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.delete"),
   validate({ params: CustomerIdParamDto }),
   customersController.deleteCustomer,
 );
@@ -97,7 +97,7 @@ adminCustomersRouter.delete(
 adminCustomersRouter.get(
   "/:id/ltv",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   validate({ params: CustomerIdParamDto }),
   customersController.getCustomerLtv,
 );
@@ -105,7 +105,7 @@ adminCustomersRouter.get(
 adminCustomersRouter.get(
   "/:id/addresses",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.view"),
   validate({ params: CustomerIdParamDto }),
   customersController.listAddresses,
 );
@@ -113,7 +113,7 @@ adminCustomersRouter.get(
 adminCustomersRouter.post(
   "/:id/addresses",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.edit"),
   validate({ params: CustomerIdParamDto, body: CustomerAddressDto }),
   customersController.addAddress,
 );
@@ -121,7 +121,7 @@ adminCustomersRouter.post(
 adminCustomersRouter.post(
   "/:id/addresses/:addressId/default",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("customers.*"),
+  rbacMiddleware("customers.edit"),
   validate({ params: CustomerIdParamDto.merge(AddressIdParamDto), body: SetDefaultAddressDto }),
   customersController.setDefaultAddress,
 );

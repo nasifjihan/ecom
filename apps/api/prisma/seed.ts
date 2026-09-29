@@ -1,6 +1,7 @@
-import { PrismaClient, PlanType } from "@prisma/client";
+import { Prisma, PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
+import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
+import { syncLocations } from "../src/modules/locations/locations.data";
 
 const prisma = new PrismaClient();
 
@@ -269,7 +270,8 @@ async function seedFashionBDStore() {
     });
     if (!ex) {
       await prisma.paymentGatewayConfig.create({
-        data: { storeId: store.id, ...g },
+        // bKash / Nagad / Rocket / bank: customers pay by hand and staff verify the transaction ID.
+        data: { storeId: store.id, ...g, mode: ["bkash", "nagad", "rocket", "bank_transfer"].includes(g.code) ? "manual" : "online" },
       });
       console.log(`  ✅ Payment gateway ${g.code} (${g.name}) default row added`);
     }
@@ -754,16 +756,46 @@ async function seedFashionBDStore() {
       }
     }
   }
-  // The storefront's division picker uses the current official spellings (Chattogram, Barishal).
-  const robZone = await prisma.shippingZone.findFirst({ where: { storeId: catalogStoreId, name: "Rest of Bangladesh" } });
-  if (robZone) {
-    const states = Array.isArray(robZone.states) ? (robZone.states as string[]) : [];
-    const missing = ["Chattogram", "Barishal"].filter((d) => !states.includes(d));
-    if (missing.length) {
-      await prisma.shippingZone.update({ where: { id: robZone.id }, data: { states: [...states, ...missing] } });
-    }
-  }
   console.log(`  ✅ Storefront demo catalog ready (${demoProducts.length} products, ${demoCreated} newly created)`);
+
+  // ===== BATCH #31: Bangla names for the demo catalog (only where none are set yet) =====
+  const bangla: Record<"category" | "brand" | "product", Record<string, string>> = {
+    category: {
+      women: "নারী", men: "পুরুষ", accessories: "এক্সেসরিজ", dresses: "ড্রেস", sarees: "শাড়ি ও সালোয়ার",
+      shirts: "শার্ট", panjabi: "পাঞ্জাবি", bags: "ব্যাগ", watches: "ঘড়ি",
+    },
+    brand: { richman: "রিচম্যান", "cats-eye": "ক্যাটস আই", aarong: "আড়ং", bata: "বাটা" },
+    product: {
+      "richman-formal-cotton-shirt-navy": "রিচম্যান ফরমাল কটন শার্ট — নেভি",
+      "richman-slim-fit-shirt-white": "রিচম্যান স্লিম ফিট অক্সফোর্ড শার্ট — সাদা",
+      "cats-eye-casual-denim-shirt": "ক্যাটস আই ক্যাজুয়াল ডেনিম শার্ট — ইন্ডিগো",
+      "cats-eye-premium-linen-shirt": "ক্যাটস আই প্রিমিয়াম লিনেন শার্ট — বেইজ",
+      "richman-party-wear-satin-shirt": "রিচম্যান পার্টি ওয়্যার স্যাটিন শার্ট — কালো",
+      "aarong-cotton-panjabi-white": "আড়ং প্রিমিয়াম কটন পাঞ্জাবি — সাদা",
+      "aarong-embroidered-panjabi-maroon": "আড়ং এমব্রয়ডারি পাঞ্জাবি — মেরুন",
+      "aarong-floral-maxi-dress": "আড়ং ফ্লোরাল ম্যাক্সি ড্রেস — সামার এডিশন",
+      "cats-eye-jamdani-saree": "ক্যাটস আই হ্যান্ডলুম জামদানি শাড়ি",
+      "aarong-three-piece-salwar": "আড়ং প্রিন্টেড থ্রি-পিস সালোয়ার কামিজ",
+      "bata-leather-tote-bag-tan": "বাটা জেনুইন লেদার টোট ব্যাগ — ট্যান",
+      "richman-classic-steel-watch": "রিচম্যান ক্লাসিক স্টেইনলেস স্টিল ঘড়ি",
+    },
+  };
+  for (const [slug, name] of Object.entries(bangla.category)) {
+    await prisma.category.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  for (const [slug, name] of Object.entries(bangla.brand)) {
+    await prisma.brand.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  for (const [slug, name] of Object.entries(bangla.product)) {
+    await prisma.product.updateMany({ where: { storeId: catalogStoreId, slug, translations: { equals: Prisma.DbNull } }, data: { translations: { bn: { name } } } });
+  }
+  await prisma.storeLocalizationSetting.upsert({
+    where: { storeId: catalogStoreId },
+    update: {},
+    create: { storeId: catalogStoreId, defaultCurrency: "BDT", defaultLanguage: "en", allowedLanguages: ["en", "bn"] },
+  });
+  console.log("  ✅ Bangla names for the demo catalog");
+
 
   // ===== BATCH #8 BASELINE: Customer Groups, 20 demo customers, 2 coupons, 1 flash sale, 30 reviews =====
   const demoStoreId = store.id;
@@ -1093,6 +1125,7 @@ async function seedDefaultRolesAndPerms(storeId: bigint) {
           slug,
           name: titleCased,
           isSystem: true,
+          maxManualDiscountPct: STORE_ROLE_MANUAL_DISCOUNT[slug] ?? 0,
         },
       });
       roleId = created.id;
@@ -1282,6 +1315,36 @@ async function seedContent(storeId: bigint) {
   console.log("  ✅ Pages, FAQs, blog posts and menus ready");
 }
 
+/** Bangladesh divisions, districts, upazilas and Dhaka thanas (prisma/data/bd-locations.json). */
+async function seedLocations() {
+  const r = await syncLocations(prisma);
+  const total = await prisma.location.count();
+  console.log(`  ✅ Locations: ${total} (${r.created} added, ${r.updated} renamed)`);
+}
+
+/**
+ * Point the demo zones at locations instead of free-text names. The most specific zone wins,
+ * so Dhaka district uses "Dhaka Metro" and the rest of the country uses "Rest of Bangladesh".
+ * Zones that already have locations (e.g. edited in the admin) are left alone.
+ */
+async function seedZoneLocations(storeId: bigint) {
+  const links: Record<string, string[]> = {
+    "Dhaka Metro": ["dhaka/dhaka"],
+    "Rest of Bangladesh": ["barishal", "chattogram", "dhaka", "khulna", "mymensingh", "rajshahi", "rangpur", "sylhet"],
+  };
+  for (const [name, codes] of Object.entries(links)) {
+    const zone = await prisma.shippingZone.findFirst({ where: { storeId, name }, include: { _count: { select: { locations: true } } } });
+    if (!zone || zone._count.locations > 0) continue;
+    const locs = await prisma.location.findMany({ where: { code: { in: codes } }, select: { id: true } });
+    await prisma.shippingZoneLocation.createMany({
+      data: locs.map((l) => ({ zoneId: zone.id, locationId: l.id })),
+      skipDuplicates: true,
+    });
+    await prisma.shippingZone.update({ where: { id: zone.id }, data: { states: [] } });
+    console.log(`  ✅ Zone "${name}" linked to ${locs.length} location(s)`);
+  }
+}
+
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
   console.log("║      E-Commerce Platform — Database Seed     ║");
@@ -1289,7 +1352,9 @@ async function main() {
 
   try {
     await seedPlatformSuperAdmin();
+    await seedLocations();
     const store = await seedFashionBDStore();
+    await seedZoneLocations(store.id);
     const ownerRole = await seedDefaultRolesAndPerms(store.id);
     await seedStoreOwner(store.id, ownerRole.id);
     await seedContent(store.id);

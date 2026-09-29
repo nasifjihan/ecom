@@ -42,9 +42,31 @@ export type PaymentMethodOption = {
   name: string;
   description?: string;
   instructions?: string;
+  /** "manual": the customer sends money to accountNumber and gives the transaction ID. */
+  mode?: "manual" | "online" | "cod";
+  accountNumber?: string;
+  /** personal | agent | merchant */
+  accountType?: string;
   feeFixed: number;
   feePercent: number;
 };
+
+/** A bKash / Nagad / Rocket / bank payment paid by hand, and what the shop made of it. */
+export type OrderPayment = {
+  method: string;
+  methodName: string;
+  manual: boolean;
+  accountNumber: string | null;
+  accountType: string | null;
+  instructions: string | null;
+  /** What's still to pay after verified payments. */
+  due: number;
+  /** A transaction ID can be sent now (nothing waiting to be checked, money still due). */
+  canSubmit: boolean;
+  transfers: { transactionId: string | null; amount: number; status: "to_verify" | "verified" | "rejected" | string; rejectReason: string | null; createdAt: string }[];
+};
+
+export type TransferInput = { transactionId: string; senderNumber?: string };
 
 export type OrderDetail = {
   orderId: string;
@@ -59,24 +81,43 @@ export type OrderDetail = {
   shippingMethodName: string;
   shipping: OrderAddressSummary;
   billing: OrderAddressSummary;
-  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number }[];
+  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
   itemsSubtotal: number;
   discountTotal: number;
+  /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
+  memberDiscount?: number;
+  memberLevel?: string | null;
+  walletUsed?: number;
+  cashback?: number;
+  /** Part of discountTotal from automatic promotions, listed in `promotions`. */
+  promotionDiscount?: number;
+  promotions?: { name: string; type: string; amount: number }[];
   couponUsed?: string | null;
   shippingTotal: number;
   taxTotal: number;
   feeTotal: number;
   grandTotal: number;
   currency: string;
+  payment?: OrderPayment;
 };
 
 export type OrderAddressSummary = {
   name: string;
   address: string;
   city?: string | null;
+  upazila?: string | null;
   division?: string | null;
   postcode?: string | null;
   country?: string | null;
+};
+
+/** A Bangladesh delivery area the store serves (GET /storefront/locations). */
+export type StoreLocation = {
+  id: string;
+  parentId: string | null;
+  type: "DIVISION" | "DISTRICT" | "UPAZILA" | "THANA";
+  en: string;
+  bn: string;
 };
 
 export type TaxBreakdown = {
@@ -94,6 +135,8 @@ export type CouponApplyResult = {
   message?: string;
   newCartTotal?: number;
   newSubtotal?: number;
+  /** False: the store's automatic promotions come off the order while this coupon is on it. */
+  worksWithPromotions?: boolean;
   /** Shipping amount waived by a free-shipping coupon (0 otherwise). */
   shippingDiscount?: number;
   errorMessage?: string;
@@ -118,6 +161,9 @@ export type AddressPayload = {
   country: string;
   division: string;
   district: string;
+  upazila?: string;
+  /** Deepest area picked (upazila/thana, else district); the API fills the names from it. */
+  locationId?: string | null;
   postcode: string;
   addressLine1: string;
   addressLine2?: string;
@@ -126,7 +172,8 @@ export type AddressPayload = {
 };
 
 export type PlaceOrderBody = {
-  email: string;
+  /** Optional: a phone number is enough to order. */
+  email?: string;
   phone: string;
   isGuest: boolean;
   accountCreatePassword?: string;
@@ -140,6 +187,8 @@ export type PlaceOrderBody = {
   shippingCost?: number;
   paymentGateway: PaymentMethod | string;
   paymentDetails?: Record<string, unknown>;
+  /** Manual bKash / Nagad / Rocket / bank payments: the transaction ID and the number paid from. */
+  payment?: TransferInput;
   couponCodes?: string[];
   items: OrderItemSnapshot[];
   subtotal?: number;
@@ -150,6 +199,10 @@ export type PlaceOrderBody = {
   currency?: string;
   customerNote?: string;
   termsAgreed?: boolean;
+  /** Signed-in customers: pay what the shop allows from the wallet. */
+  useWallet?: boolean;
+  /** A salesperson's share-link code: the order is credited to them. */
+  salesCode?: string;
 };
 
 export type OrderResult = {
@@ -171,12 +224,19 @@ export type OrderResult = {
 
 export const checkoutApi = api.injectEndpoints({
   endpoints: (builder) => ({
+    getLocations: builder.query<StoreLocation[], void>({
+      query: () => "/storefront/locations",
+      keepUnusedDataFor: 3600,
+    }),
+
     getShippingRates: builder.query<
       ShippingRate[],
       {
         countryCode?: string;
         division?: string;
         district?: string;
+        upazila?: string;
+        locationId?: string | null;
         subtotal?: number;
         weightKG?: number;
         qty?: number;
@@ -188,6 +248,8 @@ export const checkoutApi = api.injectEndpoints({
         if (args.countryCode) params.set("countryCode", args.countryCode);
         if (args.division) params.set("division", args.division);
         if (args.district) params.set("district", args.district);
+        if (args.upazila) params.set("upazila", args.upazila);
+        if (args.locationId) params.set("locationId", args.locationId);
         if (args.subtotal) params.set("subtotal", String(args.subtotal));
         if (args.weightKG) params.set("weightKG", String(args.weightKG));
         if (args.qty) params.set("qty", String(args.qty));
@@ -289,11 +351,18 @@ export const checkoutApi = api.injectEndpoints({
       query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}`, method: "GET" }),
       providesTags: (_res, _err, key) => [{ type: "Order" as const, id: key }],
     }),
+
+    /** Sends a transaction ID for an order from the thank-you page (the order key is the secret). */
+    submitOrderPayment: builder.mutation<{ transactionId: string; status: string; amount: number }, TransferInput & { orderKey: string }>({
+      query: ({ orderKey, ...body }) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}/payment`, method: "POST", body }),
+      invalidatesTags: (_res, _err, { orderKey }) => [{ type: "Order" as const, id: orderKey }],
+    }),
   }),
   overrideExisting: true,
 });
 
 export const {
+  useGetLocationsQuery,
   useGetShippingRatesQuery,
   useLazyGetShippingRatesQuery,
   useGetTaxesQuery,
@@ -302,6 +371,7 @@ export const {
   usePlaceOrderMutation,
   useGetPaymentMethodsQuery,
   useGetOrderByKeyQuery,
+  useSubmitOrderPaymentMutation,
 } = checkoutApi;
 
 /**

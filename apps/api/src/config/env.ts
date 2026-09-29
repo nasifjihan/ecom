@@ -121,6 +121,14 @@ const envSchema = z.object({
 
   STEADFAST_API_KEY: z.string().optional(),
   STEADFAST_BASE_URL: z.string().optional(),
+  /** RedX OpenAPI base URL (defaults to live or sandbox by the account's mode). */
+  REDX_API_URL: z.string().optional(),
+  /** How often booked parcels are checked with their courier (minutes; 0 = never). */
+  COURIER_SYNC_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),
+  /** SMS provider base URLs; blank = the real API (point at scripts/mock-sms.mjs to test locally). */
+  BULKSMSBD_API_URL: z.string().optional(),
+  ALPHASMS_API_URL: z.string().optional(),
+  SSLWIRELESS_API_URL: z.string().optional(),
   REDSMS_API_KEY: z.string().optional(),
   SUNDARBAN_API_KEY: z.string().optional(),
   PAPERFLY_API_KEY: z.string().optional(),

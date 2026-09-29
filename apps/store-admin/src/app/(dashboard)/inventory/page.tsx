@@ -127,11 +127,17 @@ export default function InventoryPage() {
   const [updateThreshold] = useUpdateStockThresholdMutation();
 
   const stock = stockRaw?.items ?? [];
+  const warehouses = (stockRaw?.warehouses ?? []).filter((w) => w.isActive);
+  const defaultWarehouse = warehouses.find((w) => w.isDefault) ?? warehouses[0];
+  const multi = warehouses.length > 1;
+  /** On hand in one warehouse (the whole total when there's only one). */
+  const onHandIn = (s: StockItem, warehouseId: string | undefined) =>
+    multi ? (s.byWarehouse?.find((b) => b.warehouseId === warehouseId)?.onHand ?? 0) : s.physicalQty;
   const summary: StockSummary = stockRaw?.summary ?? { totalSkus: 0, totalStockValue: 0, outOfStockCount: 0, lowStockCount: 0 };
   const logs = logsRaw?.items ?? [];
 
   const emptyAdjust = {
-    productId: "", variantId: null as string | null, currentQty: 0, productName: "",
+    productId: "", variantId: null as string | null, currentQty: 0, productName: "", warehouseId: "",
     quantity: 1, type: "ADD" as AdjustmentType, reason: "RECEIVED" as AdjustmentReason,
     note: "",
   };
@@ -143,7 +149,8 @@ export default function InventoryPage() {
         ...f,
         productId: pageStock.productId,
         variantId: pageStock.variantId,
-        currentQty: pageStock.physicalQty,
+        currentQty: onHandIn(pageStock, defaultWarehouse?.id),
+        warehouseId: defaultWarehouse?.id ?? "",
         productName: pageStock.productName,
       }));
       setShowAdjustSheet(true);
@@ -171,7 +178,7 @@ export default function InventoryPage() {
     try {
       await adjustStock({
         productId: s.productId, variantId: s.variantId, currentQty: s.physicalQty,
-        productVariantId: s.productVariantId, warehouseId: "MAIN", quantity: val, type: "SET", reason: "COUNTED",
+        productVariantId: s.productVariantId, warehouseId: defaultWarehouse?.id ?? "", quantity: val, type: "SET", reason: "COUNTED",
       }).unwrap();
       toast.success(`${s.sku}: stock set to ${val}`);
     } catch (err) {
@@ -197,7 +204,7 @@ export default function InventoryPage() {
         variantId: adjustForm.variantId,
         currentQty: adjustForm.currentQty,
         productVariantId: adjustForm.variantId ?? adjustForm.productId,
-        warehouseId: "MAIN",
+        warehouseId: adjustForm.warehouseId,
         quantity: adjustForm.quantity,
         type: adjustForm.type,
         reason: adjustForm.reason,
@@ -248,6 +255,21 @@ export default function InventoryPage() {
           const edit = v !== undefined;
           const low = s.availableQty <= s.lowStockThreshold;
           const oos = s.availableQty === 0;
+          // Several warehouses: counts are set per warehouse in the Adjust sheet.
+          if (multi) {
+            return (
+              <div className="min-w-[110px]">
+                <div className={cn("text-sm font-semibold tabular-nums", oos ? "text-red-600 dark:text-red-400" : low ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white")}>{s.physicalQty}</div>
+                <div className="mt-0.5 flex flex-wrap gap-1">
+                  {(s.byWarehouse ?? []).filter((b) => b.onHand || b.reserved).map((b) => (
+                    <span key={b.warehouseId} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={b.reserved ? `${b.reserved} held for orders` : undefined}>
+                      {b.code} {b.onHand}{b.reserved ? `/${b.reserved}` : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          }
           return (
             <div className="flex items-center gap-2">
               <Input
@@ -337,7 +359,7 @@ export default function InventoryPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editingQty, editingThresh],
+    [multi, editingQty, editingThresh],
   );
 
   const stockTable = useReactTable({ data: stock, columns: stockCols, getCoreRowModel: getCoreRowModel() });
@@ -541,7 +563,9 @@ export default function InventoryPage() {
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2"><PlusCircle className="h-5 w-5 text-indigo-600" />Adjust Stock</SheetTitle>
-            <SheetDescription>Current on-hand stock: {adjustForm.currentQty}. Every change is recorded in the inventory log.</SheetDescription>
+            <SheetDescription>
+              On the shelf{multi ? ` in ${warehouses.find((w) => w.id === adjustForm.warehouseId)?.name ?? "this warehouse"}` : ""}: {adjustForm.currentQty}. Every change is recorded in the inventory log.
+            </SheetDescription>
           </SheetHeader>
           <Separator />
           <div className="py-5 space-y-4">
@@ -549,6 +573,19 @@ export default function InventoryPage() {
               <Label className="text-xs mb-1.5 block">Product</Label>
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm font-medium">{adjustForm.productName}</div>
             </div>
+            {multi && (
+              <div>
+                <Label className="text-xs mb-1.5 block">Warehouse</Label>
+                <Select
+                  value={adjustForm.warehouseId}
+                  onValueChange={(v) => setAdjustForm({ ...adjustForm, warehouseId: v, currentQty: pageStock ? onHandIn(pageStock, v) : 0 })}
+                >
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.name} ({w.code})</SelectItem>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs mb-1.5 block">Quantity</Label>

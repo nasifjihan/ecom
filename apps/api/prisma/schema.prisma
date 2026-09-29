@@ -65,6 +65,11 @@ model Store {
   layoutSettings       StoreLayoutSetting?
   paymentSettings      PaymentGatewayConfig[]
   shippingZones        ShippingZone[]
+  shipments            Shipment[]
+  paymentRecords       PaymentRecord[]
+  courierSettlements   CourierSettlement[]
+  courierAccounts      CourierAccount[]
+  locationsOff         StoreLocationOff[]
   taxClasses           TaxClass[]
   emailSettings        StoreEmailSetting?
   seoSettings          StoreSeoSetting?
@@ -83,6 +88,12 @@ model Store {
   refunds              Refund[]
   returns              ReturnRequest[]
   coupons              Coupon[]
+  promotions           Promotion[]
+  smsSetting           StoreSmsSetting?
+  smsMessages          SmsMessage[]
+  phoneOtps            PhoneOtp[]
+  searchTerms          SearchTerm[]
+  productQuestions     ProductQuestion[]
   flashSales           FlashSale[]
   giftCards            GiftCard[]
   banners              Banner[]
@@ -101,6 +112,23 @@ model Store {
   emailTemplates       EmailTemplate[]
   abandonedCarts       AbandonedCart[]
   suppliers            Supplier[]
+  purchases            Purchase[]
+  supplierPayments     SupplierPayment[]
+  moneyAccounts        MoneyAccount[]
+  moneyTransactions    MoneyTransaction[]
+  qualityGrades        QualityGrade[]
+  loyaltySettings      LoyaltySettings?
+  wholesaleSettings    WholesaleSettings?
+  salesSettings        SalesSettings?
+  businessAccounts     BusinessAccount[]
+  quotations           Quotation[]
+  loyaltyLevels        LoyaltyLevel[]
+  walletTransactions   WalletTransaction[]
+  warehouses           Warehouse[]
+  storefronts          Storefront[]
+  productStorefronts   ProductStorefront[]
+  warehouseStock       WarehouseStock[]
+  stockTransfers       StockTransfer[]
   subscriptionProducts SubscriptionProduct[]
   subscriptions        CustomerSubscription[]
   carts                Cart[]
@@ -121,18 +149,75 @@ model Store {
 }
 
 model Domain {
-  id         BigInt   @id @default(autoincrement())
-  storeId    BigInt
-  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  hostname   String   @unique
-  type       String
-  primary    Boolean  @default(false)
-  sslEnabled Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           BigInt      @id @default(autoincrement())
+  storeId      BigInt
+  store        Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  hostname     String      @unique
+  type         String
+  primary      Boolean     @default(false)
+  sslEnabled   Boolean     @default(true)
+  /// The storefront this address opens (null: the store's default storefront).
+  storefrontId BigInt?
+  storefront   Storefront? @relation(fields: [storefrontId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([hostname])
   @@index([storeId])
+}
+
+/// One shop front of a store: its own addresses, look, menus, home page, product range and prices.
+/// Stock, customers and orders are shared by all of a store's storefronts.
+model Storefront {
+  id                 BigInt              @id @default(autoincrement())
+  storeId            BigInt
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name               String
+  /// Short code shown on lists, e.g. "MAIN", "KIDS".
+  code               String
+  /// The storefront used when an address isn't linked to one. Exactly one per store.
+  isDefault          Boolean             @default(false)
+  isActive           Boolean             @default(true)
+  /// Added to every price shown here (negative lowers them), unless a product has its own price.
+  priceAdjustPercent Decimal             @default(0) @db.Decimal(6, 2)
+  /// New products are sold here automatically (otherwise they must be added one by one).
+  includeNewProducts Boolean             @default(true)
+  /// Payment methods offered here (gateway codes; empty: every enabled one).
+  paymentGateways    String[]            @default([])
+  /// Courier account suggested when booking this storefront's parcels.
+  courierAccountId   BigInt?
+  courierAccount     CourierAccount?     @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  sortOrder          Int                 @default(0)
+  domains            Domain[]
+  menus              Menu[]
+  homepageSections   HomepageSection[]
+  orders             Order[]
+  products           ProductStorefront[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, isActive])
+}
+
+/// A product in one storefront: whether it's sold there and, optionally, its own price there
+/// (which then applies to all of its options). No row means the storefront's default.
+model ProductStorefront {
+  id           BigInt     @id @default(autoincrement())
+  storeId      BigInt
+  store        Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId    BigInt
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storefrontId BigInt
+  storefront   Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  listed       Boolean    @default(true)
+  regularPrice Decimal?   @db.Decimal(12, 2)
+  salePrice    Decimal?   @db.Decimal(12, 2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([productId, storefrontId])
+  @@index([storefrontId, listed])
 }
 
 model PlatformAdmin {
@@ -152,16 +237,18 @@ model PlatformAdmin {
 // ADMIN USERS, ROLES & PERMISSIONS (PER STORE)
 // ============================================================
 model Role {
-  id          BigInt                 @id @default(autoincrement())
-  storeId     BigInt
-  store       Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name        String
-  slug        String
-  isSystem    Boolean                @default(false)
-  permissions PermissionAssignment[]
-  admins      AdminUser[]
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                   BigInt                 @id @default(autoincrement())
+  storeId              BigInt
+  store                Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name                 String
+  slug                 String
+  isSystem             Boolean                @default(false)
+  /// Largest discount (% of the items subtotal) this role may give on an order it creates by hand.
+  maxManualDiscountPct Decimal                @default(0) @db.Decimal(5, 2)
+  permissions          PermissionAssignment[]
+  admins               AdminUser[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@unique([storeId, slug])
 }
@@ -177,28 +264,41 @@ model PermissionAssignment {
 }
 
 model AdminUser {
-  id              BigInt           @id @default(autoincrement())
-  storeId         BigInt
-  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email           String
-  passwordHash    String
-  name            String
-  phone           String?
-  avatarUrl       String?
-  roleId          BigInt
-  role            Role             @relation(fields: [roleId], references: [id])
-  status          String           @default("active")
-  twoFactorSecret String?
-  lastLoginAt     DateTime?
-  lastLoginIp     String?
-  auditLogs       AuditLog[]
-  orderStatusLogs OrderStatusLog[]
-  refunds         Refund[]
-  authoredPosts   BlogPost[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                 BigInt            @id @default(autoincrement())
+  storeId            BigInt
+  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email              String
+  passwordHash       String
+  name               String
+  phone              String?
+  avatarUrl          String?
+  roleId             BigInt
+  role               Role              @relation(fields: [roleId], references: [id])
+  status             String            @default("active")
+  /// Storefronts this staff member works on (empty: all): their orders, reports and storefront content.
+  storefrontIds      BigInt[]          @default([])
+  twoFactorSecret    String?
+  lastLoginAt        DateTime?
+  lastLoginIp        String?
+  auditLogs          AuditLog[]
+  orderStatusLogs    OrderStatusLog[]
+  ordersCreated      Order[]           @relation("OrderCreatedBy")
+  /// Sales team (Batch 33): earns commission on the orders credited to them.
+  isSalesperson      Boolean           @default(false)
+  /// Added to the product / category / store rate, in %.
+  commissionExtraPct Decimal           @default(0) @db.Decimal(5, 2)
+  /// For share links (?sp=CODE): online orders from the link are credited to them.
+  salesCode          String?
+  ordersSold         Order[]           @relation("OrderSalesperson")
+  commissions        SalesCommission[]
+  salesTargets       SalesTarget[]
+  refunds            Refund[]
+  authoredPosts      BlogPost[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   @@unique([storeId, email])
+  @@unique([storeId, salesCode])
 }
 
 model AuditLog {
@@ -365,6 +465,64 @@ model StoreEmailSetting {
   updatedAt      DateTime @updatedAt
 }
 
+/// SMS provider and order-SMS settings (modules/sms). Credentials are encrypted JSON.
+model StoreSmsSetting {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt    @unique
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// log (record only, nothing sent) | bulksmsbd | alphasms | sslwireless
+  provider      String    @default("log")
+  senderId      String?
+  credentials   String?
+  /// Per event: { enabled, template } (order_placed, order_confirmed, order_shipped, …)
+  events        Json?
+  /// Customers can sign in with a code sent to their phone.
+  phoneOtpLogin Boolean   @default(false)
+  lastTestAt    DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// Every SMS the store sent or tried to send. One-time codes are stored masked.
+model SmsMessage {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  to          String
+  body        String
+  /// otp | order_placed | order_confirmed | order_shipped | order_delivered | order_cancelled | invoice | test
+  kind        String
+  orderId     BigInt?
+  provider    String
+  /// sent | failed | logged
+  status      String
+  providerRef String?
+  error       String?
+  segments    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([storeId, orderId])
+}
+
+/// One-time sign-in codes sent by SMS; only a hash of the code is kept.
+model PhoneOtp {
+  id         BigInt    @id @default(autoincrement())
+  storeId    BigInt
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  phone      String
+  codeHash   String
+  purpose    String    @default("login")
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([storeId, phone, createdAt])
+}
+
 model StoreSeoSetting {
   id                    BigInt   @id @default(autoincrement())
   storeId               BigInt   @unique
@@ -427,37 +585,47 @@ model StoreLocalizationSetting {
 // PAYMENT, SHIPPING, TAX
 // ============================================================
 model PaymentGatewayConfig {
-  id           BigInt   @id @default(autoincrement())
-  storeId      BigInt
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  code         String
-  name         String
-  description  String?
-  enabled      Boolean  @default(false)
-  testMode     Boolean  @default(true)
-  sortOrder    Int      @default(0)
-  credentials  Json?
-  instructions String?  @db.Text
-  feeFixed     Decimal  @default(0) @db.Decimal(12, 2)
-  feePercent   Decimal  @default(0) @db.Decimal(5, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            BigInt   @id @default(autoincrement())
+  storeId       BigInt
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  description   String?
+  enabled       Boolean  @default(false)
+  testMode      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  credentials   Json?
+  instructions  String?  @db.Text
+  /// bKash / Nagad / Rocket: "manual" = customers send money to accountNumber and enter the
+  /// transaction ID, staff verify it; "online" = the gateway's checkout page.
+  mode          String   @default("online")
+  accountNumber String?
+  /// personal | agent | merchant (how the customer should send: Send Money, Cash Out, Payment)
+  accountType   String?
+  feeFixed      Decimal  @default(0) @db.Decimal(12, 2)
+  feePercent    Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([storeId, code])
 }
 
 model ShippingZone {
-  id        BigInt           @id @default(autoincrement())
-  storeId   BigInt
-  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name      String
-  countries Json
-  states    Json?
-  postcodes Json?
-  methods   ShippingMethod[]
-  orders    Order[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            BigInt                 @id @default(autoincrement())
+  storeId       BigInt
+  store         Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name          String
+  countries     Json
+  states        Json?
+  postcodes     Json?
+  enabled       Boolean                @default(true)
+  /// Only for these storefronts (empty: all). A storefront's own zones replace shared ones where both cover an address.
+  storefrontIds BigInt[]               @default([])
+  locations     ShippingZoneLocation[]
+  methods       ShippingMethod[]
+  orders        Order[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 }
 
 model ShippingMethod {
@@ -480,6 +648,54 @@ model ShippingMethod {
   deliveryEstimateMaxDays Int?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
+}
+
+/// Bangladesh administrative areas, shared by every store: division -> district -> upazila,
+/// plus the Dhaka metro thanas under Dhaka district. Stores can switch delivery off per location.
+enum LocationType {
+  DIVISION
+  DISTRICT
+  UPAZILA
+  THANA
+}
+
+model Location {
+  id        BigInt                 @id @default(autoincrement())
+  /// Stable key such as "dhaka/dhaka/dhanmondi"; the seed upserts by it.
+  code      String                 @unique
+  type      LocationType
+  nameEn    String
+  nameBn    String
+  parentId  BigInt?
+  parent    Location?              @relation("LocationTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Location[]             @relation("LocationTree")
+  sortOrder Int                    @default(0)
+  zones     ShippingZoneLocation[]
+  storesOff StoreLocationOff[]
+
+  @@index([parentId])
+  @@index([type])
+}
+
+/// A store doesn't deliver to this location (or anywhere under it).
+model StoreLocationOff {
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  locationId BigInt
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([storeId, locationId])
+}
+
+model ShippingZoneLocation {
+  zoneId     BigInt
+  zone       ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  locationId BigInt
+  location   Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([zoneId, locationId])
+  @@index([locationId])
 }
 
 model TaxClass {
@@ -534,6 +750,8 @@ model Category {
   imageUrl       String?
   bannerUrl      String?
   description    String?           @db.Text
+  /// Sales commission on products in this category, in % (null: the store's default).
+  commissionRate Decimal?          @db.Decimal(5, 2)
   displayMode    String            @default("products")
   sortOrder      Int               @default(0)
   isActive       Boolean           @default(true)
@@ -659,6 +877,8 @@ model Product {
   taxClassId            BigInt?
   taxClass              TaxClass?              @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
   categories            ProductCategory[]
+  storefronts           ProductStorefront[]
+  priceTiers            PriceTier[]
   collections           ProductCollection[]
   images                ProductImage[]
   variants              ProductVariant[]
@@ -666,6 +886,8 @@ model Product {
   upsells               ProductLink[]          @relation("Upsells")
   crossSells            ProductLink[]          @relation("CrossSells")
   inventoryLogs         InventoryLog[]
+  warehouseStock        WarehouseStock[]
+  transferItems         StockTransferItem[]
   reviews               Review[]
   isDigital             Boolean                @default(false)
   digitalFileId         BigInt?
@@ -688,8 +910,18 @@ model Product {
   supplierId            BigInt?
   supplier              Supplier?              @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   supplierCost          Decimal?               @db.Decimal(12, 2)
+  /// What one unit cost the shop (average landed cost; purchases update it). Options have their own.
+  costPrice             Decimal?               @db.Decimal(12, 2)
+  /// Sales commission on this product, in % (null: its category's, else the store's default).
+  commissionRate        Decimal?               @db.Decimal(5, 2)
+  purchaseItems         PurchaseItem[]
   supplierSku           String?
   averageRating         Decimal                @default(0) @db.Decimal(3, 2)
+  /// Search and filter words, lower-case ("eid", "cotton", "gift").
+  tags                  String[]               @default([])
+  /// [{ group?, label, value }] shown as a table on the product page.
+  specifications        Json?
+  questions             ProductQuestion[]
   reviewCount           Int                    @default(0)
   viewCount             Int                    @default(0)
   saleCount             Int                    @default(0)
@@ -707,6 +939,7 @@ model Product {
   @@index([storeId, status])
   @@index([storeId, brandId])
   @@index([storeId, type])
+  @@index([tags], type: Gin)
 }
 
 model ProductImage {
@@ -772,6 +1005,9 @@ model ProductVariant {
   attributeValues       Json
   sku                   String?
   barcode               String?
+  /// What one unit cost the shop (average landed cost; purchases update it).
+  costPrice             Decimal?               @db.Decimal(12, 2)
+  purchaseItems         PurchaseItem[]
   regularPrice          Decimal?               @db.Decimal(12, 2)
   salePrice             Decimal?               @db.Decimal(12, 2)
   salePriceStartAt      DateTime?
@@ -793,6 +1029,9 @@ model ProductVariant {
   flashSaleItems        FlashSaleItem[]
   customerSubscriptions CustomerSubscription[]
   inventoryLogs         InventoryLog[]
+  warehouseStock        WarehouseStock[]
+  transferItems         StockTransferItem[]
+  priceTiers            PriceTier[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -817,7 +1056,9 @@ model InventoryLog {
   product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
   variantId   BigInt?
   variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  /// Warehouse code at the time (kept for old rows); warehouseId is the warehouse itself.
   warehouse   String?
+  warehouseId BigInt?
   changeQty   Int
   reason      String
   referenceId String?
@@ -850,7 +1091,8 @@ model Customer {
   id                    BigInt                 @id @default(autoincrement())
   storeId               BigInt
   store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email                 String
+  /// Optional for customers a shop records by hand (phone, Facebook, walk-in); required to sign in.
+  email                 String?
   passwordHash          String?
   firstName             String
   lastName              String
@@ -883,6 +1125,14 @@ model Customer {
   purchasedGiftCards    GiftCard[]
   returnRequests        ReturnRequest[]
   affiliateProfile      Affiliate?             @relation("CustomerAffiliateProfile")
+  /// Loyalty level from qualifyingSpend (Batch 30).
+  loyaltyLevelId        BigInt?
+  loyaltyLevel          LoyaltyLevel?          @relation(fields: [loyaltyLevelId], references: [id], onDelete: SetNull)
+  businessAccount       BusinessAccount?
+  quotations            Quotation[]
+  /// Items less discounts and refunds over delivered orders; decides the loyalty level.
+  qualifyingSpend       Decimal                @default(0) @db.Decimal(14, 2)
+  walletTransactions    WalletTransaction[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -904,6 +1154,9 @@ model CustomerAddress {
   address2    String?
   city        String
   state       String?
+  upazila     String?
+  /// Deepest Location picked (upazila/thana, else district).
+  locationId  BigInt?
   postcode    String?
   countryCode String
   phone       String?
@@ -938,6 +1191,46 @@ model Review {
 
   @@index([productId, status])
   @@index([customerId])
+}
+
+/// What customers search for (aggregated per term, not per person). modules/storefront/search.ts
+model SearchTerm {
+  id             BigInt   @id @default(autoincrement())
+  storeId        BigInt
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Lower-case, single spaces.
+  term           String
+  searches       Int      @default(1)
+  /// Products found the last time it was searched (0 = the shop has nothing for it).
+  results        Int      @default(0)
+  lastSearchedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@unique([storeId, term])
+  @@index([storeId, searches])
+}
+
+/// Questions customers ask on a product page; shown once staff answer and publish them.
+model ProductQuestion {
+  id                BigInt    @id @default(autoincrement())
+  storeId           BigInt
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId         BigInt
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId        BigInt?
+  name              String
+  question          String
+  answer            String?
+  answeredByAdminId BigInt?
+  answeredAt        DateTime?
+  /// pending | published | hidden
+  status            String    @default("pending")
+  ip                String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([storeId, status, createdAt])
+  @@index([productId, status])
 }
 
 model WishlistItem {
@@ -1038,9 +1331,10 @@ model Order {
   billingAddress2        String?
   billingCity            String
   billingState           String?
+  billingUpazila         String?
   billingPostcode        String?
   billingCountryCode     String
-  billingEmail           String
+  billingEmail           String?
   billingPhone           String?
   shippingSameAsBilling  Boolean              @default(true)
   shippingFirstName      String?
@@ -1050,6 +1344,9 @@ model Order {
   shippingAddress2       String?
   shippingCity           String?
   shippingState          String?
+  shippingUpazila        String?
+  /// Deepest Location picked for delivery (upazila/thana, else district).
+  shippingLocationId     BigInt?
   shippingPostcode       String?
   shippingCountryCode    String?
   shippingPhone          String?
@@ -1073,11 +1370,46 @@ model Order {
   trackingUrl            String?
   estimatedDelivery      DateTime?
   status                 OrderStatus          @default(PENDING)
+  /// From the parcels: unfulfilled | partial | packed | shipped | delivered | delivery_failed | returned
+  fulfillmentStatus      String               @default("unfulfilled")
+  /// From the latest return: none | requested | approved | received | refunded | rejected
+  returnStatus           String               @default("none")
+  refundedTotal          Decimal              @default(0) @db.Decimal(14, 2)
   statusHistory          OrderStatusLog[]
   isGuest                Boolean              @default(false)
   orderKey               String               @unique
   couponUsed             String?
   couponDiscountAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  /// Automatic promotions: their discount (part of discountTotal) and what applied, gifts included.
+  promotionDiscount      Decimal              @default(0) @db.Decimal(12, 2)
+  promotions             Json?
+  /// Discount a staff member gave on a manual order (part of discountTotal).
+  manualDiscount         Decimal              @default(0) @db.Decimal(12, 2)
+  /// Loyalty level discount (part of discountTotal) and the level's name at the time.
+  memberDiscount         Decimal              @default(0) @db.Decimal(12, 2)
+  memberLevel            String?
+  /// Paid from the customer's wallet; grandTotal is what's left to pay by the payment method.
+  walletUsed             Decimal              @default(0) @db.Decimal(12, 2)
+  /// The language the customer shopped in ("en" / "bn"): their invoice uses it.
+  locale                 String               @default("en") @db.VarChar(5)
+  /// Cashback credited when delivered (less any taken back after refunds).
+  cashbackAmount         Decimal              @default(0) @db.Decimal(12, 2)
+  cashbackAt             DateTime?
+  /// The storefront the order was placed on (staff orders: the default storefront).
+  storefrontId           BigInt?
+  storefront             Storefront?          @relation(fields: [storefrontId], references: [id], onDelete: SetNull)
+  /// Where the order came from: website, phone, facebook, instagram, whatsapp, messenger, walk_in, other.
+  source                 String               @default("website")
+  /// Warehouse the order ships from; its stock is reserved there until a parcel is packed.
+  warehouseId            BigInt?
+  warehouse              Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  /// Staff member who created the order by hand (null for storefront orders).
+  createdByAdminId       BigInt?
+  createdByAdmin         AdminUser?           @relation("OrderCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  /// The salesperson the order is credited to (commission).
+  salespersonId          BigInt?
+  salesperson            AdminUser?           @relation("OrderSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
+  commission             SalesCommission?
   giftCardUsed           String?
   giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
   supplierOrderId        String?
@@ -1086,6 +1418,7 @@ model Order {
   shipments              Shipment[]
   refunds                Refund[]
   returns                ReturnRequest[]
+  paymentRecords         PaymentRecord[]
   reviews                Review[]
   invoice                Invoice?
   giftCards              GiftCard[]
@@ -1099,6 +1432,8 @@ model Order {
   cancelledAt            DateTime?
 
   @@index([storeId, status])
+  @@index([storeId, source])
+  @@index([storeId, storefrontId])
   @@index([storeId, createdAt])
   @@index([customerId])
   @@index([paymentStatus])
@@ -1129,12 +1464,16 @@ model OrderItem {
   variantValues    Json?
   imageUrl         String?
   quantity         Int
+  /// Cost of one unit when sold (from the product's cost price), for gross profit.
+  unitCost         Decimal?          @db.Decimal(12, 2)
   unitPrice        Decimal           @db.Decimal(12, 2)
   lineSubtotal     Decimal           @db.Decimal(14, 2)
   lineTax          Decimal           @default(0) @db.Decimal(12, 2)
   lineDiscount     Decimal           @default(0) @db.Decimal(12, 2)
   lineTotal        Decimal           @db.Decimal(14, 2)
   qtyShipped       Int               @default(0)
+  /// Units still held for this line in the order's warehouse (not yet packed, cancelled or refunded).
+  qtyReserved      Int               @default(0)
   qtyRefunded      Int               @default(0)
   downloadGranted  Boolean           @default(false)
   meta             Json?
@@ -1145,20 +1484,174 @@ model OrderItem {
   createdAt        DateTime          @default(now())
 }
 
+/// A parcel handed to a courier (an order can go out in several).
 model Shipment {
-  id             BigInt         @id @default(autoincrement())
-  orderId        BigInt
-  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  providerCode   String
-  providerName   String
-  trackingNumber String?
-  trackingUrl    String?
-  labelUrl       String?
-  items          ShipmentItem[]
-  notes          String?
-  shippedAt      DateTime?
-  deliveredAt    DateTime?
-  createdAt      DateTime       @default(now())
+  id               BigInt          @id @default(autoincrement())
+  storeId          BigInt
+  store            Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId          BigInt
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// "<order number>-P1", "-P2", ...
+  code             String
+  /// ready | picked_up | in_transit | out_for_delivery | delivered | failed | returned | cancelled
+  status           String          @default("ready")
+  /// Where it was packed; a cancelled or returned parcel's goods go back here.
+  warehouseId      BigInt?
+  warehouse        Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  providerCode     String
+  providerName     String
+  trackingNumber   String?
+  trackingUrl      String?
+  labelUrl         String?
+  /// Cash the courier collects for this parcel.
+  codAmount        Decimal         @default(0) @db.Decimal(14, 2)
+  weightKg         Decimal?        @db.Decimal(8, 3)
+  items            ShipmentItem[]
+  events           ShipmentEvent[]
+  paymentRecords   PaymentRecord[]
+  /// Set once the parcel is booked with a courier through its API.
+  courierAccountId BigInt?
+  courierAccount   CourierAccount? @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  consignmentId    String?
+  /// The courier's own status word (e.g. "in_review", "Assigned_for_Delivery") and latest message.
+  courierStatus    String?
+  courierMessage   String?
+  bookedAt         DateTime?
+  lastSyncedAt     DateTime?
+  /// What the courier charges for this parcel, when it says.
+  deliveryFee      Decimal?        @db.Decimal(12, 2)
+  notes            String?
+  failedReason     String?
+  adminId          BigInt?
+  shippedAt        DateTime?
+  deliveredAt      DateTime?
+  returnedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, status])
+  @@index([orderId])
+  @@index([courierAccountId, consignmentId])
+}
+
+/// A store's account with a courier that has an API (Steadfast, Pathao, RedX).
+model CourierAccount {
+  id            BigInt       @id @default(autoincrement())
+  storeId       BigInt
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// steadfast | pathao | redx
+  courier       String
+  label         String
+  enabled       Boolean      @default(true)
+  /// sandbox | live
+  mode          String       @default("live")
+  /// API keys and passwords as encrypted JSON (config/encryption.ts); never sent to the browser.
+  credentials   String
+  /// Non-secret options: Pathao store id, delivery type, item type; RedX pickup store; default weight.
+  settings      Json?
+  /// Part of the webhook URL given to the courier; identifies the account.
+  webhookToken  String       @unique
+  /// Encrypted secret the courier sends back (Steadfast Bearer token, Pathao X-PATHAO-Signature).
+  webhookSecret String
+  /// Encrypted access / refresh tokens (Pathao) and their expiry.
+  tokenCache    String?
+  lastCheckedAt DateTime?
+  lastError     String?
+  shipments     Shipment[]
+  storefronts   Storefront[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([storeId, courier])
+}
+
+/// Money for an order that staff must check: a bKash/Nagad/bank transfer the customer reports
+/// (kind "transfer"), or cash collected on delivery (kind "cod").
+model PaymentRecord {
+  id            BigInt             @id @default(autoincrement())
+  storeId       BigInt
+  store         Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId       BigInt
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// transfer | cod
+  kind          String
+  /// bkash | nagad | rocket | bank_transfer | cod | cash
+  method        String
+  amount        Decimal            @db.Decimal(14, 2)
+  transactionId String?
+  /// The customer's wallet number or bank account the money came from.
+  senderNumber  String?
+  /// transfer: to_verify | verified | rejected
+  /// cod: with_courier | cash_in_hand | received | not_collected
+  status        String
+  /// customer | courier | office | gateway
+  moneyIsWith   String?
+  /// cod: the parcel that collected it, and its courier.
+  shipmentId    BigInt?
+  shipment      Shipment?          @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  courierCode   String?
+  courierName   String?
+  settlementId  BigInt?
+  settlement    CourierSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  /// customer | staff | system
+  submittedBy   String             @default("customer")
+  note          String?
+  rejectReason  String?
+  checkedById   BigInt?
+  checkedAt     DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([storeId, kind, status])
+  @@index([storeId, method, transactionId])
+  @@index([orderId])
+  @@index([settlementId])
+}
+
+/// A COD payout from a courier: the parcels it covers, what it should have been and what arrived.
+model CourierSettlement {
+  id             BigInt          @id @default(autoincrement())
+  storeId        BigInt
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// "PAY-0001"
+  code           String
+  courierCode    String
+  courierName    String
+  /// Bank / mobile transfer reference of the payout.
+  reference      String?
+  paidOn         DateTime
+  /// Sum of the parcels' cash.
+  expectedAmount Decimal         @db.Decimal(14, 2)
+  /// Delivery and COD charges the courier kept.
+  charges        Decimal         @default(0) @db.Decimal(14, 2)
+  receivedAmount Decimal         @db.Decimal(14, 2)
+  /// expected - charges - received (positive = courier paid too little)
+  shortfall      Decimal         @default(0) @db.Decimal(14, 2)
+  /// balanced | short | over | resolved
+  status         String
+  note           String?
+  resolvedNote   String?
+  adminId        BigInt?
+  records        PaymentRecord[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, courierCode])
+  @@index([storeId, status])
+}
+
+model ShipmentEvent {
+  id         BigInt   @id @default(autoincrement())
+  shipmentId BigInt
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status     String
+  note       String?
+  adminId    BigInt?
+  createdAt  DateTime @default(now())
+
+  @@index([shipmentId])
 }
 
 model ShipmentItem {
@@ -1181,22 +1674,26 @@ model Invoice {
 }
 
 model Refund {
-  id                   BigInt       @id @default(autoincrement())
+  id                   BigInt         @id @default(autoincrement())
   storeId              BigInt
-  store                Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store                Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orderId              BigInt
-  order                Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order                Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   adminId              BigInt?
-  admin                AdminUser?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  admin                AdminUser?     @relation(fields: [adminId], references: [id], onDelete: SetNull)
   reason               String
   items                RefundItem[]
-  amount               Decimal      @db.Decimal(14, 2)
-  restockItems         Boolean      @default(true)
-  gatewayRefunded      Boolean      @default(false)
+  amount               Decimal        @db.Decimal(14, 2)
+  /// original | cash | bkash | nagad | bank | store_credit
+  method               String         @default("original")
+  returnRequestId      BigInt?
+  returnRequest        ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+  restockItems         Boolean        @default(true)
+  gatewayRefunded      Boolean        @default(false)
   gatewayTransactionId String?
-  noteToCustomer       String?      @db.Text
-  status               String       @default("completed")
-  createdAt            DateTime     @default(now())
+  noteToCustomer       String?        @db.Text
+  status               String         @default("completed")
+  createdAt            DateTime       @default(now())
 }
 
 model RefundItem {
@@ -1210,26 +1707,36 @@ model RefundItem {
 }
 
 model ReturnRequest {
-  id               BigInt       @id @default(autoincrement())
+  id               BigInt        @id @default(autoincrement())
   storeId          BigInt
-  store            Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store            Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orderId          BigInt
-  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   customerId       BigInt?
-  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  type             String       @default("return")
+  customer         Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  type             String        @default("return")
   reason           String
-  customerNote     String?      @db.Text
+  customerNote     String?       @db.Text
   items            ReturnItem[]
-  requestedAmount  Decimal      @db.Decimal(14, 2)
-  status           String       @default("requested")
+  events           ReturnEvent[]
+  /// "<order number>-R1", ...
+  code             String?
+  requestedAmount  Decimal       @db.Decimal(14, 2)
+  /// requested | approved | received | refunded | rejected | cancelled
+  status           String        @default("requested")
+  /// Who asked: "customer" (storefront) or "staff".
+  requestedBy      String        @default("customer")
+  approvedAt       DateTime?
+  receivedAt       DateTime?
+  closedAt         DateTime?
+  refunds          Refund[]
   resolution       String?
-  resolutionAmount Decimal?     @db.Decimal(14, 2)
-  adminNotes       String?      @db.Text
+  resolutionAmount Decimal?      @db.Decimal(14, 2)
+  adminNotes       String?       @db.Text
   trackingNumber   String?
   returnLabelUrl   String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([storeId, status])
 }
@@ -1244,6 +1751,20 @@ model ReturnItem {
   condition        String?
   customerPhotos   Json?
   resolutionAmount Decimal?      @db.Decimal(12, 2)
+  /// Put back into stock when the return was received.
+  restocked        Boolean       @default(false)
+}
+
+model ReturnEvent {
+  id              BigInt        @id @default(autoincrement())
+  returnRequestId BigInt
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  status          String
+  note            String?
+  adminId         BigInt?
+  createdAt       DateTime      @default(now())
+
+  @@index([returnRequestId])
 }
 
 model AbandonedCart {
@@ -1278,38 +1799,91 @@ enum DiscountType {
 }
 
 model Coupon {
-  id                BigInt       @id @default(autoincrement())
-  storeId           BigInt
-  store             Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  code              String
-  description       String?
-  type              DiscountType
-  amount            Decimal      @db.Decimal(12, 2)
-  freeShipping      Boolean      @default(false)
-  minSubtotal       Decimal?     @db.Decimal(12, 2)
-  maxSubtotal       Decimal?     @db.Decimal(12, 2)
-  productIds        Json?
-  excludeProductIds Json?
-  categoryIds       Json?
-  excludeSales      Boolean      @default(false)
-  individualOnly    Boolean      @default(false)
-  customerGroupIds  Json?
-  customerEmails    Json?
-  newCustomersOnly  Boolean      @default(false)
-  totalUsageLimit   Int?
-  perCustomerLimit  Int?
-  usageCount        Int          @default(0)
-  startsAt          DateTime?
-  expiresAt         DateTime?
-  isActive          Boolean      @default(true)
-  autoApply         Boolean      @default(false)
-  rewardType        String?
-  rewardValue       Json?
-  appliedCarts      Cart[]
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  id                  BigInt       @id @default(autoincrement())
+  storeId             BigInt
+  store               Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code                String
+  description         String?
+  type                DiscountType
+  amount              Decimal      @db.Decimal(12, 2)
+  freeShipping        Boolean      @default(false)
+  minSubtotal         Decimal?     @db.Decimal(12, 2)
+  maxSubtotal         Decimal?     @db.Decimal(12, 2)
+  productIds          Json?
+  excludeProductIds   Json?
+  categoryIds         Json?
+  excludeSales        Boolean      @default(false)
+  individualOnly      Boolean      @default(false)
+  customerGroupIds    Json?
+  customerEmails      Json?
+  newCustomersOnly    Boolean      @default(false)
+  totalUsageLimit     Int?
+  perCustomerLimit    Int?
+  usageCount          Int          @default(0)
+  startsAt            DateTime?
+  expiresAt           DateTime?
+  isActive            Boolean      @default(true)
+  autoApply           Boolean      @default(false)
+  rewardType          String?
+  rewardValue         Json?
+  /// private = typed code; public = listed in the cart for anyone to use; given = only the customerEmails.
+  audience            String       @default("private")
+  /// Off: no automatic promotion on the order and flash-sale items don't count toward this coupon.
+  worksWithPromotions Boolean      @default(true)
+  /// Only on these storefronts (empty: all).
+  storefrontIds       BigInt[]     @default([])
+  appliedCarts        Cart[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   @@unique([storeId, code])
+  @@index([storeId, isActive])
+}
+
+/// Automatic (code-free) offers: discount, free gift over a spend, buy X get Y free, free delivery.
+/// Rules live in modules/marketing/promotions.rules.ts.
+model Promotion {
+  id               BigInt    @id @default(autoincrement())
+  storeId          BigInt
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name             String
+  /// discount | free_gift | bxgy | free_delivery
+  type             String
+  /// percentage | fixed (discount only)
+  discountType     String?
+  discountValue    Decimal?  @db.Decimal(12, 2)
+  /// Largest discount for a percentage offer.
+  maxDiscount      Decimal?  @db.Decimal(12, 2)
+  minOrder         Decimal?  @db.Decimal(12, 2)
+  minQty           Int?
+  /// Scope: products or whole categories; both empty = the whole cart.
+  productIds       BigInt[]  @default([])
+  categoryIds      BigInt[]  @default([])
+  /// Flash-sale / marked-down items count and get discounted too.
+  includeSaleItems Boolean   @default(false)
+  /// bxgy: buy `buyQty` of one product, get `getQty` more of it free.
+  buyQty           Int?
+  getQty           Int?
+  /// free_gift: the product (and option) added at no charge.
+  giftProductId    BigInt?
+  giftVariantId    BigInt?
+  giftQty          Int       @default(1)
+  /// Where the storefront shows it (announcement_bar, home_hero, cart, …) and what it says.
+  slots            String[]  @default([])
+  /// Only on these storefronts (empty: all).
+  storefrontIds    BigInt[]  @default([])
+  headline         String?
+  message          String?
+  imageUrl         String?
+  linkUrl          String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean   @default(true)
+  /// Orders it applied to (counted when the order is placed).
+  usedCount        Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
   @@index([storeId, isActive])
 }
 
@@ -1572,14 +2146,17 @@ model Faq {
 }
 
 model Menu {
-  id        BigInt     @id @default(autoincrement())
-  storeId   BigInt
-  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name      String
-  location  String
-  items     MenuItem[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id           BigInt      @id @default(autoincrement())
+  storeId      BigInt
+  store        Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  location     String
+  /// Null: the default storefront's menu, also used by storefronts without their own for this place.
+  storefrontId BigInt?
+  storefront   Storefront? @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  items        MenuItem[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([storeId, location])
 }
@@ -1676,16 +2253,19 @@ model ThemeConfig {
 }
 
 model HomepageSection {
-  id         BigInt   @id @default(autoincrement())
-  storeId    BigInt
-  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  type       String
-  enabled    Boolean  @default(true)
-  sortOrder  Int      @default(0)
-  config     Json
-  visibility Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           BigInt      @id @default(autoincrement())
+  storeId      BigInt
+  store        Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type         String
+  enabled      Boolean     @default(true)
+  sortOrder    Int         @default(0)
+  config       Json
+  visibility   Json?
+  /// Null: the default storefront's home page, also shown by storefronts without their own.
+  storefrontId BigInt?
+  storefront   Storefront? @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([storeId, sortOrder])
 }
@@ -1755,27 +2335,173 @@ model Notification {
 // DROPSHIPPING & SUPPLIERS (Optional Module)
 // ============================================================
 model Supplier {
-  id                   BigInt    @id @default(autoincrement())
+  id                   BigInt            @id @default(autoincrement())
   storeId              BigInt
-  store                Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store                Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name                 String
   slug                 String
-  contactEmail         String
+  contactEmail         String?
   contactPhone         String?
+  /// What the shop already owed when it started using the app (negative = supplier owes us / advance).
+  openingBalance       Decimal           @default(0) @db.Decimal(12, 2)
+  notes                String?
+  purchases            Purchase[]
+  payments             SupplierPayment[]
   contactPerson        String?
   address              String?
   countryCode          String?
   apiConfig            Json?
   fulfillmentEmail     String?
-  orderAutoForward     Boolean   @default(false)
+  orderAutoForward     Boolean           @default(false)
   markupStrategy       String?
-  markupPercentDefault Decimal?  @db.Decimal(5, 2)
-  status               String    @default("active")
+  markupPercentDefault Decimal?          @db.Decimal(5, 2)
+  status               String            @default("active")
   products             Product[]
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@unique([storeId, slug])
+}
+
+/// Stock bought from a supplier: received at once, updating stock and cost prices. modules/purchasing
+model Purchase {
+  id               BigInt            @id @default(autoincrement())
+  storeId          BigInt
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// PUR-000001
+  number           String
+  supplierId       BigInt
+  supplier         Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// local | import
+  sourcingType     String            @default("local")
+  originCountry    String?
+  sourceFrom       String?
+  /// The supplier's invoice or reference number.
+  reference        String?
+  /// Warehouse the goods were received into.
+  warehouseId      BigInt?
+  warehouse        Warehouse?        @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  purchasedOn      DateTime          @db.Date
+  itemsSubtotal    Decimal           @db.Decimal(12, 2)
+  shippingCost     Decimal           @default(0) @db.Decimal(12, 2)
+  customsDuty      Decimal           @default(0) @db.Decimal(12, 2)
+  otherCharges     Decimal           @default(0) @db.Decimal(12, 2)
+  discount         Decimal           @default(0) @db.Decimal(12, 2)
+  /// Items + shipping + customs + other − discount: what the stock cost in all.
+  total            Decimal           @db.Decimal(12, 2)
+  /// advance | instant_full | instant_partial | credit
+  paymentTerm      String
+  /// received | cancelled
+  status           String            @default("received")
+  notes            String?
+  createdByAdminId BigInt?
+  cancelledAt      DateTime?
+  items            PurchaseItem[]
+  payments         SupplierPayment[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([storeId, number])
+  @@index([storeId, purchasedOn])
+  @@index([supplierId])
+}
+
+model PurchaseItem {
+  id             BigInt          @id @default(autoincrement())
+  purchaseId     BigInt
+  purchase       Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId      BigInt
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId      BigInt?
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  /// Snapshot for the record, e.g. "Cotton Panjabi (M / White)".
+  name           String
+  qualityGrade   String?
+  qty            Int
+  unitCost       Decimal         @db.Decimal(12, 2)
+  discountPct    Decimal         @default(0) @db.Decimal(5, 2)
+  discountAmount Decimal         @default(0) @db.Decimal(12, 2)
+  lineTotal      Decimal         @db.Decimal(12, 2)
+  /// Unit cost with its share of shipping, customs, other charges and discount.
+  landedUnitCost Decimal         @db.Decimal(12, 2)
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+/// Money paid to a supplier, from one of the shop's accounts.
+model SupplierPayment {
+  id               BigInt       @id @default(autoincrement())
+  storeId          BigInt
+  store            Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplierId       BigInt
+  supplier         Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseId       BigInt?
+  purchase         Purchase?    @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  accountId        BigInt
+  account          MoneyAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  amount           Decimal      @db.Decimal(12, 2)
+  /// cash | bank_transfer | cheque | bkash | nagad | rocket | other
+  method           String
+  paidOn           DateTime     @db.Date
+  reference        String?
+  notes            String?
+  createdByAdminId BigInt?
+  createdAt        DateTime     @default(now())
+
+  @@index([storeId, paidOn])
+  @@index([supplierId])
+}
+
+/// The shop's bank, cash and mobile-wallet accounts. Balance = opening balance + its transactions.
+model MoneyAccount {
+  id             BigInt             @id @default(autoincrement())
+  storeId        BigInt
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name           String
+  /// bank | cash | mobile
+  type           String
+  details        String?
+  openingBalance Decimal            @default(0) @db.Decimal(12, 2)
+  isActive       Boolean            @default(true)
+  transactions   MoneyTransaction[]
+  payments       SupplierPayment[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([storeId])
+}
+
+/// One movement of money in an account: + in, − out. Never edited; a mistake is corrected by another entry.
+model MoneyTransaction {
+  id               BigInt       @id @default(autoincrement())
+  storeId          BigInt
+  store            Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  accountId        BigInt
+  account          MoneyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  amount           Decimal      @db.Decimal(12, 2)
+  /// supplier_payment | deposit | withdrawal | transfer_in | transfer_out | adjustment | reversal
+  kind             String
+  refType          String?
+  refId            String?
+  note             String?
+  occurredOn       DateTime     @db.Date
+  createdByAdminId BigInt?
+  createdAt        DateTime     @default(now())
+
+  @@index([accountId, occurredOn])
+  @@index([storeId, occurredOn])
+}
+
+/// Grades a shop buys stock in (Genuine, Copy 1, Stock Lot…), picked on purchase lines.
+model QualityGrade {
+  id        BigInt @id @default(autoincrement())
+  storeId   BigInt
+  store     Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int    @default(0)
+
+  @@unique([storeId, name])
 }
 
 // ============================================================
@@ -1938,4 +2664,345 @@ model CurrencyRateLog {
   oldRate   Decimal  @db.Decimal(12, 6)
   newRate   Decimal  @db.Decimal(12, 6)
   createdAt DateTime @default(now())
+}
+
+// ============================================================
+// WAREHOUSES (Batch 29)
+// ============================================================
+
+/// A place stock is kept. Every store has one default warehouse; online orders ship from it unless
+/// another one has everything the order needs.
+model Warehouse {
+  id           BigInt           @id @default(autoincrement())
+  storeId      BigInt
+  store        Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  /// Short code shown on lists and stock logs, e.g. "MAIN", "CTG".
+  code         String
+  address      String?
+  phone        String?
+  isDefault    Boolean          @default(false)
+  isActive     Boolean          @default(true)
+  sortOrder    Int              @default(0)
+  stock        WarehouseStock[]
+  orders       Order[]
+  shipments    Shipment[]
+  purchases    Purchase[]
+  transfersOut StockTransfer[]  @relation("TransferFrom")
+  transfersIn  StockTransfer[]  @relation("TransferTo")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, isActive])
+}
+
+/// Stock of one product (no options) or one option in one warehouse. The product's and option's
+/// stockQty / reservedStock are the totals over all warehouses (kept in step by the stock ledger).
+model WarehouseStock {
+  id          BigInt          @id @default(autoincrement())
+  storeId     BigInt
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  warehouseId BigInt
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  productId   BigInt
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId   BigInt?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  /// "p<productId>" or "v<variantId>", so a product without options has one row per warehouse.
+  skuKey      String
+  /// Units on the shelf.
+  onHand      Int             @default(0)
+  /// Units held for orders not yet packed.
+  reserved    Int             @default(0)
+  /// Shelf / bin location, e.g. "A-3-2".
+  bin         String?
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([warehouseId, skuKey])
+  @@index([storeId, productId])
+}
+
+/// Stock sent from one warehouse to another. Sending takes it out of the source at once; receiving
+/// adds what arrived, and anything missing is written off as a shortfall.
+model StockTransfer {
+  id                BigInt              @id @default(autoincrement())
+  storeId           BigInt
+  store             Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// TR-0001
+  code              String
+  fromWarehouseId   BigInt
+  fromWarehouse     Warehouse           @relation("TransferFrom", fields: [fromWarehouseId], references: [id], onDelete: Restrict)
+  toWarehouseId     BigInt
+  toWarehouse       Warehouse           @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+  /// in_transit | received | cancelled
+  status            String              @default("in_transit")
+  note              String?
+  receivedNote      String?
+  items             StockTransferItem[]
+  sentByAdminId     BigInt?
+  receivedByAdminId BigInt?
+  sentAt            DateTime            @default(now())
+  receivedAt        DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([storeId, code])
+  @@index([storeId, status])
+}
+
+model StockTransferItem {
+  id          BigInt          @id @default(autoincrement())
+  transferId  BigInt
+  transfer    StockTransfer   @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId   BigInt
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId   BigInt?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  name        String
+  sku         String?
+  qtySent     Int
+  /// Set on receipt; qtySent - qtyReceived is the shortfall.
+  qtyReceived Int?
+}
+
+// ============================================================
+// LOYALTY, WALLET AND REFERRALS (Batch 30)
+// ============================================================
+
+/// One per store: cashback, wallet use at checkout, and the refer-a-friend rewards.
+model LoyaltySettings {
+  id                  BigInt   @id @default(autoincrement())
+  storeId             BigInt   @unique
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Customers can pay part or all of an order from their wallet.
+  walletEnabled       Boolean  @default(true)
+  /// Most of an order's total the wallet may pay, in %.
+  walletMaxPercent    Decimal  @default(100) @db.Decimal(5, 2)
+  cashbackEnabled     Boolean  @default(false)
+  /// % of the items (after discounts) credited to the wallet when an order is delivered.
+  cashbackPercent     Decimal  @default(0) @db.Decimal(5, 2)
+  cashbackMinOrder    Decimal  @default(0) @db.Decimal(12, 2)
+  /// Largest cashback on one order (null = no limit).
+  cashbackMaxPerOrder Decimal? @db.Decimal(12, 2)
+  levelsEnabled       Boolean  @default(false)
+  referralEnabled     Boolean  @default(false)
+  /// Wallet credit for the customer who shared the link, when the friend's first order is delivered.
+  referrerReward      Decimal  @default(0) @db.Decimal(12, 2)
+  /// Wallet credit for the new customer on that same first order.
+  refereeReward       Decimal  @default(0) @db.Decimal(12, 2)
+  /// The friend's first order must be at least this (items after discounts).
+  referralMinOrder    Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt           DateTime @updatedAt
+}
+
+/// Bronze / Silver / Gold…: reached by spend on delivered orders; gives a discount and extra cashback.
+model LoyaltyLevel {
+  id              BigInt     @id @default(autoincrement())
+  storeId         BigInt
+  store           Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String
+  /// Spend (items less discounts and refunds, delivered orders) needed to reach it.
+  minSpend        Decimal    @db.Decimal(14, 2)
+  /// Off the items at checkout, after promotions and coupons.
+  discountPercent Decimal    @default(0) @db.Decimal(5, 2)
+  /// Added to the store's cashback %.
+  cashbackPercent Decimal    @default(0) @db.Decimal(5, 2)
+  color           String?
+  customers       Customer[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([storeId, name])
+}
+
+/// The wallet ledger: every credit and debit; Customer.storeCredit is the running balance.
+model WalletTransaction {
+  id               BigInt   @id @default(autoincrement())
+  storeId          BigInt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId       BigInt
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// + in, − out
+  amount           Decimal  @db.Decimal(12, 2)
+  /// cashback | cashback_reversed | order_payment | order_payment_returned | refund | referral | adjustment
+  kind             String
+  orderId          BigInt?
+  note             String?
+  balanceAfter     Decimal  @db.Decimal(12, 2)
+  createdByAdminId BigInt?
+  createdAt        DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([storeId, kind])
+}
+
+// ============================================================ WHOLESALE / B2B (Batch 33)
+
+/// Whether the shop sells to businesses, and how applications are handled.
+model WholesaleSettings {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt   @unique
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Customers can apply for a business account; approved accounts get business prices.
+  enabled     Boolean  @default(false)
+  /// Approve applications straight away instead of waiting for staff.
+  autoApprove Boolean  @default(false)
+  /// Shown above the application form (what businesses get, who qualifies).
+  intro       String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// A customer's business account: applied for on the storefront, reviewed by staff.
+model BusinessAccount {
+  id             BigInt    @id @default(autoincrement())
+  storeId        BigInt
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId     BigInt    @unique
+  customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  companyName    String
+  /// retailer | reseller | corporate | institution | other
+  businessType   String    @default("retailer")
+  contactPhone   String?
+  address        String?
+  tradeLicenseNo String?
+  /// VAT registration (BIN).
+  vatRegNo       String?
+  /// What the applicant told us (what they sell, expected volume).
+  note           String?
+  /// PENDING | APPROVED | REJECTED | SUSPENDED
+  status         String    @default("PENDING")
+  /// Staff's reason, shown to the customer when rejected or suspended.
+  reviewNote     String?
+  reviewedAt     DateTime?
+  reviewedById   BigInt?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([storeId, status])
+}
+
+/// Bulk price: buy at least `minQty` of a product (or one of its options) and each costs `price`.
+model PriceTier {
+  id          BigInt          @id @default(autoincrement())
+  storeId     BigInt
+  productId   BigInt
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// null = the product itself, or every option that has no tiers of its own.
+  variantId   BigInt?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  minQty      Int
+  price       Decimal         @db.Decimal(12, 2)
+  /// false = approved business accounts only; true = any shopper buying that many.
+  forEveryone Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+
+  @@index([productId])
+}
+
+/// A price offer to one customer: staff draft it (or the customer asks from their cart), send it,
+/// the customer accepts or declines, and staff turn it into an order at the quoted prices.
+model Quotation {
+  id           BigInt          @id @default(autoincrement())
+  storeId      BigInt
+  store        Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Q-000001, per store.
+  number       String
+  customerId   BigInt
+  customer     Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// The storefront the order will be for (null: the default one).
+  storefrontId BigInt?
+  /// REQUESTED | DRAFT | SENT | ACCEPTED | DECLINED | ORDERED | CANCELLED (a SENT quote past validUntil reads as expired)
+  status       String          @default("DRAFT")
+  validUntil   DateTime?
+  /// What the customer wrote when asking, accepting or declining.
+  customerNote String?
+  /// Shown to the customer (payment terms, delivery time…).
+  terms        String?
+  /// Staff only.
+  staffNote    String?
+  /// Taken off the items (fixed amount).
+  discount     Decimal         @default(0) @db.Decimal(12, 2)
+  /// Delivery charge agreed; carried into the order as a fee staff typed.
+  deliveryFee  Decimal         @default(0) @db.Decimal(12, 2)
+  subtotal     Decimal         @default(0) @db.Decimal(14, 2)
+  total        Decimal         @default(0) @db.Decimal(14, 2)
+  orderId      BigInt?         @unique
+  sentAt       DateTime?
+  respondedAt  DateTime?
+  createdById  BigInt?
+  items        QuotationItem[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([storeId, number])
+  @@index([storeId, status])
+  @@index([customerId])
+}
+
+model QuotationItem {
+  id          BigInt    @id @default(autoincrement())
+  quotationId BigInt
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   BigInt?
+  variantId   BigInt?
+  name        String
+  option      String?
+  sku         String?
+  qty         Int
+  /// The quoted price each.
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  /// What the customer would pay without the quote (for "you save").
+  listPrice   Decimal   @db.Decimal(12, 2)
+  lineTotal   Decimal   @db.Decimal(14, 2)
+  sortOrder   Int       @default(0)
+
+  @@index([quotationId])
+}
+
+// ============================================================ SALES TEAM COMMISSION (Batch 33)
+
+model SalesSettings {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt   @unique
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(false)
+  /// Commission on products with no product or category rate, in %.
+  defaultRate Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt   DateTime @updatedAt
+}
+
+/// A salesperson's commission on one order, worked out when the order was credited to them.
+/// Whether it's earned is read from the order: delivered and paid, less refunds; nothing if cancelled.
+model SalesCommission {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  orderId       BigInt    @unique
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  salespersonId BigInt
+  salesperson   AdminUser @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  /// Items after discounts the commission is on.
+  base          Decimal   @db.Decimal(14, 2)
+  amount        Decimal   @db.Decimal(12, 2)
+  /// Per line: name, base, rate and where the rate came from.
+  lines         Json
+  paidOutAt     DateTime?
+  paidOutById   BigInt?
+  createdAt     DateTime  @default(now())
+
+  @@index([storeId, salespersonId])
+}
+
+/// Sales a salesperson aims for in a month (items after discounts on delivered, paid orders).
+model SalesTarget {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  salespersonId BigInt
+  salesperson   AdminUser @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  /// YYYY-MM
+  month         String
+  amount        Decimal   @db.Decimal(14, 2)
+
+  @@unique([salespersonId, month])
 }

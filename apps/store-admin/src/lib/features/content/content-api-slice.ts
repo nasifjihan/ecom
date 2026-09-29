@@ -78,6 +78,8 @@ export type FaqInput = Omit<Faq, "id">;
 export type MenuLocation = "header" | "footer";
 export interface MenuLink {
   title: string;
+  /** The link's text in Bangla; empty shows `title` to Bangla shoppers too. */
+  titleBn?: string;
   url: string;
   openInNewTab: boolean;
 }
@@ -88,6 +90,8 @@ export interface Menu {
   id: string;
   name: string;
   location: MenuLocation;
+  /** The storefront it belongs to; null: the default one (also used by storefronts without their own). */
+  storefrontId: string | null;
   items: MenuItem[];
 }
 
@@ -151,6 +155,16 @@ export interface ListArgs {
   perPage?: number;
   search?: string;
   status?: PostStatus;
+}
+
+/** `?storefrontId=` for a storefront other than the default one. */
+const sfParams = (storefrontId?: string) => (storefrontId ? { storefrontId } : undefined);
+
+/** A storefront's home page; `inherited`: it has none of its own and shows the default storefront's. */
+export interface HomepageState {
+  sections: HomepageSection[];
+  customised: boolean;
+  inherited?: boolean;
 }
 
 const listParams = (a: ListArgs = {}) =>
@@ -237,11 +251,11 @@ export const contentApi = api.injectEndpoints({
 
     // menus
     getMenus: b.query<Menu[], void>({ query: () => "/admin/content/menus", providesTags: ["Menu"] }),
-    createMenu: b.mutation<Menu, { name: string; location: MenuLocation }>({
+    createMenu: b.mutation<Menu, { name: string; location: MenuLocation; storefrontId?: string | null }>({
       query: (body) => ({ url: "/admin/content/menus", method: "POST", body }),
       invalidatesTags: ["Menu"],
     }),
-    updateMenu: b.mutation<Menu, { id: string; name?: string; location?: MenuLocation }>({
+    updateMenu: b.mutation<Menu, { id: string; name?: string; location?: MenuLocation; storefrontId?: string | null }>({
       query: ({ id, ...body }) => ({ url: `/admin/content/menus/${id}`, method: "PATCH", body }),
       invalidatesTags: ["Menu"],
     }),
@@ -255,28 +269,37 @@ export const contentApi = api.injectEndpoints({
     }),
 
     // theme + homepage
-    getTheme: b.query<ThemeSettings, void>({ query: () => "/admin/content/theme", providesTags: ["Theme"] }),
-    saveTheme: b.mutation<ThemeSettings, ThemeSettings>({
-      query: (body) => ({ url: "/admin/content/theme", method: "PUT", body }),
-      invalidatesTags: ["Theme"],
+    // `storefrontId` undefined: the default storefront (whose look and home page the others fall back to).
+    getTheme: b.query<ThemeSettings, string | undefined>({
+      query: (storefrontId) => ({ url: "/admin/content/theme", params: sfParams(storefrontId) }),
+      providesTags: ["Theme"],
     }),
-    getHomepage: b.query<{ sections: HomepageSection[]; customised: boolean }, void>({
-      query: () => "/admin/content/homepage",
+    saveTheme: b.mutation<ThemeSettings, { theme: ThemeSettings; storefrontId?: string }>({
+      query: ({ theme, storefrontId }) => ({ url: "/admin/content/theme", method: "PUT", body: theme, params: sfParams(storefrontId) }),
+      invalidatesTags: ["Theme", { type: "Store", id: "STOREFRONTS" }],
+    }),
+    resetTheme: b.mutation<ThemeSettings, string>({
+      query: (storefrontId) => ({ url: "/admin/content/theme", method: "DELETE", params: { storefrontId } }),
+      invalidatesTags: ["Theme", { type: "Store", id: "STOREFRONTS" }],
+    }),
+    getHomepage: b.query<HomepageState, string | undefined>({
+      query: (storefrontId) => ({ url: "/admin/content/homepage", params: sfParams(storefrontId) }),
       providesTags: ["Homepage"],
     }),
-    saveHomepage: b.mutation<{ sections: HomepageSection[]; customised: boolean }, HomepageSection[]>({
-      query: (sections) => ({ url: "/admin/content/homepage", method: "PUT", body: { sections } }),
-      invalidatesTags: ["Homepage"],
+    saveHomepage: b.mutation<HomepageState, { sections: HomepageSection[]; storefrontId?: string }>({
+      query: ({ sections, storefrontId }) => ({ url: "/admin/content/homepage", method: "PUT", body: { sections }, params: sfParams(storefrontId) }),
+      invalidatesTags: ["Homepage", { type: "Store", id: "STOREFRONTS" }],
     }),
-    resetHomepage: b.mutation<{ sections: HomepageSection[]; customised: boolean }, void>({
-      query: () => ({ url: "/admin/content/homepage", method: "DELETE" }),
-      invalidatesTags: ["Homepage"],
+    resetHomepage: b.mutation<HomepageState, string | undefined>({
+      query: (storefrontId) => ({ url: "/admin/content/homepage", method: "DELETE", params: sfParams(storefrontId) }),
+      invalidatesTags: ["Homepage", { type: "Store", id: "STOREFRONTS" }],
     }),
   }),
   overrideExisting: false,
 });
 
 export const {
+  useResetThemeMutation,
   useGetCmsPagesQuery,
   useGetCmsPageQuery,
   useCreateCmsPageMutation,

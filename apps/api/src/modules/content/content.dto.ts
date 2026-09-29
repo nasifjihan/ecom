@@ -99,12 +99,16 @@ export const MENU_LOCATIONS = ["header", "footer"] as const
 export const MenuDto = z.object({
   name: text(80).min(1),
   location: z.enum(MENU_LOCATIONS),
+  /** The storefront the menu belongs to (null / omitted: the default one, shared by the rest). */
+  storefrontId: z.coerce.bigint().positive().nullish(),
 })
 export const UpdateMenuDto = MenuDto.partial()
 export type MenuDto = z.infer<typeof MenuDto>
 
 const MenuLeaf = z.object({
   title: text(80).min(1),
+  /** The link's text in Bangla (optional). */
+  titleBn: text(80).optional(),
   url: link.refine((v) => v !== "", "Link is required"),
   openInNewTab: z.boolean().default(false),
 })

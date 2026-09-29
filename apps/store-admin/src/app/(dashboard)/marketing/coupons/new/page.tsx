@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -75,8 +76,18 @@ const createCouponSchema = z
     validUntil: z.string().optional().or(z.literal("")),
     bogoBuyQty: z.coerce.number().int().min(1).optional(),
     bogoGetQty: z.coerce.number().int().min(1).optional(),
+    audience: z.enum(["private", "public", "given"]).default("private"),
+    worksWithPromotions: z.boolean().default(true),
+    storefrontIds: z.array(z.string()).default([]),
   })
   .superRefine((v, ctx) => {
+    if (v.audience === "given" && !v.allowedEmails?.trim()) {
+      ctx.addIssue({
+        path: ["allowedEmails"],
+        code: z.ZodIssueCode.custom,
+        message: "Add the email of at least one customer to give this coupon to",
+      });
+    }
     if (
       (v.type === CouponType.PERCENT_CART || v.type === CouponType.PERCENT_PRODUCT) &&
       (v.amount < 0 || v.amount > 100)
@@ -102,6 +113,21 @@ const createCouponSchema = z
   });
 
 type CreateCouponForm = z.infer<typeof createCouponSchema>;
+
+/** Coupon types checkout can price (see StorefrontService.evaluateCoupon). */
+const CHECKOUT_TYPES: string[] = [
+  CouponType.PERCENT_CART,
+  CouponType.PERCENT_PRODUCT,
+  CouponType.FIXED_CART,
+  CouponType.FIXED_PRODUCT,
+  CouponType.FREE_SHIPPING,
+];
+
+const AUDIENCES = [
+  { value: "private", label: "Private code", help: "Only people you tell the code to can use it." },
+  { value: "public", label: "Public", help: "Listed in every cart for anyone to apply." },
+  { value: "given", label: "Given to customers", help: "Only the customers below; listed in their cart when signed in." },
+] as const;
 
 function generateRandomCode(): string {
   const prefix = "EID";
@@ -152,6 +178,9 @@ function formToDto(form: CreateCouponForm): CreateCouponDto {
     validUntil: form.validUntil || undefined,
     bogoBuyQty: form.bogoBuyQty,
     bogoGetQty: form.bogoGetQty,
+    audience: form.audience,
+    worksWithPromotions: form.worksWithPromotions,
+    storefrontIds: form.storefrontIds,
   };
 }
 
@@ -182,6 +211,9 @@ export default function NewCouponPage() {
       validUntil: "",
       bogoBuyQty: 1,
       bogoGetQty: 1,
+      audience: "private",
+      worksWithPromotions: true,
+      storefrontIds: [],
     },
   });
 
@@ -190,6 +222,7 @@ export default function NewCouponPage() {
   const code = watch("code");
   const amount = watch("amount");
   const freeShipping = watch("freeShipping");
+  const audience = watch("audience");
 
   const [createCoupon, { isLoading: createLoading }] = useCreateCouponMutation();
   const [updateCoupon, { isLoading: updateLoading }] = useUpdateCouponMutation();
@@ -228,6 +261,9 @@ export default function NewCouponPage() {
         validUntil: existing.validUntil?.slice(0, 16) ?? "",
         bogoBuyQty: existing.bogoBuyQty ?? 1,
         bogoGetQty: existing.bogoGetQty ?? 1,
+        audience: existing.audience ?? "private",
+        worksWithPromotions: existing.worksWithPromotions ?? true,
+        storefrontIds: existing.storefrontIds ?? [],
       });
     }
   }, [existing, isEdit, reset]);
@@ -415,13 +451,23 @@ export default function NewCouponPage() {
                           <FormLabel>Discount Type</FormLabel>
                           <FormControl>
                             <Select value={field.value} onValueChange={field.onChange}>
-                              {Object.values(CouponType).map((t) => (
-                                <SelectItem key={t} value={t}>
-                                  {t.replace(/_/g, " ")}
-                                </SelectItem>
-                              ))}
+                              {/* Checkout prices these; buy X get Y is an automatic promotion now. */}
+                              {Object.values(CouponType)
+                                .filter((t) => CHECKOUT_TYPES.includes(t) || t === field.value)
+                                .map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {t.replace(/_/g, " ")}
+                                  </SelectItem>
+                                ))}
                             </Select>
                           </FormControl>
+                          <FormDescription>
+                            For buy X get Y free, free gifts or a sale without a code, use{" "}
+                            <Link href="/marketing/promotions" className="text-blue-600 hover:underline">
+                              Promotions
+                            </Link>
+                            .
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -600,26 +646,48 @@ export default function NewCouponPage() {
                       )}
                     />
                   </div>
-                  <FormField
+                  <Controller
                     control={control}
-                    name="allowedEmails"
+                    name="audience"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Allowed Customer Emails</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            rows={2}
-                            placeholder="customer@example.com, partner@corp.com…"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Comma, semicolon, or newline separated. Leave empty to allow all.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                      <fieldset className="space-y-2">
+                        <legend className="text-sm font-medium">Who can use it</legend>
+                        {AUDIENCES.map((a) => (
+                          <label key={a.value} className="flex cursor-pointer items-start gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="audience"
+                              className="mt-1"
+                              checked={field.value === a.value}
+                              onChange={() => field.onChange(a.value)}
+                            />
+                            <span>
+                              <span className="font-medium">{a.label}</span>
+                              <span className="block text-xs text-slate-500">{a.help}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </fieldset>
                     )}
                   />
+                  {audience === "given" && (
+                    <FormField
+                      control={control}
+                      name="allowedEmails"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Customers' emails</FormLabel>
+                          <FormControl>
+                            <Textarea rows={2} placeholder="customer@example.com, rina@example.com" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Comma, semicolon or new line between them. They see it in their cart when signed in.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <div className="flex flex-wrap gap-4 pt-2">
                     <Controller
                       control={control}
@@ -658,6 +726,31 @@ export default function NewCouponPage() {
                           />
                           <Label className="text-sm font-normal">Free shipping</Label>
                         </div>
+                      )}
+                    />
+                    <Controller
+                      control={control}
+                      name="worksWithPromotions"
+                      render={({ field }) => (
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            checked={!!field.value}
+                            onCheckedChange={(v) => field.onChange(v)}
+                          />
+                          <Label className="text-sm font-normal">
+                            Works with promotions and flash sale prices
+                            <span className="block text-xs text-slate-500">
+                              Off: automatic promotions come off the order while this coupon is on it, and flash-sale items don't count.
+                            </span>
+                          </Label>
+                        </div>
+                      )}
+                    />
+                    <Controller
+                      control={control}
+                      name="storefrontIds"
+                      render={({ field }) => (
+                        <StorefrontMultiSelect value={field.value ?? []} onChange={field.onChange} hint="Works only on the ticked storefronts." />
                       )}
                     />
                   </div>

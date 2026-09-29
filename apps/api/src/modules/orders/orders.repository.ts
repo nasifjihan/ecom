@@ -1,4 +1,5 @@
-import { BaseRepository, type RequestContext, ConflictError } from "../../core";
+import { BaseRepository, type RequestContext, ConflictError, NotFoundError } from "../../core";
+import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { prisma } from "../../config/prisma";
 import type { OrderSearchQueryDto } from "./orders.dto";
 import type { Paginated } from "../../core/pagination";
@@ -10,9 +11,19 @@ export class OrderRepository extends BaseRepository<"order"> {
   }
 
   /** Admin order detail: lines, full status history, refunds and the linked customer. */
+  /** An order of this store, and of a storefront the staff member works on. */
+  override async findById(ctx: RequestContext, id: bigint | number): Promise<any> {
+    const row = await prisma.order.findFirst({
+      where: { id: BigInt(id), ...(ctx.storeId !== undefined ? { storeId: ctx.storeId } : {}), ...staffOrderScope(ctx) },
+    });
+    if (!row) throw new NotFoundError("Order", id);
+    return row;
+  }
+
   async findDetailById(id: bigint, ctx: RequestContext): Promise<unknown | null> {
     const where: Record<string, unknown> = { id };
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     return (this.q as any).findFirst({
       where,
       include: {
@@ -23,6 +34,11 @@ export class OrderRepository extends BaseRepository<"order"> {
         },
         refunds: { include: { items: true }, orderBy: { createdAt: "desc" } },
         customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        createdByAdmin: { select: { id: true, name: true } },
+        storefront: { select: { id: true, name: true, code: true, courierAccountId: true } },
+        shipments: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
+        paymentRecords: { include: { settlement: { select: { id: true, code: true } }, shipment: { select: { code: true } } }, orderBy: { createdAt: "asc" } },
+        returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
       },
     });
   }
@@ -30,6 +46,7 @@ export class OrderRepository extends BaseRepository<"order"> {
   async findByNumber(number: string, ctx: RequestContext): Promise<unknown | null> {
     const where: Record<string, unknown> = { number };
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     return (this.q as any).findFirst({
       where,
       orderBy: { createdAt: "desc" },
@@ -90,11 +107,20 @@ export class OrderRepository extends BaseRepository<"order"> {
       where.grandTotal = { ...(where.grandTotal as object || {}), lte: filters.maxTotal };
     }
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
+    if (filters.source && filters.source.length > 0) where.source = { in: filters.source };
+    // Staff limited to some storefronts only see those storefronts' orders.
+    const allowed = staffStorefronts(ctx);
+    if (filters.storefrontId) {
+      where.storefrontId = allowed && !allowed.includes(filters.storefrontId) ? { in: [] } : filters.storefrontId;
+    } else if (allowed) where.storefrontId = { in: allowed };
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: "insensitive" } },
         { billingEmail: { contains: filters.search, mode: "insensitive" } },
-        { shippingEmail: { contains: filters.search, mode: "insensitive" } },
+        { billingPhone: { contains: filters.search } },
+        { shippingPhone: { contains: filters.search } },
+        { billingFirstName: { contains: filters.search, mode: "insensitive" } },
+        { billingLastName: { contains: filters.search, mode: "insensitive" } },
       ];
     }
 
@@ -117,6 +143,7 @@ export class OrderRepository extends BaseRepository<"order"> {
           customer: {
             select: { id: true, firstName: true, lastName: true, email: true },
           },
+          storefront: { select: { id: true, name: true, code: true } },
         },
       }),
     ]);
@@ -148,6 +175,7 @@ export class OrderRepository extends BaseRepository<"order"> {
     // Built with Prisma filters (not string-built SQL) so query-string values are always bound parameters.
     const where: Record<string, unknown> = {};
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    Object.assign(where, staffOrderScope(ctx));
     if (filters.status?.length) where.status = { in: filters.status };
     if (filters.paymentStatus?.length) where.paymentStatus = { in: filters.paymentStatus };
     if (filters.dateFrom || filters.dateTo) {
@@ -353,124 +381,6 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
     super("inventoryLog");
   }
 
-  async deductStock(
-    productId: bigint,
-    variantId: bigint | null | undefined,
-    qty: number,
-    reason: string,
-    referenceId: bigint | string,
-    note?: string | null,
-    warehouse?: string | null,
-    ctx?: RequestContext,
-  ): Promise<unknown> {
-    return prisma.$transaction(async (tx: any) => {
-      const pid = BigInt(productId);
-      const vid = variantId ? BigInt(variantId) : null;
-      let qtyBefore: number;
-      let qtyAfter: number;
-      let target: any;
-
-      if (vid !== null && vid !== undefined) {
-        target = await tx.productVariant.findFirst({
-          where: {
-            id: vid,
-            ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
-          },
-        });
-        if (!target) throw new ConflictError("Variant not found");
-        qtyBefore = Number(target.stockQty ?? 0);
-        if (qtyBefore < qty) {
-          throw new ConflictError("OutOfStock: insufficient variant stock");
-        }
-        qtyAfter = qtyBefore - qty;
-        await tx.productVariant.update({
-          where: { id: vid },
-          data: {
-            stockQty: qtyAfter,
-            reservedQty: { increment: qty },
-          },
-        });
-      } else {
-        target = await tx.product.findFirst({
-          where: {
-            id: pid,
-            ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
-          },
-        });
-        if (!target) throw new ConflictError("Product not found");
-        qtyBefore = Number(target.stockQty ?? 0);
-        if (qtyBefore < qty) {
-          throw new ConflictError("OutOfStock: insufficient product stock");
-        }
-        qtyAfter = qtyBefore - qty;
-        await tx.product.update({
-          where: { id: pid },
-          data: {
-            stockQty: qtyAfter,
-            reservedStock: { increment: qty },
-          },
-        });
-      }
-
-      return tx.inventoryLog.create({
-        data: {
-          ...(ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {}),
-          productId: pid,
-          variantId: vid,
-          reason: reason || "ORDER_RESERVE",
-          referenceId: String(referenceId),
-          changeQty: -qty,
-          qtyBefore,
-          qtyAfter,
-          note: note ?? null,
-          warehouse: warehouse ?? null,
-        },
-      });
-    });
-  }
-
-  /**
-   * Put an order line's quantity back on the shelf (cancel/refund). Checkout takes
-   * stock straight off stockQty without reserving it, so only stockQty goes back.
-   */
-  async restock(
-    productId: bigint,
-    variantId: bigint | null | undefined,
-    qty: number,
-    reason: string,
-    referenceId: bigint | string,
-    note?: string | null,
-    ctx?: RequestContext,
-  ): Promise<unknown> {
-    return prisma.$transaction(async (tx: any) => {
-      const pid = BigInt(productId);
-      const vid = variantId ? BigInt(variantId) : null;
-      const inStore = ctx?.storeId !== undefined ? { storeId: ctx.storeId } : {};
-
-      const target = vid
-        ? await tx.productVariant.findFirst({ where: { id: vid, product: inStore } })
-        : await tx.product.findFirst({ where: { id: pid, ...inStore } });
-      if (!target) return null; // product deleted since the order: nothing to restock
-
-      const qtyBefore = Number(target.stockQty ?? 0);
-      const qtyAfter = qtyBefore + qty;
-      if (vid) await tx.productVariant.update({ where: { id: vid }, data: { stockQty: { increment: qty } } });
-      else await tx.product.update({ where: { id: pid }, data: { stockQty: { increment: qty } } });
-
-      return tx.inventoryLog.create({
-        data: {
-          productId: pid,
-          variantId: vid,
-          reason,
-          referenceId: String(referenceId),
-          changeQty: qty,
-          qtyBefore,
-          qtyAfter,
-          note: note ?? null,
-        },
-      });
-    });
-  }
 }
 
 export class ShippingRepository extends BaseRepository<"shippingZone"> {

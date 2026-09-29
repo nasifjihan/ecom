@@ -1,9 +1,8 @@
 import type { MetadataRoute } from "next";
 import type { CategoryNode, Paginated, ProductSummary } from "@ecom/storefront-base";
-import { serverApi } from "@/lib/server-api";
+import { serverApi, storeOrigin } from "@/lib/server-api";
 import { getBlogPosts, getCmsPages } from "@/lib/content";
 
-const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
 type SitemapEntry = {
   url: string;
@@ -27,7 +26,7 @@ const STATIC_PAGES = [
   { path: "/blog", priority: 0.6, changeFrequency: "weekly" as const },
 ];
 
-function buildUrl(path: string): string {
+function buildUrl(SITE_BASE: string, path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${SITE_BASE}${normalized === "/" ? "" : normalized}`;
@@ -38,11 +37,13 @@ function nowDate(): Date {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Each storefront lists its own address (and its own products, as the API returns them).
+  const base = await storeOrigin();
   const entries: SitemapEntry[] = [];
 
   for (const page of STATIC_PAGES) {
     entries.push({
-      url: buildUrl(page.path),
+      url: buildUrl(base, page.path),
       lastModified: nowDate(),
       changeFrequency: page.changeFrequency,
       priority: page.priority,
@@ -51,13 +52,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Pages and blog posts written in the admin.
   for (const page of (await getCmsPages()) ?? []) {
-    entries.push({ url: buildUrl(`/${page.slug}`), lastModified: page.updatedAt, changeFrequency: "monthly", priority: 0.4 });
+    entries.push({ url: buildUrl(base, `/${page.slug}`), lastModified: page.updatedAt, changeFrequency: "monthly", priority: 0.4 });
   }
   for (let page = 1; page <= 20; page++) {
     const res = await getBlogPosts(page, undefined, 100);
     if (!res) break;
     for (const post of res.data) {
-      entries.push({ url: buildUrl(`/blog/${post.slug}`), lastModified: post.updatedAt, changeFrequency: "monthly", priority: 0.5 });
+      entries.push({ url: buildUrl(base, `/blog/${post.slug}`), lastModified: post.updatedAt, changeFrequency: "monthly", priority: 0.5 });
     }
     if (page >= res.meta.totalPages) break;
   }
@@ -66,7 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const walk = (nodes: CategoryNode[]): CategoryNode[] => nodes.flatMap((n) => [n, ...walk(n.children ?? [])]);
   for (const cat of walk(tree)) {
     entries.push({
-      url: buildUrl(`/products?category=${cat.slug}`),
+      url: buildUrl(base, `/products?category=${cat.slug}`),
       lastModified: nowDate(),
       changeFrequency: "weekly",
       priority: 0.8,
@@ -79,7 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!res) break;
     for (const product of res.items) {
       entries.push({
-        url: buildUrl(`/products/${product.slug}`),
+        url: buildUrl(base, `/products/${product.slug}`),
         lastModified: nowDate(),
         changeFrequency: "weekly",
         priority: 0.7,

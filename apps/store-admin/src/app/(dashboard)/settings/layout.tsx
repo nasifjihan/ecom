@@ -2,91 +2,13 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import {
-  Store,
-  User2,
-  CreditCard,
-  Globe,
-  Languages,
-  Package2,
-  Warehouse,
-  Receipt,
-  Truck,
-  ShoppingCart,
-  Banknote,
-  ClipboardList,
-  Mail,
-  Users,
-  Shield,
-  Lock,
-  Plug,
-  Code2,
-  Webhook,
-  Activity,
-  ChevronRight,
-  Settings as SettingsIcon,
-} from "lucide-react";
+import { ChevronRight, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@ecom/utils";
 import { Card, CardContent } from "@/components/ui";
-
-type NavItem = {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
-type NavGroup = {
-  label: string;
-  items: NavItem[];
-};
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Store",
-    items: [
-      { label: "Profile", href: "/settings/profile", icon: User2 },
-      { label: "Store", href: "/settings/general", icon: Store },
-      { label: "Billing & Plans", href: "/settings/billing", icon: CreditCard },
-      { label: "Domains & SSL", href: "/settings/domains", icon: Globe },
-      { label: "Localization", href: "/settings/localization", icon: Languages },
-    ],
-  },
-  {
-    label: "Catalog",
-    items: [
-      { label: "Products", href: "/settings/products", icon: Package2 },
-      { label: "Inventory", href: "/settings/inventory", icon: Warehouse },
-      { label: "Taxes", href: "/settings/taxes", icon: Receipt },
-      { label: "Shipping", href: "/settings/shipping", icon: Truck },
-    ],
-  },
-  {
-    label: "Sales",
-    items: [
-      { label: "Checkout", href: "/settings/checkout", icon: ShoppingCart },
-      { label: "Payments", href: "/settings/payments", icon: Banknote },
-      { label: "Order Statuses", href: "/settings/order-statuses", icon: ClipboardList },
-      { label: "Emails", href: "/settings/emails", icon: Mail },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { label: "Team", href: "/settings/team", icon: Users },
-      { label: "Roles & Permissions", href: "/settings/roles", icon: Shield },
-      { label: "Security", href: "/settings/security", icon: Lock },
-      { label: "Integrations", href: "/settings/integrations", icon: Plug },
-      { label: "Developers API", href: "/settings/developers", icon: Code2 },
-      { label: "Webhooks", href: "/settings/webhooks", icon: Webhook },
-      { label: "Activity Log", href: "/settings/activity", icon: Activity },
-    ],
-  },
-];
+import { SETTINGS_SECTIONS } from "@/lib/nav";
+import { useCan } from "@/lib/permissions";
 
 function isActive(path: string, href: string) {
-  if (href === "/settings/profile") {
-    return path?.startsWith("/settings/profile") || path?.startsWith("/settings/password");
-  }
   if (href === "/settings/general") {
     return path?.startsWith("/settings/general") || path === "/settings";
   }
@@ -99,6 +21,8 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { can } = useCan();
+  const groups = SETTINGS_SECTIONS.map((g) => ({ ...g, items: g.items.filter((i) => can(i.perm)) })).filter((g) => g.items.length);
 
   return (
     <div className="space-y-6">
@@ -111,7 +35,7 @@ export default function SettingsLayout({
             Settings
           </h1>
           <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Manage your store, team, and system preferences.
+            Your account, store details, emails and team.
           </p>
         </div>
       </div>
@@ -121,10 +45,10 @@ export default function SettingsLayout({
           <Card>
             <CardContent className="p-2">
               <nav className="space-y-1">
-                {NAV_GROUPS.map((group) => (
-                  <div key={group.label} className="mb-2 first:mt-1">
+                {groups.map((group) => (
+                  <div key={group.title} className="mb-2 first:mt-1">
                     <div className="px-3 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      {group.label}
+                      {group.title}
                     </div>
                     <ul className="space-y-0.5">
                       {group.items.map((item) => {

@@ -32,7 +32,10 @@ export interface MeResponse {
     name: string;
     email: string;
     role?: string;
+    roleId?: string;
     avatar?: string | null;
+    /** On the sales team (has a My commission page). */
+    isSalesperson?: boolean;
   };
   storeId?: string;
   store?: {
@@ -49,6 +52,8 @@ interface ApiAdminUser {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  isSalesperson?: boolean;
+  roleId?: string;
   role?: { name: string; permissions?: { permission: string }[] } | null;
 }
 
@@ -57,7 +62,9 @@ const toAuthUser = (u: ApiAdminUser) => ({
   name: u.name,
   email: u.email,
   role: u.role?.name,
+  roleId: u.roleId,
   avatar: u.avatarUrl ?? null,
+  isSalesperson: !!u.isSalesperson,
 });
 
 export const authApiSlice = api.injectEndpoints({

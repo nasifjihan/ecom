@@ -82,6 +82,7 @@ import {
   useDeleteBrandMutation,
   type Brand,
 } from "@/lib/features/catalog/catalog-api-slice";
+import { banglaOf, bnTexts } from "@/components/catalog/bangla-fields";
 
 const brandSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }).max(255),
@@ -96,6 +97,9 @@ const brandSchema = z.object({
   logoUrl: z.string().max(500).optional().or(z.literal("")),
   websiteUrl: z.string().max(500).optional().or(z.literal("")),
   description: z.string().max(5000).optional().or(z.literal("")),
+  /** The name and description in Bangla (optional; the storefront shows them in Bangla). */
+  nameBn: z.string().max(255).optional().or(z.literal("")),
+  descriptionBn: z.string().max(5000).optional().or(z.literal("")),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().or(z.literal("")),
@@ -169,6 +173,8 @@ function BrandDialog({
       logoUrl: brand?.logoUrl || "",
       websiteUrl: brand?.websiteUrl || "",
       description: brand?.description || "",
+      nameBn: banglaOf(brand).name ?? "",
+      descriptionBn: banglaOf(brand).description ?? "",
       sortOrder: brand?.sortOrder ?? 0,
       isActive: brand?.isActive !== false,
       seoTitle: brand?.seoTitle || "",
@@ -181,6 +187,8 @@ function BrandDialog({
           logoUrl: brand?.logoUrl || "",
           websiteUrl: brand?.websiteUrl || "",
           description: brand?.description || "",
+          nameBn: banglaOf(brand).name ?? "",
+          descriptionBn: banglaOf(brand).description ?? "",
           sortOrder: brand?.sortOrder ?? 0,
           isActive: brand?.isActive !== false,
           seoTitle: brand?.seoTitle || "",
@@ -270,6 +278,31 @@ function BrandDialog({
                       <FormLabel>Description</FormLabel>
                       <FormControl>
                         <Textarea rows={3} placeholder="About the brand..." {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={methods.control}
+                  name="nameBn"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Name in Bangla (বাংলা)</FormLabel>
+                      <FormControl>
+                        <Input lang="bn" placeholder="Optional: shown when a shopper picks বাংলা" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={methods.control}
+                  name="descriptionBn"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Description in Bangla</FormLabel>
+                      <FormControl>
+                        <Textarea lang="bn" rows={2} {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -576,6 +609,7 @@ export default function BrandsPage() {
         logoUrl: values.logoUrl || null,
         websiteUrl: values.websiteUrl || null,
         description: values.description || null,
+        translations: bnTexts({ name: values.nameBn, description: values.descriptionBn }),
         sortOrder: values.sortOrder,
         isActive: values.isActive,
         seoTitle: values.seoTitle || null,

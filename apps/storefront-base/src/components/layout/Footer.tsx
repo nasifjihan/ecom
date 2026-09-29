@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button, Input, Separator } from "../ui";
 import { cn } from "@ecom/utils";
+import { useT } from "../../i18n/provider";
 
 export type FooterLink = { label: string; href: string; external?: boolean };
 
@@ -60,6 +61,7 @@ export const Footer: React.FC<FooterProps> = ({
 }) => {
   const [email, setEmail] = React.useState("");
   const [subscribed, setSubscribed] = React.useState(false);
+  const t = useT();
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,8 +117,8 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="bg-primary/5 border-b">
           <div className="container py-8 flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-foreground mb-1">Subscribe to Our Newsletter</h3>
-              <p className="text-muted-foreground text-sm">Get the latest offers, new arrivals and exclusive deals delivered to your inbox.</p>
+              <h3 className="text-xl font-bold text-foreground mb-1">{t("Subscribe to Our Newsletter")}</h3>
+              <p className="text-muted-foreground text-sm">{t("Get the latest offers, new arrivals and exclusive deals delivered to your inbox.")}</p>
             </div>
             <form onSubmit={handleSubscribe} className="w-full lg:w-auto flex items-center gap-2 max-w-md">
               <div className="relative flex-1">
@@ -131,7 +133,7 @@ export const Footer: React.FC<FooterProps> = ({
                 />
               </div>
               <Button type="submit" disabled={subscribed}>
-                {subscribed ? "Subscribed ✓" : "Subscribe"}
+                {subscribed ? t("Subscribed ✓") : t("Subscribe")}
               </Button>
             </form>
           </div>
@@ -176,17 +178,17 @@ export const Footer: React.FC<FooterProps> = ({
 
           {linkColumns.map((col) => (
             <div key={col.title}>
-              <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">{col.title}</h4>
+              <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">{t(col.title)}</h4>
               <ul className="space-y-2 text-sm">
                 {col.links.map((l) => (
                   <li key={`${l.href}-${l.label}`}>
                     {l.external ? (
                       <a href={l.href} target="_blank" rel="noreferrer noopener" className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
-                        {l.label}
+                        {t(l.label)}
                       </a>
                     ) : (
                       <Link href={l.href} className="text-muted-foreground hover:text-foreground hover:underline transition-colors">
-                        {l.label}
+                        {t(l.label)}
                       </Link>
                     )}
                   </li>
@@ -197,7 +199,7 @@ export const Footer: React.FC<FooterProps> = ({
 
           {hasSocial && (
             <div>
-              <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider">Follow Us</h4>
+              <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider">{t("Follow Us")}</h4>
               <div className="flex items-center gap-2">
                 {socialLinks.facebook && (
                   <a href={socialLinks.facebook} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-primary hover:text-white flex items-center justify-center transition-colors">
@@ -229,7 +231,7 @@ export const Footer: React.FC<FooterProps> = ({
 
       <div className="container py-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">We accept:</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">{t("We accept:")}</span>
           {paymentIcons.map((p) => (
             <div
               key={p.name}
@@ -243,7 +245,7 @@ export const Footer: React.FC<FooterProps> = ({
           ))}
         </div>
         <p className="text-sm text-muted-foreground">
-          © {year} {storeName}. All rights reserved.
+          © {year} {storeName}. {t("All rights reserved.")}
         </p>
       </div>
     </footer>

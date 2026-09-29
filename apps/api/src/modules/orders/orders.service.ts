@@ -1,14 +1,17 @@
 import { prisma, tx, cacheGet, cacheSet, cacheDel, CACHE_KEYS } from "../../config";
+import { recordOrderCash } from "../payments/payments.records";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, ForbiddenError, type RequestContext } from "../../core";
 import { getPaymentProvider, PAYMENT_METHODS } from "../../services/payments";
 import type { PaymentMethod, PaymentStatus } from "../../services/payments/types";
-import { OrderRepository, CartRepository, RefundRepository, CouponRepository, InventoryLogRepository, ShippingRepository } from "./orders.repository";
-import type { CreateOrderFromCartDto, TransitionStatusDto, CreateRefundDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
+import { OrderRepository, CartRepository } from "./orders.repository";
+import type { TransitionStatusDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
 import { newId, slugify } from "@ecom/utils";
 import { Prisma } from "@prisma/client";
 import { emitOrderStatusChanged } from "../notifications";
+import { releaseOrderStock } from "../stock";
+import { onOrderClosed, onOrderDelivered } from "../loyalty/loyalty.ledger";
 
-const STATUS_TRANSITIONS: Record<string, string[]> = {
+export const STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["PROCESSING", "ON_HOLD", "CANCELLED"],
   PROCESSING: ["ON_HOLD", "SHIPPED", "CANCELLED"],
   ON_HOLD: ["PROCESSING", "CANCELLED"],
@@ -37,334 +40,11 @@ async function releaseFlashSaleUnits(t: Prisma.TransactionClient, items: { quant
 export class OrdersService extends BaseService {
   private orders: OrderRepository;
   private carts: CartRepository;
-  private refunds: RefundRepository;
-  private coupons: CouponRepository;
-  private inventory: InventoryLogRepository;
-  private shipping: ShippingRepository;
 
   constructor(ctx: RequestContext) {
     super(ctx);
     this.orders = new OrderRepository();
     this.carts = new CartRepository();
-    this.refunds = new RefundRepository();
-    this.coupons = new CouponRepository();
-    this.inventory = new InventoryLogRepository();
-    this.shipping = new ShippingRepository();
-  }
-
-  async createOrderFromCart(dto: CreateOrderFromCartDto) {
-    return tx(async (t: Prisma.TransactionClient) => {
-      const cart = await t.cart.findFirst({
-        where: { id: BigInt(dto.cartId) },
-        include: {
-          items: {
-            include: {
-              product: {
-                include: {
-                  taxClass: {
-                    include: {
-                      rates: true,
-                    },
-                  },
-                },
-              },
-              variant: true,
-            },
-          },
-        },
-      });
-
-      if (!cart || !cart.items || cart.items.length === 0) {
-        throw new BadRequestError("Cart is empty or not found", "CART_EMPTY");
-      }
-
-      const cartItems = cart.items as unknown as Array<{
-        id: bigint;
-        productId: bigint;
-        variantId: bigint | null;
-        quantity: number;
-        unitPrice: Prisma.Decimal | number;
-        product: {
-          name: string;
-          sku: string | null;
-          imageUrl?: string | null;
-          taxClass?: {
-            rates?: Array<{ rate: number; countryCode: string }>;
-          } | null;
-        };
-        variant?: {
-          id: bigint;
-          attributeValues: Record<string, unknown> | null;
-          sku: string | null;
-        } | null;
-      }>;
-
-      let coupon: any = null;
-      let couponDiscountAmount = 0;
-      if (dto.couponCode && dto.couponCode.trim().length > 0) {
-        coupon = await this.coupons.findByCode(dto.couponCode.toUpperCase(), this.ctx);
-        if (!coupon) {
-          throw new BadRequestError("Invalid coupon code", "COUPON_INVALID");
-        }
-        if (!coupon.isActive) {
-          throw new BadRequestError("Coupon is not active", "BAD_REQUEST");
-        }
-        const now = new Date();
-        if (coupon.startsAt && new Date(coupon.startsAt) > now) {
-          throw new BadRequestError("Coupon not yet valid", "BAD_REQUEST");
-        }
-        if (coupon.expiresAt && new Date(coupon.expiresAt) < now) {
-          throw new BadRequestError("Coupon has expired", "COUPON_EXPIRED");
-        }
-      }
-
-      let itemsSubtotal = 0;
-      let taxTotal = 0;
-      const billingCountryCode = dto.billingAddress?.countryCode ?? dto.shippingAddress.countryCode ?? "BD";
-      const orderLines = cartItems.map((cartItem) => {
-        const itemUnitPrice = Number(cartItem.unitPrice);
-        const qty = cartItem.quantity;
-        const lineSubtotal = itemUnitPrice * qty;
-        itemsSubtotal += lineSubtotal;
-
-        let taxRate = 15;
-        const taxRates = cartItem.product?.taxClass?.rates ?? [];
-        const matchedRate = taxRates.find((r) => r.countryCode === billingCountryCode);
-        if (matchedRate) {
-          taxRate = matchedRate.rate;
-        }
-        const lineTax = (lineSubtotal * taxRate) / 100;
-        taxTotal += lineTax;
-
-        return {
-          cartItem,
-          itemUnitPrice,
-          qty,
-          lineSubtotal,
-          lineTax,
-        };
-      });
-
-      if (coupon) {
-        if (coupon.minSubtotal !== null && coupon.minSubtotal !== undefined && itemsSubtotal < Number(coupon.minSubtotal)) {
-          throw new BadRequestError(`Coupon requires minimum subtotal of ${coupon.minSubtotal}`, "COUPON_MIN_AMOUNT_NOT_REACHED");
-        }
-        if (coupon.usageLimit !== null && coupon.usageLimit !== undefined && (coupon.usageCount ?? 0) >= coupon.usageLimit) {
-          throw new BadRequestError("Coupon usage limit reached", "COUPON_ALREADY_USED");
-        }
-        if (coupon.perCustomerLimit !== null && coupon.perCustomerLimit !== undefined && this.ctx.customer?.id) {
-          const customerUsage = await prisma.order.count({
-            where: {
-              customerId: BigInt(this.ctx.customer.id),
-              couponId: BigInt(coupon.id),
-            },
-          });
-          if (customerUsage >= coupon.perCustomerLimit) {
-            throw new BadRequestError("Coupon per-customer limit reached", "BAD_REQUEST");
-          }
-        }
-        if (coupon.discountType === "PERCENT") {
-          couponDiscountAmount = Math.min(itemsSubtotal, (itemsSubtotal * Number(coupon.discountValue)) / 100);
-        } else {
-          couponDiscountAmount = Math.min(itemsSubtotal, Number(coupon.discountValue));
-        }
-        if (coupon.maxDiscountAmount !== null && coupon.maxDiscountAmount !== undefined) {
-          couponDiscountAmount = Math.min(couponDiscountAmount, Number(coupon.maxDiscountAmount));
-        }
-        couponDiscountAmount = Math.round(couponDiscountAmount * 100) / 100;
-      }
-
-      const shippingZone = await this.shipping.matchZoneByAddress(
-        dto.shippingAddress.countryCode,
-        dto.shippingAddress.state ?? null,
-        dto.shippingAddress.postcode ?? null,
-        this.ctx,
-      );
-      if (!shippingZone) {
-        throw new BadRequestError("No shipping zone matches the provided address", "SHIPPING_RATE_NOT_FOUND");
-      }
-      const shippingZoneId = (shippingZone as { id: bigint }).id;
-      const zoneMethods = await this.shipping.methodsForZone(shippingZoneId);
-      const shippingMethod = zoneMethods.find((m: any) => m.code === dto.shippingMethodCode);
-      if (!shippingMethod) {
-        throw new BadRequestError(`Shipping method ${dto.shippingMethodCode} not available for this zone`, "SHIPPING_UNAVAILABLE_FOR_ZONE");
-      }
-      const itemCount = orderLines.reduce((sum, l) => sum + l.qty, 0);
-      const shippingTotal = this.shipping.flatRateCalc(shippingMethod as any, itemsSubtotal, itemCount, 0);
-      const shippingMethodName = (shippingMethod as { name: string }).name;
-
-      const discountTotal = couponDiscountAmount;
-      const feeTotal = 0;
-      const grandTotal = itemsSubtotal + shippingTotal + taxTotal - discountTotal + feeTotal;
-      const currencyCode = "BDT";
-
-      for (const line of orderLines) {
-        await this.inventory.deductStock(
-          line.cartItem.productId,
-          line.cartItem.variantId ?? null,
-          line.qty,
-          "ORDER_CREATE",
-          "order-temp",
-          undefined,
-          undefined,
-          this.ctx,
-        );
-      }
-
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      const datePart = `${yyyy}${mm}${dd}`;
-      const seqQuery = await prisma.$queryRawUnsafe(`
-        SELECT COUNT(*)::int as cnt FROM "Order"
-        WHERE "number" LIKE '${datePart}%'
-      `) as Array<{ cnt: number }>;
-      const nextSeq = (seqQuery[0]?.cnt ?? 0) + 1;
-      const seqPart = String(nextSeq).padStart(6, "0");
-      const orderNumber = `${datePart}${seqPart}`;
-      const orderKey = newId("ok");
-
-      const shippingAddr = dto.shippingAddress;
-      const billingAddr = dto.billingAddress ?? dto.shippingAddress;
-      const customerId = this.ctx.customer?.id ? BigInt(this.ctx.customer.id) : null;
-      const isGuest = customerId === null;
-      const ipAddress = (this.ctx as any).req?.ip ?? null;
-      const userAgent = (this.ctx as any).req?.headers?.["user-agent"] ?? null;
-
-      const orderData: Record<string, unknown> = {
-        ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}),
-        number: orderNumber,
-        orderKey,
-        status: "PENDING",
-        currencyCode,
-        customerId,
-        customerNote: dto.customerNote ?? null,
-        isGuest,
-        ipAddress,
-        userAgent,
-        billingFirstName: billingAddr.firstName,
-        billingLastName: billingAddr.lastName,
-        billingCompany: billingAddr.company ?? null,
-        billingAddress1: billingAddr.address1,
-        billingAddress2: billingAddr.address2 ?? null,
-        billingCity: billingAddr.city,
-        billingState: billingAddr.state ?? null,
-        billingPostcode: billingAddr.postcode ?? null,
-        billingCountryCode: billingAddr.countryCode,
-        billingEmail: billingAddr.email,
-        billingPhone: billingAddr.phone ?? null,
-        shippingSameAsBilling: dto.billingAddress === undefined,
-        shippingFirstName: shippingAddr.firstName,
-        shippingLastName: shippingAddr.lastName,
-        shippingCompany: shippingAddr.company ?? null,
-        shippingAddress1: shippingAddr.address1,
-        shippingAddress2: shippingAddr.address2 ?? null,
-        shippingCity: shippingAddr.city,
-        shippingState: shippingAddr.state ?? null,
-        shippingPostcode: shippingAddr.postcode ?? null,
-        shippingCountryCode: shippingAddr.countryCode,
-        shippingEmail: shippingAddr.email,
-        shippingPhone: shippingAddr.phone ?? null,
-        shippingZoneId: shippingZoneId,
-        shippingMethodCode: dto.shippingMethodCode,
-        shippingMethodName,
-        itemsSubtotal,
-        discountTotal,
-        shippingTotal,
-        taxTotal,
-        feeTotal,
-        grandTotal,
-        couponUsed: coupon ? (coupon.code as string) : null,
-        couponId: coupon ? BigInt(coupon.id) : null,
-        couponDiscountAmount,
-        paymentGatewayCode: dto.paymentGatewayCode,
-        paymentStatus: "unpaid" as PaymentStatus,
-      };
-
-      if (coupon) {
-        await this.coupons.incrementUsage(BigInt(coupon.id), this.ctx);
-      }
-
-      const createdOrder = await t.order.create({ data: orderData as any });
-      const orderId = BigInt(createdOrder.id);
-
-      const discountRatio = discountTotal > 0 && itemsSubtotal > 0 ? discountTotal / itemsSubtotal : 0;
-      const orderItemInserts = orderLines.map((line) => {
-        const lineDiscount = Math.round(line.lineSubtotal * discountRatio * 100) / 100;
-        const lineTotal = line.lineSubtotal + line.lineTax - lineDiscount;
-        const product = line.cartItem.product;
-        const variant = line.cartItem.variant;
-        const productName = product?.name ?? "";
-        const productSku = product?.sku ?? null;
-        const imageUrl = product?.imageUrl ?? null;
-        const variantValues = variant?.attributeValues ?? null;
-        return {
-          orderId,
-          productId: line.cartItem.productId,
-          variantId: line.cartItem.variantId ?? null,
-          productName,
-          productSku,
-          variantValues: variantValues as any,
-          imageUrl,
-          quantity: line.qty,
-          unitPrice: line.itemUnitPrice,
-          lineSubtotal: line.lineSubtotal,
-          lineTax: line.lineTax,
-          lineDiscount,
-          lineTotal,
-        };
-      });
-
-      await t.orderItem.createMany({ data: orderItemInserts as any });
-
-      await t.orderStatusLog.create({
-        data: {
-          orderId,
-          status: "PENDING",
-          note: "Order created from cart",
-          notifyCustomer: true,
-          adminId: null,
-        } as any,
-      });
-
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
-      await t.cartItem.deleteMany({ where: { cartId: BigInt(dto.cartId) } });
-      await t.cart.update({
-        where: { id: BigInt(dto.cartId) },
-        data: { expiresAt } as any,
-      });
-
-      let nextStep: string;
-      let redirectUrl: string | undefined;
-      if (dto.paymentGatewayCode === "cod") {
-        nextStep = "COD_AWAITING_CONFIRM";
-      } else {
-        nextStep = "INITIATE_PAYMENT";
-        try {
-          const provider = getPaymentProvider(dto.paymentGatewayCode as PaymentMethod);
-          const initiateResult = await provider.initiate({
-            orderId,
-            orderNumber,
-            amount: grandTotal,
-            currencyCode,
-            customerEmail: billingAddr.email,
-            customerName: `${billingAddr.firstName} ${billingAddr.lastName}`,
-            customerPhone: billingAddr.phone,
-            redirectUrl: "",
-            ipnUrl: "",
-            metadata: { orderKey },
-          });
-          redirectUrl = initiateResult.redirectUrl;
-        } catch {
-          redirectUrl = undefined;
-        }
-      }
-
-      const fullOrder = await this.orders.findById(this.ctx, orderId);
-      return { order: fullOrder, nextStep, redirectUrl };
-    });
   }
 
   async transitionStatus(orderId: bigint, dto: TransitionStatusDto) {
@@ -383,18 +63,12 @@ export class OrdersService extends BaseService {
     }
 
     const result = await tx(async (t: Prisma.TransactionClient) => {
-      if (newStatus === "CANCELLED" || newStatus === "REFUNDED") {
+      if (newStatus === "CANCELLED" || newStatus === "REFUNDED" || newStatus === "FAILED") {
         const orderItems = await t.orderItem.findMany({ where: { orderId: oid } });
-        for (const oi of orderItems as Array<{ productId: bigint; variantId: bigint | null; quantity: number }>) {
-          await this.inventory.restock(
-            oi.productId,
-            oi.variantId ?? null,
-            oi.quantity,
-            `ORDER_${newStatus}`,
-            String(oid),
-            undefined,
-            this.ctx,
-          );
+        // Stock still held for the order goes back on sale; packed parcels are unpacked on cancel.
+        // Units already with a courier or the customer come back through a returned parcel or a return.
+        if (this.ctx.storeId !== undefined) {
+          await releaseOrderStock(t, this.ctx.storeId, oid, `ORDER_${newStatus}`, newStatus === "CANCELLED");
         }
         if (newStatus === "CANCELLED") await releaseFlashSaleUnits(t, orderItems);
       }
@@ -414,6 +88,13 @@ export class OrdersService extends BaseService {
       }
 
       await t.order.update({ where: { id: oid }, data: updateData as any });
+      // Loyalty: cashback, referral rewards and level on delivery; wallet and cashback back on closing.
+      if (this.ctx.storeId !== undefined) {
+        if (newStatus === "DELIVERED") await onOrderDelivered(t, this.ctx.storeId, oid);
+        if (newStatus === "CANCELLED" || newStatus === "REFUNDED" || newStatus === "FAILED") await onOrderClosed(t, this.ctx.storeId, oid);
+      }
+      // Cash on delivery handed over without a parcel carrying it: count it as cash in hand.
+      if (newStatus === "DELIVERED") await recordOrderCash(t, oid);
 
       await t.orderStatusLog.create({
         data: {
@@ -454,116 +135,6 @@ export class OrdersService extends BaseService {
     const order = await this.orders.findByNumber(number, this.ctx);
     if (!order) throw new NotFoundError("order", number);
     return order;
-  }
-
-  async createRefund(dto: CreateRefundDto) {
-    const oid = BigInt(dto.orderId);
-    const order = await this.orders.findById(this.ctx, oid);
-    if (!order) throw new NotFoundError("order", oid);
-
-    const orderItems = await prisma.orderItem.findMany({ where: { orderId: oid } });
-    const orderItemMap = new Map<bigint, any>();
-    for (const oi of orderItems) {
-      orderItemMap.set(BigInt((oi as any).id), oi);
-    }
-
-    let totalRefundAmount = 0;
-    const perItemRefunded = new Map<bigint, number>();
-
-    for (const line of dto.items) {
-      const oi = orderItemMap.get(BigInt(line.orderItemId));
-      if (!oi) throw new BadRequestError(`Order item ${line.orderItemId} not found`, "REFUND_NOT_ALLOWED");
-      const lineTotal = Number((oi as any).lineTotal ?? 0);
-      const existingForItem = perItemRefunded.get(BigInt(line.orderItemId)) ?? 0;
-      const newRefundForItem = existingForItem + line.amount * line.quantity;
-      if (newRefundForItem > lineTotal) {
-        throw new BadRequestError(
-          `Refund amount for item ${line.orderItemId} exceeds line total`,
-          "REFUND_AMOUNT_EXCEEDS_PAID",
-        );
-      }
-      perItemRefunded.set(BigInt(line.orderItemId), newRefundForItem);
-      totalRefundAmount += line.amount * line.quantity;
-    }
-
-    const refundResult = await tx(async (t: Prisma.TransactionClient) => {
-      const adminId = this.ctx.admin?.id ? BigInt(this.ctx.admin.id) : null;
-      const refund = await t.refund.create({
-        data: {
-          ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}),
-          orderId: oid,
-          adminId,
-          reason: dto.reason,
-          refundMethod: dto.refundMethod,
-          totalAmount: totalRefundAmount,
-          restockItems: dto.restockItems,
-          gatewayRefund: dto.gatewayRefund,
-          noteToCustomer: dto.noteToCustomer ?? null,
-          status: "PENDING",
-        } as any,
-      });
-      const refundId = BigInt((refund as any).id);
-
-      const refundItemInserts = dto.items.map((line) => ({
-        refundId,
-        orderItemId: BigInt(line.orderItemId),
-        quantity: line.quantity,
-        amount: line.amount,
-      }));
-      await t.refundItem.createMany({ data: refundItemInserts as any });
-
-      if (dto.restockItems) {
-        for (const line of dto.items) {
-          const oi = orderItemMap.get(BigInt(line.orderItemId));
-          if (oi) {
-            await this.inventory.restock(
-              BigInt((oi as any).productId),
-              (oi as any).variantId ? BigInt((oi as any).variantId) : null,
-              line.quantity,
-              "REFUND_RESTOCK",
-              String(refundId),
-              undefined,
-              this.ctx,
-            );
-          }
-        }
-      }
-
-      if (dto.gatewayRefund) {
-        const gatewayCode = (order as any).paymentGatewayCode as PaymentMethod;
-        try {
-          const provider = getPaymentProvider(gatewayCode);
-          await provider.refund({
-            orderId: oid,
-            amount: totalRefundAmount,
-            reason: dto.reason,
-          });
-        } catch {
-          // gateway refund failure is logged but doesn't block refund record
-        }
-      }
-
-      const orderGrandTotal = Number((order as any).grandTotal ?? 0);
-      if (totalRefundAmount >= orderGrandTotal - 0.001) {
-        await t.order.update({
-          where: { id: oid },
-          data: { status: "REFUNDED", paymentStatus: "refunded" } as any,
-        });
-        await t.orderStatusLog.create({
-          data: {
-            orderId: oid,
-            status: "REFUNDED",
-            note: `Order fully refunded via refund #${refundId}`,
-            notifyCustomer: true,
-            adminId,
-          } as any,
-        });
-      }
-
-      return refund;
-    });
-
-    return refundResult;
   }
 
   async initiatePayment(dto: PaymentInitiateDto, order: any) {
@@ -620,7 +191,7 @@ export class OrdersService extends BaseService {
       data: {
         paymentStatus: confirmResult.status,
         paidAt: confirmResult.paidAt ?? new Date(),
-        paymentTxnId: confirmResult.transactionId ?? dto.gatewayTxnId,
+        transactionId: confirmResult.transactionId ?? dto.gatewayTxnId,
       } as any,
     });
 
@@ -661,7 +232,7 @@ export class OrdersService extends BaseService {
         data: {
           paymentStatus: confirmResult.status ?? "paid",
           paidAt: confirmResult.paidAt ?? new Date(),
-          paymentTxnId: ipnResult.transactionId,
+          transactionId: ipnResult.transactionId,
         } as any,
       });
     }

@@ -57,6 +57,10 @@ const BaseOrderSearchQueryDto = PaginationSchema.extend({
   search: z.string().optional(),
   customerId: z.coerce.bigint().optional(),
   channel: z.string().optional(),
+  /** Where orders came from: website, phone, facebook, ... (comma separated). */
+  source: csvArray(z.string().max(20)).optional(),
+  /** Orders placed on one storefront. */
+  storefrontId: z.coerce.bigint().positive().optional(),
 });
 
 export const OrderSearchQueryDto = BaseOrderSearchQueryDto.superRefine((v, ctx) => {

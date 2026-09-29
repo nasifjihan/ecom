@@ -10,7 +10,6 @@ import {
   Wallet,
   Landmark,
   Check,
-  Upload,
   FileText,
 } from "lucide-react";
 import { PaymentMethod } from "@ecom/shared-types";
@@ -25,12 +24,13 @@ import {
   FormMessage,
   Badge,
   Separator,
-  cn,
-  formatMoney,
 } from "@ecom/storefront-base";
+import { cn, formatMoney } from "@ecom/utils";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useT } from "../../i18n/provider";
+import { msg } from "../../i18n/translate";
 
 export type PaymentGatewayOption = {
   id: PaymentMethod;
@@ -42,14 +42,19 @@ export type PaymentGatewayOption = {
   helperText?: string;
   hasExtraFields?: boolean;
   extraFee?: number;
+  /**
+   * The store takes this method by hand: the customer sends money to `accountNumber` (or the bank
+   * account in `instructions`) and gives the transaction ID, which the shop then verifies.
+   */
+  manual?: { accountNumber?: string; accountType?: string; instructions?: string };
 };
 
 export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
   {
     id: PaymentMethod.STRIPE,
     name: "stripe",
-    brandName: "Credit / Debit Card",
-    description: "Pay securely with Visa, Mastercard, Amex",
+    brandName: msg("Credit / Debit Card"),
+    description: msg("Pay securely with Visa, Mastercard, Amex"),
     icon: <CreditCard className="h-5 w-5" />,
     color: "text-blue-600",
     hasExtraFields: true,
@@ -58,7 +63,7 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     id: PaymentMethod.BKASH,
     name: "bkash",
     brandName: "bKash",
-    description: "Bangladesh's most popular mobile financial service",
+    description: msg("Bangladesh's most popular mobile financial service"),
     icon: <Wallet className="h-5 w-5" />,
     color: "text-pink-600",
     hasExtraFields: true,
@@ -67,7 +72,7 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     id: PaymentMethod.NAGAD,
     name: "nagad",
     brandName: "Nagad",
-    description: "Fast and secure mobile banking from Nagad",
+    description: msg("Fast and secure mobile banking from Nagad"),
     icon: <Smartphone className="h-5 w-5" />,
     color: "text-orange-600",
     hasExtraFields: true,
@@ -76,7 +81,7 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     id: PaymentMethod.ROCKET,
     name: "rocket",
     brandName: "Rocket",
-    description: "Dutch-Bangla Bank Rocket mobile banking",
+    description: msg("Dutch-Bangla Bank Rocket mobile banking"),
     icon: <RocketIcon className="h-5 w-5" />,
     color: "text-purple-600",
     hasExtraFields: true,
@@ -85,7 +90,7 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     id: PaymentMethod.SSLCOMMERZ,
     name: "sslcommerz",
     brandName: "SSLCommerz",
-    description: "Secure payment gateway — redirect to SSLCommerz",
+    description: msg("Secure payment gateway — redirect to SSLCommerz"),
     icon: <Shield className="h-5 w-5" />,
     color: "text-emerald-600",
     hasExtraFields: false,
@@ -93,8 +98,8 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
   {
     id: PaymentMethod.COD,
     name: "cod",
-    brandName: "Cash On Delivery",
-    description: "Pay in cash when your order arrives",
+    brandName: msg("Cash On Delivery"),
+    description: msg("Pay in cash when your order arrives"),
     icon: <Banknote className="h-5 w-5" />,
     color: "text-green-700",
     hasExtraFields: false,
@@ -102,8 +107,8 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
   {
     id: PaymentMethod.BANK_TRANSFER,
     name: "bank_transfer",
-    brandName: "Bank Transfer",
-    description: "Direct bank transfer to our account",
+    brandName: msg("Bank Transfer"),
+    description: msg("Direct bank transfer to our account"),
     icon: <Landmark className="h-5 w-5" />,
     color: "text-indigo-600",
     hasExtraFields: true,
@@ -142,6 +147,8 @@ export type PaymentMethodListProps = {
   onFormDataChange?: (data: PaymentFormData) => void;
   formData?: PaymentFormData;
   currency?: string;
+  /** The order total, shown as the amount to send for manual payments. */
+  amount?: number;
   className?: string;
 };
 
@@ -171,8 +178,10 @@ export function PaymentMethodList({
   onFormDataChange,
   formData,
   currency = "BDT",
+  amount,
   className,
 }: PaymentMethodListProps) {
+  const t = useT();
   const {
     control,
     watch,
@@ -214,7 +223,7 @@ export function PaymentMethodList({
         control={control}
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Card Number</FormLabel>
+            <FormLabel>{t("Card Number")}</FormLabel>
             <FormControl>
               <Input
                 placeholder="1234 5678 9012 3456"
@@ -241,7 +250,7 @@ export function PaymentMethodList({
           control={control}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Expiry (MM/YY)</FormLabel>
+              <FormLabel>{t("Expiry (MM/YY)")}</FormLabel>
               <FormControl>
                 <Input
                   placeholder="12/28"
@@ -291,7 +300,7 @@ export function PaymentMethodList({
         control={control}
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Name on Card</FormLabel>
+            <FormLabel>{t("Name on Card")}</FormLabel>
             <FormControl>
               <Input
                 placeholder="JOHN DOE"
@@ -307,135 +316,87 @@ export function PaymentMethodList({
       />
       <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
         <Shield className="h-3.5 w-3.5 text-green-600" />
-        🔒 Payments secured by Stripe — your card details are encrypted and never stored on our servers.
+        🔒 {t("Payments secured by Stripe — your card details are encrypted and never stored on our servers.")}
       </p>
     </div>
   );
 
-  const renderMFSFields = (method: "bkash" | "nagad" | "rocket", merchantNumber: string, color: string, brandLabel: string) => (
-    <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in">
-      <div className="p-3 rounded-lg bg-card border">
-        <p className="text-xs text-muted-foreground mb-1">{brandLabel} Merchant Account (send money to):</p>
-        <p className={cn("font-bold text-lg", color)}>{merchantNumber}</p>
-        <p className="text-[11px] text-muted-foreground mt-1">
-          After placing order, pay via {brandLabel} app and enter the Transaction ID below.
-        </p>
-      </div>
-      <Controller
-        name={`${method}.accountNumber`}
-        control={control}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Your {brandLabel} Account Number</FormLabel>
-            <FormControl>
-              <Input
-                placeholder="01XXXXXXXXX"
-                {...field}
-                inputMode="numeric"
-                maxLength={11}
-                onChange={(e) => {
-                  field.onChange(e.target.value.replace(/\D/g, "").slice(0, 11));
-                }}
-                className={cn("font-mono", (errors as any)[method]?.accountNumber && "border-destructive")}
-              />
-            </FormControl>
-            {(errors as any)[method]?.accountNumber && (
-              <FormMessage>{String((errors as any)[method].accountNumber.message)}</FormMessage>
-            )}
-          </FormItem>
-        )}
-      />
-      <Controller
-        name={`${method}.transactionId`}
-        control={control}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Transaction ID (after payment)</FormLabel>
-            <FormControl>
-              <Input
-                placeholder="e.g. 8A7K2M9P"
-                {...field}
-                value={field.value ?? ""}
-              />
-            </FormControl>
-            <p className="text-[11px] text-muted-foreground">
-              💡 You can also enter this later from order confirmation page
-            </p>
-          </FormItem>
-        )}
-      />
-      <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-        <p className="text-xs text-amber-800">
-          <strong>How to pay:</strong> Open {brandLabel} app → Send Money → Merchant {merchantNumber} → Enter amount → Enter your PIN → Save the Transaction ID.
-        </p>
-      </div>
-    </div>
-  );
+  /** How to send money by each account type, as the wallet apps name the option. */
+  const SEND_HOW: Record<string, string> = { personal: msg("Send Money"), agent: msg("Cash Out"), merchant: msg("Make Payment") };
 
-  const renderBankTransferFields = () => (
-    <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="p-4 rounded-lg bg-card border">
-          <div className="flex items-center gap-2 mb-2">
-            <Landmark className="h-5 w-5 text-indigo-600" />
-            <span className="font-bold">Sonali Bank PLC</span>
-          </div>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">A/C Name:</span>
-              <span className="font-medium">Fashion BD Limited</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">A/C No:</span>
-              <span className="font-mono font-medium">0401-123456789</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Routing:</span>
-              <span className="font-mono">050261828</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Branch:</span>
-              <span className="font-medium">Motijheel Main Branch</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Swift:</span>
-              <span className="font-mono">BSONBDDH</span>
-            </div>
-          </div>
+  const renderMFSFields = (method: "bkash" | "nagad" | "rocket", gw: PaymentGatewayOption, color: string) => {
+    const brandLabel = gw.brandName;
+    if (!gw.manual) {
+      return (
+        <div className="mt-4 p-4 rounded-xl bg-muted/40 border text-sm text-muted-foreground animate-fade-in">
+          {t("After you place the order you'll be taken to {brand} to pay.", { brand: brandLabel })}
         </div>
-        <div className="p-4 rounded-lg bg-card border">
-          <div className="flex items-center gap-2 mb-2">
-            <Landmark className="h-5 w-5 text-blue-600" />
-            <span className="font-bold">DBBL (Dutch-Bangla)</span>
-          </div>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">A/C Name:</span>
-              <span className="font-medium">Fashion BD Limited</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">A/C No:</span>
-              <span className="font-mono font-medium">165.110.8293</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Routing:</span>
-              <span className="font-mono">090261451</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Branch:</span>
-              <span className="font-medium">Gulshan Branch</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Swift:</span>
-              <span className="font-mono">DBBLBDDH</span>
-            </div>
-          </div>
+      );
+    }
+    const how = t(SEND_HOW[gw.manual.accountType ?? "personal"] ?? "Send Money");
+    return (
+      <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+        <div className="p-3 rounded-lg bg-card border">
+          <p className="text-xs text-muted-foreground mb-1">
+            {how} {amount != null ? <strong className="text-foreground">{formatMoney(amount, currency)}</strong> : t("the order total")} {t("to our {brand} number:", { brand: brandLabel })}
+          </p>
+          <p className={cn("font-bold text-lg font-mono tracking-wide select-all", color)}>{gw.manual.accountNumber}</p>
+          {gw.manual.instructions && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{gw.manual.instructions}</p>}
         </div>
+        <Controller
+          name={`${method}.accountNumber`}
+          control={control}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("Your {brand} number (you paid from)", { brand: brandLabel })}</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="01XXXXXXXXX"
+                  {...field}
+                  inputMode="numeric"
+                  maxLength={11}
+                  onChange={(e) => field.onChange(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                  className="font-mono"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <Controller
+          name={`${method}.transactionId`}
+          control={control}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("Transaction ID (TrxID)")}</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder={t("From the SMS, e.g. 9JK7A2BC4D")}
+                  {...field}
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                  className="font-mono uppercase"
+                />
+              </FormControl>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Haven't paid yet? Leave it empty and add it later from your order page. We confirm the order once we see the payment.")}
+              </p>
+            </FormItem>
+          )}
+        />
       </div>
-      <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-        <p className="text-xs text-blue-800">
-          <strong>Note:</strong> After completing the transfer, please enter the transaction reference ID below. Order will be confirmed after payment verification (1-2 business days).
-        </p>
+    );
+  };
+
+  const renderBankTransferFields = (gw: PaymentGatewayOption) => (
+    <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+      <div className="p-4 rounded-lg bg-card border">
+        <div className="flex items-center gap-2 mb-2">
+          <Landmark className="h-5 w-5 text-indigo-600" />
+          <span className="font-bold">
+            {t("Transfer {amount} to:", { amount: amount != null ? formatMoney(amount, currency) : t("the order total") })}
+          </span>
+        </div>
+        <p className="text-sm whitespace-pre-line">{gw.manual?.instructions ?? t("Our bank details are shown after you place the order.")}</p>
       </div>
       <Controller
         name="bankTransfer.referenceId"
@@ -444,62 +405,24 @@ export function PaymentMethodList({
           <FormItem>
             <FormLabel className="flex items-center gap-1.5">
               <FileText className="h-3.5 w-3.5" />
-              Transfer Reference / Transaction ID *
+              {t("Transfer reference")}
             </FormLabel>
             <FormControl>
-              <Input
-                placeholder="e.g. TRX20260912ABCDEF or Bank Slip No."
-                {...field}
-                className={cn((errors as any).bankTransfer?.referenceId && "border-destructive")}
-              />
+              <Input placeholder={t("From your bank's confirmation")} {...field} value={field.value ?? ""} />
             </FormControl>
-            {(errors as any).bankTransfer?.referenceId && (
-              <FormMessage>{String((errors as any).bankTransfer.referenceId.message)}</FormMessage>
-            )}
+            <p className="text-[11px] text-muted-foreground">
+              {t("You can also add it later from your order page. We confirm the order once the money arrives (usually 1–2 working days).")}
+            </p>
           </FormItem>
         )}
       />
-      <FormItem>
-        <FormLabel className="flex items-center gap-1.5">
-          <Upload className="h-3.5 w-3.5" />
-          Attach Payment Slip (Optional)
-        </FormLabel>
-        <FormControl>
-          <label className="flex items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer hover:bg-muted/60 transition-colors border-muted-foreground/30">
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) {
-                  onFormDataChange?.({
-                    ...(formData ?? {}),
-                    bankTransfer: {
-                      ...((formData as any)?.bankTransfer ?? {}),
-                      referenceId: (formData as any)?.bankTransfer?.referenceId ?? "",
-                      paymentSlip: f,
-                    },
-                  });
-                }
-              }}
-            />
-            <div className="text-center p-2">
-              <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-1" />
-              <p className="text-xs text-muted-foreground">Click to upload or drag & drop</p>
-              <p className="text-[10px] text-muted-foreground">PNG, JPG or PDF up to 10MB</p>
-            </div>
-          </label>
-        </FormControl>
-      </FormItem>
     </div>
   );
 
   const renderCODFields = () => (
     <div className="mt-4 p-4 rounded-xl bg-green-50/60 border border-green-200 animate-fade-in">
       <p className="text-sm text-green-800">
-        <strong>Cash on Delivery</strong> — You will pay the full amount in cash when our delivery rider hands over the package.
-        Available nationwide in Bangladesh.
+        <strong>{t("Cash on Delivery")}</strong> — {t("You will pay the full amount in cash when our delivery rider hands over the package. Available nationwide in Bangladesh.")}
       </p>
     </div>
   );
@@ -509,8 +432,8 @@ export function PaymentMethodList({
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-700">SSL</div>
         <div>
-          <p className="font-semibold text-emerald-800">SSLCommerz Secure Checkout</p>
-          <p className="text-xs text-emerald-700/80">You will be redirected to SSLCommerz secure payment page to complete your purchase.</p>
+          <p className="font-semibold text-emerald-800">{t("SSLCommerz Secure Checkout")}</p>
+          <p className="text-xs text-emerald-700/80">{t("You will be redirected to SSLCommerz secure payment page to complete your purchase.")}</p>
         </div>
       </div>
       <Separator className="my-3" />
@@ -521,7 +444,7 @@ export function PaymentMethodList({
         <span className="px-2 py-1 text-[10px] rounded bg-white border">Nagad</span>
         <span className="px-2 py-1 text-[10px] rounded bg-white border">Rocket</span>
         <span className="px-2 py-1 text-[10px] rounded bg-white border">DBBL Nexus</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">+20 more</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-white border">{t("+20 more")}</span>
       </div>
     </div>
   );
@@ -552,14 +475,14 @@ export function PaymentMethodList({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">{gw.brandName}</span>
+                    <span className="font-semibold">{t(gw.brandName)}</span>
                     {gw.extraFee != null && gw.extraFee > 0 && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                         +{formatMoney(gw.extraFee, currency)}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">{gw.description}</p>
+                  <p className="text-sm text-muted-foreground">{t(gw.description)}</p>
                 </div>
                 <div
                   className={cn(
@@ -574,10 +497,10 @@ export function PaymentMethodList({
               </div>
 
               {isSelected && gw.id === PaymentMethod.STRIPE && renderStripeFields()}
-              {isSelected && gw.id === PaymentMethod.BKASH && renderMFSFields("bkash", "01700-000000", "text-pink-600", "bKash")}
-              {isSelected && gw.id === PaymentMethod.NAGAD && renderMFSFields("nagad", "01800-000000", "text-orange-600", "Nagad")}
-              {isSelected && gw.id === PaymentMethod.ROCKET && renderMFSFields("rocket", "01600-000000", "text-purple-600", "Rocket")}
-              {isSelected && gw.id === PaymentMethod.BANK_TRANSFER && renderBankTransferFields()}
+              {isSelected && gw.id === PaymentMethod.BKASH && renderMFSFields("bkash", gw, "text-pink-600")}
+              {isSelected && gw.id === PaymentMethod.NAGAD && renderMFSFields("nagad", gw, "text-orange-600")}
+              {isSelected && gw.id === PaymentMethod.ROCKET && renderMFSFields("rocket", gw, "text-purple-600")}
+              {isSelected && gw.id === PaymentMethod.BANK_TRANSFER && renderBankTransferFields(gw)}
               {isSelected && gw.id === PaymentMethod.COD && renderCODFields()}
               {isSelected && gw.id === PaymentMethod.SSLCOMMERZ && renderSSLCommerzFields()}
             </CardContent>

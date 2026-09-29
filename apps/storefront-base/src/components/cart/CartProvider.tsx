@@ -17,6 +17,8 @@ export type CartItem = {
   compareAtPrice?: number | null;
   /** The running flash sale that sets `price`, if any. */
   flashSale?: { name: string; endsAt: string } | null;
+  /** A bulk price the line's quantity reaches ("10+"), if it sets `price`. */
+  bulk?: { minQty: number; business: boolean } | null;
 };
 
 /** The server's current price for a cart line (see syncPrices). */
@@ -26,6 +28,7 @@ export type CartPriceQuote = {
   price: number;
   compareAtPrice?: number | null;
   flashSale?: { name: string; endsAt: string } | null;
+  bulk?: { minQty: number; business: boolean } | null;
 };
 
 export type CartPriceChange = { item: CartItem; oldPrice: number; newPrice: number };
@@ -130,7 +133,9 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
     const changes: CartPriceChange[] = [];
     for (const it of itemsRef.current) {
       const q = byKey.get(lineKey(it.productId, it.variantId));
-      if (q && q.price !== it.price) changes.push({ item: it, oldPrice: it.price, newPrice: q.price });
+      // A bulk price starting or stopping because the quantity changed isn't news to the shopper.
+      const bulkMoved = (it.bulk?.minQty ?? null) !== (q?.bulk?.minQty ?? null);
+      if (q && q.price !== it.price && !bulkMoved) changes.push({ item: it, oldPrice: it.price, newPrice: q.price });
     }
     setItems((prev) => {
       let touched = false;
@@ -138,14 +143,17 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
         const q = byKey.get(lineKey(it.productId, it.variantId));
         if (!q) return it;
         const flashSale = q.flashSale ? { name: q.flashSale.name, endsAt: q.flashSale.endsAt } : null;
+        const bulk = q.bulk ? { minQty: q.bulk.minQty, business: q.bulk.business } : null;
         const same =
+          (it.bulk?.minQty ?? null) === (bulk?.minQty ?? null) &&
+          (it.bulk?.business ?? null) === (bulk?.business ?? null) &&
           it.price === q.price &&
           (it.compareAtPrice ?? null) === (q.compareAtPrice ?? null) &&
           (it.flashSale?.name ?? null) === (flashSale?.name ?? null) &&
           (it.flashSale?.endsAt ?? null) === (flashSale?.endsAt ?? null);
         if (same) return it;
         touched = true;
-        return { ...it, price: q.price, compareAtPrice: q.compareAtPrice ?? null, flashSale };
+        return { ...it, price: q.price, compareAtPrice: q.compareAtPrice ?? null, flashSale, bulk };
       });
       return touched ? next : prev;
     });

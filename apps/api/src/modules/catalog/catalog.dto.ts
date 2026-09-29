@@ -39,6 +39,8 @@ const BaseProductVariantDto = z.object({
   barcode: z.string().max(100).optional().nullable(),
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** What one unit cost the shop; purchases update it. */
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePriceStartAt: z.coerce.date().optional().nullable(),
   salePriceEndAt: z.coerce.date().optional().nullable(),
   manageStock: z.boolean().default(true),
@@ -68,6 +70,49 @@ export type CreateProductVariantDto = z.infer<typeof CreateProductVariantDto>;
 export const UpdateProductVariantDto = BaseProductVariantDto.partial();
 export type UpdateProductVariantDto = z.infer<typeof UpdateProductVariantDto>;
 
+/** Lower-case, trimmed, no duplicates: "Eid", " eid " and "EID" are one tag. */
+const ProductTags = z
+  .array(z.string().trim().min(1).max(40).refine(noXss, "No JavaScript injection allowed"))
+  .max(30)
+  .transform((tags) => [...new Set(tags.map((t) => t.toLowerCase().replace(/\s+/g, " ")))]);
+
+/** Rows of the product page's specifications table, e.g. { group: "Fabric", label: "Material", value: "Cotton" }. */
+const ProductSpecifications = z
+  .array(
+    z.object({
+      group: z.string().trim().max(60).refine(noXss, "No JavaScript injection allowed").optional().nullable(),
+      label: z.string().trim().min(1).max(80).refine(noXss, "No JavaScript injection allowed"),
+      value: z.string().trim().min(1).max(300).refine(noXss, "No JavaScript injection allowed"),
+    }),
+  )
+  .max(60);
+
+
+/** A text in another language; blank or null removes it. */
+const otherText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullable()
+    .optional()
+    .refine((v) => !v || noXss(v), "No JavaScript injection allowed");
+
+/** Texts in other languages: `{ bn: { name: "…" } }`. */
+const nameAndDescription = (descMax: number) =>
+  z
+    .object({ bn: z.object({ name: otherText(255), description: otherText(descMax) }).partial() })
+    .partial()
+    .optional();
+
+const ProductTranslations = z
+  .object({
+    bn: z
+      .object({ name: otherText(255), shortDescription: otherText(500), description: otherText(20000) })
+      .partial(),
+  })
+  .partial()
+  .optional();
+
 const BaseCreateProductDto = z.object({
   type: z.enum(["SIMPLE", "VARIABLE", "DIGITAL", "SUBSCRIPTION", "MADE_TO_ORDER"]).default("SIMPLE"),
   name: z.string().min(2).max(255),
@@ -78,6 +123,10 @@ const BaseCreateProductDto = z.object({
   description: z.string().max(20000).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** What one unit cost the shop; purchases update it. */
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** Sales commission on this product, in % (empty: its category's, else the store's). */
+  commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   salePriceStartAt: z.coerce.date().optional().nullable(),
   salePriceEndAt: z.coerce.date().optional().nullable(),
   manageStock: z.boolean().default(true),
@@ -112,10 +161,17 @@ const BaseCreateProductDto = z.object({
   supplierCost: z.coerce.number().nonnegative().optional().nullable(),
   supplierSku: z.string().max(100).optional().nullable(),
   fulfillmentType: z.string().default("own"),
+  tags: ProductTags.default([]),
+  specifications: ProductSpecifications.default([]),
+  translations: ProductTranslations,
 });
 export const CreateProductDto = BaseCreateProductDto.superRefine(priceStockRefine);
 export type CreateProductDto = z.infer<typeof CreateProductDto>;
-export const UpdateProductDto = BaseCreateProductDto.deepPartial();
+// Tags and specification rows keep their full rules on update (deepPartial would loosen each row).
+export const UpdateProductDto = BaseCreateProductDto.deepPartial().extend({
+  tags: ProductTags.optional(),
+  specifications: ProductSpecifications.optional(),
+});
 export type UpdateProductDto = z.infer<typeof UpdateProductDto>;
 
 export const BulkProductStatusDto = z.object({ ids: z.array(z.coerce.bigint()).min(1) });
@@ -129,6 +185,8 @@ export const CreateCategoryDto = z.object({
   bannerUrl: z.string().max(500).optional().nullable(),
   description: z.string().max(5000).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   displayMode: z.string().default("products"),
+  /** Sales commission on products in this category, in % (empty: the store's default). */
+  commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   menuIncluded: z.boolean().default(true),
@@ -137,6 +195,7 @@ export const CreateCategoryDto = z.object({
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
   ogImageUrl: z.string().max(500).optional().nullable(),
+  translations: nameAndDescription(5000),
 });
 export type CreateCategoryDto = z.infer<typeof CreateCategoryDto>;
 export const UpdateCategoryDto = CreateCategoryDto.partial();
@@ -160,6 +219,7 @@ export const CreateBrandDto = z.object({
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
   ogImageUrl: z.string().max(500).optional().nullable(),
+  translations: nameAndDescription(5000),
 });
 export type CreateBrandDto = z.infer<typeof CreateBrandDto>;
 export const UpdateBrandDto = CreateBrandDto.partial();

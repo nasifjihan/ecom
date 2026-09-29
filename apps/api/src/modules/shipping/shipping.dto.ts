@@ -1,8 +1,5 @@
 import { z } from "zod";
 import { PaginationSchema } from "@ecom/zod-schemas";
-import { ShippingProvider } from "@ecom/shared-types";
-
-const COUNTRY_CODES = ["BD", "US", "GB", "CA", "AU", "IN", "PK", "SAE", "AE", "MY", "SG"];
 
 const NO_XSS = /<\s*script|javascript:|\son[a-z]+\s*=/i;
 const noXss = (val: string | undefined, path: string[], ctx: z.RefinementCtx) => {
@@ -11,29 +8,33 @@ const noXss = (val: string | undefined, path: string[], ctx: z.RefinementCtx) =>
   }
 };
 
-export const ShippingZoneRegionDto = z.object({
-  countryCode: z.string().length(2).toUpperCase().refine((v) => COUNTRY_CODES.includes(v) || /^[A-Z]{2}$/.test(v), "Country code 2 letters"),
-  divisions: z.array(z.string().max(64)).default([]).superRefine((arr, ctx) => {
-    for (let i = 0; i < arr.length; i++) noXss(arr[i], ["divisions", String(i)], ctx);
-  }),
-  districts: z.array(z.string().max(64)).default([]).superRefine((arr, ctx) => {
-    for (let i = 0; i < arr.length; i++) noXss(arr[i], ["districts", String(i)], ctx);
-  }),
-  postcodeRanges: z.array(z.string().max(32)).default([]).refine(
+const CountryCode = z.string().trim().toUpperCase().refine((v) => v === "*" || /^[A-Z]{2}$/.test(v), "2-letter country code or *");
+
+/**
+ * A zone covers countries, optionally narrowed to locations (division, district or upazila ids)
+ * and postcode ranges. No locations = the whole of each country.
+ */
+const BaseShippingZoneDto = z.object({
+  name: z.string().trim().min(2).max(80).superRefine((v, ctx) => noXss(v, ["name"], ctx)),
+  enabled: z.boolean().default(true),
+  /** Only for these storefronts (empty: all). */
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).default([]),
+  countries: z.array(CountryCode).min(1, "Pick at least one country").max(50).default(["BD"]),
+  locationIds: z.array(z.coerce.bigint().positive()).max(700).default([]),
+  postcodes: z.array(z.string().trim().max(32)).max(200).default([]).refine(
     (arr) => arr.every((p) => p === "*" || /^[0-9]{4}$/.test(p) || /^\d{4}-\d{4}$/.test(p)),
-    "postcode format 1200 or 1200-1230 or *",
+    "Postcodes look like 1200 or 1200-1230",
   ),
 });
-export type ShippingZoneRegionDto = z.infer<typeof ShippingZoneRegionDto>;
-
-const BaseShippingZoneDto = z.object({
-  name: z.string().min(2).max(80).superRefine((v, ctx) => noXss(v, ["name"], ctx)),
-  regions: z.array(ShippingZoneRegionDto).min(1, "At least one region required"),
-  zoneType: z.enum(["metro", "suburban", "rural", "international"]).default("suburban"),
-  enabled: z.boolean().default(true),
-});
 export const CreateShippingZoneDto = BaseShippingZoneDto;
-export const UpdateShippingZoneDto = BaseShippingZoneDto.partial();
+export const UpdateShippingZoneDto = z.object({
+  name: BaseShippingZoneDto.shape.name.optional(),
+  enabled: z.boolean().optional(),
+  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).optional(),
+  countries: z.array(CountryCode).min(1).max(50).optional(),
+  locationIds: z.array(z.coerce.bigint().positive()).max(700).optional(),
+  postcodes: BaseShippingZoneDto.shape.postcodes.optional(),
+});
 export type CreateShippingZoneDto = z.infer<typeof CreateShippingZoneDto>;
 export type UpdateShippingZoneDto = z.infer<typeof UpdateShippingZoneDto>;
 
@@ -43,32 +44,46 @@ export const ShippingZoneSearchQueryDto = PaginationSchema.extend({
 });
 export type ShippingZoneSearchQueryDto = z.infer<typeof ShippingZoneSearchQueryDto>;
 
-const METHOD_CODES: readonly [string, ...string[]] = ["standard", "express", "same_day", "next_day", "economy", "pickup"];
-
 const BaseShippingMethodPlain = z.object({
   zoneId: z.coerce.bigint(),
   code: z.string().min(2).max(40).refine((v) => /^[a-z0-9_-]+$/.test(v), "code: lowercase letters digits underscores hyphens"),
   name: z.string().min(2).max(80).superRefine((v, ctx) => noXss(v, ["name"], ctx)),
-  description: z.string().max(500).optional().superRefine((v, ctx) => noXss(v, ["description"], ctx)),
-  provider: z.nativeEnum(ShippingProvider).default(ShippingProvider.FLAT_RATE),
-  methodType: z.enum(METHOD_CODES).default("standard"),
+  description: z.string().max(500).nullable().optional().superRefine((v, ctx) => noXss(v ?? undefined, ["description"], ctx)),
   enabled: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(1000).default(0),
   baseCost: z.coerce.number().min(0).multipleOf(0.01),
   perItemCost: z.coerce.number().min(0).multipleOf(0.01).default(0),
   perKgExtra: z.coerce.number().min(0).multipleOf(0.01).default(0),
-  freeFromSubtotal: z.coerce.number().min(0).multipleOf(0.01).optional(),
+  freeFromSubtotal: z.coerce.number().min(0).multipleOf(0.01).nullable().optional(),
   minimumCost: z.coerce.number().min(0).multipleOf(0.01).default(0),
-  deliveryEstimateMinDays: z.coerce.number().int().min(0).max(60).optional(),
-  deliveryEstimateMaxDays: z.coerce.number().int().min(0).max(90).optional(),
-  taxClassId: z.coerce.bigint().optional(),
+  /** Price by parcel weight: the first tier the weight fits in; perKgExtra per kg above the last. */
+  weightTiers: z.array(z.object({
+    upToKg: z.coerce.number().positive().max(1000),
+    cost: z.coerce.number().min(0).multipleOf(0.01),
+  })).max(20).refine(
+    (t) => new Set(t.map((x) => x.upToKg)).size === t.length,
+    "Each weight tier needs its own weight",
+  ).default([]),
+  /** Only offered when the order subtotal is at least this. */
+  minSubtotal: z.coerce.number().min(0).multipleOf(0.01).default(0),
+  deliveryEstimateMinDays: z.coerce.number().int().min(0).max(60).nullable().optional(),
+  deliveryEstimateMaxDays: z.coerce.number().int().min(0).max(90).nullable().optional(),
+  taxClassId: z.coerce.bigint().nullable().optional(),
 });
 export const CreateShippingMethodDto = BaseShippingMethodPlain.superRefine((v, ctx) => {
-  if (v.deliveryEstimateMinDays !== undefined && v.deliveryEstimateMaxDays !== undefined && v.deliveryEstimateMinDays > v.deliveryEstimateMaxDays) {
+  if (v.deliveryEstimateMinDays != null && v.deliveryEstimateMaxDays != null && v.deliveryEstimateMinDays > v.deliveryEstimateMaxDays) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "min days <= max days", path: ["deliveryEstimateMinDays"] });
   }
 });
-export const UpdateShippingMethodDto = BaseShippingMethodPlain.omit({ zoneId: true }).partial();
+// .partial() keeps .default()s, which would reset unsent fields; strip them for PATCH-style updates.
+export const UpdateShippingMethodDto = z.object(
+  Object.fromEntries(
+    Object.entries(BaseShippingMethodPlain.omit({ zoneId: true }).shape).map(([k, v]) => [
+      k,
+      (v instanceof z.ZodDefault ? v.removeDefault() : v).optional(),
+    ]),
+  ) as { [K in keyof Omit<typeof BaseShippingMethodPlain.shape, "zoneId">]: z.ZodOptional<z.ZodTypeAny> },
+);
 export type CreateShippingMethodDto = z.infer<typeof CreateShippingMethodDto>;
 export type UpdateShippingMethodDto = z.infer<typeof UpdateShippingMethodDto>;
 
@@ -86,6 +101,9 @@ export const ShippingRatesQueryDto = z.object({
   countryCode: z.string().length(2).toUpperCase().optional(),
   division: z.string().max(64).optional(),
   district: z.string().max(64).optional(),
+  upazila: z.string().max(64).optional(),
+  /** Deepest location picked (upazila/thana or district); wins over the names. */
+  locationId: z.coerce.bigint().positive().optional(),
   postcode: z.string().max(12).optional(),
   subtotal: z.coerce.number().min(0).default(0),
   weightKG: z.coerce.number().min(0).default(0),

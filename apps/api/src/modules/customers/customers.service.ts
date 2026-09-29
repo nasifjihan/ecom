@@ -20,6 +20,7 @@ import type {
   PasswordResetRequestDto,
 } from "./customers.dto";
 import { CustomerStatus, ExportFormat } from "@ecom/shared-types";
+import { addressWithLocation } from "../locations/locations.service";
 
 function formatDateForFilename(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -159,7 +160,7 @@ export class CustomersService extends BaseService {
     });
     if (!existing) throw new NotFoundError("customer", id);
 
-    if (dto.email !== undefined && dto.email.toLowerCase() !== existing.email.toLowerCase()) {
+    if (dto.email !== undefined && dto.email.toLowerCase() !== (existing.email ?? "").toLowerCase()) {
       await this.ensureUniqueEmail(storeId, dto.email, cid);
     }
 
@@ -285,7 +286,7 @@ export class CustomersService extends BaseService {
       customerId = BigInt(customerIdOrDto as bigint | number);
       addressDto = dto;
     }
-    return this.addresses.addAddress(this.ctx, customerId, addressDto as unknown as Record<string, unknown>);
+    return this.addresses.addAddress(this.ctx, customerId, (await withLocationNames(addressDto)) as unknown as Record<string, unknown>);
   }
 
   async setDefaultAddress(
@@ -317,7 +318,7 @@ export class CustomersService extends BaseService {
 
   async updateMyAddress(addressId: bigint | number, dto: CustomerAddressDto): Promise<unknown> {
     const addr = await this.requireMyAddress(addressId);
-    const { isDefault, ...fields } = dto;
+    const { isDefault, ...fields } = await withLocationNames(dto);
     return tx(async (t: any) => {
       if (isDefault) {
         await t.customerAddress.updateMany({ where: { customerId: addr.customerId, type: dto.type }, data: { isDefault: false } });
@@ -364,4 +365,16 @@ function withoutSecrets<T>(row: T): T {
   if (!row || typeof row !== "object") return row;
   const { passwordHash: _p, twoFactorSecret: _t, ...rest } = row as Record<string, unknown>;
   return rest as T;
+}
+
+/** Address book rows keep division in `state`, district in `city`, plus `upazila` and the picked `locationId`. */
+async function withLocationNames(dto: CustomerAddressDto): Promise<CustomerAddressDto> {
+  const a = await addressWithLocation({
+    countryCode: dto.countryCode,
+    locationId: dto.locationId,
+    division: dto.state,
+    district: dto.city,
+    upazila: dto.upazila,
+  });
+  return { ...dto, state: a.division ?? null, city: a.district ?? dto.city, upazila: a.upazila ?? null, locationId: a.locationId };
 }

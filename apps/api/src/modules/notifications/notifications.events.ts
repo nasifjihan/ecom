@@ -9,6 +9,10 @@ import { EmailService } from "./notifications.service"
 export interface OrderPlacedEvent {
   storeId: string
   orderId: string
+  /** Default true. False when staff entered the order and chose not to email the customer. */
+  notifyCustomer?: boolean
+  /** Default true. False for orders staff entered themselves (no "new order" alert). */
+  notifyStaff?: boolean
 }
 export interface OrderStatusEvent {
   storeId: string
@@ -38,7 +42,10 @@ export function registerEmailListeners() {
   registered = true
   eventBus.on(EventName.ORDER_PLACED, async (p) => {
     const e = p as OrderPlacedEvent
-    await new EmailService(BigInt(e.storeId)).orderPlaced(BigInt(e.orderId))
+    await new EmailService(BigInt(e.storeId)).orderPlaced(BigInt(e.orderId), undefined, {
+      customer: e.notifyCustomer !== false,
+      staff: e.notifyStaff !== false,
+    })
   })
   eventBus.on(EventName.ORDER_STATUS_CHANGED, async (p) => {
     const e = p as OrderStatusEvent

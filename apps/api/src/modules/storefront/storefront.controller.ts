@@ -1,13 +1,19 @@
 import type { Request, Response } from "express";
 import { ctrl, envelope, type RequestContext } from "../../core";
 import { StorefrontService } from "./storefront.service";
+import type { CartPricesDto, StorefrontProductsQueryDto } from "./storefront.dto";
+import { StorefrontEngagement } from "./engagement";
 
 type Req = Request & { ctx: RequestContext };
 const svc = (req: Req) => new StorefrontService(req.ctx);
 
 export const storefrontController = {
   listProducts: ctrl(async (req: Req, res: Response) => {
-    envelope(res, { data: await svc(req).listProducts(req.query as any) });
+    const q = req.query as unknown as StorefrontProductsQueryDto;
+    const data = await svc(req).listProducts(q);
+    // Search terms are counted on the first page, so paging through results counts once.
+    if (q.search && q.page === 1) await new StorefrontEngagement(req.ctx).recordSearch(q.search, data.total);
+    envelope(res, { data });
   }),
 
   getProductBySlug: ctrl(async (req: Req, res: Response) => {
@@ -23,7 +29,12 @@ export const storefrontController = {
   }),
 
   cartPrices: ctrl(async (req: Req, res: Response) => {
-    envelope(res, { data: await svc(req).cartPrices(req.body.items) });
+    const body = req.body as CartPricesDto;
+    envelope(res, { data: await svc(req).cartPrices(body.items, body.couponCode, body.email) });
+  }),
+
+  availableCoupons: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).availableCoupons() });
   }),
 
   applyCoupon: ctrl(async (req: Req, res: Response) => {

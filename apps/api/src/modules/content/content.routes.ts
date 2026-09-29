@@ -27,6 +27,7 @@ import {
   type HomepageSection,
   type ThemeSettings,
 } from "./content.dto"
+import { StorefrontQuery } from "../storefronts/storefronts.dto"
 
 type Req = Request & { ctx: RequestContext }
 type Handler = (svc: ContentService, req: Req) => Promise<unknown>
@@ -35,6 +36,8 @@ const svc = (req: Req) => new ContentService(req.ctx)
 const id = (req: Req) => BigInt((req.params as { id: string }).id)
 const slug = (req: Req) => (req.params as { slug: string }).slug
 const q = (req: Req) => req.query as unknown as ListQueryDto
+/** `?storefrontId=` on the theme, home page and menu editors (omitted: the default storefront). */
+const sf = (req: Req) => (req.query as { storefrontId?: bigint }).storefrontId
 /** The body after validate() has parsed it with the route's DTO. */
 const body = <T>(req: Req) => req.body as T
 
@@ -59,7 +62,7 @@ const can = (perm: string) => rbacMiddleware(perm)
 // ---- pages
 adminContentRouter.get(
   "/pages",
-  can("pages.read"),
+  can("pages.view"),
   validate({ query: ListQueryDto }),
   send((s, r) => s.listPages(q(r))),
 )
@@ -71,13 +74,13 @@ adminContentRouter.post(
 )
 adminContentRouter.get(
   "/pages/:id",
-  can("pages.read"),
+  can("pages.view"),
   validate({ params: IdParamDto }),
   send((s, r) => s.getPage(id(r))),
 )
 adminContentRouter.patch(
   "/pages/:id",
-  can("pages.update"),
+  can("pages.edit"),
   validate({ params: IdParamDto, body: UpdatePageDto }),
   send((s, r) => s.updatePage(id(r), body<UpdatePageDto>(r))),
 )
@@ -91,7 +94,7 @@ adminContentRouter.delete(
 // ---- blog
 adminContentRouter.get(
   "/blog/categories",
-  can("blog.read"),
+  can("blog.view"),
   send((s) => s.listBlogCategories()),
 )
 adminContentRouter.post(
@@ -102,7 +105,7 @@ adminContentRouter.post(
 )
 adminContentRouter.patch(
   "/blog/categories/:id",
-  can("blog.update"),
+  can("blog.edit"),
   validate({ params: IdParamDto, body: UpdateBlogCategoryDto }),
   send((s, r) => s.updateBlogCategory(id(r), body<Partial<BlogCategoryDto>>(r))),
 )
@@ -114,7 +117,7 @@ adminContentRouter.delete(
 )
 adminContentRouter.get(
   "/blog/posts",
-  can("blog.read"),
+  can("blog.view"),
   validate({ query: ListQueryDto }),
   send((s, r) => s.listPosts(q(r))),
 )
@@ -126,13 +129,13 @@ adminContentRouter.post(
 )
 adminContentRouter.get(
   "/blog/posts/:id",
-  can("blog.read"),
+  can("blog.view"),
   validate({ params: IdParamDto }),
   send((s, r) => s.getPost(id(r))),
 )
 adminContentRouter.patch(
   "/blog/posts/:id",
-  can("blog.update"),
+  can("blog.edit"),
   validate({ params: IdParamDto, body: UpdatePostDto }),
   send((s, r) => s.updatePost(id(r), body<UpdatePostDto>(r))),
 )
@@ -146,7 +149,7 @@ adminContentRouter.delete(
 // ---- FAQs
 adminContentRouter.get(
   "/faqs",
-  can("faqs.read"),
+  can("faqs.view"),
   send((s) => s.listFaqs()),
 )
 adminContentRouter.post(
@@ -157,7 +160,7 @@ adminContentRouter.post(
 )
 adminContentRouter.patch(
   "/faqs/:id",
-  can("faqs.update"),
+  can("faqs.edit"),
   validate({ params: IdParamDto, body: UpdateFaqDto }),
   send((s, r) => s.updateFaq(id(r), body<Partial<FaqDto>>(r))),
 )
@@ -171,8 +174,9 @@ adminContentRouter.delete(
 // ---- menus
 adminContentRouter.get(
   "/menus",
-  can("menus.read"),
-  send((s) => s.listMenus()),
+  can("menus.view"),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.listMenus(sf(r))),
 )
 adminContentRouter.post(
   "/menus",
@@ -182,19 +186,19 @@ adminContentRouter.post(
 )
 adminContentRouter.get(
   "/menus/:id",
-  can("menus.read"),
+  can("menus.view"),
   validate({ params: IdParamDto }),
   send((s, r) => s.getMenu(id(r))),
 )
 adminContentRouter.patch(
   "/menus/:id",
-  can("menus.update"),
+  can("menus.edit"),
   validate({ params: IdParamDto, body: UpdateMenuDto }),
   send((s, r) => s.updateMenu(id(r), body<Partial<MenuDto>>(r))),
 )
 adminContentRouter.put(
   "/menus/:id/items",
-  can("menus.update"),
+  can("menus.edit"),
   validate({ params: IdParamDto, body: MenuItemsDto }),
   send((s, r) => s.setMenuItems(id(r), body<MenuItemsDto>(r))),
 )
@@ -208,30 +212,39 @@ adminContentRouter.delete(
 // ---- theme + homepage
 adminContentRouter.get(
   "/theme",
-  can("themes.read"),
-  send((s) => s.getTheme()),
+  can("online_store.view"),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.getTheme(sf(r))),
 )
 adminContentRouter.put(
   "/theme",
-  can("themes.update"),
-  validate({ body: ThemeDto }),
-  send((s, r) => s.saveTheme(body<ThemeSettings>(r))),
+  can("online_store.edit"),
+  validate({ query: StorefrontQuery, body: ThemeDto }),
+  send((s, r) => s.saveTheme(body<ThemeSettings>(r), sf(r))),
+)
+adminContentRouter.delete(
+  "/theme",
+  can("online_store.edit"),
+  validate({ query: StorefrontQuery.required() }),
+  send((s, r) => s.resetTheme(sf(r)!)),
 )
 adminContentRouter.get(
   "/homepage",
-  can("homepage_sections.read"),
-  send((s) => s.getHomepage()),
+  can("online_store.view"),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.getHomepage(sf(r))),
 )
 adminContentRouter.put(
   "/homepage",
-  can("homepage_sections.update"),
-  validate({ body: HomepageDto }),
-  send((s, r) => s.saveHomepage(body<{ sections: HomepageSection[] }>(r).sections)),
+  can("online_store.edit"),
+  validate({ query: StorefrontQuery, body: HomepageDto }),
+  send((s, r) => s.saveHomepage(body<{ sections: HomepageSection[] }>(r).sections, sf(r))),
 )
 adminContentRouter.delete(
   "/homepage",
-  can("homepage_sections.update"),
-  send((s) => s.resetHomepage()),
+  can("online_store.edit"),
+  validate({ query: StorefrontQuery }),
+  send((s, r) => s.resetHomepage(sf(r))),
 )
 
 // ============================================================ storefront

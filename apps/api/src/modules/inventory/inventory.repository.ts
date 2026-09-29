@@ -7,81 +7,6 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
     super("inventoryLog");
   }
 
-  async deductStock(
-    variantId: bigint | number,
-    qty: number,
-    warehouse: string = "MAIN",
-    reason: string,
-    txInstance?: any,
-  ): Promise<unknown> {
-    const vid = BigInt(variantId);
-    const run = async (t: any) => {
-      const target = await t.productVariant.findFirst({
-        where: { id: vid },
-      });
-      if (!target) throw new NotFoundError("productVariant", vid);
-      const qtyBefore = Number(target.stockQty ?? 0);
-      if (qtyBefore < qty) {
-        throw new ConflictError("OutOfStock: insufficient variant stock", "INSUFFICIENT_STOCK");
-      }
-      const qtyAfter = qtyBefore - qty;
-      await t.productVariant.update({
-        where: { id: vid },
-        data: {
-          stockQty: qtyAfter,
-        },
-      });
-      const productId = target.productId;
-      return t.inventoryLog.create({
-        data: {
-          variantId: vid,
-          productId,
-          warehouse,
-          changeQty: -qty,
-          reason,
-          qtyBefore,
-          qtyAfter,
-        },
-      });
-    };
-    return txInstance ? run(txInstance) : tx(run);
-  }
-
-  async restock(
-    variantId: bigint | number,
-    qty: number,
-    reason: string,
-    txInstance?: any,
-  ): Promise<unknown> {
-    const vid = BigInt(variantId);
-    const run = async (t: any) => {
-      const target = await t.productVariant.findFirst({
-        where: { id: vid },
-      });
-      if (!target) throw new NotFoundError("productVariant", vid);
-      const qtyBefore = Number(target.stockQty ?? 0);
-      const qtyAfter = qtyBefore + qty;
-      await t.productVariant.update({
-        where: { id: vid },
-        data: {
-          stockQty: qtyAfter,
-        },
-      });
-      const productId = target.productId;
-      return t.inventoryLog.create({
-        data: {
-          variantId: vid,
-          productId,
-          changeQty: qty,
-          reason,
-          qtyBefore,
-          qtyAfter,
-        },
-      });
-    };
-    return txInstance ? run(txInstance) : tx(run);
-  }
-
   async logMovement(
     variantId: bigint | number,
     productId: bigint | number | undefined,
@@ -250,21 +175,3 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
   }
 }
 
-export class InventoryRepository {
-  async adjustStockQtyVariantOrProduct(
-    _ctx: RequestContext,
-    variantId: bigint | number,
-    delta: number,
-    qtyAfter: number,
-    txInstance?: any,
-  ): Promise<void> {
-    const vid = BigInt(variantId);
-    const run = async (t: any) => {
-      await t.productVariant.update({
-        where: { id: vid },
-        data: { stockQty: qtyAfter },
-      });
-    };
-    return txInstance ? run(txInstance) : tx(run);
-  }
-}

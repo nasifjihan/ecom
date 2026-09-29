@@ -9,6 +9,7 @@ import { z } from "zod";
 import { prisma } from "../../config";
 import { ctrl, envelope, BadRequestError, NotFoundError, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
+import { languagesView, saveStoreLanguages, storeLanguages } from "./languages";
 
 type Req = Request & { ctx: RequestContext };
 
@@ -120,6 +121,11 @@ const profileOf = (u: { id: bigint; name: string; email: string; phone: string |
 
 const SECTIONS = ["general", "address"] as const;
 
+const LanguagesDto = z.object({
+  enabled: z.array(z.string().max(10)).max(10),
+  defaultLanguage: z.string().max(10),
+});
+
 export const adminSettingsRouter = Router();
 
 adminSettingsRouter.get(
@@ -181,9 +187,13 @@ adminSettingsRouter.put(
 adminSettingsRouter.get(
   "/:section",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware(["store.settings.update", "store.owner", "settings.*"]),
+  rbacMiddleware("settings.view"),
   ctrl(async (req: Req, res: Response) => {
     const section = String(req.params.section);
+    if (section === "languages") {
+      envelope(res, { status: 200, data: languagesView(await storeLanguages(storeIdOf(req))) });
+      return;
+    }
     if (!(SECTIONS as readonly string[]).includes(section)) {
       // Media / legal / … have no storage yet: return empty so the page renders its defaults.
       envelope(res, { status: 200, data: {} });
@@ -197,10 +207,16 @@ adminSettingsRouter.get(
 adminSettingsRouter.put(
   "/:section",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware(["store.settings.update", "store.owner", "settings.*"]),
+  rbacMiddleware("settings.edit"),
   ctrl(async (req: Req, res: Response) => {
     const storeId = storeIdOf(req);
     const section = String(req.params.section);
+    if (section === "languages") {
+      const dto = LanguagesDto.parse(req.body);
+      const saved = await saveStoreLanguages(storeId, dto.enabled, dto.defaultLanguage);
+      envelope(res, { status: 200, data: languagesView(saved), message: "Languages saved" });
+      return;
+    }
     if (section === "general") {
       const dto = GeneralDto.parse(req.body);
       if (dto.storeName) await prisma.store.update({ where: { id: storeId }, data: { name: dto.storeName } });

@@ -13,6 +13,7 @@ import {
   AdminResetPasswordDto,
 } from "./auth.dto";
 import { PasswordResetService } from "./password-reset";
+import { OtpRequestDto, OtpVerifyDto } from "../sms/sms.dto";
 import { UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core";
 import type { Request, Response } from "express";
 
@@ -41,6 +42,11 @@ router.post(
   validate({ body: CustomerRegisterDto }),
   authController.postCustomerRegister,
 );
+
+// ---- sign in with a code sent by SMS (Settings → SMS → phone sign-in)
+router.get("/customer/login-methods", authController.getCustomerLoginMethods);
+router.post("/customer/otp/request", validate({ body: OtpRequestDto }), authController.postCustomerOtpRequest);
+router.post("/customer/otp/verify", validate({ body: OtpVerifyDto }), authController.postCustomerOtpVerify);
 
 // ---- forgot / reset password (store comes from the request Origin)
 

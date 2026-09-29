@@ -60,6 +60,12 @@ export function configureApiClient(opts: {
   if (opts.refresh) refreshOpts = opts.refresh;
 }
 
+/** The language the storefront shows ("en" / "bn"); sent as X-Locale so the API answers in it. */
+let requestLocale: string | null = null;
+export function setRequestLocale(locale: string | null): void {
+  requestLocale = locale;
+}
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: apiBaseUrl,
   credentials: "include",
@@ -68,6 +74,7 @@ const rawBaseQuery = fetchBaseQuery({
     const token = getToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
     headers.set("Accept", "application/json");
+    if (requestLocale) headers.set("X-Locale", requestLocale);
     return headers;
   },
 });
@@ -165,6 +172,10 @@ export const api = createApi({
     "Homepage",
     "EmailTemplate",
     "EmailLog",
+    "ShippingZone",
+    "Location",
+    "AuditLog",
+    "Purchasing",
   ],
   endpoints: () => ({}),
 });

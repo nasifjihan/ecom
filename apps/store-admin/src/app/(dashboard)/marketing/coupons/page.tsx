@@ -373,6 +373,7 @@ export default function CouponsPage() {
                 <TableHead>Min Spend</TableHead>
                 <TableHead>Usage</TableHead>
                 <TableHead>Per User</TableHead>
+                <TableHead>Who can use it</TableHead>
                 <TableHead>Valid Range</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -381,14 +382,14 @@ export default function CouponsPage() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-slate-500">
+                  <TableCell colSpan={11} className="text-center py-10 text-slate-500">
                     <Loader2 className="h-6 w-6 mx-auto animate-spin mb-2" /> Loading coupons...
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && coupons.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-slate-500">
+                  <TableCell colSpan={11} className="text-center py-10 text-slate-500">
                     No coupons found. Create one to get started.
                   </TableCell>
                 </TableRow>
@@ -429,6 +430,10 @@ export default function CouponsPage() {
                         {c.usageLimit !== undefined ? ` / ${c.usageLimit}` : ""}
                       </TableCell>
                       <TableCell>{c.usageLimitPerUser ?? "∞"}</TableCell>
+                      <TableCell className="text-xs">
+                        {c.audience === "public" ? "Public" : c.audience === "given" ? `Given (${c.allowedEmails?.length ?? 0})` : "Private code"}
+                        {c.worksWithPromotions === false && <span className="block text-amber-600">Not with promotions</span>}
+                      </TableCell>
                       <TableCell className="text-xs text-slate-500 whitespace-nowrap">
                         {c.validFrom ? new Date(c.validFrom).toLocaleDateString() : "Now"}
                         <span className="mx-1">→</span>

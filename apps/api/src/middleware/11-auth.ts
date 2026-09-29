@@ -10,6 +10,7 @@ import { jwt as jwtCfg, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config
 import { UnauthorizedError, ForbiddenError } from "../core";
 import type { TokenAudience } from "../config/jwt";
 import { COOKIE_NAMES } from "../config";
+import { adminPermissions, adminStorefronts } from "../config/admin-permissions";
 import type { UserType } from "@ecom/shared-types";
 
 type AuthGuardType = "super" | "admin" | "customer" | "adminOrSuper" | "any" | "optional";
@@ -45,35 +46,14 @@ async function attachToCtx(
     req.ctx.super = { id: obj.id };
     req.ctx.admin = { id: obj.id, role: "SUPER", permissions: ["*"] };
   } else if (audience === "admin") {
-    let permissions: string[] = [];
     const storeId = (decoded as any).storeId;
-    const sub = decoded.sub;
-    const role = decoded.role;
-    if (sub && storeId && role) {
-      const cacheKey = `admin:perms:${storeId}:${role}:${sub}`;
-      const cached = await cacheGet<string[]>(cacheKey);
-      if (cached) {
-        permissions = cached;
-      } else {
-        try {
-          const admin = await prisma.adminUser.findFirst({
-            where: { id: BigInt(sub), storeId: BigInt(storeId) },
-            include: { role: true },
-          });
-          if (admin && admin.roleId) {
-            const assignments = await prisma.permissionAssignment.findMany({
-              where: { roleId: admin.roleId },
-              select: { permission: true },
-            });
-            permissions = assignments.map((a) => a.permission);
-            await cacheSet(cacheKey, permissions, CACHE_KEYS.TTL_DEFAULT);
-          }
-        } catch {
-          permissions = [];
-        }
-      }
-    }
-    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions };
+    const permissions = storeId && decoded.sub
+      ? await adminPermissions(BigInt(storeId), BigInt(decoded.sub)).catch(() => [] as string[])
+      : [];
+    const storefrontIds = storeId && decoded.sub
+      ? (await adminStorefronts(BigInt(String(storeId)), BigInt(String(decoded.sub))).catch((): string[] => [])).map((s) => BigInt(s))
+      : [];
+    req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions, storefrontIds };
   } else {
     req.ctx.customer = { id: obj.id };
   }

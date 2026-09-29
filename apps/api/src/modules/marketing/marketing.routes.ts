@@ -21,7 +21,7 @@ export const marketingCouponsRouter = Router();
 marketingCouponsRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.create"),
   validate({ body: CreateCouponDto }),
   marketingController.createCoupon,
 );
@@ -29,7 +29,7 @@ marketingCouponsRouter.post(
 marketingCouponsRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.view"),
   validate({ query: CouponSearchQueryDto }),
   marketingController.listCoupons,
 );
@@ -37,14 +37,14 @@ marketingCouponsRouter.get(
 marketingCouponsRouter.get(
   "/validate",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.view"),
   marketingController.validateCoupon,
 );
 
 marketingCouponsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.view"),
   validate({ params: CouponIdParamDto }),
   marketingController.getCoupon,
 );
@@ -52,7 +52,7 @@ marketingCouponsRouter.get(
 marketingCouponsRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.edit"),
   validate({ params: CouponIdParamDto, body: UpdateCouponDto }),
   marketingController.updateCoupon,
 );
@@ -60,7 +60,7 @@ marketingCouponsRouter.patch(
 marketingCouponsRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.*"),
+  rbacMiddleware("coupons.delete"),
   validate({ params: CouponIdParamDto }),
   marketingController.deleteCoupon,
 );
@@ -70,7 +70,7 @@ export const marketingFlashSalesRouter = Router();
 marketingFlashSalesRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("flash_sales.*"),
+  rbacMiddleware("flash_sales.create"),
   validate({ body: CreateFlashSaleDto }),
   marketingController.createFlashSale,
 );
@@ -78,7 +78,7 @@ marketingFlashSalesRouter.post(
 marketingFlashSalesRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("flash_sales.*"),
+  rbacMiddleware("flash_sales.view"),
   validate({ query: PaginationSchema }),
   marketingController.listFlashSales,
 );
@@ -86,7 +86,7 @@ marketingFlashSalesRouter.get(
 marketingFlashSalesRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("flash_sales.*"),
+  rbacMiddleware("flash_sales.view"),
   validate({ params: FlashSaleIdParamDto }),
   marketingController.getFlashSale,
 );
@@ -94,7 +94,7 @@ marketingFlashSalesRouter.get(
 marketingFlashSalesRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("flash_sales.*"),
+  rbacMiddleware("flash_sales.edit"),
   validate({ params: FlashSaleIdParamDto, body: UpdateFlashSaleDto }),
   marketingController.updateFlashSale,
 );
@@ -102,7 +102,7 @@ marketingFlashSalesRouter.patch(
 marketingFlashSalesRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("flash_sales.*"),
+  rbacMiddleware("flash_sales.delete"),
   validate({ params: FlashSaleIdParamDto }),
   marketingController.deleteFlashSale,
 );
@@ -126,7 +126,7 @@ marketingReviewsRouter.get(
 marketingReviewsRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("reviews.*"),
+  rbacMiddleware("reviews.view"),
   validate({ query: ListReviewsQueryDto }),
   marketingController.listReviews,
 );
@@ -134,7 +134,7 @@ marketingReviewsRouter.get(
 marketingReviewsRouter.post(
   "/moderate",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("reviews.*"),
+  rbacMiddleware("reviews.edit"),
   validate({ body: ReviewModerateDto }),
   marketingController.moderateReviews,
 );
@@ -142,7 +142,7 @@ marketingReviewsRouter.post(
 marketingReviewsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("reviews.*"),
+  rbacMiddleware("reviews.view"),
   validate({ params: ReviewIdParamDto }),
   marketingController.getReview,
 );

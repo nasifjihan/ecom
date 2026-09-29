@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import type { ProductDetail } from "@ecom/storefront-base";
-import { serverApi } from "@/lib/server-api";
+import { serverApi, storeOrigin } from "@/lib/server-api";
 import ProductDetailClient from "./ProductDetailClient";
 
-const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
 async function getProduct(slug: string): Promise<ProductDetail | null> {
   return serverApi<ProductDetail>(`/storefront/products/${encodeURIComponent(slug)}`);
@@ -32,6 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const resolvedParams = await params;
   const slug = typeof resolvedParams.slug === "string" ? resolvedParams.slug : String(resolvedParams.slug);
   const canonical = `/products/${slug}`;
+  // Each storefront is its own site: links use the address the page was opened on.
+  const SITE_BASE = await storeOrigin();
   const fullCanonical = `${SITE_BASE}/products/${slug}`;
 
   const product = await getProduct(slug);
@@ -113,6 +114,7 @@ export default async function ProductDetailPage({ params }: Props) {
   const product = await getProduct(slug);
   if (!product) return <ProductDetailClient slug={slug} />;
   const sample = toSeo(product);
+  const SITE_BASE = await storeOrigin();
 
   const fullUrl = `${SITE_BASE}/products/${slug}`;
 

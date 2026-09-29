@@ -28,6 +28,9 @@ const BaseCustomerAddressDto = z.object({
   address2: z.string().max(500).optional().nullable().refine(noXss, noXssMessage),
   city: z.string().min(1).max(150).refine(noXss, noXssMessage),
   state: z.string().max(150).optional().nullable().refine(noXss, noXssMessage),
+  upazila: z.string().max(150).optional().nullable().refine(noXss, noXssMessage),
+  /** Deepest area picked (upazila/thana or district); fills state/city/upazila with its names. */
+  locationId: z.coerce.bigint().positive().optional().nullable(),
   postcode: z.string().max(50).optional().nullable().refine(noXss, noXssMessage),
   countryCode: z
     .string()

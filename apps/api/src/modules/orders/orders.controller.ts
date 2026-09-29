@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import { envelope, ctrl, BaseController, type RequestContext, NotFoundError, ConflictError, BadRequestError } from "../../core";
 import { OrdersService } from "./orders.service";
 import type {
-  CreateOrderFromCartDto as CreateOrderFromCartDtoType,
   TransitionStatusDto as TransitionStatusDtoType,
   OrderSearchQueryDto as OrderSearchQueryDtoType,
   OrderIdParamDto as OrderIdParamDtoType,
@@ -20,13 +19,6 @@ class OrdersController extends BaseController {
   private getService(ctx: RequestContext): OrdersService {
     return new OrdersService(ctx);
   }
-
-  createOrderFromCart = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const dto = req.body as CreateOrderFromCartDtoType;
-    const result = await svc.createOrderFromCart(dto);
-    envelope(res, { status: 201, data: result, message: "Order created" });
-  });
 
   transitionStatus = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
@@ -55,21 +47,6 @@ class OrdersController extends BaseController {
     const params = req.params as unknown as OrderNumberParamDtoType;
     const order = await svc.getOrderByNumber(params.number);
     envelope(res, { status: 200, data: order });
-  });
-
-  createRefund = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const dto = req.body as CreateRefundDtoType;
-    const refund = await svc.createRefund(dto);
-    envelope(res, { status: 201, data: refund, message: "Refund created" });
-  });
-
-  listRefunds = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const params = req.params as unknown as OrderIdParamDtoType;
-    const oid = BigInt(params.id);
-    const refunds = await (svc as any).refunds.listForOrder(oid, req.ctx);
-    envelope(res, { status: 200, data: refunds });
   });
 
   initiatePayment = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

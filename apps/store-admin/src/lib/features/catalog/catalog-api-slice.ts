@@ -10,6 +10,8 @@ export interface ProductVariant {
   barcode?: string | null;
   regularPrice?: number | null;
   salePrice?: number | null;
+  /** What one unit cost the shop (purchases set it to the average). */
+  costPrice?: number | null;
   salePriceStartAt?: string | null;
   salePriceEndAt?: string | null;
   manageStock?: boolean;
@@ -26,6 +28,10 @@ export interface ProductVariant {
 
 export interface Product {
   id: string | number;
+  /** Lower-case search and filter words. */
+  tags?: string[];
+  /** Rows of the product page's specifications table. */
+  specifications?: { group?: string | null; label: string; value: string }[] | null;
   storeId?: string | number;
   type?: string;
   name: string;
@@ -34,8 +40,14 @@ export interface Product {
   barcode?: string | null;
   shortDescription?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, shortDescription, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   regularPrice?: number | null;
   salePrice?: number | null;
+  /** What one unit cost the shop (purchases set it to the average). */
+  costPrice?: number | null;
+  /** Sales commission on the product, in % (null: its category's or the store's). */
+  commissionRate?: number | null;
   salePriceStartAt?: string | null;
   salePriceEndAt?: string | null;
   manageStock?: boolean;
@@ -109,7 +121,11 @@ export interface Category {
   imageUrl?: string | null;
   bannerUrl?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   displayMode?: string;
+  /** Sales commission on products in this category, in % (null: the store's default). */
+  commissionRate?: number | string | null;
   sortOrder?: number;
   isActive?: boolean;
   menuIncluded?: boolean;
@@ -135,6 +151,8 @@ export interface Brand {
   bannerUrl?: string | null;
   websiteUrl?: string | null;
   description?: string | null;
+  /** Other languages: `{ bn: { name, description } }`. */
+  translations?: { bn?: Record<string, string | null> } | null;
   sortOrder?: number;
   isActive?: boolean;
   seoTitle?: string | null;
@@ -222,6 +240,7 @@ function fromApiVariant(v: ApiRow): ProductVariant {
     ...(v as ProductVariant),
     regularPrice: num(v.regularPrice),
     salePrice: num(v.salePrice),
+    costPrice: num(v.costPrice),
     weight: num(v.weight),
     length: num(v.length),
     width: num(v.width),
@@ -238,6 +257,8 @@ export function fromApiProduct(p: ApiRow): Product {
     status: String(p.status ?? "draft").toUpperCase(),
     regularPrice: num(p.regularPrice),
     salePrice: num(p.salePrice),
+    costPrice: num(p.costPrice),
+    commissionRate: num(p.commissionRate),
     weight: num(p.weight),
     length: num(p.length),
     width: num(p.width),

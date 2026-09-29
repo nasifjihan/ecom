@@ -81,6 +81,9 @@ export type {
   CouponAppliedState,
 } from "./components/checkout/CouponApplyInput";
 
+export { LocationSelects } from "./components/checkout/LocationSelects";
+export type { LocationSelectsProps, LocationValue } from "./components/checkout/LocationSelects";
+
 export {
   OrderSummaryCard,
   default as OrderSummaryCardDefault,
@@ -122,3 +125,5 @@ export { cn, formatMoney, moneyAdd, moneyMul, slugify, newId, deepClone, wait } 
 export type { ClassValue } from "clsx";
 
 export { toast, Toaster } from "sonner";
+
+export * from "./i18n";

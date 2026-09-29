@@ -77,6 +77,7 @@ import {
   useDeleteCategoryMutation,
   type Category,
 } from "@/lib/features/catalog/catalog-api-slice";
+import { banglaOf, bnTexts } from "@/components/catalog/bangla-fields";
 
 const categorySchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }).max(255),
@@ -90,8 +91,12 @@ const categorySchema = z.object({
     .or(z.literal("")),
   parentId: z.string().optional().or(z.literal("")),
   description: z.string().max(5000).optional().or(z.literal("")),
+  /** The name and description in Bangla (optional; the storefront shows them in Bangla). */
+  nameBn: z.string().max(255).optional().or(z.literal("")),
+  descriptionBn: z.string().max(5000).optional().or(z.literal("")),
   imageUrl: z.string().max(500).optional().or(z.literal("")),
   displayMode: z.enum(["products", "children", "both"]).default("products"),
+  commissionRate: z.string().regex(/^(\d{1,2}(\.\d{1,2})?|100)?$/, "0–100").optional().or(z.literal("")),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().or(z.literal("")),
@@ -205,8 +210,11 @@ export default function CategoriesPage() {
     slug: "",
     parentId: "",
     description: "",
+    nameBn: "",
+    descriptionBn: "",
     imageUrl: "",
     displayMode: "products",
+    commissionRate: "",
     sortOrder: 0,
     isActive: true,
     seoTitle: "",
@@ -237,8 +245,11 @@ export default function CategoriesPage() {
           slug: editing.slug,
           parentId: editing.parentId ? String(editing.parentId) : "",
           description: editing.description || "",
+          nameBn: banglaOf(editing).name ?? "",
+          descriptionBn: banglaOf(editing).description ?? "",
           imageUrl: editing.imageUrl || "",
           displayMode: (editing.displayMode as any) || "products",
+          commissionRate: editing.commissionRate == null ? "" : String(Number(editing.commissionRate)),
           sortOrder: editing.sortOrder ?? 0,
           isActive: editing.isActive !== false,
           seoTitle: editing.seoTitle || "",
@@ -257,8 +268,10 @@ export default function CategoriesPage() {
         slug: values.slug || slugify(values.name),
         parentId: values.parentId ? (BigInt(values.parentId) as any) : null,
         description: values.description || null,
+        translations: bnTexts({ name: values.nameBn, description: values.descriptionBn }),
         imageUrl: values.imageUrl || null,
         displayMode: values.displayMode,
+        commissionRate: values.commissionRate ? Number(values.commissionRate) : null,
         sortOrder: values.sortOrder,
         isActive: values.isActive,
         seoTitle: values.seoTitle || null,
@@ -598,6 +611,31 @@ export default function CategoriesPage() {
 
                   <FormField
                     control={control}
+                    name="nameBn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name in Bangla (বাংলা)</FormLabel>
+                        <FormControl>
+                          <Input lang="bn" placeholder="Optional: shown when a shopper picks বাংলা" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="descriptionBn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description in Bangla</FormLabel>
+                        <FormControl>
+                          <Textarea lang="bn" rows={2} {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={control}
                     name="imageUrl"
                     render={({ field }) => (
                       <FormItem>
@@ -622,6 +660,20 @@ export default function CategoriesPage() {
                             <SelectItem value="both">Both Products & Children</SelectItem>
                           </Select>
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={control}
+                    name="commissionRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sales commission (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} max={100} step="0.5" placeholder="Empty: the store's default" {...field} />
+                        </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

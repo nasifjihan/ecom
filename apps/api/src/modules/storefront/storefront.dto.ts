@@ -17,6 +17,10 @@ export const StorefrontProductsQueryDto = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
   search: z.string().trim().max(120).optional(),
+  /** Products with this tag (lower-case). */
+  tag: z.string().trim().toLowerCase().max(40).optional(),
+  /** These products only (e.g. a guest's wishlist), comma-separated. */
+  ids: z.string().regex(/^\d+(,\d+){0,99}$/, "ids must be comma-separated product ids").optional(),
   featured: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   excludeId: z.coerce.bigint().positive().optional(),
 });
@@ -45,6 +49,9 @@ const StorefrontAddressDto = z.object({
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, "country must be a 2-letter code"),
   division: safeText(64).optional().default(""),
   district: safeText(64).pipe(z.string().min(1)),
+  upazila: safeText(64).optional().default(""),
+  /** Deepest area picked (upazila/thana or district); its names replace the typed ones. */
+  locationId: z.coerce.bigint().positive().optional().nullable(),
   postcode: safeText(12).optional().default(""),
   addressLine1: safeText(200).pipe(z.string().min(3)),
   addressLine2: safeText(200).optional(),
@@ -56,6 +63,9 @@ export type StorefrontAddressDto = z.infer<typeof StorefrontAddressDto>;
 /** The cart page asks for current prices (flash sales start and end while a cart sits in the browser). */
 export const CartPricesDto = z.object({
   items: z.array(CartLineDto.passthrough()).min(1).max(100),
+  /** The coupon the customer applied: one that doesn't work with promotions switches them off. */
+  couponCode: z.string().trim().toUpperCase().max(40).optional(),
+  email: z.string().trim().toLowerCase().email().optional(),
 });
 export type CartPricesDto = z.infer<typeof CartPricesDto>;
 
@@ -74,7 +84,8 @@ export type ApplyCouponDto = z.infer<typeof ApplyCouponDto>;
  * the server re-prices every line from the database.
  */
 export const PlaceOrderDto = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  /** Optional: many customers here shop with a phone number only (order emails are then skipped). */
+  email: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().trim().toLowerCase().email().max(254).optional()),
   phone: z.string().trim().min(7).max(20),
   isGuest: z.boolean().optional(),
   subscribeNewsletter: z.boolean().optional(),
@@ -83,9 +94,17 @@ export const PlaceOrderDto = z.object({
   billingSameAsShipping: z.boolean().optional().default(true),
   shippingMethodId: z.coerce.bigint().positive(),
   paymentGateway: z.string().trim().toLowerCase().min(2).max(32),
+  /** bKash / Nagad / Rocket / bank sent by hand: what the customer paid from and the transaction ID. */
+  payment: z
+    .object({ transactionId: safeText(60), senderNumber: safeText(40).optional() })
+    .optional(),
   couponCodes: z.array(z.string().trim().toUpperCase().max(40)).max(1).optional().default([]),
   items: z.array(CartLineDto.passthrough()).min(1).max(100),
   customerNote: safeText(2000).optional(),
+  /** Signed-in customers: pay what the store allows from the wallet balance. */
+  useWallet: z.boolean().optional(),
+  /** A salesperson's share-link code (?sp=CODE): the order is credited to them. */
+  salesCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{3,20}$/).optional().or(z.literal("")),
   termsAgreed: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
 });
 export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;

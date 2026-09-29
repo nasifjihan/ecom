@@ -40,7 +40,7 @@ export const adminProductsRouter = Router();
 adminProductsRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.view"),
   validate({ query: ProductSearchQueryDto }),
   catalogController.listProducts,
 );
@@ -48,7 +48,7 @@ adminProductsRouter.get(
 adminProductsRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.create"),
   validate({ body: CreateProductDto }),
   catalogController.createProduct,
 );
@@ -56,7 +56,7 @@ adminProductsRouter.post(
 adminProductsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.view"),
   validate({ params: ProductIdParamDto }),
   catalogController.getProductById,
 );
@@ -64,7 +64,7 @@ adminProductsRouter.get(
 adminProductsRouter.get(
   "/slug/:slug",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.view"),
   validate({ params: ProductSlugParamDto }),
   catalogController.getProductBySlug,
 );
@@ -72,7 +72,7 @@ adminProductsRouter.get(
 adminProductsRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ params: ProductIdParamDto, body: UpdateProductDto }),
   catalogController.updateProduct,
 );
@@ -80,7 +80,7 @@ adminProductsRouter.patch(
 adminProductsRouter.post(
   "/bulk-archive",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ body: BulkProductStatusDto }),
   catalogController.archiveBulk,
 );
@@ -88,7 +88,7 @@ adminProductsRouter.post(
 adminProductsRouter.post(
   "/bulk-unpublish",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ body: BulkProductStatusDto }),
   catalogController.unpublishBulk,
 );
@@ -96,7 +96,7 @@ adminProductsRouter.post(
 adminProductsRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.delete"),
   validate({ params: ProductIdParamDto }),
   catalogController.deleteProduct,
 );
@@ -104,7 +104,7 @@ adminProductsRouter.delete(
 adminProductsRouter.get(
   "/:id/variants",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.view"),
   validate({ params: ProductIdParamDto }),
   catalogController.listProductVariants,
 );
@@ -112,7 +112,7 @@ adminProductsRouter.get(
 adminProductsRouter.post(
   "/:id/variants",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ params: ProductIdParamDto, body: CreateProductVariantDto }),
   catalogController.createVariant,
 );
@@ -120,7 +120,7 @@ adminProductsRouter.post(
 adminProductsRouter.patch(
   "/variants/:variantId",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ params: VariantIdParamDto, body: UpdateProductVariantDto }),
   catalogController.updateVariant,
 );
@@ -128,7 +128,7 @@ adminProductsRouter.patch(
 adminProductsRouter.delete(
   "/variants/:variantId",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ params: VariantIdParamDto }),
   catalogController.deleteVariant,
 );
@@ -136,7 +136,7 @@ adminProductsRouter.delete(
 adminProductsRouter.post(
   "/:productId/images/reorder",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("products.*"),
+  rbacMiddleware("products.edit"),
   validate({ params: ProductIdParamDto, body: ReorderGalleryDto }),
   catalogController.reorderGallery,
 );
@@ -176,7 +176,7 @@ const MediaUpdateDto = z.object({
 productUploadRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("media.*"),
+  rbacMiddleware("media.view"),
   validate({ query: MediaListQuery }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const q = req.query as unknown as z.infer<typeof MediaListQuery>;
@@ -200,7 +200,7 @@ productUploadRouter.get(
 productUploadRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("media.*"),
+  rbacMiddleware("media.edit"),
   validate({ params: MediaIdParam, body: MediaUpdateDto }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const { id } = req.params as unknown as z.infer<typeof MediaIdParam>;
@@ -214,7 +214,7 @@ productUploadRouter.patch(
 productUploadRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("media.*"),
+  rbacMiddleware("media.delete"),
   validate({ params: MediaIdParam }),
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const { id } = req.params as unknown as z.infer<typeof MediaIdParam>;
@@ -231,14 +231,14 @@ export const adminCategoriesRouter = Router();
 adminCategoriesRouter.get(
   "/tree",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.view"),
   catalogController.listCategoryTree,
 );
 
 adminCategoriesRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.create"),
   validate({ body: CreateCategoryDto }),
   catalogController.createCategory,
 );
@@ -246,7 +246,7 @@ adminCategoriesRouter.post(
 adminCategoriesRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.view"),
   validate({ params: CategoryIdParamDto }),
   catalogController.getCategory,
 );
@@ -254,7 +254,7 @@ adminCategoriesRouter.get(
 adminCategoriesRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.edit"),
   validate({ params: CategoryIdParamDto, body: UpdateCategoryDto }),
   catalogController.updateCategory,
 );
@@ -262,7 +262,7 @@ adminCategoriesRouter.patch(
 adminCategoriesRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.delete"),
   validate({ params: CategoryIdParamDto }),
   catalogController.deleteCategory,
 );
@@ -270,7 +270,7 @@ adminCategoriesRouter.delete(
 adminCategoriesRouter.post(
   "/:id/reorder",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("categories.*"),
+  rbacMiddleware("categories.edit"),
   validate({ params: CategoryIdParamDto, body: ReorderCategoriesDto }),
   catalogController.reorderChildren,
 );
@@ -280,7 +280,7 @@ export const adminBrandsRouter = Router();
 adminBrandsRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.view"),
   validate({ query: ProductSearchQueryDto }),
   catalogController.listBrands,
 );
@@ -288,7 +288,7 @@ adminBrandsRouter.get(
 adminBrandsRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.create"),
   validate({ body: CreateBrandDto }),
   catalogController.createBrand,
 );
@@ -296,14 +296,14 @@ adminBrandsRouter.post(
 adminBrandsRouter.get(
   "/active/list",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.view"),
   catalogController.listActiveBrands,
 );
 
 adminBrandsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.view"),
   validate({ params: BrandIdParamDto }),
   catalogController.getBrand,
 );
@@ -311,7 +311,7 @@ adminBrandsRouter.get(
 adminBrandsRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.edit"),
   validate({ params: BrandIdParamDto, body: UpdateBrandDto }),
   catalogController.updateBrand,
 );
@@ -319,7 +319,7 @@ adminBrandsRouter.patch(
 adminBrandsRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("brands.*"),
+  rbacMiddleware("categories.delete"),
   validate({ params: BrandIdParamDto }),
   catalogController.deleteBrand,
 );
@@ -329,14 +329,14 @@ export const adminAttributesRouter = Router();
 adminAttributesRouter.get(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.view"),
   catalogController.listAllFullAttributes,
 );
 
 adminAttributesRouter.post(
   "/",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.create"),
   validate({ body: CreateAttributeDto }),
   catalogController.createAttribute,
 );
@@ -344,7 +344,7 @@ adminAttributesRouter.post(
 adminAttributesRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.view"),
   validate({ params: AttributeIdParamDto }),
   catalogController.getAttribute,
 );
@@ -352,7 +352,7 @@ adminAttributesRouter.get(
 adminAttributesRouter.patch(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.edit"),
   validate({ params: AttributeIdParamDto, body: UpdateAttributeDto }),
   catalogController.updateAttribute,
 );
@@ -360,7 +360,7 @@ adminAttributesRouter.patch(
 adminAttributesRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.delete"),
   validate({ params: AttributeIdParamDto }),
   catalogController.deleteAttribute,
 );
@@ -368,7 +368,7 @@ adminAttributesRouter.delete(
 adminAttributesRouter.post(
   "/:id/terms",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.edit"),
   validate({ params: AttributeIdParamDto, body: AddAttributeTermDto }),
   catalogController.addTerm,
 );
@@ -376,7 +376,7 @@ adminAttributesRouter.post(
 adminAttributesRouter.delete(
   "/terms/:termId",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("attributes.*"),
+  rbacMiddleware("attributes.edit"),
   validate({ params: AttributeTermIdParamDto }),
   catalogController.removeTerm,
 );

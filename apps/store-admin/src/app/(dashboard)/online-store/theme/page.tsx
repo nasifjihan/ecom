@@ -4,24 +4,34 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ExternalLink, Loader2, Palette } from "lucide-react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Skeleton, Textarea, cn } from "@/components/ui";
-import { Field, PageTitle, STOREFRONT_URL, Toggle } from "@/components/content/shared";
+import { Field, PageTitle, Toggle } from "@/components/content/shared";
+import { StorefrontPicker, useStorefrontChoice } from "@/components/storefront-picker";
 import { ImageField } from "@/components/content/media-picker";
-import { errorText, useGetThemeQuery, useSaveThemeMutation, type ThemeSettings } from "@/lib/features/content/content-api-slice";
+import {
+  errorText,
+  useGetThemeQuery,
+  useResetThemeMutation,
+  useSaveThemeMutation,
+  type ThemeSettings,
+} from "@/lib/features/content/content-api-slice";
 
 const SWATCHES = ["#7c3aed", "#2563eb", "#0891b2", "#059669", "#ca8a04", "#ea580c", "#e11d48", "#db2777", "#0f172a"];
 const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
 const isLink = (v: string) => v === "" || v.startsWith("/") || /^https?:\/\//i.test(v);
 
 export default function ThemePage() {
-  const { data, isLoading } = useGetThemeQuery();
+  const sf = useStorefrontChoice();
+  // currentData: empty while another storefront loads, kept while this one refetches after a save.
+  const { currentData: data, isLoading } = useGetThemeQuery(sf.storefrontId);
   const [save, { isLoading: saving }] = useSaveThemeMutation();
+  const [reset, { isLoading: resetting }] = useResetThemeMutation();
   const [t, setT] = useState<ThemeSettings | null>(null);
 
   useEffect(() => {
     if (data) setT(data);
   }, [data]);
 
-  if (isLoading || !t) return <Skeleton className="h-[32rem] w-full" />;
+  if (isLoading || !data || !t) return <Skeleton className="h-[32rem] w-full" />;
 
   const set = <G extends keyof ThemeSettings>(group: G, patch: Partial<ThemeSettings[G]>) =>
     setT((cur) => (cur ? { ...cur, [group]: { ...cur[group], ...patch } } : cur));
@@ -34,9 +44,12 @@ export default function ThemePage() {
     e.preventDefault();
     try {
       await save({
-        ...t,
-        brand: { ...t.brand, logoUrl: t.brand.logoUrl?.trim() || null },
-        announcement: { ...t.announcement, link: t.announcement.link?.trim() || null },
+        theme: {
+          ...t,
+          brand: { ...t.brand, logoUrl: t.brand.logoUrl?.trim() || null },
+          announcement: { ...t.announcement, link: t.announcement.link?.trim() || null },
+        },
+        storefrontId: sf.storefrontId,
       }).unwrap();
       toast.success("Theme saved", { description: "Your store shows the changes within a minute." });
     } catch (err) {
@@ -53,15 +66,44 @@ export default function ThemePage() {
         actions={
           <>
             <Button type="button" variant="outline" asChild>
-              <a href={STOREFRONT_URL} target="_blank" rel="noreferrer">
+              <a href={sf.viewUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" /> View store
               </a>
             </Button>
+            {sf.storefrontId && sf.current?.ownTheme && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resetting}
+                onClick={() => {
+                  if (!window.confirm(`Use the default storefront's look on ${sf.current?.name ?? "this storefront"} again?`)) return;
+                  reset(sf.storefrontId!)
+                    .unwrap()
+                    .then(() => toast.success("This storefront uses the default look again"))
+                    .catch((err: unknown) => toast.error(errorText(err)));
+                }}
+              >
+                Use default look
+              </Button>
+            )}
             <Button type="submit" disabled={saving || !dirty || !valid}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save theme
             </Button>
           </>
+        }
+      />
+
+      <StorefrontPicker
+        choice={sf}
+        note={
+          sf.storefrontId
+            ? sf.current?.ownTheme
+              ? "Has its own look."
+              : "Uses the default storefront's look. Save to give it its own."
+            : sf.several
+              ? "Storefronts without their own look use this one."
+              : null
         }
       />
 

@@ -13,6 +13,7 @@ import {
   cn,
   formatMoney,
 } from "@ecom/storefront-base";
+import { useT } from "../../i18n/provider";
 
 export type CouponAppliedState = {
   valid: boolean;
@@ -54,6 +55,7 @@ export function CouponApplyInput({
   className,
 }: CouponApplyInputProps) {
   const isApplied = applied?.valid === true && applied.couponCode.length > 0;
+  const t = useT();
   const hasError = Boolean(error || applied?.errorMessage);
   const errorMsg = error || applied?.errorMessage;
 
@@ -61,7 +63,7 @@ export function CouponApplyInput({
     <div className={cn("space-y-2 w-full", className)}>
       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
         <Tag className="h-3.5 w-3.5" />
-        Promo / Coupon Code
+        {t("Promo / Coupon Code")}
       </Label>
 
       {isApplied ? (
@@ -74,17 +76,17 @@ export function CouponApplyInput({
               <span className="uppercase tracking-wide">{applied.couponCode}</span>
               {applied.discountType === "PERCENTAGE" && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
-                  Percentage
+                  {t("Percentage")}
                 </span>
               )}
               {applied.discountType === "FIXED" && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
-                  Fixed
+                  {t("Fixed")}
                 </span>
               )}
               {applied.freeShipping && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
-                  Free Shipping
+                  {t("Free Shipping")}
                 </span>
               )}
             </div>
@@ -102,7 +104,7 @@ export function CouponApplyInput({
               variant="ghost"
               onClick={onRemove}
               className="h-8 w-8 rounded-full text-green-700 hover:bg-green-100 hover:text-red-600 flex-shrink-0"
-              aria-label="Remove coupon"
+              aria-label={t("Remove coupon")}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -114,7 +116,7 @@ export function CouponApplyInput({
             <FormItem className="flex-1">
               <FormControl>
                 <Input
-                  placeholder="Enter coupon code"
+                  placeholder={t("Enter coupon code")}
                   value={couponCode}
                   onChange={(e) => onCouponCodeChange(e.target.value)}
                   disabled={applying}
@@ -139,10 +141,10 @@ export function CouponApplyInput({
               {applying ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Applying
+                  {t("Applying")}
                 </>
               ) : (
-                "Apply"
+                t("Apply")
               )}
             </Button>
           </div>
@@ -158,7 +160,7 @@ export function CouponApplyInput({
 
       {!isApplied && !hasError && (
         <p className="text-[11px] text-muted-foreground px-1">
-          💡 Have a promo code? Enter it above to unlock exclusive discounts.
+          💡 {t("Have a promo code? Enter it above to unlock exclusive discounts.")}
         </p>
       )}
     </div>

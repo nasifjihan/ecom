@@ -3,7 +3,6 @@ import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { inventoryController } from "./inventory.controller";
 import {
   StockAdjustmentDto,
-  StockTransferDto,
   MovementQueryDto,
   LowStockReportDto,
   VariantIdParamDto,
@@ -22,23 +21,15 @@ export const adminInventoryRouter = Router();
 adminInventoryRouter.post(
   "/adjust",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.edit"),
   validate({ body: StockAdjustmentDto }),
   inventoryController.adjustStock,
-);
-
-adminInventoryRouter.post(
-  "/transfer",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
-  validate({ body: StockTransferDto }),
-  inventoryController.transferStock,
 );
 
 adminInventoryRouter.get(
   "/stock",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   validate({ query: StockListQueryDto }),
   inventoryController.stockList,
 );
@@ -46,7 +37,7 @@ adminInventoryRouter.get(
 adminInventoryRouter.get(
   "/movements",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   validate({ query: MovementQueryDto }),
   inventoryController.movementReport,
 );
@@ -54,7 +45,7 @@ adminInventoryRouter.get(
 adminInventoryRouter.get(
   "/low-stock",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   validate({ query: LowStockReportDto }),
   inventoryController.lowStockReport,
 );
@@ -62,14 +53,14 @@ adminInventoryRouter.get(
 adminInventoryRouter.get(
   "/stock-value",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   inventoryController.stockValueReport,
 );
 
 adminInventoryRouter.post(
   "/import",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.edit"),
   multerFallback,
   inventoryController.importStockCount,
 );
@@ -77,7 +68,7 @@ adminInventoryRouter.post(
 adminInventoryRouter.get(
   "/variants/:variantId",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   validate({ params: VariantIdParamDto }),
   inventoryController.variantInventoryById,
 );
@@ -85,7 +76,7 @@ adminInventoryRouter.get(
 adminInventoryRouter.post(
   "/variants/:variantId/adjust",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.edit"),
   validate({ params: VariantIdParamDto, body: StockAdjustLineDto.partial() as any }),
   inventoryController.adjustVariant,
 );
@@ -93,6 +84,6 @@ adminInventoryRouter.post(
 adminInventoryRouter.get(
   "/movements/:id",
   authMiddleware("adminOrSuper"),
-  rbacMiddleware("inventory.*"),
+  rbacMiddleware("inventory.view"),
   inventoryController.getMovement,
 );

@@ -36,26 +36,23 @@ const send = (run: (req: Req) => Promise<unknown>, status = 200) =>
     envelope(res, { status, data: await run(req) })
   })
 
-const READ = ["store.settings.read", "store.owner", "settings.*"]
-const WRITE = ["store.settings.update", "store.owner", "settings.*"]
-
 export const adminEmailsRouter = Router()
 adminEmailsRouter.use(authMiddleware("adminOrSuper"))
 
 adminEmailsRouter.get(
   "/templates",
-  rbacMiddleware(READ),
+  rbacMiddleware("emails.view"),
   send((req) => svc(req).listTemplates()),
 )
 adminEmailsRouter.get(
   "/templates/:key",
-  rbacMiddleware(READ),
+  rbacMiddleware("emails.view"),
   validate({ params: TemplateKeyParamDto }),
   send((req) => svc(req).getTemplate(key(req))),
 )
 adminEmailsRouter.put(
   "/templates/:key",
-  rbacMiddleware(WRITE),
+  rbacMiddleware("emails.edit"),
   validate({ params: TemplateKeyParamDto, body: TemplateDto }),
   send((req) =>
     svc(req).saveTemplate(key(req), body<z.infer<typeof TemplateDto>>(req), req.ctx.admin?.id),
@@ -63,19 +60,19 @@ adminEmailsRouter.put(
 )
 adminEmailsRouter.delete(
   "/templates/:key",
-  rbacMiddleware(WRITE),
+  rbacMiddleware("emails.edit"),
   validate({ params: TemplateKeyParamDto }),
   send((req) => svc(req).resetTemplate(key(req))),
 )
 adminEmailsRouter.post(
   "/templates/:key/preview",
-  rbacMiddleware(READ),
+  rbacMiddleware("emails.edit"),
   validate({ params: TemplateKeyParamDto, body: PreviewDto }),
   send((req) => svc(req).preview(key(req), body<z.infer<typeof PreviewDto>>(req).draft)),
 )
 adminEmailsRouter.post(
   "/templates/:key/test",
-  rbacMiddleware(WRITE),
+  rbacMiddleware("emails.edit"),
   validate({ params: TemplateKeyParamDto, body: TestSendDto }),
   send(async (req) => {
     const b = body<z.infer<typeof TestSendDto>>(req)
@@ -93,7 +90,7 @@ adminEmailsRouter.post(
 )
 adminEmailsRouter.get(
   "/log",
-  rbacMiddleware(READ),
+  rbacMiddleware("emails.view"),
   validate({ query: LogQueryDto }),
   ctrl(async (req: Req, res: Response) => {
     const out = await svc(req).listLog(req.query as unknown as z.infer<typeof LogQueryDto>)
@@ -102,13 +99,13 @@ adminEmailsRouter.get(
 )
 adminEmailsRouter.get(
   "/log/:id",
-  rbacMiddleware(READ),
+  rbacMiddleware("emails.view"),
   validate({ params: IdParamDto }),
   send((req) => svc(req).getLog(id(req))),
 )
 adminEmailsRouter.post(
   "/log/:id/resend",
-  rbacMiddleware(WRITE),
+  rbacMiddleware("emails.edit"),
   validate({ params: IdParamDto }),
   send((req) => svc(req).resend(id(req)), 201),
 )
