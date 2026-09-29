@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
+import { Briefcase, FileText, Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
 import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney, msg, orderStatusWord, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import { useWholesaleStatus } from "@/lib/wholesale";
@@ -57,6 +57,7 @@ const NAV = [
   { href: "/account/wallet", label: msg("Wallet"), icon: Wallet },
   { href: "/account/refer", label: msg("Refer a friend"), icon: Gift },
   { href: "/account/business", label: msg("Business account"), icon: Briefcase },
+  { href: "/account/quotes", label: msg("Quotes"), icon: FileText },
 ];
 
 export function AccountShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -68,7 +69,8 @@ export function AccountShell({ title, description, children }: { title: string; 
   const t = useT();
   // "Business account" only for shops that sell to businesses (or customers who already have one).
   const { data: wholesale } = useWholesaleStatus();
-  const nav = NAV.filter((n) => n.href !== "/account/business" || wholesale?.enabled === true || !!wholesale?.account);
+  const wholesaleShown = wholesale?.enabled === true || !!wholesale?.account;
+  const nav = NAV.filter((n) => !["/account/business", "/account/quotes"].includes(n.href) || wholesaleShown);
 
   const onLogout = async () => {
     await logout().unwrap().catch(() => undefined);

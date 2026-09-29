@@ -120,6 +120,7 @@ model Store {
   loyaltySettings      LoyaltySettings?
   wholesaleSettings    WholesaleSettings?
   businessAccounts     BusinessAccount[]
+  quotations           Quotation[]
   loyaltyLevels        LoyaltyLevel[]
   walletTransactions   WalletTransaction[]
   warehouses           Warehouse[]
@@ -1113,6 +1114,7 @@ model Customer {
   loyaltyLevelId        BigInt?
   loyaltyLevel          LoyaltyLevel?          @relation(fields: [loyaltyLevelId], references: [id], onDelete: SetNull)
   businessAccount       BusinessAccount?
+  quotations            Quotation[]
   /// Items less discounts and refunds over delivered orders; decides the loyalty level.
   qualifyingSpend       Decimal                @default(0) @db.Decimal(14, 2)
   walletTransactions    WalletTransaction[]
@@ -2878,4 +2880,64 @@ model PriceTier {
   createdAt   DateTime        @default(now())
 
   @@index([productId])
+}
+
+/// A price offer to one customer: staff draft it (or the customer asks from their cart), send it,
+/// the customer accepts or declines, and staff turn it into an order at the quoted prices.
+model Quotation {
+  id           BigInt          @id @default(autoincrement())
+  storeId      BigInt
+  store        Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Q-000001, per store.
+  number       String
+  customerId   BigInt
+  customer     Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// The storefront the order will be for (null: the default one).
+  storefrontId BigInt?
+  /// REQUESTED | DRAFT | SENT | ACCEPTED | DECLINED | ORDERED | CANCELLED (a SENT quote past validUntil reads as expired)
+  status       String          @default("DRAFT")
+  validUntil   DateTime?
+  /// What the customer wrote when asking, accepting or declining.
+  customerNote String?
+  /// Shown to the customer (payment terms, delivery time…).
+  terms        String?
+  /// Staff only.
+  staffNote    String?
+  /// Taken off the items (fixed amount).
+  discount     Decimal         @default(0) @db.Decimal(12, 2)
+  /// Delivery charge agreed; carried into the order as a fee staff typed.
+  deliveryFee  Decimal         @default(0) @db.Decimal(12, 2)
+  subtotal     Decimal         @default(0) @db.Decimal(14, 2)
+  total        Decimal         @default(0) @db.Decimal(14, 2)
+  orderId      BigInt?         @unique
+  sentAt       DateTime?
+  respondedAt  DateTime?
+  createdById  BigInt?
+  items        QuotationItem[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([storeId, number])
+  @@index([storeId, status])
+  @@index([customerId])
+}
+
+model QuotationItem {
+  id          BigInt    @id @default(autoincrement())
+  quotationId BigInt
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   BigInt?
+  variantId   BigInt?
+  name        String
+  option      String?
+  sku         String?
+  qty         Int
+  /// The quoted price each.
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  /// What the customer would pay without the quote (for "you save").
+  listPrice   Decimal   @db.Decimal(12, 2)
+  lineTotal   Decimal   @db.Decimal(14, 2)
+  sortOrder   Int       @default(0)
+
+  @@index([quotationId])
 }

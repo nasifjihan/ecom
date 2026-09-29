@@ -157,6 +157,27 @@ export const EMAIL_TEMPLATES = {
     button: { label: "Choose a new password", url: "reset.url" },
     variables: [...STORE, "staff.name", "staff.email", "reset.url", "reset.expires_minutes"],
   },
+  quote_sent_customer: {
+    label: "Price quote",
+    audience: "customer",
+    description: "Sent to the customer when you send them a quotation.",
+    subject: "Your quote {{quote.number}} from {{store.name}}",
+    message:
+      "# Your quote {{quote.number}}\n\nHi {{customer.first_name}},\n\nHere is our quote for {{quote.total}} (VAT, if it applies, is added to the order). It's valid until {{quote.valid_until}}.\n\n{{quote.terms}}\n\nOpen it in your account to accept or decline.",
+    blocks: ["order_summary"],
+    button: { label: "View your quote", url: "quote.url" },
+    variables: [...STORE, ...CUSTOMER, "quote.number", "quote.total", "quote.valid_until", "quote.terms", "quote.url"],
+  },
+  quote_update_admin: {
+    label: "Quote request or answer",
+    audience: "staff",
+    description: "Sent to your team when a customer asks for a quote, or accepts or declines one.",
+    subject: "Quote {{quote.number}}: {{quote.event}}",
+    message: "# Quote {{quote.number}}: {{quote.event}}\n\n{{customer.name}} ({{customer.email}}), {{quote.total}}.\n\n{{quote.note}}",
+    blocks: ["order_summary"],
+    button: { label: "Open in admin", url: "quote.admin_url" },
+    variables: [...STORE, ...CUSTOMER, "quote.number", "quote.total", "quote.event", "quote.note", "quote.admin_url"],
+  },
 } satisfies Record<string, TemplateDef>
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES

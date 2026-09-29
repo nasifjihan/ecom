@@ -41,6 +41,8 @@ export interface ManualOrderInput {
   customerNote?: string;
   staffNote?: string;
   notifyCustomer: boolean;
+  /** Make the order from this quotation (its customer, lines, agreed prices and discount). */
+  quotationId?: string;
 }
 
 /** Automatic promotions on a priced order (StorefrontService.promotionsView). */

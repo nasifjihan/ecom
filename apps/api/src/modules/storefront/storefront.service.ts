@@ -170,6 +170,8 @@ export type OrderDraft = {
   customerId?: bigint | null;
   /** Pay what the wallet allows from the customer's balance. */
   useWallet?: boolean;
+  /** Agreed prices each (a quotation), by `productId:variantId`; they replace the shop's prices. */
+  unitPrices?: Map<string, number>;
 };
 
 export type OrderQuote = Awaited<ReturnType<StorefrontService["quoteOrder"]>>;
@@ -981,6 +983,22 @@ export class StorefrontService {
     }
 
     const quoted = await this.quoteLines(input.items, input.customerId ?? this.ctx.customer?.id);
+    if (input.unitPrices) {
+      for (const q of quoted) {
+        const agreed = input.unitPrices.get(`${q.line.productId}:${q.line.variantId ?? ""}`);
+        if (agreed === undefined || !q.priced) continue;
+        const normal = q.priced.unitPrice;
+        q.priced = {
+          ...q.priced,
+          unitPrice: agreed,
+          compareAtPrice: agreed < normal ? q.priced.compareAtPrice ?? normal : null,
+          onSale: agreed < normal,
+          flash: null,
+          tier: null,
+          lineSubtotal: round2(agreed * q.line.qty),
+        };
+      }
+    }
     const lines: PricedLine[] = [];
     for (const q of quoted) {
       if (q.problem || !q.priced) fail(q.problem?.message ?? "A product is no longer available", q.problem?.code ?? "CART_INVALID");

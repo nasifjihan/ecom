@@ -5,18 +5,17 @@ import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefront
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertCircle, ArrowLeft, Minus, PackagePlus, Plus, Search, ShoppingBag, Trash2, User, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Minus, PackagePlus, Plus, ShoppingBag, Trash2, User } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, cn } from "@/components/ui";
 import { Field, PageTitle, Toggle } from "@/components/content/shared";
 import { AreaSelects, type AreaValue } from "@/components/orders/area-selects";
+import { CustomerPicker, ProductPicker, taka, useDebounced } from "@/components/orders/order-pickers";
 import { useCan } from "@/lib/permissions";
+import { useQuotationQuery } from "@/lib/features/wholesale/quotations-api-slice";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { ORDER_SOURCES, type OrderSource } from "@/lib/features/operations/operations-api-slice";
 import {
   useCreateManualOrderMutation,
-  usePickCustomersQuery,
-  usePickProductsQuery,
-  usePickVariantsQuery,
   useQuoteManualOrderMutation,
   useOrderAreasQuery,
   type ManualOrderInput,
@@ -26,150 +25,7 @@ import {
 } from "@/lib/features/operations/manual-order-api-slice";
 
 const SELECT = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
-const taka = (n: number | null | undefined) =>
-  `৳${Number(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-
-function useDebounced<T>(value: T, ms = 300) {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
-
 type Line = { key: string; productId: string; variantId: string | null; name: string; variantLabel?: string; qty: number };
-
-// ------------------------------------------------------------------ pickers
-
-function CustomerPicker({ onPick }: { onPick: (c: PickCustomer) => void }) {
-  const [q, setQ] = useState("");
-  const search = useDebounced(q.trim());
-  const { data = [], isFetching } = usePickCustomersQuery(search, { skip: search.length < 2 });
-  return (
-    <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-      <Input className="pl-9" placeholder="Find a customer by name, phone or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find customer" />
-      {search.length >= 2 && (
-        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-white shadow-lg dark:bg-slate-900">
-          {data.length === 0 ? (
-            <li className="p-3 text-sm text-slate-500">{isFetching ? "Searching…" : "No customer found — fill in the details below."}</li>
-          ) : (
-            data.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
-                  onClick={() => {
-                    onPick(c);
-                    setQ("");
-                  }}
-                >
-                  <span>
-                    <span className="font-medium">{c.name}</span>
-                    <span className="ml-2 text-slate-500">{[c.phone, c.email].filter(Boolean).join(" · ")}</span>
-                  </span>
-                  <span className="text-xs text-slate-400">{c.orderCount} orders</span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function VariantChooser({ product, onPick, onCancel }: { product: PickProduct; onPick: (id: string, label: string) => void; onCancel: () => void }) {
-  const { data = [], isLoading } = usePickVariantsQuery(product.id);
-  return (
-    <div className="rounded-md border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-medium">Choose an option of {product.name}</p>
-        <Button type="button" variant="ghost" size="icon" onClick={onCancel} aria-label="Cancel">
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-      {isLoading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {data.map((v) => {
-            const out = v.manageStock && (v.stockQty ?? 0) <= 0;
-            return (
-              <Button key={v.id} type="button" variant="outline" size="sm" disabled={out} onClick={() => onPick(v.id, v.label)}>
-                {v.label} · {taka(v.price)}
-                <span className="ml-1 text-xs text-slate-400">{out ? "out of stock" : v.manageStock ? `${v.stockQty} left` : ""}</span>
-              </Button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProductPicker({ onAdd }: { onAdd: (p: PickProduct, variant?: { id: string; label: string }) => void }) {
-  const [q, setQ] = useState("");
-  const [choosing, setChoosing] = useState<PickProduct | null>(null);
-  const search = useDebounced(q.trim());
-  const { data = [], isFetching } = usePickProductsQuery(search, { skip: search.length < 2 });
-  return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-        <Input className="pl-9" placeholder="Search products by name or SKU" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search products" />
-        {search.length >= 2 && !choosing && (
-          <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-white shadow-lg dark:bg-slate-900">
-            {data.length === 0 ? (
-              <li className="p-3 text-sm text-slate-500">{isFetching ? "Searching…" : "No published product matches."}</li>
-            ) : (
-              data.map((p) => {
-                const out = p.variantCount === 0 && p.manageStock && (p.stockQty ?? 0) <= 0;
-                return (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      disabled={out}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
-                      onClick={() => {
-                        if (p.variantCount > 0) setChoosing(p);
-                        else {
-                          onAdd(p);
-                          setQ("");
-                        }
-                      }}
-                    >
-                      {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-9 w-9 rounded object-cover" /> : <ShoppingBag className="h-9 w-9 p-2 text-slate-400" />}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{p.name}</span>
-                        <span className="text-xs text-slate-500">
-                          {p.sku} · {p.variantCount > 0 ? `${p.variantCount} options` : out ? "Out of stock" : p.manageStock ? `${p.stockQty} in stock` : "In stock"}
-                        </span>
-                      </span>
-                      <span>{taka(p.price)}</span>
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        )}
-      </div>
-      {choosing && (
-        <VariantChooser
-          product={choosing}
-          onCancel={() => setChoosing(null)}
-          onPick={(id, label) => {
-            onAdd(choosing, { id, label });
-            setChoosing(null);
-            setQ("");
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 // ------------------------------------------------------------------ page
 
@@ -210,6 +66,28 @@ export default function NewOrderPage() {
   const [staffNote, setStaffNote] = useState("");
   const [notify, setNotify] = useState(true);
 
+  // Opened from a quotation (?quotation=ID): its customer, lines, prices and discount are used.
+  const [quotationId, setQuotationId] = useState<string | null>(null);
+  useEffect(() => setQuotationId(new URLSearchParams(window.location.search).get("quotation")), []);
+  const { data: fromQuote } = useQuotationQuery(quotationId ?? "", { skip: !quotationId });
+  useEffect(() => {
+    if (!fromQuote) return;
+    setCustomer({ id: fromQuote.customer.id, name: fromQuote.customer.business ?? fromQuote.customer.name, phone: fromQuote.customer.phone, email: fromQuote.customer.email, orderCount: 0 });
+    if (fromQuote.customer.phone) setPhone(fromQuote.customer.phone);
+    setLines(
+      fromQuote.items
+        .filter((i) => i.productId)
+        .map((i) => ({ key: `${i.productId}:${i.variantId ?? ""}`, productId: i.productId!, variantId: i.variantId, name: i.name, variantLabel: i.option ?? undefined, qty: i.qty })),
+    );
+    setStorefrontId(fromQuote.storefrontId ?? "");
+    if (fromQuote.deliveryFee > 0) {
+      setDeliveryType("custom");
+      setCustomFee(String(fromQuote.deliveryFee));
+    }
+    if (fromQuote.customerNote) setCustomerNote(fromQuote.customerNote);
+  }, [fromQuote]);
+  const locked = !!fromQuote;
+
   const body: ManualOrderInput = useMemo(
     () => ({
       customer: customer ? { id: customer.id } : { firstName: first.trim(), lastName: last.trim(), phone: phone.trim(), email: email.trim() },
@@ -243,8 +121,9 @@ export default function NewOrderPage() {
       customerNote: customerNote.trim() || undefined,
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
+      ...(fromQuote ? { quotationId: fromQuote.id } : {}),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -335,9 +214,11 @@ export default function NewOrderPage() {
                     <p className="font-medium">{customer.name}</p>
                     <p className="text-sm text-slate-500">{[customer.phone, customer.email].filter(Boolean).join(" · ") || "No contact details"} · {customer.orderCount} orders</p>
                   </div>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setCustomer(null)}>
-                    Change
-                  </Button>
+                  {!locked && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setCustomer(null)}>
+                      Change
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -386,7 +267,17 @@ export default function NewOrderPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ProductPicker onAdd={addLine} />
+              {fromQuote ? (
+                <p className="rounded-md bg-emerald-50 p-2 text-sm text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  From quote{" "}
+                  <Link href={`/orders/quotations/${fromQuote.id}`} className="font-medium underline">
+                    {fromQuote.number}
+                  </Link>
+                  : products, quantities, prices{fromQuote.discount > 0 ? " and the discount" : ""} are as agreed. Fill in the delivery and payment.
+                </p>
+              ) : (
+                <ProductPicker onAdd={addLine} />
+              )}
               {lines.length === 0 ? (
                 <p className="text-sm text-slate-500">No products yet.</p>
               ) : (
@@ -409,7 +300,7 @@ export default function NewOrderPage() {
                           </p>
                           {info?.problem && <p className="text-xs text-rose-600">{info.problem}</p>}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className={cn("flex items-center gap-1", locked && "hidden")}>
                           <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={() => setQty(l.key, l.qty - 1)} aria-label="One less">
                             <Minus className="h-3 w-3" />
                           </Button>
@@ -426,7 +317,8 @@ export default function NewOrderPage() {
                           </Button>
                         </div>
                         <span className="w-24 text-right font-medium">{info?.lineSubtotal != null ? taka(info.lineSubtotal) : "—"}</span>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => setQty(l.key, 0)} aria-label={`Remove ${l.name}`}>
+                        {locked && <span className="text-sm text-slate-600">× {l.qty}</span>}
+                        <Button type="button" variant="ghost" size="icon" className={cn(locked && "hidden")} onClick={() => setQty(l.key, 0)} aria-label={`Remove ${l.name}`}>
                           <Trash2 className="h-4 w-4 text-rose-600" />
                         </Button>
                       </li>
@@ -511,6 +403,11 @@ export default function NewOrderPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
+                {fromQuote ? (
+                  <Field label="Discount" htmlFor="disc">
+                    <p id="disc" className="py-2 text-sm">{fromQuote.discount > 0 ? `${taka(fromQuote.discount)} (agreed in the quote)` : "None (prices agreed in the quote)"}</p>
+                  </Field>
+                ) : (
                 <Field
                   label="Discount"
                   htmlFor="disc"
@@ -524,9 +421,12 @@ export default function NewOrderPage() {
                     <Input id="disc" type="number" min={0} step="1" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} />
                   </div>
                 </Field>
-                <Field label="Coupon code (optional)" htmlFor="coupon" error={coupon.trim() ? result?.couponError : null}>
-                  <Input id="coupon" value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} />
-                </Field>
+                )}
+                {!locked && (
+                  <Field label="Coupon code (optional)" htmlFor="coupon" error={coupon.trim() ? result?.couponError : null}>
+                    <Input id="coupon" value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} />
+                  </Field>
+                )}
                 <Field label="Payment method" htmlFor="gw">
                   <select id="gw" className={SELECT} value={gateway} onChange={(e) => setGateway(e.target.value)}>
                     {(result?.paymentMethods ?? [{ code: "cod", name: "Cash on Delivery", enabled: true }]).map((g) => (
@@ -558,12 +458,14 @@ export default function NewOrderPage() {
                   </Field>
                 )}
               </div>
-              <Toggle
-                checked={applyPromotions}
-                onChange={setApplyPromotions}
-                label="Apply the store's promotions"
-                hint="Automatic discounts, free gifts and free delivery, as on the website."
-              />
+              {!locked && (
+                <Toggle
+                  checked={applyPromotions}
+                  onChange={setApplyPromotions}
+                  label="Apply the store's promotions"
+                  hint="Automatic discounts, free gifts and free delivery, as on the website."
+                />
+              )}
               {result?.customer && result.wallet.enabled && result.wallet.balance > 0 && (
                 <Toggle
                   checked={useWallet}

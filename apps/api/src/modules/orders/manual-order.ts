@@ -13,6 +13,7 @@ import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } f
 import { StorefrontService, type OrderDraft } from "../storefront/storefront.service";
 import { assertStaffStorefront, defaultStorefrontId, staffStorefronts } from "../storefronts/storefronts.context";
 import { emitOrderPlaced } from "../notifications";
+import { orderBlocker } from "../wholesale/quotation.rules";
 
 export const ORDER_SOURCES = ["website", "phone", "facebook", "instagram", "whatsapp", "messenger", "walk_in", "other"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
@@ -81,17 +82,19 @@ const Base = z.object({
   notifyCustomer: z.boolean().default(true),
   /** Take what the store allows from the customer's wallet (known customers only). */
   useWallet: z.boolean().default(false),
+  /** Make the order from this quotation: its customer, lines, agreed prices and discount. */
+  quotationId: z.coerce.bigint().positive().optional(),
 });
 
 export const ManualOrderQuoteDto = Base;
 export type ManualOrderQuoteDto = z.infer<typeof ManualOrderQuoteDto>;
 
 export const ManualOrderDto = Base.superRefine((v, ctx) => {
-  if (!v.items.length) ctx.addIssue({ code: "custom", path: ["items"], message: "Add at least one product" });
-  if (!v.customer.id && !v.customer.phone && !v.customer.email) {
+  if (!v.items.length && !v.quotationId) ctx.addIssue({ code: "custom", path: ["items"], message: "Add at least one product" });
+  if (!v.quotationId && !v.customer.id && !v.customer.phone && !v.customer.email) {
     ctx.addIssue({ code: "custom", path: ["customer", "phone"], message: "Pick a customer or enter a phone number or email" });
   }
-  if (!v.customer.id && !v.customer.firstName) {
+  if (!v.quotationId && !v.customer.id && !v.customer.firstName) {
     ctx.addIssue({ code: "custom", path: ["customer", "firstName"], message: "Enter the customer's name" });
   }
   if (v.delivery.type !== "pickup") {
@@ -167,7 +170,32 @@ export class ManualOrderService {
     return null;
   }
 
+  /** The quotation an order is made from, and why it can't become one (if so). */
+  private async quotation(id: bigint) {
+    const q = await prisma.quotation.findFirst({ where: { id, storeId: this.storeId }, include: { items: { orderBy: { sortOrder: "asc" } } } });
+    if (!q) throw new NotFoundError("Quotation", String(id));
+    return { q, blocker: orderBlocker(q.status, q.validUntil) };
+  }
+
   private async draft(dto: ManualOrderQuoteDto, strict: boolean) {
+    // From a quotation: its customer, storefront, lines at the agreed prices and its discount.
+    const found = dto.quotationId ? await this.quotation(dto.quotationId) : null;
+    // Creating fails; the form's live pricing lists it as a problem instead.
+    if (found?.blocker && strict) throw new BadRequestError(found.blocker, "ORDER_STATUS_INVALID_TRANSITION");
+    const fromQuote = found?.q ?? null;
+    if (fromQuote) {
+      dto = {
+        ...dto,
+        customer: { id: fromQuote.customerId },
+        storefrontId: fromQuote.storefrontId ?? dto.storefrontId,
+        items: fromQuote.items
+          .filter((i) => i.productId)
+          .map((i) => ({ productId: i.productId!, variantId: i.variantId, qty: i.qty })),
+        discount: Number(fromQuote.discount) > 0 ? { type: "fixed", value: Number(fromQuote.discount) } : null,
+        couponCode: "",
+        applyPromotions: false,
+      };
+    }
     const customer = await this.findCustomer(dto.customer).catch((e) => {
       if (strict) throw e;
       return null;
@@ -215,20 +243,25 @@ export class ManualOrderService {
       // A known customer gets their loyalty level's discount; staff can take payment from their wallet.
       customerId: customer?.id ?? null,
       useWallet: dto.useWallet && !!customer,
+      unitPrices: fromQuote
+        ? new Map(fromQuote.items.filter((i) => i.productId).map((i) => [`${i.productId}:${i.variantId ?? ""}`, Number(i.unitPrice)]))
+        : undefined,
     };
     const shop = await this.shopFor(dto.storefrontId);
     const quote = await shop.quoteOrder(input);
 
+    if (found?.blocker) quote.problems.push(found.blocker);
     const cap = await manualDiscountCap(this.ctx);
     const { itemsSubtotal, manualDiscount } = quote.totals;
     const pct = itemsSubtotal > 0 ? (manualDiscount / itemsSubtotal) * 100 : 0;
-    const overCap = manualDiscount > 0 && pct > cap + 1e-9;
+    // A quotation's discount was agreed when it was made (and checked against the maker's limit then).
+    const overCap = !fromQuote && manualDiscount > 0 && pct > cap + 1e-9;
     if (overCap) {
       const msg = `Your role can give at most ${cap}% off (৳${round2((itemsSubtotal * cap) / 100)} on this order)`;
       if (strict) throw new ForbiddenError(msg, "DISCOUNT_OVER_LIMIT");
       quote.problems.push(msg);
     }
-    return { quote, customer, email, phone, cap, shop };
+    return { quote, customer, email, phone, cap, shop, fromQuote };
   }
 
   async quote(dto: ManualOrderQuoteDto) {
@@ -276,7 +309,7 @@ export class ManualOrderService {
   }
 
   async create(dto: ManualOrderDto) {
-    const { quote, customer: found, email, phone, shop } = await this.draft(dto, true);
+    const { quote, customer: found, email, phone, shop, fromQuote } = await this.draft(dto, true);
     const storeId = this.storeId;
 
     // Keep a customer record for the order (no login until they register on the storefront).
@@ -297,26 +330,49 @@ export class ManualOrderService {
       customer = await prisma.customer.update({ where: { id: customer.id }, data: { phone } });
     }
 
+    // Claim the quotation first, so two people can't both turn it into an order.
+    if (fromQuote) {
+      const claimed = await prisma.quotation.updateMany({
+        where: { id: fromQuote.id, status: fromQuote.status, orderId: null },
+        data: { status: "ORDERED" },
+      });
+      if (!claimed.count) throw new BadRequestError("This quote was just changed or made into an order. Reload it.", "ORDER_STATUS_INVALID_TRANSITION");
+    }
     const adminId = await this.adminUserId();
     const who = await this.staffName(adminId);
     const sourceLabel = dto.source.replace("_", "-");
-    const order = await shop.createOrder(quote, {
-      customerId: customer.id,
-      customerNote: dto.customerNote || null,
-      source: dto.source,
-      createdByAdminId: adminId,
-      status: dto.status,
-      paid: dto.paid,
-      transactionId: dto.transactionId || null,
-      notifyCustomer: dto.notifyCustomer,
-      historyNote: [`Order entered by ${who} (${sourceLabel} order)`, dto.staffNote].filter(Boolean).join(". "),
-    });
+    const order = await shop
+      .createOrder(quote, {
+        customerId: customer.id,
+        customerNote: dto.customerNote || null,
+        source: dto.source,
+        createdByAdminId: adminId,
+        status: dto.status,
+        paid: dto.paid,
+        transactionId: dto.transactionId || null,
+        notifyCustomer: dto.notifyCustomer,
+        historyNote: [
+          `Order entered by ${who} (${sourceLabel} order)`,
+          fromQuote ? `From quotation ${fromQuote.number}` : null,
+          dto.staffNote,
+        ]
+          .filter(Boolean)
+          .join(". "),
+      })
+      .catch(async (e: unknown) => {
+        // Give the quotation back if the order couldn't be made (stock ran out, etc.).
+        if (fromQuote) await prisma.quotation.update({ where: { id: fromQuote.id }, data: { status: fromQuote.status } });
+        throw e;
+      });
 
     await prisma.customer.update({
       where: { id: customer.id },
       data: { orderCount: { increment: 1 }, totalSpent: { increment: quote.totals.grandTotal } },
     });
 
+    if (fromQuote) {
+      await prisma.quotation.update({ where: { id: fromQuote.id }, data: { orderId: order.id } });
+    }
     emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id), notifyCustomer: dto.notifyCustomer, notifyStaff: false });
     return {
       id: String(order.id),

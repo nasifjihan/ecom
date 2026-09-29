@@ -39,6 +39,7 @@ import {
   toast,
 } from "@ecom/storefront-base";
 import { cartLineKey, useCartPriceCheck } from "@/lib/cart-prices";
+import { AskForQuote } from "./ask-quote";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
 
 function formatBDT(n: number) {
@@ -352,6 +353,7 @@ export default function CartPage() {
                   {t("Proceed to Checkout")}
                   <ArrowRight className="h-5 w-5 ml-2" />
                 </Button>
+                <AskForQuote />
                 <Button variant="outline" className="w-full" asChild>
                   <Link href="/products">
                     <ArrowLeft className="h-4 w-4 mr-2" /> {t("Continue Shopping")}

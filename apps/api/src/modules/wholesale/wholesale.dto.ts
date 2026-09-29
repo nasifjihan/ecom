@@ -87,3 +87,55 @@ export const ApplyPricesDto = z.object({
     .min(1, "Pick at least one row")
     .max(500),
 })
+
+// ------------------------------------------------------------------ quotations
+
+const QuoteLine = z.object({
+  productId: z.coerce.bigint().positive(),
+  variantId: z.coerce.bigint().positive().nullable().optional(),
+  qty: z.coerce.number().int().min(1).max(100_000),
+})
+
+export const QuotePreviewDto = z.object({
+  customerId: z.coerce.bigint().positive(),
+  storefrontId: z.coerce.bigint().positive().nullable().optional(),
+  items: z.array(QuoteLine).min(1).max(200),
+})
+
+export const SaveQuoteDto = z.object({
+  customerId: z.coerce.bigint().positive(),
+  storefrontId: z.coerce.bigint().positive().nullable().optional(),
+  validUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
+    .nullable()
+    .optional(),
+  terms: optText(2000),
+  staffNote: optText(2000),
+  discount: money.default(0),
+  deliveryFee: money.default(0),
+  items: z
+    .array(QuoteLine.extend({ unitPrice: money }))
+    .min(1, "Add at least one product")
+    .max(200),
+})
+
+export const QuotesQuery = z.object({
+  status: z.enum(["REQUESTED", "DRAFT", "SENT", "EXPIRED", "ACCEPTED", "DECLINED", "ORDERED", "CANCELLED"]).optional(),
+  search: z.string().trim().max(100).optional(),
+  customerId: z.coerce.bigint().positive().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(25),
+})
+
+export const RequestQuoteDto = z.object({
+  items: z.array(QuoteLine).min(1, "Your cart is empty").max(200),
+  note: optText(1000),
+})
+
+export const RespondQuoteDto = z.object({
+  action: z.enum(["accept", "decline"]),
+  note: optText(1000),
+})
+
+export const QuoteNumberParam = z.object({ number: z.string().trim().regex(/^Q-\d{1,10}$/) })

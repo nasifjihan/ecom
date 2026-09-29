@@ -417,6 +417,77 @@ export class EmailService {
     })
   }
 
+  // ------------------------------------------------------------------ quotations
+
+  /** The quote as an order-summary block (lines, totals). */
+  private async quoteDetails(id: bigint) {
+    const q = await prisma.quotation.findFirst({
+      where: { id, storeId: this.storeId },
+      include: { items: { orderBy: { sortOrder: "asc" } }, customer: true },
+    })
+    if (!q) return null
+    const totals = [
+      { label: "Items", value: money(q.subtotal) },
+      ...(Number(q.discount) > 0 ? [{ label: "Discount", value: `−${money(q.discount)}` }] : []),
+      ...(Number(q.deliveryFee) > 0 ? [{ label: "Delivery", value: money(q.deliveryFee) }] : []),
+      { label: "Total", value: money(q.total), strong: true },
+    ]
+    const order: OrderSummary = {
+      items: q.items.map((i) => ({
+        name: i.name,
+        detail: [i.option, `${money(i.unitPrice)} each`].filter(Boolean).join(" · "),
+        qty: i.qty,
+        total: money(i.lineTotal),
+        imageUrl: null,
+      })),
+      totals,
+      shipTo: [],
+    }
+    const c = q.customer
+    const vars = {
+      "customer.name": `${c.firstName} ${c.lastName}`.trim(),
+      "customer.first_name": c.firstName,
+      "customer.email": c.email ?? "",
+      "quote.number": q.number,
+      "quote.total": money(q.total),
+      "quote.valid_until": q.validUntil
+        ? q.validUntil.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" })
+        : "further notice",
+      "quote.terms": q.terms ?? "",
+    }
+    return { q, order, vars }
+  }
+
+  async quoteSent(id: bigint) {
+    const d = await this.quoteDetails(id)
+    if (!d) return
+    const { urls } = await this.context()
+    await this.send("quote_sent_customer", {
+      to: [d.q.customer.email],
+      vars: { ...d.vars, "quote.url": `${urls.storefront}/account/quotes/${d.q.number}` },
+      order: d.order,
+      recipientType: "customer",
+      recipientId: d.q.customerId,
+    })
+  }
+
+  async quoteUpdate(id: bigint, event: "requested" | "accepted" | "declined") {
+    const d = await this.quoteDetails(id)
+    if (!d) return
+    const { urls } = await this.context()
+    await this.send("quote_update_admin", {
+      to: await this.staffRecipients("quote_update_admin"),
+      vars: {
+        ...d.vars,
+        "quote.event": { requested: "new request", accepted: "accepted", declined: "declined" }[event],
+        "quote.note": d.q.customerNote ?? "",
+        "quote.admin_url": `${urls.admin}/orders/quotations/${d.q.id}`,
+      },
+      order: d.order,
+      recipientType: "staff",
+    })
+  }
+
   // ------------------------------------------------------------------ admin: templates
 
   async listTemplates() {
@@ -527,6 +598,14 @@ export class EmailService {
         "reset.expires_minutes": "60",
         "staff.name": "Rahim",
         "staff.email": "rahim@example.com",
+        "quote.number": "Q-000012",
+        "quote.total": money(30900),
+        "quote.valid_until": "15 Oct 2026",
+        "quote.terms": "Half in advance, the rest on delivery.",
+        "quote.url": `${urls.storefront}/account/quotes/Q-000012`,
+        "quote.event": "accepted",
+        "quote.note": "",
+        "quote.admin_url": `${urls.admin}/orders/quotations`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },

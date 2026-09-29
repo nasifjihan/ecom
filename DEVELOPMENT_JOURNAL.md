@@ -2881,3 +2881,107 @@ Shops can now sell to businesses. A customer applies for a business account from
 - **Listings:** product lists and cards don't show bulk prices, only the product page does.
 - **Order lines:** the bulk price used isn't recorded as such on the order line (the unit price is).
 - **Notifications:** no email or SMS when an application is approved or rejected; the customer sees the result in their account.
+
+## ✅ BATCH #33 (part 2) — Quotations (2026-09-29)
+Staff can send customers a price quote, customers accept or decline it in their account, and staff turn an accepted quote into an order at the agreed prices. Approved business accounts can also ask for a quote straight from their cart.
+
+### 33.9 Data (migration `quotations`)
+- **`Quotation`:**
+  - `number` (Q-000001, per store), customer, storefront;
+  - `status`, `validUntil`, `terms` (the customer sees them), `staffNote` (staff only), `customerNote` (what the customer wrote when asking or answering);
+  - `discount` and `deliveryFee` (fixed amounts), `subtotal`, `total`;
+  - `orderId` once it's an order;
+  - `sentAt`, `respondedAt`, `createdById`.
+- **`QuotationItem`:** product, option, name, SKU, qty, `unitPrice` (agreed), `listPrice` (what the customer would normally pay), `lineTotal`.
+
+### 33.10 Rules (`quotation.rules.ts`)
+- **Statuses:**
+  - REQUESTED: the customer asked from their cart;
+  - DRAFT: staff are preparing it, and the customer can't see it;
+  - SENT: the customer can answer until the end of `validUntil`, Dhaka time; after that it reads EXPIRED (worked out on read, not stored);
+  - ACCEPTED, DECLINED, ORDERED, CANCELLED.
+- **Editing:** a quote that was sent or answered goes back to DRAFT and must be sent again; a request stays a request until sent.
+- **Sending:** allowed from requested, draft or sent (sending again). If no date is set, or the date has passed, the quote is valid for 14 days.
+- **Ordering:** allowed from accepted, or sent and not expired. Otherwise the reason is given ("expired, send it again", "declined", "already an order", "send it first").
+- **Totals:** lines at the agreed prices, minus the discount (never more than the items), plus delivery. The quote also shows how far below the customer's normal prices it is.
+
+### 33.11 API
+- **Staff, under `/api/admin/quotations`** (`orders.view` to look, `orders.create` to change):
+  - the list has status counts, including EXPIRED, and search by number, customer or business;
+  - `preview` gives names and the customer's normal prices (business and bulk prices included). A product that's gone is refused; low stock only adds a note;
+  - create, change, send (emails the customer), cancel, and delete a draft that was never sent.
+- **Discount limit:** lower prices plus the discount together may not go past the staff member's role limit (the same limit as manual orders).
+- **Customers, under `/api/storefront/account/quotes`:**
+  - my quotes (drafts, and cancelled quotes never sent, stay hidden);
+  - one quote;
+  - `request`: approved business accounts only, priced at their current prices, emails staff;
+  - `respond`: accept or decline with a note, emails staff.
+- **Emails:**
+  - "Price quote" goes to the customer, with the lines and totals and a button to the quote;
+  - "Quote request or answer" goes to staff: the template's recipients, else the owners;
+  - both can be edited under Settings → Emails like the others.
+
+### 33.12 Quote → order
+- **Request:** `POST /api/admin/orders/manual` takes `quotationId`.
+- **What the order takes from the quote:** the customer, storefront, lines and quantities, the agreed unit prices, and the discount as a fixed amount. The discount isn't checked against the role limit again, since it was checked when the quote was saved.
+- **What doesn't apply:** coupons and promotions. Stock and delivery work as usual.
+- **Mechanics:**
+  - `quoteOrder` takes `unitPrices`, which replace the shop's prices for those lines. A price below normal shows the normal price as the compare-at price, and flash-sale and bulk prices don't apply;
+  - the quote is claimed first, so two people can't make it into two orders; it's handed back if the order fails (for example, stock ran out);
+  - it then records the order id, and the order history says "From quotation Q-…";
+  - the form's live pricing lists a quote that can't become an order as a problem, instead of failing.
+
+### 33.13 Store admin
+- **Orders → Quotations:** status tabs with counts, search, the total and valid-until date, and links to the order.
+- **Quote editor** (new and existing):
+  - customer search;
+  - products at the customer's normal price, which you change per line. Prices follow the normal price as quantities change until you type one;
+  - quantity, "৳X less each", and stock notes;
+  - discount, delivery charge, valid until, terms, staff note;
+  - a summary with the total and "% less than normal prices", and a note that VAT is added on the order;
+  - Save, Save and send, Cancel quote, Delete draft, Make order, Print. Print uses a plain document layout: store name, customer, lines, totals, terms.
+- **New order `?quotation=ID`:**
+  - fills in the customer, lines, delivery charge, storefront and the customer's note;
+  - locks products, quantities, prices, discount, coupon and promotions;
+  - shows "From quote Q-…".
+- **Shared search boxes:** the customer and product searches moved to `components/orders/order-pickers.tsx` for both forms.
+
+### 33.14 Storefront
+- **Account → Quotes:**
+  - the list, with status and valid-until date;
+  - each quote: its lines (quoted price, with the normal price struck through), discount, delivery, total and savings, the VAT note and terms;
+  - Accept or Decline with an optional note while it's open;
+  - once ordered, a link to the order.
+- **Cart:** "Ask for a quote instead", with an optional note, for approved business accounts. It opens the new quote.
+- **Bangla:** 37 new strings.
+
+### 33.15 Checked
+- **Tests:** 579/579 API tests. New ones:
+  - 7 unit tests: expiry and end of day, allowed moves, why a quote can't become an order, totals, numbering;
+  - 7 database tests:
+    - normal prices with business tiers, and low-stock notes;
+    - a draft hidden until sent;
+    - the role's discount limit;
+    - accept, then a change goes back to draft;
+    - quote → order at 840 each, and never twice;
+    - expiry blocks answers and orders, and sending again renews the date;
+    - requests from business accounts only.
+- **Chromium, run twice with no errors:**
+  - a business customer asked for a quote on 12 shirts from the cart, with a note;
+  - staff opened the request, set ৳2,990 each, ৳150 delivery and terms, then saved and sent;
+  - the customer saw "Waiting for your answer" and accepted with a note;
+  - staff printed it and pressed Make order, which filled in the customer, the locked lines and the customer's note; they chose pickup and created the order;
+  - the order line is 12 × 2,990, the quote shows Ordered with the order number, and the customer's quote links to the order;
+  - each run created three emails: request to staff, quote to customer, acceptance to staff.
+- **Found and fixed during the check:**
+  - quote totals left out VAT, which the order adds, so the editor, print, customer page and email now say VAT is added on the order;
+  - the form's live pricing failed once the quote was ordered, and now reports it as a problem instead;
+  - the promotions switch showed on quote orders, where promotions never apply, so it's hidden there;
+  - the printed heading had no store name, which the quote API now provides.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.16 Not done
+- **VAT:** quotes don't work out VAT (it depends on the delivery address); the order adds it.
+- **PDF:** no PDF quote attached to the email; staff can print or save as PDF from the browser.
+- **Quote changes:** customers can't propose changes except in the note, and there's no history of each version sent.
+- **Paying from the quote:** customers can't pay a quote themselves online; staff make the order.
