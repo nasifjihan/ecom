@@ -116,6 +116,7 @@ const productCreateSchema = z.object({
     .nullable()
     .optional(),
   costPrice: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0, { message: "Cost can't be negative" }).nullable()),
+  commissionRate: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0).max(100, { message: "Up to 100%" }).nullable()),
   salePriceStartAt: z.string().optional().or(z.literal("")),
   salePriceEndAt: z.string().optional().or(z.literal("")),
   stockQty: z.coerce.number().int().min(0, { message: "Stock cannot be negative" }).optional(),
@@ -179,6 +180,7 @@ export default function NewProductPage() {
     regularPrice: null,
     salePrice: null,
     costPrice: null,
+    commissionRate: null,
     salePriceStartAt: "",
     salePriceEndAt: "",
     stockQty: 0,
@@ -351,6 +353,7 @@ export default function NewProductPage() {
         regularPrice: values.regularPrice ?? null,
         salePrice: values.salePrice ?? null,
         costPrice: values.costPrice ?? null,
+        commissionRate: values.commissionRate ?? null,
         salePriceStartAt: values.salePriceStartAt || null,
         salePriceEndAt: values.salePriceEndAt || null,
         manageStock: values.manageStock,
@@ -825,6 +828,19 @@ export default function NewProductPage() {
                             </FormControl>
                             <FormMessage>{methods.formState.errors.costPrice?.message}</FormMessage>
                             <CostMargin cost={watch("costPrice")} price={watch("salePrice") ?? watch("regularPrice")} />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="commissionRate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sales commission (%)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={0} max={100} step="0.5" placeholder="Empty: the category's or the store's rate" {...field} value={watch("commissionRate") ?? ""} />
+                            </FormControl>
+                            <FormMessage>{methods.formState.errors.commissionRate?.message}</FormMessage>
                           </FormItem>
                         )}
                       />

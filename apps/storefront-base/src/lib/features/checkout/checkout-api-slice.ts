@@ -201,6 +201,8 @@ export type PlaceOrderBody = {
   termsAgreed?: boolean;
   /** Signed-in customers: pay what the shop allows from the wallet. */
   useWallet?: boolean;
+  /** A salesperson's share-link code: the order is credited to them. */
+  salesCode?: string;
 };
 
 export type OrderResult = {

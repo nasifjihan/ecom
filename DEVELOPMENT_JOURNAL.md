@@ -2985,3 +2985,91 @@ Staff can send customers a price quote, customers accept or decline it in their 
 - **PDF:** no PDF quote attached to the email; staff can print or save as PDF from the browser.
 - **Quote changes:** customers can't propose changes except in the note, and there's no history of each version sent.
 - **Paying from the quote:** customers can't pay a quote themselves online; staff make the order.
+
+## ✅ BATCH #33 (part 3) — Sales team commission (2026-09-29)
+Staff who sell earn commission on the orders credited to them. The rate is the product's, else its category's, else the store's default, plus each salesperson's extra %. Commission is earned when the order is delivered and paid. There are monthly targets, payouts, a Sales team page for managers and a My commission page for each salesperson.
+
+### 33.17 Data (migration `sales_commission`)
+- **`SalesSettings`:** `enabled` (off by default) and `defaultRate` %.
+- **`AdminUser`:** `isSalesperson`, `commissionExtraPct`, and `salesCode` (unique per store; used in share links).
+- **Rates:** `Product.commissionRate` and `Category.commissionRate` (null means fall back).
+- **`Order.salespersonId`:** who the order is credited to.
+- **`SalesCommission`** (one per order):
+  - `base` (items after discounts) and `amount`;
+  - `lines`: per product, its base, rate and where the rate came from;
+  - `paidOutAt`, `paidOutById`.
+- **`SalesTarget`:** `salespersonId`, `month` (YYYY-MM), `amount`.
+- **Permission area `commissions`** (view / edit):
+  - Finance gets edit; Order Manager, Reports and Viewer get view;
+  - roles a store made get view if they can view reports.
+
+### 33.18 Rules (`sales/commission.rules.ts`)
+- **Rate:** the product's rate, else the rate of its first category that has one (main category first), else the store default, plus the salesperson's extra.
+- **Base:** each line's value minus its share of the order's discounts (shared by value, with rounding kept in the last line).
+- **Fixed when credited:** commission is worked out when the order is credited, so later rate changes don't touch past orders.
+- **State** is read from the order each time, not stored:
+  - PENDING until the order is delivered or completed AND paid (or partly refunded);
+  - then EARNED, dated the later of delivery and payment;
+  - PAID once paid out;
+  - CANCELLED (nothing) when the order is cancelled, failed or fully refunded.
+- **Refunds:** they take back their share of the amount and the base.
+- **Why read, not stored:** no hooks were needed in the places an order becomes delivered or paid (status changes, couriers, payment checks).
+- **Months:** in Dhaka time. Target progress is sales (the earned base) ÷ target.
+
+### 33.19 Who gets credit
+- **Staff orders:** the salesperson picked on the New order page; "Nobody"; or by default the person entering it, if they're on the sales team.
+- **Quotes:** orders made from a quote default to whoever made the quote.
+- **Online orders:** the storefront remembers `?sp=CODE` from a share link for 30 days and sends it with the order. The code is ignored if it isn't an active salesperson's.
+- **Changing it:** staff with commission edit rights can change an order's salesperson on the order page, until its commission is paid out.
+- **Commission switched off:** the salesperson is recorded, but no commission.
+- **Never blocks the order:** a failure while crediting is logged and the order goes ahead.
+
+### 33.20 API (`/api/admin/sales`)
+- **Team page:** `team?month` returns salespeople with sales, earned, waiting, to pay, target and progress, plus staff not on the team.
+- **Changes:** `settings`, `salespeople/:id` (join or leave, extra %, code; a code is made when someone joins), `salespeople/:id/target`.
+- **Payout:** `salespeople/:id/payout` marks everything earned up to the end of the month as paid out.
+- **Lists:** `commissions?month&salespersonId&state`.
+- **For forms:** `salespeople` (names for the order form), and `orders/:id` (read or change an order's salesperson).
+- **`me?month`:** my commission.
+- **Sign-in data:** the staff sign-in data now says whether someone is a salesperson, so only salespeople see "My commission".
+
+### 33.21 Store admin
+- **Orders → Sales team:**
+  - a month picker;
+  - commission on/off and the default rate;
+  - totals: sales, earned, waiting, to pay out;
+  - a salespeople table: share-link code (click to copy the link), target with progress bar, sales, earned, waiting, to pay, and Pay out / Edit / Remove;
+  - "Add someone from staff";
+  - a commission-by-order list filtered by salesperson and state. Hovering an amount shows each line: base × rate, and where the rate came from.
+- **My commission** (in the menu for salespeople only): the same figures for me, my target progress, my share link with Copy, and my orders.
+- **Rate fields:** "Sales commission (%)" on the product Pricing tab (edit and new) and on the category form.
+- **Order page:** a Salesperson card with the commission, its state and the rates, and Change.
+- **New order:** a Salesperson field ("Me, if I'm on the sales team" / "Whoever made the quote", Nobody, or a name).
+- **Menu:** nav items can be `salesOnly` (shown only to salespeople).
+
+### 33.22 Checked
+- **Tests:** 594/594 API tests. New ones:
+  - 8 unit tests: rate order, discount sharing, states, refunds, Dhaka months, target progress;
+  - 7 database tests:
+    - crediting whoever enters the order, with the three rate sources and the extra;
+    - picking a salesperson or nobody, and clerks off the team;
+    - earned only when delivered and paid, refunds, cancelled;
+    - the team's month with targets;
+    - payout, and then no reassigning;
+    - share-link codes (made automatically, unique, checked, dropped when someone leaves the team);
+    - commission switched off.
+- **Chromium:**
+  - the owner switched commission on at 5%, joined the team, and set 1% extra, code OWNER1 and a ৳20,000 target;
+  - they set the denim shirt to 10%;
+  - a shopper came by `/?sp=owner1`, bought the shirt and the linen shirt and paid cash on delivery;
+  - the order was credited to the owner: ৳645.30 on ৳7,680 (11% and 6%), shown on the order page as Waiting;
+  - after delivery and payment, Sales team and My commission showed it earned at 38.4% of target;
+  - Pay out marked it paid;
+  - no page errors.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.23 Not done
+- **Team bonuses:** no bonus for reaching a target (targets show progress only), and no split commission between two people.
+- **Category rates:** a parent category's rate isn't inherited.
+- **Payouts:** a payout isn't recorded in Purchasing → Accounts as money out; it only marks the commission paid.
+- **Share links:** the link is checked only when the order is placed (last link used within 30 days wins); there's no report of visits per link.

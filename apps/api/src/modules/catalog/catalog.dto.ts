@@ -125,6 +125,8 @@ const BaseCreateProductDto = z.object({
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
   /** What one unit cost the shop; purchases update it. */
   costPrice: z.coerce.number().nonnegative().optional().nullable(),
+  /** Sales commission on this product, in % (empty: its category's, else the store's). */
+  commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   salePriceStartAt: z.coerce.date().optional().nullable(),
   salePriceEndAt: z.coerce.date().optional().nullable(),
   manageStock: z.boolean().default(true),
@@ -183,6 +185,8 @@ export const CreateCategoryDto = z.object({
   bannerUrl: z.string().max(500).optional().nullable(),
   description: z.string().max(5000).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   displayMode: z.string().default("products"),
+  /** Sales commission on products in this category, in % (empty: the store's default). */
+  commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   menuIncluded: z.boolean().default(true),

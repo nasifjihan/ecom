@@ -50,6 +50,7 @@ import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { adminWarehousesRouter } from "./modules/stock";
 import { adminStorefrontsRouter } from "./modules/storefronts";
+import { adminSalesRouter } from "./modules/sales";
 import { adminQuotationsRouter, adminWholesaleRouter, storefrontQuotesRouter, storefrontWholesaleRouter } from "./modules/wholesale";
 import { adminLoyaltyRouter, storefrontLoyaltyRouter } from "./modules/loyalty";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
@@ -175,6 +176,7 @@ export function buildApp(): Express {
   app.use("/api/admin/warehouses", adminWarehousesRouter);            // warehouses, stock per warehouse, transfers, order ship-from
   app.use("/api/admin/storefronts", adminStorefrontsRouter);          // storefronts, their web addresses, product range and prices
   app.use("/api/admin/quotations", adminQuotationsRouter);            // price quotes to customers
+  app.use("/api/admin/sales", adminSalesRouter);                      // sales team: commission, targets, payouts
   app.use("/api/admin/wholesale", adminWholesaleRouter);              // business accounts, bulk prices, pricing by margin
   app.use("/api/storefront/wholesale", storefrontWholesaleRouter);    // apply for a business account, bulk prices on a product
   app.use("/api/admin/reports", adminReportsRouter);                  // sales and profit, products, discounts, customers, couriers, returns, tax, stock value

@@ -7,6 +7,7 @@ import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
 import { getSite, getSlotPromotions, hexToHslVar, pageLocale } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
+import { SalesCodeCapture } from "@/lib/sales-code";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
 
@@ -205,6 +206,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <CartDrawerSlot storeName={storeName} />
           <EntryPopup />
           <ReferralCapture />
+          <SalesCodeCapture />
         </Providers>
       </body>
     </html>

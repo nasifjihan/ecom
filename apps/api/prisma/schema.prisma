@@ -119,6 +119,7 @@ model Store {
   qualityGrades        QualityGrade[]
   loyaltySettings      LoyaltySettings?
   wholesaleSettings    WholesaleSettings?
+  salesSettings        SalesSettings?
   businessAccounts     BusinessAccount[]
   quotations           Quotation[]
   loyaltyLevels        LoyaltyLevel[]
@@ -263,31 +264,41 @@ model PermissionAssignment {
 }
 
 model AdminUser {
-  id              BigInt           @id @default(autoincrement())
-  storeId         BigInt
-  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email           String
-  passwordHash    String
-  name            String
-  phone           String?
-  avatarUrl       String?
-  roleId          BigInt
-  role            Role             @relation(fields: [roleId], references: [id])
-  status          String           @default("active")
+  id                 BigInt            @id @default(autoincrement())
+  storeId            BigInt
+  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email              String
+  passwordHash       String
+  name               String
+  phone              String?
+  avatarUrl          String?
+  roleId             BigInt
+  role               Role              @relation(fields: [roleId], references: [id])
+  status             String            @default("active")
   /// Storefronts this staff member works on (empty: all): their orders, reports and storefront content.
-  storefrontIds   BigInt[]         @default([])
-  twoFactorSecret String?
-  lastLoginAt     DateTime?
-  lastLoginIp     String?
-  auditLogs       AuditLog[]
-  orderStatusLogs OrderStatusLog[]
-  ordersCreated   Order[]          @relation("OrderCreatedBy")
-  refunds         Refund[]
-  authoredPosts   BlogPost[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  storefrontIds      BigInt[]          @default([])
+  twoFactorSecret    String?
+  lastLoginAt        DateTime?
+  lastLoginIp        String?
+  auditLogs          AuditLog[]
+  orderStatusLogs    OrderStatusLog[]
+  ordersCreated      Order[]           @relation("OrderCreatedBy")
+  /// Sales team (Batch 33): earns commission on the orders credited to them.
+  isSalesperson      Boolean           @default(false)
+  /// Added to the product / category / store rate, in %.
+  commissionExtraPct Decimal           @default(0) @db.Decimal(5, 2)
+  /// For share links (?sp=CODE): online orders from the link are credited to them.
+  salesCode          String?
+  ordersSold         Order[]           @relation("OrderSalesperson")
+  commissions        SalesCommission[]
+  salesTargets       SalesTarget[]
+  refunds            Refund[]
+  authoredPosts      BlogPost[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   @@unique([storeId, email])
+  @@unique([storeId, salesCode])
 }
 
 model AuditLog {
@@ -739,6 +750,8 @@ model Category {
   imageUrl       String?
   bannerUrl      String?
   description    String?           @db.Text
+  /// Sales commission on products in this category, in % (null: the store's default).
+  commissionRate Decimal?          @db.Decimal(5, 2)
   displayMode    String            @default("products")
   sortOrder      Int               @default(0)
   isActive       Boolean           @default(true)
@@ -899,6 +912,8 @@ model Product {
   supplierCost          Decimal?               @db.Decimal(12, 2)
   /// What one unit cost the shop (average landed cost; purchases update it). Options have their own.
   costPrice             Decimal?               @db.Decimal(12, 2)
+  /// Sales commission on this product, in % (null: its category's, else the store's default).
+  commissionRate        Decimal?               @db.Decimal(5, 2)
   purchaseItems         PurchaseItem[]
   supplierSku           String?
   averageRating         Decimal                @default(0) @db.Decimal(3, 2)
@@ -1391,6 +1406,10 @@ model Order {
   /// Staff member who created the order by hand (null for storefront orders).
   createdByAdminId       BigInt?
   createdByAdmin         AdminUser?           @relation("OrderCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  /// The salesperson the order is credited to (commission).
+  salespersonId          BigInt?
+  salesperson            AdminUser?           @relation("OrderSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
+  commission             SalesCommission?
   giftCardUsed           String?
   giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
   supplierOrderId        String?
@@ -2940,4 +2959,50 @@ model QuotationItem {
   sortOrder   Int       @default(0)
 
   @@index([quotationId])
+}
+
+// ============================================================ SALES TEAM COMMISSION (Batch 33)
+
+model SalesSettings {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt   @unique
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(false)
+  /// Commission on products with no product or category rate, in %.
+  defaultRate Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt   DateTime @updatedAt
+}
+
+/// A salesperson's commission on one order, worked out when the order was credited to them.
+/// Whether it's earned is read from the order: delivered and paid, less refunds; nothing if cancelled.
+model SalesCommission {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  orderId       BigInt    @unique
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  salespersonId BigInt
+  salesperson   AdminUser @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  /// Items after discounts the commission is on.
+  base          Decimal   @db.Decimal(14, 2)
+  amount        Decimal   @db.Decimal(12, 2)
+  /// Per line: name, base, rate and where the rate came from.
+  lines         Json
+  paidOutAt     DateTime?
+  paidOutById   BigInt?
+  createdAt     DateTime  @default(now())
+
+  @@index([storeId, salespersonId])
+}
+
+/// Sales a salesperson aims for in a month (items after discounts on delivered, paid orders).
+model SalesTarget {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt
+  salespersonId BigInt
+  salesperson   AdminUser @relation(fields: [salespersonId], references: [id], onDelete: Cascade)
+  /// YYYY-MM
+  month         String
+  amount        Decimal   @db.Decimal(14, 2)
+
+  @@unique([salespersonId, month])
 }

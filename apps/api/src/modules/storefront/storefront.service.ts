@@ -10,7 +10,7 @@
  * recomputed here.
  */
 import { Prisma, type Coupon } from "@prisma/client";
-import { prisma, tx } from "../../config";
+import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext, tr } from "../../core";
 import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
@@ -40,6 +40,7 @@ import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.
 import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
 import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
+import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -1396,6 +1397,15 @@ export class StorefrontService {
       historyNote: `Order placed on storefront (${quote.gateway!.name}${transfer ? `, transaction ${transfer.transactionId} to verify` : ""})`,
     });
 
+    // A salesperson's share link: credit the order to them (never blocks the order).
+    if (dto.salesCode) {
+      try {
+        const sp = await salespersonByCode(prisma, this.storeId, dto.salesCode);
+        if (sp) await creditOrder(prisma, this.storeId, order.id, sp);
+      } catch (err) {
+        logger.warn({ err, orderId: String(order.id) }, "Could not credit the order to a salesperson");
+      }
+    }
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
 
     const { grandTotal } = quote.totals;

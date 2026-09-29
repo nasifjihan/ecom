@@ -8,12 +8,13 @@
  *   POST /api/admin/orders/manual         create the order
  */
 import { z } from "zod";
-import { prisma } from "../../config";
+import { logger, prisma } from "../../config";
 import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
 import { StorefrontService, type OrderDraft } from "../storefront/storefront.service";
 import { assertStaffStorefront, defaultStorefrontId, staffStorefronts } from "../storefronts/storefronts.context";
 import { emitOrderPlaced } from "../notifications";
 import { orderBlocker } from "../wholesale/quotation.rules";
+import { creditOrder } from "../sales/commission.ledger";
 
 export const ORDER_SOURCES = ["website", "phone", "facebook", "instagram", "whatsapp", "messenger", "walk_in", "other"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
@@ -84,6 +85,8 @@ const Base = z.object({
   useWallet: z.boolean().default(false),
   /** Make the order from this quotation: its customer, lines, agreed prices and discount. */
   quotationId: z.coerce.bigint().positive().optional(),
+  /** The salesperson credited (commission); null: nobody. Default: the quote's maker or whoever enters it, if on the sales team. */
+  salespersonId: z.coerce.bigint().positive().nullable().optional(),
 });
 
 export const ManualOrderQuoteDto = Base;
@@ -373,6 +376,7 @@ export class ManualOrderService {
     if (fromQuote) {
       await prisma.quotation.update({ where: { id: fromQuote.id }, data: { orderId: order.id } });
     }
+    await this.credit(order.id, dto.salespersonId, fromQuote?.createdById ?? adminId);
     emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id), notifyCustomer: dto.notifyCustomer, notifyStaff: false });
     return {
       id: String(order.id),
@@ -457,6 +461,23 @@ export class ManualOrderService {
       email: c.email,
       orderCount: c.orderCount,
     }));
+  }
+
+  /**
+   * Credits the order to a salesperson: the one picked, else `fallback` (the quote's maker or whoever
+   * entered it) when they're on the sales team. Never blocks the order.
+   */
+  private async credit(orderId: bigint, picked: bigint | null | undefined, fallback: bigint | null) {
+    try {
+      let id = picked;
+      if (id === undefined) {
+        const f = fallback ? await prisma.adminUser.findFirst({ where: { id: fallback, storeId: this.storeId, isSalesperson: true }, select: { id: true } }) : null;
+        id = f?.id ?? null;
+      }
+      if (id) await creditOrder(prisma, this.storeId, orderId, id);
+    } catch (err) {
+      logger.warn({ err, orderId: String(orderId) }, "Could not credit the order to a salesperson");
+    }
   }
 
   /** The store admin behind this session; null for a platform admin (not an AdminUser row). */

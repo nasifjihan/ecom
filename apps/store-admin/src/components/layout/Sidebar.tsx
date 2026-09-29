@@ -74,7 +74,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { can, ready } = useCan();
   // Only the pages this person may open (nothing until their permissions have loaded).
   const navSections = ready
-    ? NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => can(i.perm)) })).filter((s) => s.items.length > 0)
+    ? NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => can(i.perm) && (!i.salesOnly || !!meData?.user?.isSalesperson)) })).filter((s) => s.items.length > 0)
     : [];
 
   const isActive = (href: string) => {

@@ -13,6 +13,8 @@ import {
   Factory,
   FileText,
   ClipboardList,
+  Trophy,
+  Coins,
   HandCoins,
   Gift,
   HelpCircle,
@@ -62,6 +64,8 @@ export interface NavItem {
   icon: ComponentType<{ className?: string }>;
   /** Permission needed to open the page; none = every signed-in staff member. */
   perm?: string;
+  /** Shown only to staff on the sales team. */
+  salesOnly?: boolean;
 }
 
 export interface NavSection {
@@ -83,6 +87,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/orders", label: "Orders", icon: ShoppingCart, perm: "orders.view" },
       { href: "/orders/new", label: "New order", icon: PackagePlus, perm: "orders.create" },
       { href: "/orders/quotations", label: "Quotations", icon: ClipboardList, perm: "orders.view" },
+      { href: "/orders/sales-team", label: "Sales team", icon: Trophy, perm: "commissions.view" },
+      { href: "/my-commission", label: "My commission", icon: Coins, salesOnly: true },
       { href: "/orders/shipments", label: "Shipments", icon: Truck, perm: "orders.view" },
       { href: "/orders/returns", label: "Returns", icon: Undo2, perm: "orders.view" },
       { href: "/orders/payments", label: "Payments to verify", icon: CreditCard, perm: "payments.view" },

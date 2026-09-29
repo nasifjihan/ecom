@@ -70,6 +70,7 @@ import { passwordProblem } from "@/app/account/_components";
 import { useCartPriceCheck } from "@/lib/cart-prices";
 import { useAvailableCouponsQuery } from "@/lib/promotions";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
+import { salesCode } from "@/lib/sales-code";
 
 const CURRENCY = "BDT";
 
@@ -541,6 +542,7 @@ export default function CheckoutPage() {
         currency: CURRENCY,
         termsAgreed: true,
         useWallet: walletUsed > 0,
+        salesCode: salesCode(),
       }).unwrap();
 
       toast.success(t("Order placed!"), { description: t("Order #{ref} created successfully", { ref: result.orderRef }) });

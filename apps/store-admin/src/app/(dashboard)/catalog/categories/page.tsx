@@ -96,6 +96,7 @@ const categorySchema = z.object({
   descriptionBn: z.string().max(5000).optional().or(z.literal("")),
   imageUrl: z.string().max(500).optional().or(z.literal("")),
   displayMode: z.enum(["products", "children", "both"]).default("products"),
+  commissionRate: z.string().regex(/^(\d{1,2}(\.\d{1,2})?|100)?$/, "0–100").optional().or(z.literal("")),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().or(z.literal("")),
@@ -213,6 +214,7 @@ export default function CategoriesPage() {
     descriptionBn: "",
     imageUrl: "",
     displayMode: "products",
+    commissionRate: "",
     sortOrder: 0,
     isActive: true,
     seoTitle: "",
@@ -247,6 +249,7 @@ export default function CategoriesPage() {
           descriptionBn: banglaOf(editing).description ?? "",
           imageUrl: editing.imageUrl || "",
           displayMode: (editing.displayMode as any) || "products",
+          commissionRate: editing.commissionRate == null ? "" : String(Number(editing.commissionRate)),
           sortOrder: editing.sortOrder ?? 0,
           isActive: editing.isActive !== false,
           seoTitle: editing.seoTitle || "",
@@ -268,6 +271,7 @@ export default function CategoriesPage() {
         translations: bnTexts({ name: values.nameBn, description: values.descriptionBn }),
         imageUrl: values.imageUrl || null,
         displayMode: values.displayMode,
+        commissionRate: values.commissionRate ? Number(values.commissionRate) : null,
         sortOrder: values.sortOrder,
         isActive: values.isActive,
         seoTitle: values.seoTitle || null,
@@ -656,6 +660,20 @@ export default function CategoriesPage() {
                             <SelectItem value="both">Both Products & Children</SelectItem>
                           </Select>
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={control}
+                    name="commissionRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sales commission (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} max={100} step="0.5" placeholder="Empty: the store's default" {...field} />
+                        </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

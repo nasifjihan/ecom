@@ -103,6 +103,8 @@ export const PlaceOrderDto = z.object({
   customerNote: safeText(2000).optional(),
   /** Signed-in customers: pay what the store allows from the wallet balance. */
   useWallet: z.boolean().optional(),
+  /** A salesperson's share-link code (?sp=CODE): the order is credited to them. */
+  salesCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{3,20}$/).optional().or(z.literal("")),
   termsAgreed: z.literal(true, { errorMap: () => ({ message: "You must accept the terms" }) }),
 });
 export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;

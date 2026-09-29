@@ -12,6 +12,7 @@ import { AreaSelects, type AreaValue } from "@/components/orders/area-selects";
 import { CustomerPicker, ProductPicker, taka, useDebounced } from "@/components/orders/order-pickers";
 import { useCan } from "@/lib/permissions";
 import { useQuotationQuery } from "@/lib/features/wholesale/quotations-api-slice";
+import { useSalespeopleQuery } from "@/lib/features/sales/sales-api-slice";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { ORDER_SOURCES, type OrderSource } from "@/lib/features/operations/operations-api-slice";
 import {
@@ -65,6 +66,8 @@ export default function NewOrderPage() {
   const [customerNote, setCustomerNote] = useState("");
   const [staffNote, setStaffNote] = useState("");
   const [notify, setNotify] = useState(true);
+  const { data: salespeople = [] } = useSalespeopleQuery();
+  const [salesperson, setSalesperson] = useState("auto");
 
   // Opened from a quotation (?quotation=ID): its customer, lines, prices and discount are used.
   const [quotationId, setQuotationId] = useState<string | null>(null);
@@ -122,8 +125,9 @@ export default function NewOrderPage() {
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
       ...(fromQuote ? { quotationId: fromQuote.id } : {}),
+      ...(salesperson === "auto" ? {} : { salespersonId: salesperson === "none" ? null : salesperson }),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote, salesperson],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -446,6 +450,19 @@ export default function NewOrderPage() {
                     ))}
                   </select>
                 </Field>
+                {salespeople.length > 0 && (
+                  <Field label="Salesperson" htmlFor="order-sp" hint="Who earns the commission on this order.">
+                    <select id="order-sp" className={SELECT} value={salesperson} onChange={(e) => setSalesperson(e.target.value)}>
+                      <option value="auto">{fromQuote ? "Whoever made the quote" : "Me, if I'm on the sales team"}</option>
+                      <option value="none">Nobody</option>
+                      {salespeople.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
                 {storefronts.length > 1 && (
                   <Field label="Storefront" htmlFor="order-sf" hint="Its prices, promotions and delivery charges apply.">
                     <select id="order-sf" className={SELECT} value={storefrontId || (storefronts.find((s) => s.isDefault) ?? storefronts[0])?.id} onChange={(e) => setStorefrontId(e.target.value)}>

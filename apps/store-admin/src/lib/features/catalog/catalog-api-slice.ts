@@ -46,6 +46,8 @@ export interface Product {
   salePrice?: number | null;
   /** What one unit cost the shop (purchases set it to the average). */
   costPrice?: number | null;
+  /** Sales commission on the product, in % (null: its category's or the store's). */
+  commissionRate?: number | null;
   salePriceStartAt?: string | null;
   salePriceEndAt?: string | null;
   manageStock?: boolean;
@@ -122,6 +124,8 @@ export interface Category {
   /** Other languages: `{ bn: { name, description } }`. */
   translations?: { bn?: Record<string, string | null> } | null;
   displayMode?: string;
+  /** Sales commission on products in this category, in % (null: the store's default). */
+  commissionRate?: number | string | null;
   sortOrder?: number;
   isActive?: boolean;
   menuIncluded?: boolean;
@@ -254,6 +258,7 @@ export function fromApiProduct(p: ApiRow): Product {
     regularPrice: num(p.regularPrice),
     salePrice: num(p.salePrice),
     costPrice: num(p.costPrice),
+    commissionRate: num(p.commissionRate),
     weight: num(p.weight),
     length: num(p.length),
     width: num(p.width),

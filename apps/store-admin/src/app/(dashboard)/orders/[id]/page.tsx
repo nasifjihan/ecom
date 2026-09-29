@@ -94,6 +94,7 @@ import { OrderSmsCard } from "@/components/orders/order-sms-card";
 import { ShipsFromCard } from "@/components/orders/ships-from-card";
 import { OrderPayments } from "@/components/orders/order-payments";
 import { useCan } from "@/lib/permissions";
+import { OrderSalesperson } from "@/components/sales/order-salesperson";
 import { openFile } from "@ecom/api-client";
 import { cn } from "@/components/ui";
 
@@ -545,6 +546,8 @@ export default function OrderDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          <OrderSalesperson orderId={orderId} />
 
           <Card className="border-slate-200 shadow-sm dark:border-slate-800">
             <CardHeader className="pb-3">

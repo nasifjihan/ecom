@@ -130,8 +130,13 @@ These are our advantages. Keep them.
 | Cost price on products and options; cost saved on each order line | ✅ | Batch 27: margin shown in the product editor; `OrderItem.unitCost` feeds Batch 28's profit reports |
 | Purchase returns to supplier, purchase orders before goods arrive | ❌ | |
 
-### Sales team (reference 18) — all ❌
-Commission rates (product > category > salesperson extra), monthly targets, "my commission" page; earned when delivered and paid.
+### Sales team (reference 18)
+| Feature | Status | Notes |
+|---|---|---|
+| Commission rates (product > category > store default, + salesperson extra) | ✅ | Batch 33: rates on product and category; fixed when the order is credited |
+| Earned when delivered and paid; refunds and cancellations taken back | ✅ | Batch 33 |
+| Monthly targets, payouts, Sales team page, "My commission" page | ✅ | Batch 33: Orders → Sales team, My commission |
+| Credit from staff orders, quotes and share links (?sp=CODE) | ✅ | Batch 33 |
 
 ### Reports (reference 19)
 | Feature | Status |
@@ -228,6 +233,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
+| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

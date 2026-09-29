@@ -43,6 +43,8 @@ export interface ManualOrderInput {
   notifyCustomer: boolean;
   /** Make the order from this quotation (its customer, lines, agreed prices and discount). */
   quotationId?: string;
+  /** The salesperson credited; null: nobody; left out: the quote's maker or whoever enters it, if on the sales team. */
+  salespersonId?: string | null;
 }
 
 /** Automatic promotions on a priced order (StorefrontService.promotionsView). */
