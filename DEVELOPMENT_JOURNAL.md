@@ -3154,3 +3154,97 @@ Old web addresses now send visitors, and search engines, to the new ones. Staff 
 - **Patterns:** no wildcard or pattern redirects (`/old/*`); each address is listed.
 - **Admin changes:** changes take up to a minute to reach the shop (the middleware's cache).
 - **Staff limits:** redirects apply to the whole store, not per storefront.
+
+## ✅ BATCH #33 (part 5) — Product landing pages (2026-09-29)
+A page for one product at `/lp/{address}`, for Facebook and other ads. It has a big picture, an offer price with a countdown, the page's own blocks, reviews, and an order form on the page itself: name, mobile number, address, cash on delivery. Orders remember their page, so each page shows its visits, orders, sales and conversion.
+
+### 33.32 Data (migration `landing_pages`)
+- **`LandingPage`:**
+  - `slug` (unique per store), `title` (for staff), `status` draft / published, `productId`;
+  - `headline`, `subheadline`, `heroImageUrl` (empty means the product's first photo);
+  - `offerPrice` and `offerEndsAt` (empty means the offer never ends);
+  - `sections` (the same blocks as pages and the homepage);
+  - `showReviews`, `ctaText`, `formTitle`, `maxQty`, `seoTitle`, `metaDesc`, `views`.
+- **`Order.landingPageId`** (indexed); the order's `source` is `"landing"`.
+
+### 33.33 Rules (`landing/landing.rules.ts`)
+- **Offer:** runs until its end time, if it has one. It only ever lowers a price: an offer at or above an option's normal price isn't used.
+- **Name:** the one name field is split into first name and the rest.
+- **Mobile numbers:** must be Bangladeshi (`01[3-9]` + 8 digits, with or without +88, spaces and dashes); saved as `01XXXXXXXXX`.
+- **Conversion:** orders per 100 visits, one decimal.
+
+### 33.34 API
+- **Admin, under `/api/admin/landing-pages`** (Pages permissions: view / create / edit / delete):
+  - list and one page, each with visits, orders, sales and conversion (cancelled and failed orders left out) and a preview key;
+  - create, change, delete. A new address adds a 301 from the old one (`recordMove`), so running ads keep working.
+- **Storefront, under `/api/storefront/landing/:slug`:**
+  - `GET` returns the page with the product and every option at the page's price. A draft opens only with `?preview=` (an HMAC of the store and page).
+  - `POST /view` counts a visit (published pages only).
+  - `POST /quote` returns the unit price, delivery options for the address, and totals.
+  - `POST /order` checks the name and mobile number, then places the order through the checkout's own `quoteOrder` / `createOrder`: stock, delivery zones, VAT and the order email all work as in checkout. Cash on delivery must be switched on. A salesperson's share code (`?sp=`) is credited as in checkout.
+- **The page price is charged by the server:** `quoteOrder` takes the offer as `unitPrices` with a new `unitPricesLowerOnly` flag, whatever the browser sends.
+
+### 33.35 Storefront (`/lp/[slug]`)
+- **Top of the page:** picture, headline, text, stars, the price with the old price struck out and "% off", a countdown (it reloads the page when it runs out), and an "Order now" button that scrolls to the form.
+- **Below that:** the page's blocks, then up to six reviews.
+- **Order form:**
+  - option buttons (sold-out options can't be picked);
+  - quantity, up to the page's limit;
+  - name and mobile number;
+  - division, district and upazila pickers, and the street address;
+  - delivery: the three cheapest options, the cheapest picked, and "Show all N delivery options";
+  - a note;
+  - a live summary: items, delivery, discount, VAT, and the total to pay on delivery.
+  - After ordering, the shopper lands on the usual thank-you page.
+- **Phones:** an order button stays at the bottom of the screen.
+- **Language:** all text is in English and Bangla. A button text left as "Order now" is translated.
+- **Previews:** a draft shows a "Preview" banner.
+- **Fresh data:** the page is never cached. A cached copy kept showing a page after it went back to draft, so offers, stock and drafts now show at once.
+
+### 33.36 Store admin
+- **Online Store → Landing pages:**
+  - totals for visits, orders and sales;
+  - a table with page, address, product and running offer, status (Draft / Live / Product hidden), visits, orders, sales, conversion, and copy link / open / edit / delete.
+- **Editor:**
+  - product search;
+  - headline, text and picture (media library);
+  - offer price, with the normal price shown and a warning when the offer isn't below it;
+  - offer end, with a warning when it's in the past;
+  - the blocks editor;
+  - order-form settings;
+  - name, address and Published;
+  - search and sharing text;
+  - "How it's doing" figures, with a link to the orders.
+  - Drafts get a Preview button.
+- **Orders:** the list's source filter has "Landing page" and reads `?source=` from the address.
+
+### 33.37 Checked
+- **Tests:** 617/617 API tests and 4/4 storefront Bangla tests. New ones:
+  - 5 unit tests: offer, price, name, mobile number, conversion;
+  - 6 database tests:
+    - a draft is hidden, and the preview key opens it;
+    - the address is checked;
+    - offer price, delivery options and totals, and the quantity limit;
+    - no offer above the normal price;
+    - a finished offer isn't used;
+    - form checks, and the order saved with its page, source, split name and cleaned mobile number;
+    - visits, orders, sales and conversion;
+    - a 301 when the address changes, and orders kept when the page is deleted.
+- **Chromium:**
+  - made a page for the white panjabi with an offer of ৳3,490 (normal ৳4,290);
+  - the too-high offer warning appeared;
+  - the draft opened through the preview link with its banner;
+  - after publishing, the empty form showed 3 errors;
+  - picked size 40 and 2 pieces, and filled in the address;
+  - delivery options and VAT appeared; total ৳8,239.75;
+  - the order was saved at 2 × ৳3,490, source "landing", with the page, name Rahim / Uddin and phone 01712345678;
+  - the list showed 2 visits, 1 order, ৳8,240, 50%;
+  - on a phone, in Bangla, nothing was wider than the screen;
+  - no page errors.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.38 Not done
+- **Other payment methods:** only cash on delivery; there's no bKash or card payment on the page.
+- **Several products:** one product per page; no bundles or upsell.
+- **Visit counting:** one per page load. Bots and repeat visits are counted, and there's no ad source (UTM) breakdown.
+- **Theme:** the page keeps the store's header and footer; there's no bare "landing only" layout.

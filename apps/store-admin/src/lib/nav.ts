@@ -56,6 +56,7 @@ import {
   Users,
   Warehouse,
   Zap,
+  Megaphone,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -145,6 +146,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/online-store/theme", label: "Theme", icon: Palette, perm: "online_store.view" },
       { href: "/online-store/menus", label: "Menus", icon: ListTree, perm: "menus.view" },
       { href: "/online-store/storefronts", label: "Storefronts", icon: Store, perm: "online_store.view" },
+      { href: "/online-store/landing-pages", label: "Landing pages", icon: Megaphone, perm: "pages.view" },
       { href: "/online-store/redirects", label: "Redirects", icon: CornerUpRight, perm: "online_store.view" },
     ],
   },

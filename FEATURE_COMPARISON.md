@@ -44,7 +44,7 @@ These are our advantages. Keep them.
 | Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
 | Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
 | Soft delete + "Deleted only" filter, created/updated by | ❌ | Products are hard-deleted |
-| Product landing page `/lp/{slug}` built from blocks | ❌ | Reuse our page builder — cheap win |
+| Product landing page `/lp/{slug}` built from blocks | ✅ | Batch 33: offer price and countdown, blocks, reviews, order form with cash on delivery on the page, visits and conversion per page |
 | Gift box components + Gift Box Builder | ❌ | Unique to the reference |
 | Media: auto WebP + thumbnail, size guidance per slot | 🟡 | Upload works and accepts WebP; no conversion or thumbnails |
 
@@ -233,6 +233,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, gift box builder, landing pages, festivals | Add-ons to sell | L each |
+| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, gift box builder, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

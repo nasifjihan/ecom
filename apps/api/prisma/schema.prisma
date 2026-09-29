@@ -121,6 +121,7 @@ model Store {
   wholesaleSettings    WholesaleSettings?
   salesSettings        SalesSettings?
   redirects            Redirect[]
+  landingPages         LandingPage[]
   notFoundHits         NotFoundHit[]
   businessAccounts     BusinessAccount[]
   quotations           Quotation[]
@@ -881,6 +882,7 @@ model Product {
   categories            ProductCategory[]
   storefronts           ProductStorefront[]
   priceTiers            PriceTier[]
+  landingPages          LandingPage[]
   collections           ProductCollection[]
   images                ProductImage[]
   variants              ProductVariant[]
@@ -1412,6 +1414,9 @@ model Order {
   salespersonId          BigInt?
   salesperson            AdminUser?           @relation("OrderSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
   commission             SalesCommission?
+  /// The landing page the order was placed on.
+  landingPageId          BigInt?
+  landingPage            LandingPage?         @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
   giftCardUsed           String?
   giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
   supplierOrderId        String?
@@ -1439,6 +1444,7 @@ model Order {
   @@index([storeId, createdAt])
   @@index([customerId])
   @@index([paymentStatus])
+  @@index([landingPageId])
 }
 
 model OrderStatusLog {
@@ -3047,4 +3053,41 @@ model NotFoundHit {
 
   @@unique([storeId, path])
   @@index([storeId, lastSeen])
+}
+
+// ============================================================ LANDING PAGES (Batch 33)
+
+/// A page for one product (ads, Facebook posts) at /lp/{slug}: hero, blocks, reviews and an order form.
+model LandingPage {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  slug         String
+  title        String
+  /// draft | published
+  status       String    @default("draft")
+  productId    BigInt
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  headline     String
+  subheadline  String?
+  /// Empty: the product's first image.
+  heroImageUrl String?
+  /// Price each on this page (every option); empty: the normal price.
+  offerPrice   Decimal?  @db.Decimal(12, 2)
+  /// The offer price stops then (a countdown shows until it); empty: no end.
+  offerEndsAt  DateTime?
+  /// Page blocks (the page builder's sections) shown between the hero and the order form.
+  sections     Json      @default("[]")
+  showReviews  Boolean   @default(true)
+  ctaText      String    @default("Order now")
+  formTitle    String?
+  maxQty       Int       @default(10)
+  seoTitle     String?
+  metaDesc     String?
+  views        Int       @default(0)
+  orders       Order[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([storeId, slug])
 }

@@ -91,7 +91,9 @@ export const ORDER_SOURCES = [
   { value: "other", label: "Other" },
 ] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number]["value"];
-export const sourceLabel = (s?: string | null) => ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
+/** Every source an order can have: the ones staff pick, plus landing pages (orders placed on /lp/ pages). */
+export const ALL_ORDER_SOURCES = [...ORDER_SOURCES, { value: "landing", label: "Landing page" }] as const;
+export const sourceLabel = (s?: string | null) => ALL_ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
 
 export interface OrderLine {
   id: string | number;

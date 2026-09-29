@@ -52,6 +52,7 @@ import { adminWarehousesRouter } from "./modules/stock";
 import { adminStorefrontsRouter } from "./modules/storefronts";
 import { adminSalesRouter } from "./modules/sales";
 import { adminRedirectsRouter, storefrontRedirectsRouter } from "./modules/redirects";
+import { adminLandingRouter, storefrontLandingRouter } from "./modules/landing";
 import { adminQuotationsRouter, adminWholesaleRouter, storefrontQuotesRouter, storefrontWholesaleRouter } from "./modules/wholesale";
 import { adminLoyaltyRouter, storefrontLoyaltyRouter } from "./modules/loyalty";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
@@ -180,6 +181,8 @@ export function buildApp(): Express {
   app.use("/api/admin/sales", adminSalesRouter);                      // sales team: commission, targets, payouts
   app.use("/api/admin/redirects", adminRedirectsRouter);              // old addresses sent to new ones; broken links
   app.use("/api/storefront/redirects", storefrontRedirectsRouter);    // the list the storefront middleware uses; hits; not-found log
+  app.use("/api/admin/landing-pages", adminLandingRouter);            // one-product pages for ads, with their visits and orders
+  app.use("/api/storefront/landing", storefrontLandingRouter);        // /lp/{slug}: the page, its order form
   app.use("/api/admin/wholesale", adminWholesaleRouter);              // business accounts, bulk prices, pricing by margin
   app.use("/api/storefront/wholesale", storefrontWholesaleRouter);    // apply for a business account, bulk prices on a product
   app.use("/api/admin/reports", adminReportsRouter);                  // sales and profit, products, discounts, customers, couriers, returns, tax, stock value

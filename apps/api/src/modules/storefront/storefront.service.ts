@@ -173,6 +173,8 @@ export type OrderDraft = {
   useWallet?: boolean;
   /** Agreed prices each (a quotation), by `productId:variantId`; they replace the shop's prices. */
   unitPrices?: Map<string, number>;
+  /** Use unitPrices only where they're lower than the shop's price (a landing page offer). */
+  unitPricesLowerOnly?: boolean;
 };
 
 export type OrderQuote = Awaited<ReturnType<StorefrontService["quoteOrder"]>>;
@@ -190,6 +192,8 @@ export type OrderMeta = {
   transfer?: { transactionId: string; senderNumber: string | null };
   historyNote: string;
   notifyCustomer?: boolean;
+  /** Placed on this landing page (/lp/…). */
+  landingPageId?: bigint | null;
 };
 
 export class StorefrontService {
@@ -1000,6 +1004,7 @@ export class StorefrontService {
         const agreed = input.unitPrices.get(`${q.line.productId}:${q.line.variantId ?? ""}`);
         if (agreed === undefined || !q.priced) continue;
         const normal = q.priced.unitPrice;
+        if (input.unitPricesLowerOnly && agreed >= normal) continue;
         q.priced = {
           ...q.priced,
           unitPrice: agreed,
@@ -1260,6 +1265,7 @@ export class StorefrontService {
           warehouseId,
           ipAddress: null,
           source: meta.source,
+          landingPageId: meta.landingPageId ?? null,
           createdByAdminId: meta.createdByAdminId ?? null,
           billingFirstName: bill.firstName,
           billingLastName: bill.lastName,

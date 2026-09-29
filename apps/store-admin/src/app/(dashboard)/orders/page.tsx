@@ -90,7 +90,7 @@ import {
   type PaymentMethod,
   type ShippingZone,
   PAYMENT_METHOD_META,
-  ORDER_SOURCES,
+  ALL_ORDER_SOURCES,
   sourceLabel,
 } from "@/lib/features/operations/operations-api-slice";
 import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
@@ -192,9 +192,9 @@ export default function OrdersPage() {
   const [filterStaff, setFilterStaff] = useState<string>("");
   const [filterCoupon, setFilterCoupon] = useState(false);
   const [filterShippingZone, setFilterShippingZone] = useState<string>("");
-  const [filterSource, setFilterSource] = useState<string>("");
-  // Storefront filter (the Storefronts page links here with ?storefrontId=); shown with 2+ storefronts.
   const searchParams = useSearchParams();
+  const [filterSource, setFilterSource] = useState<string>(searchParams.get("source") ?? "");
+  // Storefront filter (the Storefronts page links here with ?storefrontId=); shown with 2+ storefronts.
   const [filterStorefront, setFilterStorefront] = useState<string>(searchParams.get("storefrontId") ?? "");
   const { data: storefronts = [] } = useStorefrontOptionsQuery();
   const severalFronts = storefronts.length > 1;
@@ -604,7 +604,7 @@ export default function OrdersPage() {
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
                 <option value="">All sources</option>
-                {ORDER_SOURCES.map((s) => (
+                {ALL_ORDER_SOURCES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
                   </option>
