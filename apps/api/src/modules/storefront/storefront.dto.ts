@@ -38,6 +38,16 @@ const CartLineDto = z.object({
   productId: z.coerce.bigint().positive(),
   variantId: z.coerce.bigint().positive().optional().nullable(),
   qty: z.coerce.number().int().min(1).max(100),
+  /** Part of a gift box the shopper filled (modules/giftboxes): the box itself or an item in it. */
+  box: z
+    .object({
+      key: z.string().trim().min(1).max(40),
+      giftBoxId: z.coerce.bigint().positive(),
+      role: z.enum(["box", "item"]),
+      message: z.string().max(1000).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type CartLineDto = z.infer<typeof CartLineDto>;
 

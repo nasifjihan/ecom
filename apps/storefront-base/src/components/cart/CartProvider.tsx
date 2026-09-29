@@ -33,8 +33,46 @@ export type CartPriceQuote = {
 
 export type CartPriceChange = { item: CartItem; oldPrice: number; newPrice: number };
 
+/**
+ * A gift box the shopper filled (/gift-boxes/{slug}): the box itself (a product, qty 1) and what
+ * goes in it. Checkout sends its lines tagged with the box; the server checks it.
+ */
+export interface CartBox {
+  key: string;
+  giftBoxId: string;
+  name: string;
+  slug: string;
+  message?: string;
+  box: CartItem;
+  items: CartItem[];
+}
+
+/** A line as checkout and the price check send it. */
+export interface CartOrderLine {
+  productId: string;
+  variantId?: string;
+  qty: number;
+  box?: { key: string; giftBoxId: string; role: "box" | "item"; message?: string | null };
+}
+
+/** Every line of the cart for the server: the loose items, then each box's lines tagged with it. */
+export function cartOrderLines(items: CartItem[], boxes: CartBox[]): CartOrderLine[] {
+  const line = (i: CartItem) => ({ productId: i.productId, variantId: i.variantId, qty: i.qty });
+  return [
+    ...items.map(line),
+    ...boxes.flatMap((b) => [
+      { ...line(b.box), box: { key: b.key, giftBoxId: b.giftBoxId, role: "box" as const, message: b.message ?? null } },
+      ...b.items.map((i) => ({ ...line(i), box: { key: b.key, giftBoxId: b.giftBoxId, role: "item" as const } })),
+    ]),
+  ];
+}
+
+/** What one box costs: the box and everything in it. */
+export const boxTotal = (b: CartBox) => [b.box, ...b.items].reduce((s, i) => moneyAdd(s, moneyMul(i.price, i.qty)), 0);
+
 export type CartState = {
   items: CartItem[];
+  boxes: CartBox[];
   subtotal: number;
   itemCount: number;
   totalWeightKG: number;
@@ -46,6 +84,9 @@ type CartContextValue = CartState & {
   closeCart: () => void;
   toggleCart: () => void;
   addItem: (item: Omit<CartItem, "qty"> & { qty?: number }) => void;
+  /** Adds a filled gift box (and opens the cart). */
+  addBox: (box: CartBox) => void;
+  removeBox: (key: string) => void;
   updateQty: (productId: string, variantId: string | undefined, qty: number) => void;
   removeItem: (productId: string, variantId: string | undefined) => void;
   clearCart: () => void;
@@ -57,11 +98,12 @@ type CartContextValue = CartState & {
 const CartContext = React.createContext<CartContextValue | null>(null);
 
 const CART_STORAGE_PREFIX = "cart_";
+const BOX_STORAGE_PREFIX = "cartboxes_";
 const DEFAULT_STORE_ID = "default";
 
 const lineKey = (productId: string, variantId?: string | null) => `${productId}:${variantId ?? ""}`;
 
-function deriveState(items: CartItem[]): CartState {
+function deriveState(items: CartItem[], boxes: CartBox[]): CartState {
   let subtotal = 0;
   let itemCount = 0;
   let totalWeightKG = 0;
@@ -70,7 +112,13 @@ function deriveState(items: CartItem[]): CartState {
     itemCount += it.qty;
     totalWeightKG += (it.weightKG ?? 0) * it.qty;
   }
-  return { items, subtotal, itemCount, totalWeightKG };
+  // A box counts as one item in the cart.
+  for (const b of boxes) {
+    subtotal = moneyAdd(subtotal, boxTotal(b));
+    itemCount += 1;
+    for (const it of [b.box, ...b.items]) totalWeightKG += (it.weightKG ?? 0) * it.qty;
+  }
+  return { items, boxes, subtotal, itemCount, totalWeightKG };
 }
 
 function loadCartFromStorage(storeId: string): CartItem[] {
@@ -83,6 +131,25 @@ function loadCartFromStorage(storeId: string): CartItem[] {
     return parsed;
   } catch {
     return [];
+  }
+}
+
+function loadBoxes(storeId: string): CartBox[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const parsed = JSON.parse(window.localStorage.getItem(`${BOX_STORAGE_PREFIX}${storeId}`) ?? "[]") as CartBox[];
+    return Array.isArray(parsed) ? parsed.filter((b) => b?.key && b.box && Array.isArray(b.items)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBoxes(storeId: string, boxes: CartBox[]) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(`${BOX_STORAGE_PREFIX}${storeId}`, JSON.stringify(boxes));
+  } catch {
+    /* storage disabled — ignore */
   }
 }
 
@@ -103,6 +170,7 @@ export type CartProviderProps = {
 
 export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItems }: CartProviderProps) {
   const [items, setItems] = React.useState<CartItem[]>(() => initialItems ?? []);
+  const [boxes, setBoxes] = React.useState<CartBox[]>([]);
   const [isOpen, setIsOpen] = React.useState(false);
   const storeIdRef = React.useRef(storeId);
 
@@ -117,6 +185,8 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
     }
     const loaded = loadCartFromStorage(storeIdRef.current);
     if (loaded.length > 0) setItems(loaded);
+    const savedBoxes = loadBoxes(storeIdRef.current);
+    if (savedBoxes.length > 0) setBoxes(savedBoxes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -124,7 +194,17 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
     saveCartToStorage(storeIdRef.current, items);
   }, [items]);
 
-  const derived = React.useMemo(() => deriveState(items), [items]);
+  // Skips the first run, so the empty start doesn't overwrite saved boxes before they're loaded.
+  const boxesReady = React.useRef(false);
+  React.useEffect(() => {
+    if (!boxesReady.current) {
+      boxesReady.current = true;
+      return;
+    }
+    saveBoxes(storeIdRef.current, boxes);
+  }, [boxes]);
+
+  const derived = React.useMemo(() => deriveState(items, boxes), [items, boxes]);
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
 
@@ -157,7 +237,28 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
       });
       return touched ? next : prev;
     });
+    // Boxes' lines take the same prices (changes are told once, for the loose items).
+    setBoxes((prev) => {
+      let touched = false;
+      const fix = (it: CartItem) => {
+        const q = byKey.get(lineKey(it.productId, it.variantId));
+        if (!q || (q.price === it.price && (it.compareAtPrice ?? null) === (q.compareAtPrice ?? null))) return it;
+        touched = true;
+        return { ...it, price: q.price, compareAtPrice: q.compareAtPrice ?? null };
+      };
+      const next = prev.map((b) => ({ ...b, box: fix(b.box), items: b.items.map(fix) }));
+      return touched ? next : prev;
+    });
     return changes;
+  }, []);
+
+  const addBox: CartContextValue["addBox"] = React.useCallback((box) => {
+    setBoxes((prev) => [...prev.filter((b) => b.key !== box.key), box]);
+    setIsOpen(true);
+  }, []);
+
+  const removeBox: CartContextValue["removeBox"] = React.useCallback((key) => {
+    setBoxes((prev) => prev.filter((b) => b.key !== key));
   }, []);
 
   const addItem: CartContextValue["addItem"] = React.useCallback((raw) => {
@@ -198,6 +299,7 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
 
   const clearCart: CartContextValue["clearCart"] = React.useCallback(() => {
     setItems([]);
+    setBoxes([]);
   }, []);
 
   const hasItem: CartContextValue["hasItem"] = React.useCallback(
@@ -214,13 +316,15 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
       closeCart: () => setIsOpen(false),
       toggleCart: () => setIsOpen((v) => !v),
       addItem,
+      addBox,
+      removeBox,
       updateQty,
       removeItem,
       clearCart,
       hasItem,
       syncPrices,
     }),
-    [derived, isOpen, addItem, updateQty, removeItem, clearCart, hasItem, syncPrices],
+    [derived, isOpen, addItem, addBox, removeBox, updateQty, removeItem, clearCart, hasItem, syncPrices],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

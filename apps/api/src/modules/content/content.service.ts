@@ -17,6 +17,7 @@ import {
   type RequestContext,
 } from "../../core"
 import { storeLanguages } from "../settings/languages"
+import { recordMove } from "../redirects"
 import { assertStaffStorefront, defaultStorefrontId } from "../storefronts/storefronts.context"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
 import {
@@ -156,10 +157,12 @@ export class ContentService {
   }
 
   async updatePage(id: bigint, d: UpdatePageDto) {
-    await this.getPage(id)
-    return this.uniqueSlug("page", () =>
+    const current = await this.getPage(id)
+    const page = await this.uniqueSlug("page", () =>
       prisma.cmsPage.update({ where: { id }, data: this.pageData(d) }),
     )
+    if (page.slug !== current.slug) await recordMove(prisma, this.storeId, `/${current.slug}`, `/${page.slug}`)
+    return page
   }
 
   async deletePage(id: bigint) {
@@ -271,12 +274,14 @@ export class ContentService {
     const current = await this.getPost(id)
     await this.checkCategory(d.categoryId)
     const firstPublish = d.status === "published" && !current.publishedAt
-    return this.uniqueSlug("post", () =>
+    const post = await this.uniqueSlug("post", () =>
       prisma.blogPost.update({
         where: { id },
         data: { ...d, ...(firstPublish ? { publishedAt: new Date() } : {}) },
       }),
     )
+    if (post.slug !== current.slug) await recordMove(prisma, this.storeId, `/blog/${current.slug}`, `/blog/${post.slug}`)
+    return post
   }
 
   async deletePost(id: bigint) {

@@ -81,7 +81,7 @@ export type OrderDetail = {
   shippingMethodName: string;
   shipping: OrderAddressSummary;
   billing: OrderAddressSummary;
-  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
+  items: { id: string; productId: string | null; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null; giftBox?: { key: string; name: string; message: string | null; role: "box" | "item" } | null }[];
   itemsSubtotal: number;
   discountTotal: number;
   /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */
@@ -152,6 +152,8 @@ export type OrderItemSnapshot = {
   sku?: string;
   variantLabel?: string;
   weightKG?: number;
+  /** Part of a gift box (see cartOrderLines). */
+  box?: { key: string; giftBoxId: string; role: "box" | "item"; message?: string | null };
 };
 
 export type AddressPayload = {

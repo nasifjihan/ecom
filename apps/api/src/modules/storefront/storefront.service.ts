@@ -41,6 +41,7 @@ import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from 
 import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
+import { checkOrderBoxes } from "../giftboxes/giftbox.check";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -173,6 +174,8 @@ export type OrderDraft = {
   useWallet?: boolean;
   /** Agreed prices each (a quotation), by `productId:variantId`; they replace the shop's prices. */
   unitPrices?: Map<string, number>;
+  /** Use unitPrices only where they're lower than the shop's price (a landing page offer). */
+  unitPricesLowerOnly?: boolean;
 };
 
 export type OrderQuote = Awaited<ReturnType<StorefrontService["quoteOrder"]>>;
@@ -190,6 +193,8 @@ export type OrderMeta = {
   transfer?: { transactionId: string; senderNumber: string | null };
   historyNote: string;
   notifyCustomer?: boolean;
+  /** Placed on this landing page (/lp/…). */
+  landingPageId?: bigint | null;
 };
 
 export class StorefrontService {
@@ -648,6 +653,8 @@ export class StorefrontService {
           onSale: priced.compareAtPrice !== null,
           lineSubtotal: round2(priced.price * line.qty),
           weightKG: num(variant?.weight ?? p.weight) * line.qty,
+          /** Set by quoteOrder once the line's gift box is checked. */
+          giftBox: null as { key: string; giftBoxId: string; name: string; message: string | null; role: "box" | "item" } | null,
         },
       };
     });
@@ -944,11 +951,22 @@ export class StorefrontService {
 
   // ------------------------------------------------------------------ checkout
 
+  /**
+   * The day's next order number (YYYYMMDD + 6 digits; numbers are unique across the platform).
+   * A transaction lock makes orders placed at the same moment take turns, so two can't get the
+   * same number; it's held until the order is saved.
+   */
   private async nextOrderNumber(t: Prisma.TransactionClient): Promise<string> {
+    await t.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('order-number'))`;
     const d = new Date();
     const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    const count = await t.order.count({ where: { number: { startsWith: datePart } } });
-    return `${datePart}${String(count + 1).padStart(6, "0")}`;
+    const last = await t.order.findFirst({
+      where: { number: { startsWith: datePart } },
+      orderBy: { number: "desc" },
+      select: { number: true },
+    });
+    const n = last ? Number(last.number.slice(datePart.length)) || 0 : 0;
+    return `${datePart}${String(n + 1).padStart(6, "0")}`;
   }
 
   /** A checkout address with its division/district/upazila names taken from the picked area. */
@@ -989,6 +1007,7 @@ export class StorefrontService {
         const agreed = input.unitPrices.get(`${q.line.productId}:${q.line.variantId ?? ""}`);
         if (agreed === undefined || !q.priced) continue;
         const normal = q.priced.unitPrice;
+        if (input.unitPricesLowerOnly && agreed >= normal) continue;
         q.priced = {
           ...q.priced,
           unitPrice: agreed,
@@ -999,6 +1018,13 @@ export class StorefrontService {
           lineSubtotal: round2(agreed * q.line.qty),
         };
       }
+    }
+    // Gift boxes the shopper filled: each checked, then its lines remember the box.
+    const boxed = await checkOrderBoxes(storeId, input.items);
+    for (const message of boxed.problems) fail(message, "CART_INVALID");
+    for (const q of quoted) {
+      const b = q.line.box ? boxed.boxes.get(q.line.box.key) : undefined;
+      if (b && q.priced) q.priced = { ...q.priced, giftBox: { key: b.key, giftBoxId: String(b.giftBoxId), name: b.name, message: b.message, role: q.line.box!.role } };
     }
     const lines: PricedLine[] = [];
     for (const q of quoted) {
@@ -1249,6 +1275,7 @@ export class StorefrontService {
           warehouseId,
           ipAddress: null,
           source: meta.source,
+          landingPageId: meta.landingPageId ?? null,
           createdByAdminId: meta.createdByAdminId ?? null,
           billingFirstName: bill.firstName,
           billingLastName: bill.lastName,
@@ -1319,9 +1346,13 @@ export class StorefrontService {
                 lineDiscount,
                 lineTax,
                 lineTotal: round2(l.lineSubtotal - lineDiscount + lineTax),
-                meta: l.flash
-                  ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } }
-                  : undefined,
+                meta:
+                  l.flash || l.giftBox
+                    ? {
+                        ...(l.flash ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } } : {}),
+                        ...(l.giftBox ? { giftBox: l.giftBox } : {}),
+                      }
+                    : undefined,
               };
             }),
               ...giftItems,
@@ -1663,6 +1694,7 @@ function orderView(o: OrderWithItems) {
       lineTotal: num(i.lineSubtotal),
       /** A free gift from a promotion (price 0). */
       giftFrom: ((i.meta as { gift?: { promotionName?: string } } | null)?.gift?.promotionName) ?? null,
+      giftBox: ((i.meta as { giftBox?: { key: string; name: string; message: string | null; role: "box" | "item" } } | null)?.giftBox) ?? null,
     })),
     itemsSubtotal: num(o.itemsSubtotal),
     discountTotal: num(o.discountTotal),

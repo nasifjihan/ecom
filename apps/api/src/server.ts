@@ -11,6 +11,7 @@ import { logger, disconnectPrisma, disconnectRedis, redis, prisma } from "./conf
 import { ensureBucket } from "./config/s3";
 import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/notifications";
 import { startCourierSync, stopCourierSync } from "./modules/couriers";
+import { startFestivalReminders, stopFestivalReminders } from "./modules/festivals";
 import { syncLocations } from "./modules/locations";
 
 async function bootstrap() {
@@ -37,6 +38,7 @@ async function bootstrap() {
     startEmailWorker();
     // Background jobs run in the same process as the email sender.
     void startCourierSync();
+    void startFestivalReminders();
   }
 
   const server = app.listen(env.API_PORT, () => {
@@ -62,6 +64,7 @@ async function bootstrap() {
     await Promise.allSettled([
       stopEmailQueue(),
       stopCourierSync(),
+      stopFestivalReminders(),
       disconnectPrisma(),
       disconnectRedis(),
     ]);

@@ -120,6 +120,11 @@ model Store {
   loyaltySettings      LoyaltySettings?
   wholesaleSettings    WholesaleSettings?
   salesSettings        SalesSettings?
+  redirects            Redirect[]
+  landingPages         LandingPage[]
+  festivals            Festival[]
+  giftBoxes            GiftBox[]
+  notFoundHits         NotFoundHit[]
   businessAccounts     BusinessAccount[]
   quotations           Quotation[]
   loyaltyLevels        LoyaltyLevel[]
@@ -879,6 +884,8 @@ model Product {
   categories            ProductCategory[]
   storefronts           ProductStorefront[]
   priceTiers            PriceTier[]
+  landingPages          LandingPage[]
+  giftBoxes             GiftBox[]
   collections           ProductCollection[]
   images                ProductImage[]
   variants              ProductVariant[]
@@ -1410,6 +1417,9 @@ model Order {
   salespersonId          BigInt?
   salesperson            AdminUser?           @relation("OrderSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
   commission             SalesCommission?
+  /// The landing page the order was placed on.
+  landingPageId          BigInt?
+  landingPage            LandingPage?         @relation(fields: [landingPageId], references: [id], onDelete: SetNull)
   giftCardUsed           String?
   giftCardDiscountAmount Decimal              @default(0) @db.Decimal(12, 2)
   supplierOrderId        String?
@@ -1437,6 +1447,7 @@ model Order {
   @@index([storeId, createdAt])
   @@index([customerId])
   @@index([paymentStatus])
+  @@index([landingPageId])
 }
 
 model OrderStatusLog {
@@ -3005,4 +3016,140 @@ model SalesTarget {
   amount        Decimal   @db.Decimal(14, 2)
 
   @@unique([salespersonId, month])
+}
+
+// ============================================================ REDIRECTS (Batch 33)
+
+/// Send visitors of an old address to a new one (after a product, category or page changed its URL).
+model Redirect {
+  id         BigInt    @id @default(autoincrement())
+  storeId    BigInt
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// "/old-path", lowercase, no trailing slash, no query.
+  fromPath   String
+  /// "/new-path" on this shop, or a full https:// address.
+  toUrl      String
+  /// 301 (moved for good) or 302 (for now).
+  statusCode Int       @default(301)
+  isActive   Boolean   @default(true)
+  /// Made automatically when something's web address changed.
+  auto       Boolean   @default(false)
+  note       String?
+  hits       Int       @default(0)
+  lastHitAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([storeId, fromPath])
+}
+
+/// Addresses visitors asked for that don't exist (to fix with a redirect).
+model NotFoundHit {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  path      String
+  hits      Int      @default(1)
+  referrer  String?
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  @@unique([storeId, path])
+  @@index([storeId, lastSeen])
+}
+
+// ============================================================ LANDING PAGES (Batch 33)
+
+/// A page for one product (ads, Facebook posts) at /lp/{slug}: hero, blocks, reviews and an order form.
+model LandingPage {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  slug         String
+  title        String
+  /// draft | published
+  status       String    @default("draft")
+  productId    BigInt
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  headline     String
+  subheadline  String?
+  /// Empty: the product's first image.
+  heroImageUrl String?
+  /// Price each on this page (every option); empty: the normal price.
+  offerPrice   Decimal?  @db.Decimal(12, 2)
+  /// The offer price stops then (a countdown shows until it); empty: no end.
+  offerEndsAt  DateTime?
+  /// Page blocks (the page builder's sections) shown between the hero and the order form.
+  sections     Json      @default("[]")
+  showReviews  Boolean   @default(true)
+  ctaText      String    @default("Order now")
+  formTitle    String?
+  maxQty       Int       @default(10)
+  seoTitle     String?
+  metaDesc     String?
+  views        Int       @default(0)
+  orders       Order[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([storeId, slug])
+}
+
+/// A festival or shopping day on the store's calendar (Marketing > Festival calendar), with
+/// its sale window, a prep checklist and the campaigns set up for it. Days are Dhaka dates.
+model Festival {
+  id             BigInt    @id @default(autoincrement())
+  storeId        BigInt
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Built-in festival it came from (eid_ul_fitr, pohela_boishakh …); null for the store's own.
+  key            String?
+  name           String
+  startsOn       DateTime  @db.Date
+  endsOn         DateTime  @db.Date
+  saleFrom       DateTime  @db.Date
+  saleTo         DateTime  @db.Date
+  /// Moon-sighted dates: estimates until announced.
+  dateIsEstimate Boolean   @default(false)
+  /// Email the team this many days before the sale starts.
+  remindDays     Int       @default(14)
+  remindedAt     DateTime?
+  note           String?
+  /// [{ id, text, done }]
+  checklist      Json      @default("[]")
+  promotionIds   BigInt[]  @default([])
+  flashSaleIds   BigInt[]  @default([])
+  couponIds      BigInt[]  @default([])
+  landingPageIds BigInt[]  @default([])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([storeId, startsOn])
+}
+
+/// A gift box shoppers fill themselves (Catalog > Gift boxes, /gift-boxes/{slug}). The box is a
+/// product (the packaging: its price, stock and styles as options); what goes in it is sold as
+/// ordinary lines tagged with the box (OrderItem.meta.giftBox), checked at checkout.
+model GiftBox {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  slug         String
+  name         String
+  description  String?
+  imageUrl     String?
+  boxProductId BigInt
+  boxProduct   Product  @relation(fields: [boxProductId], references: [id], onDelete: Restrict)
+  minItems     Int      @default(2)
+  maxItems     Int      @default(6)
+  /// What it takes: these products and anything in these categories (both empty: any product).
+  productIds   BigInt[] @default([])
+  categoryIds  BigInt[] @default([])
+  allowMessage Boolean  @default(true)
+  messageMax   Int      @default(200)
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, slug])
 }

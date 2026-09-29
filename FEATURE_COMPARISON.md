@@ -44,8 +44,8 @@ These are our advantages. Keep them.
 | Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
 | Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
 | Soft delete + "Deleted only" filter, created/updated by | ❌ | Products are hard-deleted |
-| Product landing page `/lp/{slug}` built from blocks | ❌ | Reuse our page builder — cheap win |
-| Gift box components + Gift Box Builder | ❌ | Unique to the reference |
+| Product landing page `/lp/{slug}` built from blocks | ✅ | Batch 33: offer price and countdown, blocks, reviews, order form with cash on delivery on the page, visits and conversion per page |
+| Gift box components + Gift Box Builder | ✅ | Batch 33: /gift-boxes builder (box styles, items from chosen categories/products, min–max, message card), boxes in cart and checkout, checked by the server, box and card on the order |
 | Media: auto WebP + thumbnail, size guidance per slot | 🟡 | Upload works and accepts WebP; no conversion or thumbnails |
 
 ### Orders & fulfilment (reference 11, 06, 07.10)
@@ -73,7 +73,7 @@ These are our advantages. Keep them.
 | Coupon "works with promotions" toggle | ✅ | Batch 23 |
 | **Automatic promotions** (no code): discount, free gift over spend, buy X get Y, free delivery | ✅ | Batch 23: one best discount + stacking buy X get Y, gifts from stock, nudges |
 | Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ✅ | Batch 23 (fixed home positions; no page-builder block yet) |
-| Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ❌ | |
+| Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ✅ | Batch 33: 14 built-in festivals (moon dates as estimates), sale windows, prep checklists, linked promotions/flash sales/coupons/landing pages with "run for the sale", last year's sales, reminder email, dashboard card. No ready-made campaign templates |
 | Newsletter subscribers | 🟡 | Storefront shows a signup block; nothing stores subscribers and there's no admin list |
 | Search terms analytics (what customers search) | ✅ | Batch 26: Marketing → Search terms, "found nothing" filter, suggestions |
 
@@ -83,7 +83,7 @@ These are our advantages. Keep them.
 | Pages, blog + categories, FAQs, header/footer menus, block builder | ✅ | |
 | Sliders as a separate reusable item | 🟡 | Hero slides live inside the homepage section |
 | Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | 🟡 | `scheduledAt` column exists; no linked products or view count |
-| Redirects (301/302) | ❌ | Important for SEO after URL changes |
+| Redirects (301/302) | ✅ | Batch 33: Online Store → Redirects; automatic 301 when an address changes; broken-link log |
 | Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | 🟡 | We have 4 + homepage blocks |
 
 ### CRM (reference 14)
@@ -233,6 +233,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
+| 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

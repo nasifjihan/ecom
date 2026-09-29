@@ -13,6 +13,7 @@ import {
   Factory,
   FileText,
   ClipboardList,
+  CornerUpRight,
   Trophy,
   Coins,
   HandCoins,
@@ -55,6 +56,8 @@ import {
   Users,
   Warehouse,
   Zap,
+  Megaphone,
+  CalendarHeart,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -104,6 +107,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/catalog/attributes", label: "Attributes", icon: SlidersHorizontal, perm: "attributes.view" },
       { href: "/catalog/media", label: "Media", icon: Image, perm: "media.view" },
       { href: "/catalog/pricing", label: "Price by margin", icon: Calculator, perm: "products.view" },
+      { href: "/catalog/gift-boxes", label: "Gift boxes", icon: Gift, perm: "products.view" },
       { href: "/inventory", label: "Stock", icon: Boxes, perm: "inventory.view" },
       { href: "/inventory/warehouses", label: "Warehouses", icon: Warehouse, perm: "inventory.view" },
       { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "inventory.view" },
@@ -131,6 +135,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/marketing/promotions", label: "Promotions", icon: Gift, perm: "promotions.view" },
       { href: "/marketing/coupons", label: "Coupons", icon: Percent, perm: "coupons.view" },
       { href: "/marketing/flash-sales", label: "Flash Sales", icon: Zap, perm: "flash_sales.view" },
+      { href: "/marketing/festivals", label: "Festival calendar", icon: CalendarHeart, perm: "promotions.view" },
       { href: "/marketing/loyalty", label: "Loyalty & wallet", icon: Wallet, perm: "loyalty.view" },
       { href: "/marketing/reviews", label: "Reviews", icon: MessageSquare, perm: "reviews.view" },
       { href: "/marketing/questions", label: "Questions", icon: MessageCircleQuestion, perm: "reviews.view" },
@@ -144,6 +149,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/online-store/theme", label: "Theme", icon: Palette, perm: "online_store.view" },
       { href: "/online-store/menus", label: "Menus", icon: ListTree, perm: "menus.view" },
       { href: "/online-store/storefronts", label: "Storefronts", icon: Store, perm: "online_store.view" },
+      { href: "/online-store/landing-pages", label: "Landing pages", icon: Megaphone, perm: "pages.view" },
+      { href: "/online-store/redirects", label: "Redirects", icon: CornerUpRight, perm: "online_store.view" },
     ],
   },
   {

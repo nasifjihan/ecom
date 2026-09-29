@@ -20,11 +20,14 @@ export type { FeaturedCategoriesProps, FeaturedCategory } from "./components/sec
 
 export { CartDrawer, default as CartDrawerDefault } from "./components/cart/CartDrawer";
 export type { CartDrawerProps } from "./components/cart/CartDrawer";
+export { GiftBoxCartCard } from "./components/cart/GiftBoxCartCard";
 
 export {
   CartProvider,
   useCart,
   CartContext,
+  cartOrderLines,
+  boxTotal,
   default as CartProviderDefault,
 } from "./components/cart/CartProvider";
 export type {
@@ -33,6 +36,8 @@ export type {
   CartItem,
   CartPriceQuote,
   CartPriceChange,
+  CartBox,
+  CartOrderLine,
 } from "./components/cart/CartProvider";
 
 export {

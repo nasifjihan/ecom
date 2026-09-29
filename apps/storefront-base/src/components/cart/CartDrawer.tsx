@@ -16,6 +16,7 @@ import {
   Skeleton,
 } from "../ui";
 import { useCart, type CartItem } from "./CartProvider";
+import { GiftBoxCartCard } from "./GiftBoxCartCard";
 import { cn, formatMoney, moneyMul } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
 
@@ -122,10 +123,12 @@ export function CartDrawer({
     isOpen,
     closeCart,
     items,
+    boxes,
     subtotal,
     itemCount,
     updateQty,
     removeItem,
+    removeBox,
   } = useCart();
 
   const [mounted, setMounted] = React.useState(false);
@@ -158,7 +161,7 @@ export function CartDrawer({
           </div>
         </SheetHeader>
 
-        {items.length === 0 ? (
+        {items.length === 0 && boxes.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-16 px-4 text-center">
             <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
               <ShoppingCart className="h-10 w-10 text-primary/60" />
@@ -197,6 +200,13 @@ export function CartDrawer({
                         {idx < items.length - 1 && <Separator />}
                       </React.Fragment>
                     ))}
+                {mounted && boxes.length > 0 && (
+                  <div className={cn("space-y-3 pb-2", items.length > 0 && "pt-3")}>
+                    {boxes.map((b) => (
+                      <GiftBoxCartCard key={b.key} box={b} currency={currency} compact onRemove={() => removeBox(b.key)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </ScrollArea>
 

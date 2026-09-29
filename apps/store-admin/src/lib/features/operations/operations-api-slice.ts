@@ -91,7 +91,9 @@ export const ORDER_SOURCES = [
   { value: "other", label: "Other" },
 ] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number]["value"];
-export const sourceLabel = (s?: string | null) => ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
+/** Every source an order can have: the ones staff pick, plus landing pages (orders placed on /lp/ pages). */
+export const ALL_ORDER_SOURCES = [...ORDER_SOURCES, { value: "landing", label: "Landing page" }] as const;
+export const sourceLabel = (s?: string | null) => ALL_ORDER_SOURCES.find((x) => x.value === s)?.label ?? s ?? "Website";
 
 export interface OrderLine {
   id: string | number;
@@ -104,6 +106,8 @@ export interface OrderLine {
   lineTotal: number;
   /** A free gift from this promotion. */
   giftFrom?: string;
+  /** Part of a gift box the shopper filled: the box itself or an item in it, with the card message. */
+  giftBox?: { key: string; name: string; role: "box" | "item"; message: string | null };
 }
 
 /** An automatic promotion the order got (Order.promotions). */
@@ -599,7 +603,7 @@ interface ApiOrder {
     unitPrice: string;
     lineTotal: string;
     variantValues: Record<string, string> | null;
-    meta?: { gift?: { promotionName?: string } } | null;
+    meta?: { gift?: { promotionName?: string }; giftBox?: { key: string; name: string; role: "box" | "item"; message: string | null } } | null;
   }[];
   statusHistory?: {
     id: string;
@@ -651,6 +655,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     unitPrice: Number(i.unitPrice),
     lineTotal: Number(i.lineTotal),
     giftFrom: i.meta?.gift?.promotionName,
+    giftBox: i.meta?.giftBox ?? undefined,
   }));
   return {
     id: o.id,
