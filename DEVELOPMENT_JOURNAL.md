@@ -3248,3 +3248,90 @@ A page for one product at `/lp/{address}`, for Facebook and other ads. It has a 
 - **Several products:** one product per page; no bundles or upsell.
 - **Visit counting:** one per page load. Bots and repeat visits are counted, and there's no ad source (UTM) breakdown.
 - **Theme:** the page keeps the store's header and footer; there's no bare "landing only" layout.
+
+## ✅ BATCH #33 (part 6) — Festival calendar (2026-09-30)
+Bangladesh's shopping seasons on one calendar: Eid, Pohela Boishakh, Puja, 11.11 and more. For each one it shows when the sale should run, what to get ready, whether the offers set up for it actually run then, and how the same weeks went last year. The team gets an email before each sale starts, and the dashboard shows what's coming up.
+
+### 33.39 Data (migration `festivals`)
+- **`Festival`:**
+  - `key` (the built-in festival it came from, or null for the store's own), `name`;
+  - `startsOn` / `endsOn` (the festival) and `saleFrom` / `saleTo` (the sale), all Dhaka `date`s;
+  - `dateIsEstimate`, `remindDays`, `remindedAt`, `note`;
+  - `checklist` (`[{ id, text, done }]`);
+  - `promotionIds`, `flashSaleIds`, `couponIds`, `landingPageIds`.
+
+### 33.40 Rules (`festivals/festival.rules.ts`)
+- **14 built-in festivals.**
+  - **Worked out for any year:** Pohela Falgun & Valentine's Day, 21 February, Independence Day, Pohela Boishakh, Victory Day, Christmas; Mother's Day (2nd Sunday of May), Father's Day (3rd Sunday of June), 11.11, Black Friday (day after the 4th Thursday of November).
+  - **Moon and lunar dates, from an estimates table (2025–2027):** Ramadan, Eid-ul-Fitr, Eid-ul-Adha, Durga Puja. They're marked "expected" for staff to correct once announced. For other years they're left out and named on the page.
+- **Each festival has:**
+  - its length and sale window (Eid-ul-Fitr: sale from 25 days before, since shopping happens in Ramadan);
+  - a reminder lead;
+  - the usual five-item checklist plus its own items.
+- **Days:** "YYYY-MM-DD" in Dhaka time, with helpers for adding days and for the first and last moment of a day.
+- **Phase:** later → get ready (from the reminder day) → sale on → over.
+- **Reminder:** sent once, from the reminder day until the sale ends.
+- **Coverage** (a campaign's dates against the sale): runs for all of it, part of it, none of it, or always on (no dates).
+- **Last year:** the same lead and length around last year's date of the same festival (moon festivals move about 11 days a year), else the same days a year back; 29 February becomes the 28th.
+
+### 33.41 API (`/api/admin/festivals`, Promotions permissions)
+- **The year's festivals:** each with its phase, days to the sale, checklist progress and campaign count. Also returned: how many built-in festivals aren't on the calendar yet, and which have no known dates.
+- **"Add Bangladesh festivals":** adds each built-in festival once per year.
+- **One festival:**
+  - its linked campaigns with their dates and coverage;
+  - orders and sales in the same weeks last year and in this sale so far (cancelled and failed left out).
+- **Changes:**
+  - add, change, delete;
+  - tick a task;
+  - link only the store's own campaigns;
+  - a new festival starts with the usual checklist.
+  - Changing the sale start or the reminder lead means a new reminder.
+- **"Run for the sale":** sets a linked promotion, flash sale or coupon to run from the first moment of the sale to its last, in Dhaka time. For a landing page, its offer ends with the sale. Staff need that campaign's own edit permission.
+- **Upcoming:** the next three whose sale hasn't ended, for the dashboard.
+- **Reminder email `festival_reminder_admin`** ("Festival coming up"):
+  - sent to the addresses set on the template, else the store owners;
+  - includes dates (with "expected" when estimated), days left, last year's orders and sales, and the unticked checklist;
+  - a BullMQ job runs every hour (like courier sync); each reminder is claimed before sending, so it goes out once.
+  - The template can be edited under Settings → Emails.
+
+### 33.42 Store admin
+- **Marketing → Festival calendar:**
+  - year switcher and "Add N Bangladesh festivals";
+  - a note naming festivals whose dates aren't known that year;
+  - a year timeline: sale window light, festival days solid, a line for today;
+  - a table with festival and dates ("expected"), sale, status with days to go, checklist and campaigns.
+- **Festival page:**
+  - name, festival and sale dates, reminder days, "Date not announced yet", notes;
+  - checklist: ticks save at once; add and remove items;
+  - campaigns: link from a grouped list, see coverage and dates, and "Run for the sale" or "End offer with the sale";
+  - "Where it stands": phase, days to the sale, reminder status, last year's orders and sales, and this sale so far.
+- **Dashboard:** a "Coming up" card with the next three festivals (status, dates, days to the sale, "3 of 5 ready"). With nothing ahead, it invites adding them.
+
+### 33.43 Checked
+- **Tests:** 632/632 API tests. New ones:
+  - 10 unit tests: fixed and weekday dates, estimates and unknown years, day arithmetic in Dhaka time, last year's window, date checks, phases, reminders, coverage, checklist;
+  - 5 database tests:
+    - presets added once;
+    - last year's Eid sales (2 orders, ৳5,000; a cancelled one and one outside the weeks left out);
+    - date checks and another store's campaign refused;
+    - checklist cleaned and ticked;
+    - "Run for the sale" (and refused without permission);
+    - the reminder email sent once, and set again after the sale moved.
+- **Chromium:**
+  - the dashboard invited adding festivals;
+  - "Add 14 Bangladesh festivals" filled 2026;
+  - 2028 named the four festivals with unknown dates;
+  - on Durga Puja I ticked a task, added one, and linked a flash sale and a landing page, both "Doesn't run during the sale";
+  - "Run for the sale" moved the flash sale to 3–21 Oct in Dhaka time;
+  - a store's own "Shop anniversary" was added;
+  - the dashboard showed Durga Puja (get ready, 4 days), 11.11 and the anniversary;
+  - no page errors.
+- **Reminder:** run by hand on the dev data, it sent Durga Puja's email to the owner (checklist and "expected" included); the other five checked weren't due yet.
+- **Fixed while checking:** after saving, the page refilled from its old copy and hid the new task and links (they were saved). The form now fills from the saved festival.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.44 Not done
+- **Estimated dates:** Eid, Ramadan and Puja are estimates only for 2025–2027; later years need adding by hand, and nothing updates them when the moon is sighted.
+- **Storefront:** nothing is shown to shoppers on its own. Greetings and banners come from the linked promotions (announcement bar and so on).
+- **Staff:** only emails are sent; there's no in-app notification (the bell is still a placeholder) and no assigning tasks to people.
+- **Storefronts:** the calendar is for the whole store, not per storefront.

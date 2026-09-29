@@ -488,6 +488,15 @@ export class EmailService {
     })
   }
 
+  /** A festival's sale is coming up (the festival calendar's reminder). Returns the log id. */
+  async festivalReminder(vars: Record<string, string>) {
+    return this.send("festival_reminder_admin", {
+      to: await this.staffRecipients("festival_reminder_admin"),
+      vars,
+      recipientType: "staff",
+    })
+  }
+
   // ------------------------------------------------------------------ admin: templates
 
   async listTemplates() {
@@ -606,6 +615,13 @@ export class EmailService {
         "quote.event": "accepted",
         "quote.note": "",
         "quote.admin_url": `${urls.admin}/orders/quotations`,
+        "festival.name": "Eid-ul-Fitr",
+        "festival.dates": "21–23 Mar 2026",
+        "festival.sale_dates": "24 Feb – 23 Mar 2026",
+        "festival.days_left": "30",
+        "festival.last_year": "Last year's sale brought 142 orders, ৳6,84,500.",
+        "festival.todo": "- Order enough stock of the best sellers\n- Make the banner and homepage section",
+        "festival.admin_url": `${urls.admin}/marketing/festivals`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },

@@ -73,7 +73,7 @@ These are our advantages. Keep them.
 | Coupon "works with promotions" toggle | ✅ | Batch 23 |
 | **Automatic promotions** (no code): discount, free gift over spend, buy X get Y, free delivery | ✅ | Batch 23: one best discount + stacking buy X get Y, gifts from stock, nudges |
 | Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ✅ | Batch 23 (fixed home positions; no page-builder block yet) |
-| Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ❌ | |
+| Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ✅ | Batch 33: 14 built-in festivals (moon dates as estimates), sale windows, prep checklists, linked promotions/flash sales/coupons/landing pages with "run for the sale", last year's sales, reminder email, dashboard card. No ready-made campaign templates |
 | Newsletter subscribers | 🟡 | Storefront shows a signup block; nothing stores subscribers and there's no admin list |
 | Search terms analytics (what customers search) | ✅ | Batch 26: Marketing → Search terms, "found nothing" filter, suggestions |
 
@@ -233,6 +233,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, gift box builder, festivals | Add-ons to sell | L each |
+| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

@@ -122,6 +122,7 @@ model Store {
   salesSettings        SalesSettings?
   redirects            Redirect[]
   landingPages         LandingPage[]
+  festivals            Festival[]
   notFoundHits         NotFoundHit[]
   businessAccounts     BusinessAccount[]
   quotations           Quotation[]
@@ -3090,4 +3091,35 @@ model LandingPage {
   updatedAt    DateTime  @updatedAt
 
   @@unique([storeId, slug])
+}
+
+/// A festival or shopping day on the store's calendar (Marketing > Festival calendar), with
+/// its sale window, a prep checklist and the campaigns set up for it. Days are Dhaka dates.
+model Festival {
+  id             BigInt    @id @default(autoincrement())
+  storeId        BigInt
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Built-in festival it came from (eid_ul_fitr, pohela_boishakh …); null for the store's own.
+  key            String?
+  name           String
+  startsOn       DateTime  @db.Date
+  endsOn         DateTime  @db.Date
+  saleFrom       DateTime  @db.Date
+  saleTo         DateTime  @db.Date
+  /// Moon-sighted dates: estimates until announced.
+  dateIsEstimate Boolean   @default(false)
+  /// Email the team this many days before the sale starts.
+  remindDays     Int       @default(14)
+  remindedAt     DateTime?
+  note           String?
+  /// [{ id, text, done }]
+  checklist      Json      @default("[]")
+  promotionIds   BigInt[]  @default([])
+  flashSaleIds   BigInt[]  @default([])
+  couponIds      BigInt[]  @default([])
+  landingPageIds BigInt[]  @default([])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([storeId, startsOn])
 }

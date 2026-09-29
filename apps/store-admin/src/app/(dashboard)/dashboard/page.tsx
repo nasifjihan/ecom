@@ -11,6 +11,7 @@ import StatCard, { StatCardSkeleton } from "@/components/dashboard/StatCard";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import TopProductsChart from "@/components/dashboard/TopProductsChart";
 import RecentOrdersTable from "@/components/dashboard/RecentOrdersTable";
+import UpcomingFestivals from "@/components/dashboard/UpcomingFestivals";
 import { useGetDashboardOverviewQuery } from "@/lib/features/dashboard/dashboard-api-slice";
 
 const DAYS = 30;
@@ -76,6 +77,8 @@ export default function DashboardHomePage() {
               <StatCard key={config.label} {...config} delay={i * 0.05} />
             ))}
       </div>
+
+      <UpcomingFestivals />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

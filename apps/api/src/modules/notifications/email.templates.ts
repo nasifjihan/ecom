@@ -178,6 +178,26 @@ export const EMAIL_TEMPLATES = {
     button: { label: "Open in admin", url: "quote.admin_url" },
     variables: [...STORE, ...CUSTOMER, "quote.number", "quote.total", "quote.event", "quote.note", "quote.admin_url"],
   },
+  festival_reminder_admin: {
+    label: "Festival coming up",
+    audience: "staff",
+    description: "Sent to your team before a festival's sale starts (Marketing > Festival calendar), to get offers and stock ready.",
+    subject: "{{festival.name}}: the sale starts in {{festival.days_left}} days",
+    message:
+      "# {{festival.name}} is coming\n\nThe festival is on {{festival.dates}}, and its sale runs {{festival.sale_dates}}.\n\n{{festival.last_year}}\n\nStill to do:\n\n{{festival.todo}}",
+    blocks: [],
+    button: { label: "Open the festival calendar", url: "festival.admin_url" },
+    variables: [
+      ...STORE,
+      "festival.name",
+      "festival.dates",
+      "festival.sale_dates",
+      "festival.days_left",
+      "festival.last_year",
+      "festival.todo",
+      "festival.admin_url",
+    ],
+  },
 } satisfies Record<string, TemplateDef>
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES
