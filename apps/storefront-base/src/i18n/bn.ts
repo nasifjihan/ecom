@@ -832,4 +832,7 @@ export const BN: Record<string, string> = {
   "Declined": "প্রত্যাখ্যাত",
   "Ordered": "অর্ডার হয়েছে",
   "VAT, if it applies, is added to the order.": "ভ্যাট প্রযোজ্য হলে অর্ডারে যোগ হবে।",
+  // Not found page (Batch 33)
+  "We couldn't find that page": "পাতাটি খুঁজে পাওয়া যায়নি",
+  "It may have moved, or the link may be wrong. Try searching, or start from the home page.": "পাতাটি হয়তো সরানো হয়েছে, বা লিংকটি ভুল। খুঁজে দেখুন, বা হোম পেজ থেকে শুরু করুন।",
 };

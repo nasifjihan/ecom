@@ -1,6 +1,7 @@
 import { getStorageProvider } from "../../services/storage";
 import type { StorageProvider } from "../../services/storage";
 import { prisma, tx, cacheGet, cacheSet, cacheDel, CACHE_KEYS } from "../../config";
+import { recordMove } from "../redirects";
 import {
   BaseService,
   ConflictError,
@@ -353,6 +354,10 @@ export class CatalogService extends BaseService {
       }
     });
 
+    // A new web address: the old one sends visitors (and search engines) to it.
+    if (uniqueSlug !== undefined && uniqueSlug !== existing.slug) {
+      await recordMove(prisma, storeId, `/products/${existing.slug}`, `/products/${uniqueSlug}`);
+    }
     await this.invalidateProductCache(productId);
     return this.products.findFull(this.ctx, productId);
   }
@@ -575,6 +580,9 @@ export class CatalogService extends BaseService {
       where: { id: cid },
       data: updateData,
     });
+    if (updated.slug !== existing.slug) {
+      await recordMove(prisma, storeId, `/categories/${existing.slug}`, `/categories/${updated.slug}`);
+    }
     await this.invalidateCategoryCache();
     return updated;
   }

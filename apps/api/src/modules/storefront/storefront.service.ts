@@ -944,11 +944,22 @@ export class StorefrontService {
 
   // ------------------------------------------------------------------ checkout
 
+  /**
+   * The day's next order number (YYYYMMDD + 6 digits; numbers are unique across the platform).
+   * A transaction lock makes orders placed at the same moment take turns, so two can't get the
+   * same number; it's held until the order is saved.
+   */
   private async nextOrderNumber(t: Prisma.TransactionClient): Promise<string> {
+    await t.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('order-number'))`;
     const d = new Date();
     const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    const count = await t.order.count({ where: { number: { startsWith: datePart } } });
-    return `${datePart}${String(count + 1).padStart(6, "0")}`;
+    const last = await t.order.findFirst({
+      where: { number: { startsWith: datePart } },
+      orderBy: { number: "desc" },
+      select: { number: true },
+    });
+    const n = last ? Number(last.number.slice(datePart.length)) || 0 : 0;
+    return `${datePart}${String(n + 1).padStart(6, "0")}`;
   }
 
   /** A checkout address with its division/district/upazila names taken from the picked area. */

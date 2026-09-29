@@ -3073,3 +3073,84 @@ Staff who sell earn commission on the orders credited to them. The rate is the p
 - **Category rates:** a parent category's rate isn't inherited.
 - **Payouts:** a payout isn't recorded in Purchasing → Accounts as money out; it only marks the commission paid.
 - **Share links:** the link is checked only when the order is placed (last link used within 30 days wins); there's no report of visits per link.
+
+## ✅ BATCH #33 (part 4) — URL redirects and broken links (2026-09-29)
+Old web addresses now send visitors, and search engines, to the new ones. Staff add redirects by hand or paste a list from an old website. Changing a product's, category's, page's or blog post's address adds a 301 on its own. Addresses visitors hit that don't exist are logged, so each can become a redirect in one click.
+
+### 33.24 Data (migration `redirects`)
+- **`Redirect`:**
+  - `fromPath` (one form: lowercase, no query, no trailing slash; unique per store);
+  - `toUrl` (a shop path, query allowed, or a full http(s) address);
+  - `statusCode` 301 or 302, `isActive`;
+  - `auto` (made by an address change), `note`;
+  - `hits`, `lastHitAt`.
+- **`NotFoundHit`:** `path`, `hits`, `referrer`, `firstSeen`, `lastSeen`; at most 2,000 per store, the oldest dropped.
+
+### 33.25 Rules (`redirects/redirect.rules.ts`)
+- **Old address:** a full URL or a path is reduced to its path, lowercased, with double slashes and the trailing slash removed.
+- **Can't be redirected:** `/`, `/api…` and `/_next…`.
+- **Chains:** each redirect is followed to its final address, up to 10 hops, so visitors get one hop. The result is 301 only if every hop is.
+- **Loops:** refused when saving; any already in the list are left out.
+- **Pasted lists:** "old, new[, 302]" with commas or tabs. A header line, blank lines and `#` comments are skipped; each bad line is reported with its line number.
+
+### 33.26 API
+- **Admin, under `/api/admin/redirects`** (Theme and homepage permission, `online_store.view` / `.edit`):
+  - list with search and paging (plus the broken-link count), add, change, delete, paste;
+  - the broken-link list, and ignore one or clear all.
+- **Adding a redirect** removes that address from the broken-link log.
+- **Storefront, under `/api/storefront/redirects`:**
+  - `GET /`: the resolved list;
+  - `POST /hit`: count a use;
+  - `POST /not-found`: log a missing address. Images, scripts, fonts and other files, paths that already redirect, and very long paths aren't logged.
+- **Automatic 301s (`recordMove`)** for products (`/products/…`), categories (`/categories/…`), pages (`/…`) and blog posts (`/blog/…`). Each one:
+  - adds or updates old → new;
+  - points older redirects that went to the old address straight at the new one;
+  - deletes any redirect from the new address, so it works (renaming something back to an old address undoes that redirect).
+  - A failure here is logged and never blocks the save.
+
+### 33.27 Storefront
+- **`middleware.ts`:**
+  - fetches the store's resolved list once a minute per web address and answers a match with a real 301 or 302, before the page runs, so even pages that still exist can be redirected;
+  - the visitor's query (`?utm_source=…`) is kept unless the new address has its own;
+  - hits are counted in the background;
+  - it skips Next's files, `/api`, and images, scripts and fonts; old `.html` / `.php` addresses are matched;
+  - if the API is down, nothing is redirected and it retries within 10 seconds.
+- **"Not found" page** (new, English and Bangla): search box, Home and Shop buttons. It reports the address and where the visitor came from.
+
+### 33.28 Store admin
+- **Online Store → Redirects:**
+  - two tabs, Redirects and Broken links, with counts;
+  - search, "Add redirect" and "Paste a list" (shows how many were added and updated, and each bad line);
+  - the table shows old address (opens the shop), new address, 301 / 302, "Automatic" and "Off" badges, uses and last used, and Edit / Delete;
+  - Broken links shows each address with visits, last seen and the referring page, plus "Add redirect" (the old address filled in), "Ignore" and "Clear list".
+
+### 33.29 Fixed along the way: order numbers
+- **The bug:** numbers were "today's date + (orders so far today + 1)", counted across the platform with no lock. Two orders placed at the same moment could get the same number, and one failed. The full test run showed it now and then: two quotation tests failed once, when test files created orders at the same time.
+- **The fix:** `nextOrderNumber` takes a transaction lock (`pg_advisory_xact_lock`) held until the order is saved, and uses the day's highest number + 1, so a deleted order can't cause a repeat either.
+- **Checked:** the full suite passed three runs in a row after the fix.
+
+### 33.30 Checked
+- **Tests:** 606/606 API tests. New ones:
+  - 7 unit tests: address forms, reserved paths, targets, chains, loops, pasted lines;
+  - 5 database tests:
+    - adding and refusing;
+    - paste with updates and errors;
+    - product address changed twice, then back;
+    - page address changed;
+    - hits, and the broken-link log cleared by a new redirect.
+- **Chromium, with plain HTTP requests** for the status codes:
+  - `/Eid-Sale/` → `/flash-sale` (302), added by hand;
+  - a pasted list with 2 added and "Line 4: / can't be redirected";
+  - renaming the linen shirt's address added the automatic 301;
+  - `/shop.php?utm_source=fb` gave 301 to `/products?utm_source=fb`;
+  - the old product address gave 301, and the browser landed on the new product page;
+  - `/summer-2024` showed the not-found page, appeared under Broken links, and was fixed with "Add redirect";
+  - hit counts were recorded;
+  - no page errors.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.31 Not done
+- **Trailing slashes:** an address with a trailing slash first gets Next's own 308 to the address without it, then the redirect (two hops, same result).
+- **Patterns:** no wildcard or pattern redirects (`/old/*`); each address is listed.
+- **Admin changes:** changes take up to a minute to reach the shop (the middleware's cache).
+- **Staff limits:** redirects apply to the whole store, not per storefront.

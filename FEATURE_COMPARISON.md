@@ -83,7 +83,7 @@ These are our advantages. Keep them.
 | Pages, blog + categories, FAQs, header/footer menus, block builder | ✅ | |
 | Sliders as a separate reusable item | 🟡 | Hero slides live inside the homepage section |
 | Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | 🟡 | `scheduledAt` column exists; no linked products or view count |
-| Redirects (301/302) | ❌ | Important for SEO after URL changes |
+| Redirects (301/302) | ✅ | Batch 33: Online Store → Redirects; automatic 301 when an address changes; broken-link log |
 | Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | 🟡 | We have 4 + homepage blocks |
 
 ### CRM (reference 14)
@@ -233,6 +233,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 30 ✅ | **Loyalty levels, wallet cashback, referrals** | Retention | M |
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
-| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, gift box builder, landing pages, redirects, festivals | Add-ons to sell | L each |
+| 33 🟡 | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, gift box builder, landing pages, festivals | Add-ons to sell | L each |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

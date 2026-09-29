@@ -120,6 +120,8 @@ model Store {
   loyaltySettings      LoyaltySettings?
   wholesaleSettings    WholesaleSettings?
   salesSettings        SalesSettings?
+  redirects            Redirect[]
+  notFoundHits         NotFoundHit[]
   businessAccounts     BusinessAccount[]
   quotations           Quotation[]
   loyaltyLevels        LoyaltyLevel[]
@@ -3005,4 +3007,44 @@ model SalesTarget {
   amount        Decimal   @db.Decimal(14, 2)
 
   @@unique([salespersonId, month])
+}
+
+// ============================================================ REDIRECTS (Batch 33)
+
+/// Send visitors of an old address to a new one (after a product, category or page changed its URL).
+model Redirect {
+  id         BigInt    @id @default(autoincrement())
+  storeId    BigInt
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// "/old-path", lowercase, no trailing slash, no query.
+  fromPath   String
+  /// "/new-path" on this shop, or a full https:// address.
+  toUrl      String
+  /// 301 (moved for good) or 302 (for now).
+  statusCode Int       @default(301)
+  isActive   Boolean   @default(true)
+  /// Made automatically when something's web address changed.
+  auto       Boolean   @default(false)
+  note       String?
+  hits       Int       @default(0)
+  lastHitAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([storeId, fromPath])
+}
+
+/// Addresses visitors asked for that don't exist (to fix with a redirect).
+model NotFoundHit {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  path      String
+  hits      Int      @default(1)
+  referrer  String?
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  @@unique([storeId, path])
+  @@index([storeId, lastSeen])
 }
