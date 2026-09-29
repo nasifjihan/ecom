@@ -88,7 +88,25 @@ const TRUST_BADGES = [
 export default function CheckoutPage() {
   const router = useRouter();
   const t = useT();
-  const { items, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
+  const { items, boxes, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
+  // Gift boxes go to the server as their lines, tagged with the box.
+  const boxLines = React.useMemo(
+    () =>
+      boxes.flatMap((b) =>
+        [{ it: b.box, role: "box" as const }, ...b.items.map((it) => ({ it, role: "item" as const }))].map(({ it, role }) => ({
+          productId: it.productId,
+          variantId: it.variantId,
+          qty: it.qty,
+          price: it.price,
+          title: it.title,
+          image: it.image,
+          variantLabel: it.variantLabel,
+          weightKG: it.weightKG,
+          box: { key: b.key, giftBoxId: b.giftBoxId, role, ...(role === "box" ? { message: b.message ?? null } : {}) },
+        })),
+      ),
+    [boxes],
+  );
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   const customerName = useAppSelector((s) => s.auth.customerName);
   const customerEmail = useAppSelector((s) => s.auth.customerEmail);
@@ -325,12 +343,15 @@ export default function CheckoutPage() {
       const result = await applyCoupon({
         code,
         subtotal,
-        items: items.map((it) => ({
-          productId: it.productId,
-          variantId: it.variantId,
-          price: it.price,
-          qty: it.qty,
-        })),
+        items: [
+          ...items.map((it) => ({
+            productId: it.productId,
+            variantId: it.variantId,
+            price: it.price,
+            qty: it.qty,
+          })),
+          ...boxLines.map((l) => ({ productId: l.productId, variantId: l.variantId, price: l.price, qty: l.qty })),
+        ],
         shippingTotal: shippingAmount,
         countryCode: shippingAddress.country,
         email: contactEmail || undefined,
@@ -524,16 +545,19 @@ export default function CheckoutPage() {
         paymentGateway: selectedPaymentMethod ?? PaymentMethod.COD,
         payment: manualPayment,
         couponCodes: appliedCoupon?.valid ? [appliedCoupon.couponCode] : [],
-        items: items.map((it) => ({
-          productId: it.productId,
-          variantId: it.variantId,
-          qty: it.qty,
-          price: it.price,
-          title: it.title,
-          image: it.image,
-          variantLabel: it.variantLabel,
-          weightKG: it.weightKG,
-        })),
+        items: [
+          ...items.map((it) => ({
+            productId: it.productId,
+            variantId: it.variantId,
+            qty: it.qty,
+            price: it.price,
+            title: it.title,
+            image: it.image,
+            variantLabel: it.variantLabel,
+            weightKG: it.weightKG,
+          })),
+          ...boxLines,
+        ],
         subtotal,
         shippingTotal: shippingAmount,
         taxTotal: actualTaxTotal,

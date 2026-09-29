@@ -288,6 +288,12 @@ export default function ThankYouPage() {
                         </p>
                         {it.variantLabel && <p className="text-xs text-muted-foreground">{it.variantLabel}</p>}
                         {it.giftFrom && <p className="text-xs font-semibold text-pink-600">{t("Free gift")} · {it.giftFrom}</p>}
+                        {it.giftBox && (
+                          <p className="text-xs font-medium text-primary">
+                            {it.giftBox.role === "box" ? t("Gift box") : t("In the gift box")} · {it.giftBox.name}
+                            {it.giftBox.role === "box" && it.giftBox.message && <span className="block font-normal italic text-muted-foreground">“{it.giftBox.message}”</span>}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right py-0.5 flex-shrink-0">
                         <p className="font-bold">{formatBDT(lineTotal)}</p>

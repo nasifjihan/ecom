@@ -3335,3 +3335,92 @@ Bangladesh's shopping seasons on one calendar: Eid, Pohela Boishakh, Puja, 11.11
 - **Storefront:** nothing is shown to shoppers on its own. Greetings and banners come from the linked promotions (announcement bar and so on).
 - **Staff:** only emails are sent; there's no in-app notification (the bell is still a placeholder) and no assigning tasks to people.
 - **Storefronts:** the calendar is for the whole store, not per storefront.
+
+## ✅ BATCH #33 (part 7) — Gift box builder (2026-09-30)
+Shoppers fill a gift box themselves at `/gift-boxes/{slug}`: they pick the box's style, the products that go in it (within the box's limits) and a message card, then add the whole box to the cart. The box is sold as its products plus the box itself. Checkout checks every box on the server, and the order shows the box and the card for packing. This finishes Batch 33.
+
+### 33.45 How a box is sold
+- **The box is a product:** the packaging, with its own price, stock and options (colours or sizes become box styles).
+- **The contents** are ordinary order lines. So pricing (flash sales, bulk prices), stock held for the order, promotions, VAT, delivery weight, parcels, returns and reports all work as for any line.
+- **In the cart and at checkout,** each line carries `box: { key, giftBoxId, role: "box" | "item", message }`. After the check, the order line keeps `meta.giftBox = { key, giftBoxId, name, message, role }`.
+
+### 33.46 Data (migration `gift_boxes`)
+- **`GiftBox`:**
+  - `slug` (unique per store), `name`, `description`, `imageUrl`;
+  - `boxProductId` (Restrict: a product used as a box can't be removed from under it);
+  - `minItems` / `maxItems`;
+  - `productIds` and `categoryIds` for what it takes (both empty means any product);
+  - `allowMessage`, `messageMax`, `isActive`, `sortOrder`.
+
+### 33.47 Rules (`giftboxes/giftbox.rules.ts`, checked in `giftbox.check.ts`)
+- **What a box takes:** hand-picked products, and anything in its categories or their sub-categories. Never the box product itself.
+- **Each box in an order needs:**
+  - exactly one box line, quantity 1, of the right box product;
+  - between min and max items;
+  - only products it takes;
+  - a message only if allowed, and no longer than the limit.
+- **Also refused:** a box that was switched off or deleted ("no longer available"), and more than 10 boxes in one order.
+- **Problems** are worded for the shopper and stop checkout, like any cart problem.
+- **Wiring:** `StorefrontService.quoteOrder` runs the check (the file is separate to avoid an import cycle), and `createOrder` writes the box onto the order lines.
+
+### 33.48 API
+- **Admin, under `/api/admin/gift-boxes`** (Products permissions):
+  - list (with boxes sold: box lines on orders that weren't cancelled or failed), one box (with its hand-picked products' names);
+  - create, change, delete.
+  - Set-up checks: address, most ≥ fewest, the box can't hold itself, and products and categories must be the store's own.
+- **Storefront, under `/api/storefront/gift-boxes`:**
+  - `GET /`: boxes that are on sale, with a published box product;
+  - `GET /:slug`: the box's rules, its box product with styles (options) and prices, and what it takes. Products are browsed through the normal products list (`?ids=`, `?categoryId=`).
+- **Order views:** the thank-you page's lines include `giftBox`.
+
+### 33.49 Storefront
+- **Cart (`CartProvider`, storefront-base):**
+  - boxes are kept apart from loose items (`boxes`, `addBox`, `removeBox`) and saved in the browser;
+  - a box counts as one item in the cart count, and its lines are in the subtotal and weight;
+  - price updates apply to box contents too;
+  - `cartOrderLines()` gives checkout and the price check every line with its box tag;
+  - "Clear cart" and a placed order empty the boxes too.
+- **`/gift-boxes`:** the boxes on sale, with how many items each takes and the box price.
+- **Builder (`/gift-boxes/[slug]`):**
+  - pick a style;
+  - a grid of what the box takes (sold-out items can't be picked; options are chosen right on the card);
+  - a side panel with the box so far ("3 of 4 items", "Add 1 more" / "Ready"), quantity buttons, the card message with a counter, and the total;
+  - "Add box to cart" works only once the box is valid;
+  - never cached, so admin changes show at once.
+- **Gift box card** (drawer, cart page, checkout summary): box and style, each item and price, the message, the box total, "Remove box". If something in the box can't be bought (sold out, say), the card shows why.
+- **Thank-you page:** "Gift box" / "In the gift box" under the lines, with the message.
+- **Language:** all text in English and Bangla.
+
+### 33.50 Store admin
+- **Catalog → Gift boxes:**
+  - a list with box product and price, items (min–max), what it takes, status ("On sale", "Off", "Box product hidden") and sold;
+  - an editor with name, description, box product search, picture, fewest and most items, a category tree to tick, product search for extra products, on sale, address, list order, message card on/off and its length.
+- **Order page:** box lines are labelled ("Gift box · name", "In gift box · name"), and the card message gets its own row under the box ("Card for Eid gift box: …").
+
+### 33.51 Checked
+- **Tests:** 642/642 API tests and 4/4 storefront Bangla tests. New ones:
+  - 5 unit tests: what a box takes (sub-categories included), a good box, item counts, wrong products, a wrong box line, message rules, several boxes, a box switched off;
+  - 5 database tests:
+    - set-up checks;
+    - the storefront list and builder data;
+    - checkout refusing too few items, a product the box doesn't take, and a long message;
+    - a good box priced like its lines, with name, role and message on the order lines and "sold" 1;
+    - a box switched off, hidden and refused at checkout.
+- **Chromium,** for a box of 2–4 from Accessories plus the white panjabi:
+  - the builder offered exactly the panjabi, the tote bag and the watch (the watch showed "Out of stock");
+  - "Add box to cart" stayed off below 2 items;
+  - I picked two panjabi sizes on the cards and filled the box to 4, after which the other add buttons turned off;
+  - message card; total ৳18,810;
+  - the drawer, cart page and checkout showed the box next to a loose shirt;
+  - the order was placed: the shirt, then the box line and its 4 items tagged, with the card on the order page;
+  - the cart and boxes emptied, and the admin list showed 1 sold;
+  - no page errors.
+- **Fixed while checking:** the builder page was cached for a minute, so after the box was deleted and made again it still sent the old box. Checkout refused it ("no longer available"), and the page is now never cached.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 33.52 Not done
+- **Box discount:** no "10% off when bought in a box"; items cost what they cost alone.
+- **Card and wrapping:** the message goes on the order only; there's no printed card, no packing slip with it, and no wrapping-paper choice apart from the box styles.
+- **Changing a box in the cart:** remove it and build it again.
+- **Staff orders:** the New order screen can't build gift boxes.
+- **Menu link:** `/gift-boxes` has to be added to a menu by hand (Online Store → Menus).

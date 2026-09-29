@@ -41,6 +41,7 @@ import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from 
 import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
+import { checkOrderBoxes } from "../giftboxes/giftbox.check";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -652,6 +653,8 @@ export class StorefrontService {
           onSale: priced.compareAtPrice !== null,
           lineSubtotal: round2(priced.price * line.qty),
           weightKG: num(variant?.weight ?? p.weight) * line.qty,
+          /** Set by quoteOrder once the line's gift box is checked. */
+          giftBox: null as { key: string; giftBoxId: string; name: string; message: string | null; role: "box" | "item" } | null,
         },
       };
     });
@@ -1016,6 +1019,13 @@ export class StorefrontService {
         };
       }
     }
+    // Gift boxes the shopper filled: each checked, then its lines remember the box.
+    const boxed = await checkOrderBoxes(storeId, input.items);
+    for (const message of boxed.problems) fail(message, "CART_INVALID");
+    for (const q of quoted) {
+      const b = q.line.box ? boxed.boxes.get(q.line.box.key) : undefined;
+      if (b && q.priced) q.priced = { ...q.priced, giftBox: { key: b.key, giftBoxId: String(b.giftBoxId), name: b.name, message: b.message, role: q.line.box!.role } };
+    }
     const lines: PricedLine[] = [];
     for (const q of quoted) {
       if (q.problem || !q.priced) fail(q.problem?.message ?? "A product is no longer available", q.problem?.code ?? "CART_INVALID");
@@ -1336,9 +1346,13 @@ export class StorefrontService {
                 lineDiscount,
                 lineTax,
                 lineTotal: round2(l.lineSubtotal - lineDiscount + lineTax),
-                meta: l.flash
-                  ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } }
-                  : undefined,
+                meta:
+                  l.flash || l.giftBox
+                    ? {
+                        ...(l.flash ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } } : {}),
+                        ...(l.giftBox ? { giftBox: l.giftBox } : {}),
+                      }
+                    : undefined,
               };
             }),
               ...giftItems,
@@ -1680,6 +1694,7 @@ function orderView(o: OrderWithItems) {
       lineTotal: num(i.lineSubtotal),
       /** A free gift from a promotion (price 0). */
       giftFrom: ((i.meta as { gift?: { promotionName?: string } } | null)?.gift?.promotionName) ?? null,
+      giftBox: ((i.meta as { giftBox?: { key: string; name: string; message: string | null; role: "box" | "item" } } | null)?.giftBox) ?? null,
     })),
     itemsSubtotal: num(o.itemsSubtotal),
     discountTotal: num(o.discountTotal),

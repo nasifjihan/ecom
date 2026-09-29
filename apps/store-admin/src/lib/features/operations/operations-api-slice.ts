@@ -106,6 +106,8 @@ export interface OrderLine {
   lineTotal: number;
   /** A free gift from this promotion. */
   giftFrom?: string;
+  /** Part of a gift box the shopper filled: the box itself or an item in it, with the card message. */
+  giftBox?: { key: string; name: string; role: "box" | "item"; message: string | null };
 }
 
 /** An automatic promotion the order got (Order.promotions). */
@@ -601,7 +603,7 @@ interface ApiOrder {
     unitPrice: string;
     lineTotal: string;
     variantValues: Record<string, string> | null;
-    meta?: { gift?: { promotionName?: string } } | null;
+    meta?: { gift?: { promotionName?: string }; giftBox?: { key: string; name: string; role: "box" | "item"; message: string | null } } | null;
   }[];
   statusHistory?: {
     id: string;
@@ -653,6 +655,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     unitPrice: Number(i.unitPrice),
     lineTotal: Number(i.lineTotal),
     giftFrom: i.meta?.gift?.promotionName,
+    giftBox: i.meta?.giftBox ?? undefined,
   }));
   return {
     id: o.id,

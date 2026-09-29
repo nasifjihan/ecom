@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -391,7 +391,8 @@ export default function OrderDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {order.lines.map((l: OrderLine) => (
-                    <TableRow key={l.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <Fragment key={l.id}>
+                    <TableRow className="border-slate-200 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 shrink-0 overflow-hidden">
@@ -408,6 +409,11 @@ export default function OrderDetailPage() {
                                 Free gift · {l.giftFrom}
                               </span>
                             )}
+                            {l.giftBox && (
+                              <span className="mt-0.5 block text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                                {l.giftBox.role === "box" ? "Gift box" : "In gift box"} · {l.giftBox.name}
+                              </span>
+                            )}
                             <div className="text-xs text-slate-500 font-mono">{l.sku}</div>
                           </div>
                         </div>
@@ -416,6 +422,15 @@ export default function OrderDetailPage() {
                       <TableCell className="text-right text-sm text-slate-600 dark:text-slate-400">{formatCurrency(l.unitPrice)}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">{formatCurrency(l.lineTotal)}</TableCell>
                     </TableRow>
+                    {l.giftBox?.role === "box" && l.giftBox.message && (
+                      <TableRow className="border-slate-200 dark:border-slate-800">
+                        <TableCell colSpan={4} className="bg-violet-50/60 py-2 text-sm dark:bg-violet-500/10">
+                          <span className="font-medium text-violet-700 dark:text-violet-300">Card for {l.giftBox.name}:</span>{" "}
+                          <span className="italic text-slate-700 dark:text-slate-200">“{l.giftBox.message}”</span>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>

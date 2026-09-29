@@ -32,6 +32,7 @@ import {
   Skeleton,
   Label,
   useCart,
+  GiftBoxCartCard,
   useGetProductsQuery,
   useT,
   cn,
@@ -47,7 +48,8 @@ function formatBDT(n: number) {
 }
 
 export default function CartPage() {
-  const { items, subtotal, itemCount, updateQty, removeItem, clearCart } = useCart();
+  const { items, boxes, subtotal, itemCount, updateQty, removeItem, removeBox, clearCart } = useCart();
+  const empty = items.length === 0 && boxes.length === 0;
   const t = useT();
   const [mounted, setMounted] = React.useState(false);
   const { problems, hasProblems, promotions } = useCartPriceCheck();
@@ -94,7 +96,7 @@ export default function CartPage() {
                 </div>
               ))}
             </div>
-          ) : items.length === 0 ? (
+          ) : empty ? (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -143,6 +145,8 @@ export default function CartPage() {
             </motion.div>
           ) : (
             <div className="space-y-3">
+              {items.length > 0 && (
+              <>
               <div className="hidden md:grid grid-cols-[120px_1fr_auto] gap-4 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 rounded-t-2xl border border-b-0">
                 <span>{t("Product")}</span>
                 <div className="grid grid-cols-[1fr_100px_140px_120px_40px] gap-4">
@@ -243,6 +247,20 @@ export default function CartPage() {
                   );
                 })}
               </div>
+              </>
+              )}
+
+              {boxes.map((b) => (
+                <GiftBoxCartCard
+                  key={b.key}
+                  box={b}
+                  problem={[b.box, ...b.items].map((i) => problems[cartLineKey(i.productId, i.variantId)]).find(Boolean)}
+                  onRemove={() => {
+                    removeBox(b.key);
+                    toast.info(t("Gift box removed"));
+                  }}
+                />
+              ))}
 
               <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 p-4 border rounded-2xl bg-muted/20">
                 <div className="flex items-center gap-2 text-sm">
@@ -344,9 +362,9 @@ export default function CartPage() {
                 <Button
                   size="lg"
                   className="w-full h-12 text-base shadow-hover"
-                  disabled={items.length === 0 || hasProblems}
+                  disabled={empty || hasProblems}
                   onClick={() => {
-                    if (items.length === 0 || hasProblems) return;
+                    if (empty || hasProblems) return;
                     window.location.href = "/checkout";
                   }}
                 >

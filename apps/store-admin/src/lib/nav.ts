@@ -107,6 +107,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/catalog/attributes", label: "Attributes", icon: SlidersHorizontal, perm: "attributes.view" },
       { href: "/catalog/media", label: "Media", icon: Image, perm: "media.view" },
       { href: "/catalog/pricing", label: "Price by margin", icon: Calculator, perm: "products.view" },
+      { href: "/catalog/gift-boxes", label: "Gift boxes", icon: Gift, perm: "products.view" },
       { href: "/inventory", label: "Stock", icon: Boxes, perm: "inventory.view" },
       { href: "/inventory/warehouses", label: "Warehouses", icon: Warehouse, perm: "inventory.view" },
       { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "inventory.view" },

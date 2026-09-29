@@ -28,6 +28,8 @@ import {
 import { cn, formatMoney } from "@ecom/utils";
 import { CouponApplyInput, CouponAppliedState } from "./CouponApplyInput";
 import { useT } from "../../i18n/provider";
+import { GiftBoxCartCard } from "../cart/GiftBoxCartCard";
+import { useCart as useCartBoxes } from "../cart/CartProvider";
 
 export type OrderSummaryLineItem = {
   id: string;
@@ -113,6 +115,7 @@ export function OrderSummaryCard({
   className,
 }: OrderSummaryCardProps) {
   const cart = useCart();
+  const { boxes } = useCartBoxes();
   const t = useT();
   const displayItems = items ?? cart.items;
   const displayItemCount = itemCount ?? cart.itemCount;
@@ -181,6 +184,13 @@ export function OrderSummaryCard({
                 {t("+{n} more items", { n: displayItems.length - 5 })}
               </p>
             )}
+          </div>
+        )}
+        {showItemsPreview && !items && boxes.length > 0 && (
+          <div className="space-y-2">
+            {boxes.map((b) => (
+              <GiftBoxCartCard key={b.key} box={b} currency={currency} compact />
+            ))}
           </div>
         )}
 

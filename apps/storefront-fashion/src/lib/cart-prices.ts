@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import { api } from "@ecom/api-client";
-import { formatMoney, toast, useCart, useT, type CartPriceQuote } from "@ecom/storefront-base";
+import { cartOrderLines, formatMoney, toast, useCart, useT, type CartOrderLine, type CartPriceQuote } from "@ecom/storefront-base";
 import type { CartPromotions } from "./promotions";
 import { useAppSelector } from "./store";
 
@@ -22,7 +22,7 @@ const cartPricesApi = api.injectEndpoints({
   endpoints: (builder) => ({
     cartPrices: builder.mutation<
       { items: CartPriceLine[]; promotions: CartPromotions; member: MemberDiscount | null },
-      { items: Array<{ productId: string; variantId?: string; qty: number }>; couponCode?: string; email?: string }
+      { items: CartOrderLine[]; couponCode?: string; email?: string }
     >({
       query: (body) => ({ url: "/storefront/checkout/cart/prices", method: "POST", body }),
     }),
@@ -48,7 +48,7 @@ export const cartLineKey = (productId: string, variantId?: string | null) => `${
  * that coupon applied).
  */
 export function useCartPriceCheck(opts: { couponCode?: string; email?: string } = {}) {
-  const { items, syncPrices } = useCart();
+  const { items, boxes, syncPrices } = useCart();
   const t = useT();
   const [check] = useCartPricesMutation();
   const [problems, setProblems] = React.useState<Record<string, string>>({});
@@ -60,12 +60,14 @@ export function useCartPriceCheck(opts: { couponCode?: string; email?: string } 
   const { couponCode, email } = opts;
   const [round, setRound] = React.useState(0);
 
-  const key = items.map((i) => `${cartLineKey(i.productId, i.variantId)}x${i.qty}`).join("|");
-  const itemsRef = React.useRef(items);
-  itemsRef.current = items;
+  // Gift boxes' lines are priced too (their products can change price like any other).
+  const allLines = cartOrderLines(items, boxes);
+  const key = allLines.map((i) => `${cartLineKey(i.productId, i.variantId)}x${i.qty}${i.box ? `@${i.box.key}` : ""}`).join("|");
+  const linesRef = React.useRef(allLines);
+  linesRef.current = allLines;
 
   React.useEffect(() => {
-    const lines = itemsRef.current.map((i) => ({ productId: i.productId, variantId: i.variantId, qty: i.qty }));
+    const lines = linesRef.current;
     if (!lines.length) {
       setProblems({});
       setPromotions(null);
