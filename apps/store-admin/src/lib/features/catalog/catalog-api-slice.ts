@@ -1,6 +1,6 @@
 "use client";
 
-import { api, toPaginated } from "@ecom/api-client";
+import { api, fileResponse, toPaginated } from "@ecom/api-client";
 import { ProductStatus, ExportFormat } from "@ecom/shared-types";
 
 export interface ProductVariant {
@@ -309,6 +309,30 @@ function flattenCategories(nodes: ApiRow[], depth = 0, parent: { id: string; nam
     };
     return [self, ...flattenCategories(children, depth + 1, { id: String(n.id), name: String(n.name) })];
   });
+}
+
+/** Product import (API: modules/catalog/import). One entry per product in the sheet. */
+export interface ImportPreviewProduct {
+  sku: string;
+  name: string | null;
+  action: "create" | "update";
+  rows: number[];
+  variants: number;
+  errors: { row: number; message: string }[];
+}
+
+export interface ImportPreview {
+  summary: { rows: number; create: number; update: number; withErrors: number; variants: number };
+  fileErrors: string[];
+  products: ImportPreviewProduct[];
+  unknownColumns: string[];
+}
+
+export interface ImportResult {
+  created: number;
+  updated: number;
+  done: { sku: string; action: "create" | "update"; id: string }[];
+  failed: { sku: string; rows: number[]; message: string }[];
 }
 
 export const catalogApiSlice = api.injectEndpoints({
@@ -662,6 +686,24 @@ export const catalogApiSlice = api.injectEndpoints({
         { type: "Media", id: "LIST" },
       ],
     }),
+
+    exportProducts: builder.mutation<string, { format: "csv" | "xlsx"; ids?: (string | number)[] }>({
+      query: ({ format, ids }) => ({
+        url: "/admin/products/export",
+        params: ids?.length ? { format, ids: ids.join(",") } : { format },
+        responseHandler: fileResponse,
+      }),
+    }),
+    productImportTemplate: builder.mutation<string, "csv" | "xlsx">({
+      query: (format) => ({ url: "/admin/products/import/template", params: { format }, responseHandler: fileResponse }),
+    }),
+    previewProductImport: builder.mutation<ImportPreview, FormData>({
+      query: (body) => ({ url: "/admin/products/import/preview", method: "POST", body, formData: true }),
+    }),
+    importProducts: builder.mutation<ImportResult, FormData>({
+      query: (body) => ({ url: "/admin/products/import", method: "POST", body, formData: true }),
+      invalidatesTags: [{ type: "Product", id: "LIST" }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -696,4 +738,8 @@ export const {
   useListMediaQuery,
   useDeleteMediaMutation,
   useUpdateMediaAltTextMutation,
+  useExportProductsMutation,
+  useProductImportTemplateMutation,
+  usePreviewProductImportMutation,
+  useImportProductsMutation,
 } = catalogApiSlice;

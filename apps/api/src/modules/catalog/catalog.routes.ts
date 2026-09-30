@@ -31,12 +31,16 @@ import {
   AddAttributeTermDto,
   ReorderGalleryDto,
 } from "./catalog.dto";
+import { productImportRouter } from "./import/import.routes";
 
 function multerFallback(_req: Request, _res: Response, next: NextFunction): void {
   next();
 }
 
 export const adminProductsRouter = Router();
+
+// Import/export first so "/export" and "/import" never match "/:id".
+adminProductsRouter.use(productImportRouter);
 
 adminProductsRouter.get(
   "/",

@@ -208,7 +208,7 @@ These are our advantages. Keep them.
 | OpenAPI docs at `/api/docs` | ❌ |
 | Audit row on every admin change | ✅ |
 | Background jobs: courier sync, COD, exports, imports | 🟡 (email, courier sync) |
-| Product CSV/XLSX import | ❌ |
+| Product CSV/XLSX import | ✅ Batch 34 (preview with errors per row, create/update by SKU, export in the same columns) |
 
 ---
 

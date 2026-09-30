@@ -3534,3 +3534,86 @@ Staff type a product's options once (Size: S, M, L; Colour: Red, Sky Blue) and g
 - **Adding a new option to existing variants:** variants that had only a size don't get the new option filled in; the new combinations are added alongside them.
 - **Per-option pictures:** there's no picture per option value (for example one photo per colour).
 - **Storefront choosers:** the product page still lists combinations; it doesn't show a separate size and colour picker.
+
+## ✅ BATCH #34 (part 3) — Product import and export (2026-09-30)
+Staff can upload a CSV or Excel sheet of products, see what will happen to each one (with problems listed by row), and then import it: new SKUs are created and known SKUs updated. The catalog, or just the selected products, can be exported in the same columns, edited and imported back. The Products page's Export CSV/XLSX/PDF menu items only showed a "started" message; they now download real files (PDF was dropped).
+
+### 34.11 The sheet (`modules/catalog/import/import.rules.ts`, pure)
+- **Columns:**
+  - product_sku, name, status, category, brand;
+  - price, sale_price, cost_price, stock, weight_kg;
+  - tags, short_description, description, image_urls;
+  - variant_sku, option1–3_name and option1–3_value.
+  - Common other names are accepted ("SKU", "Regular price", "Qty", "Category" …), in any case. Unknown columns are listed and ignored.
+- **Layout:**
+  - One row per product. A variable product has a row for the product and one row per variant, all with the same product_sku.
+  - Rows can be in any order; a product's rows don't need to be together.
+- **Reading values:**
+  - Prices and stock accept ৳, commas and Bangla digits ("৳2,500", "১২৫০").
+  - Tags and image links can be separated by "|" or commas.
+  - Status words are loose ("Active" means published).
+  - CSV files can be separated by commas, semicolons or tabs, and a leading BOM is ignored.
+- **Matching:**
+  - Products are matched by product_sku, not by name.
+  - A category is written as a path ("Men > Panjabi") or a name that is unique; it must already exist.
+  - A brand must match by name.
+- **Problems are per product:**
+  - Examples: a price that isn't a number, a sale price above the price, a new product without a name or price, an unknown category or brand, a variant SKU used by another product, the same options twice.
+  - The product with the problem is skipped and every other product still imports.
+- **Limits:** 2,000 rows and 5 MB per file.
+
+### 34.12 API (`import.service.ts`, `import.routes.ts` on `/admin/products`)
+- **Routes:**
+  - `GET /export?format=csv|xlsx[&ids=…]` needs products.view;
+  - `GET /import/template?format=` is a filled-in example;
+  - `POST /import/preview` needs products.create and saves nothing;
+  - `POST /import` needs products.create and products.edit.
+  - They are mounted before `/:id`.
+- **Creating:** goes through the same `CatalogService.createProduct` as the product form: slug, stock through the ledger, variants, categories and images.
+- **Updating:**
+  - Only filled cells change; empty cells leave current values alone.
+  - The sheet's category becomes the main one and the product's other categories stay.
+  - Variants are matched by variant SKU, or else by their options. Matched variants keep their id; new ones are added; variants missing from the sheet are kept, not deleted.
+- **Export:**
+  - Covers every product outside the Trash, one row per product plus one per variant.
+  - Uses the raw column names, so the file imports back as updates with no changes.
+  - Excel exports have no title row, so they import back as well.
+
+### 34.13 Store admin
+- **Products page:**
+  - an "Import" button;
+  - an "Export" menu (CSV or Excel) for all products;
+  - in Bulk actions, "Export selected" (CSV or Excel) in place of the fake items.
+- **Import page (`/catalog/products/import`):**
+  - short instructions and template downloads (CSV and Excel);
+  - "Choose file" checks the file straight away and shows counts: rows, new, to update, variants, with problems;
+  - a table per product (rows, SKU, name, variants, Create/Update/Skip, problems by row);
+  - "Import N products";
+  - the result, listing each skipped product with its reasons.
+
+### 34.14 Checked
+- **Tests:**
+  - 8 unit tests for the rules: aliases, separators, quoted cells, ৳/commas/Bangla digits, grouping variants, errors per product, category paths.
+  - 4 integration tests against Postgres:
+    - preview saves nothing;
+    - create skips the bad product;
+    - update by SKU keeps variant ids and changes only filled cells;
+    - export imports back as 2 updates with no changes.
+  - Full API suite: 658 passing.
+- **Chromium (dev data):**
+  - "Export → CSV" downloaded all products (43 lines with variants) and Excel downloaded too.
+  - Importing a 5-row sheet previewed "2 new, 1 to update, 2 variants, 1 with problems". The bad row listed an unknown category, "abc" as the price, and no price.
+  - "Import 3 products" gave "2 created, 1 updated, 1 skipped":
+    - FBD-0003 went to stock 7 at ৳1,999;
+    - a new draft was created at ৳1,250 (entered as "১২৫০");
+    - a variable product was created with Size M/L variants.
+  - "Export selected" with one product selected gave just that product's rows.
+- **Lint and builds:** no new lint errors; API typecheck, admin and storefront builds pass.
+- **Dev data:** the import check changed FBD-0003 (stock 50 → 7, price ৳3,690 → ৳1,999) and added two draft products, IMP-MUNKMN9E and IMP2-MUNKMN9E.
+
+### 34.15 Not done
+- **Background jobs:** imports run in the request. 2,000 rows is fine; a much bigger catalog would need a background job (Batch 39).
+- **Images:** image links are saved as they are; the pictures aren't downloaded into the media library.
+- **Missing categories and brands:** these aren't created automatically; the row is skipped with a message.
+- **Deletes:** variants missing from a sheet are kept, not deleted, and products aren't deleted by import.
+- **Phone layout:** on a phone, the admin's sidebar stays open and squeezes every page, including this one. This is an existing layout issue, not part of this change.

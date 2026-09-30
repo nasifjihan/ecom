@@ -33,6 +33,7 @@ import {
   Check,
   X,
   RotateCcw,
+  Upload,
 } from "lucide-react";
 import {
   Button,
@@ -75,11 +76,13 @@ import {
   useBulkUpdateProductsMutation,
   useRestoreProductsMutation,
   usePurgeProductsMutation,
+  useExportProductsMutation,
   useGetCategoriesQuery,
   useGetBrandsQuery,
   type Product,
 } from "@/lib/features/catalog/catalog-api-slice";
 import { cn } from "@/components/ui";
+import { openFile } from "@ecom/api-client";
 import { errorText } from "@/lib/features/content/content-api-slice";
 
 const STATUS_OPTIONS = [
@@ -426,6 +429,12 @@ export default function ProductsPage() {
   );
   const [bulkDelete] = useBulkDeleteProductsMutation();
   const [bulkUpdate] = useBulkUpdateProductsMutation();
+  const [loadExport] = useExportProductsMutation();
+  /** Downloads the catalog (or just `ids`) in the import's columns, so it can be edited and imported back. */
+  const exportSheet = (format: "csv" | "xlsx", ids?: (string | number)[]) =>
+    openFile(() => loadExport({ format, ids }).unwrap(), { filename: `products.${format}`, mode: "download" }).catch((err: unknown) =>
+      toast.error(errorText(err, "Export failed")),
+    );
 
   const products = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -711,9 +720,29 @@ export default function ProductsPage() {
             Manage your product catalog — create, edit, and organize products.
           </p>
         </div>
-        <Button onClick={() => router.push("/catalog/products/new")} className="gap-2">
-          <Plus className="h-4 w-4" /> Add Product
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-2" asChild>
+            <Link href="/catalog/products/import">
+              <Upload className="h-4 w-4" /> Import
+            </Link>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Download className="h-4 w-4" /> Export
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>All products</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => void exportSheet("csv")}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportSheet("xlsx")}>Excel (.xlsx)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={() => router.push("/catalog/products/new")} className="gap-2">
+            <Plus className="h-4 w-4" /> Add Product
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -758,15 +787,12 @@ export default function ProductsPage() {
                     </>
                   ) : (
                   <>
-                  <DropdownMenuLabel>Export</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => toast.success("CSV export started")}>
+                  <DropdownMenuLabel>Export selected</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => void exportSheet("csv", selectedIds)}>
                     <Download className="mr-2 h-4 w-4" /> Export CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.success("XLSX export started")}>
-                    <Download className="mr-2 h-4 w-4" /> Export XLSX
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.success("PDF export started")}>
-                    <Download className="mr-2 h-4 w-4" /> Export PDF
+                  <DropdownMenuItem onClick={() => void exportSheet("xlsx", selectedIds)}>
+                    <Download className="mr-2 h-4 w-4" /> Export Excel
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleBulkStatus("published")}>
