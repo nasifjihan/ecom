@@ -166,6 +166,8 @@ export class CatalogService extends BaseService {
         individuallySold: dto.individuallySold,
         requireShipping: dto.requireShipping,
         status: dto.status,
+        createdById: this.ctx.admin?.id ?? null,
+        updatedById: this.ctx.admin?.id ?? null,
         featured: dto.featured,
         allowReviews: dto.allowReviews,
         seoTitle: dto.seoTitle ?? null,
@@ -244,6 +246,7 @@ export class CatalogService extends BaseService {
 
     const existing = await prisma.product.findFirst({ where: { id: productId, storeId } });
     if (!existing) throw new NotFoundError("product", id);
+    if (existing.deletedAt) throw new BadRequestError("This product is in the Trash. Restore it before changing it.", "VALIDATION_FAILED");
 
     let uniqueSlug: string | undefined = undefined;
     if (dto.slug !== undefined && dto.slug !== existing.slug) {
@@ -281,6 +284,7 @@ export class CatalogService extends BaseService {
         (updateData as any)[key] = (dto as any)[key];
       }
       if (uniqueSlug !== undefined) updateData.slug = uniqueSlug;
+      updateData.updatedById = this.ctx.admin?.id ?? null;
 
       if (Object.keys(updateData).length > 0) {
         await t.product.update({ where: { id: productId }, data: updateData });
@@ -362,30 +366,48 @@ export class CatalogService extends BaseService {
     return this.products.findFull(this.ctx, productId);
   }
 
+  /** Hides products from the storefront but keeps them in the catalog (bulk "Archive"). */
   async softArchiveProduct(ids: bigint[]) {
+    return this.setStatus(ids, "archived")
+  }
+
+  /** Back to draft: off the storefront until published again (bulk "Unpublish"). */
+  async softUnpublishProduct(ids: bigint[]) {
+    return this.setStatus(ids, "draft")
+  }
+
+  /** On the storefront (bulk "Publish"). */
+  async publishProducts(ids: bigint[]) {
+    return this.setStatus(ids, "published")
+  }
+
+  private async setStatus(ids: bigint[], status: "archived" | "draft" | "published") {
     const storeId = this.ctx.storeId!;
     const bigIds = ids.map((i) => BigInt(i));
     const result = await prisma.product.updateMany({
-      where: { id: { in: bigIds }, storeId },
-      data: { status: "ARCHIVED" } as any,
+      where: { id: { in: bigIds }, storeId, deletedAt: null },
+      data: { status, updatedById: this.ctx.admin?.id ?? null },
     });
-    if (bigIds.length > 0) {
-      await this.invalidateProductCache(bigIds[0]!);
-    }
+    for (const id of bigIds) await this.invalidateProductCache(id);
     return result;
   }
 
-  async softUnpublishProduct(ids: bigint[]) {
+  /**
+   * Moves products to the Trash: hidden everywhere (status "archived"), their previous status kept
+   * for Restore. Orders, carts and reports that name them are unaffected.
+   */
+  async trashProducts(ids: bigint[]) {
     const storeId = this.ctx.storeId!;
-    const bigIds = ids.map((i) => BigInt(i));
-    const result = await prisma.product.updateMany({
-      where: { id: { in: bigIds }, storeId },
-      data: { status: "DRAFT" },
-    });
-    if (bigIds.length > 0) {
-      await this.invalidateProductCache(bigIds[0]!);
-    }
-    return result;
+    const rows = await prisma.product.findMany({ where: { id: { in: ids }, storeId, deletedAt: null }, select: { id: true, status: true } });
+    const by = this.ctx.admin?.id ?? null;
+    const now = new Date();
+    await prisma.$transaction(
+      rows.map((r) =>
+        prisma.product.update({ where: { id: r.id }, data: { deletedAt: now, deletedById: by, statusBeforeDelete: r.status, status: "archived" } }),
+      ),
+    );
+    for (const r of rows) await this.invalidateProductCache(r.id);
+    return { count: rows.length };
   }
 
   async softDeleteProduct(id: bigint | number) {
@@ -393,12 +415,65 @@ export class CatalogService extends BaseService {
     const productId = BigInt(id);
     const existing = await prisma.product.findFirst({ where: { id: productId, storeId } });
     if (!existing) throw new NotFoundError("product", id);
-    const result = await prisma.product.update({
-      where: { id: productId },
-      data: { status: "ARCHIVED" },
-    });
-    await this.invalidateProductCache(productId);
-    return result;
+    return this.trashProducts([productId]);
+  }
+
+  /** Takes products out of the Trash, back to the status they had. */
+  async restoreProducts(ids: bigint[]) {
+    const storeId = this.ctx.storeId!;
+    const rows = await prisma.product.findMany({ where: { id: { in: ids }, storeId, deletedAt: { not: null } }, select: { id: true, statusBeforeDelete: true } });
+    await prisma.$transaction(
+      rows.map((r) =>
+        prisma.product.update({
+          where: { id: r.id },
+          data: { deletedAt: null, deletedById: null, status: r.statusBeforeDelete ?? "draft", statusBeforeDelete: null, updatedById: this.ctx.admin?.id ?? null },
+        }),
+      ),
+    );
+    for (const r of rows) await this.invalidateProductCache(r.id);
+    return { count: rows.length };
+  }
+
+  /**
+   * Deletes products in the Trash for good. A product something else depends on (a gift box, a
+   * landing page, a purchase, a stock transfer) stays in the Trash, with the reason. Past orders
+   * and stock history keep their records: names and prices are copied onto them.
+   */
+  async purgeProducts(ids: bigint[]) {
+    const storeId = this.ctx.storeId!;
+    const rows = await prisma.product.findMany({ where: { id: { in: ids }, storeId, deletedAt: { not: null } }, select: { id: true, name: true } });
+    const deleted: string[] = [];
+    const kept: { id: string; name: string; reason: string }[] = [];
+    for (const r of rows) {
+      // Stock history and past orders keep their records (they lose only the link to the product).
+      const [boxes, pages, purchases, transfers] = await Promise.all([
+        prisma.giftBox.count({ where: { boxProductId: r.id } }),
+        prisma.landingPage.count({ where: { productId: r.id } }),
+        prisma.purchaseItem.count({ where: { productId: r.id } }),
+        prisma.stockTransferItem.count({ where: { productId: r.id } }),
+      ]);
+      const reason = boxes
+        ? "It's the box of a gift box"
+        : pages
+          ? "A landing page sells it"
+          : purchases
+            ? "It's on a purchase from a supplier"
+            : transfers
+              ? "It's on a stock transfer"
+              : null;
+      if (reason) {
+        kept.push({ id: String(r.id), name: r.name, reason });
+        continue;
+      }
+      try {
+        await prisma.product.delete({ where: { id: r.id } });
+        deleted.push(String(r.id));
+      } catch (e) {
+        if ((e as { code?: string }).code !== "P2003") throw e;
+        kept.push({ id: String(r.id), name: r.name, reason: "Other records still use it" });
+      }
+    }
+    return { deleted: deleted.length, kept };
   }
 
   async listProducts(filters: ProductSearchQueryDto): Promise<Paginated<any>> {

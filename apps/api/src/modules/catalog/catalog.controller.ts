@@ -87,7 +87,7 @@ class CatalogController extends BaseController {
     const svc = this.getService(req.ctx);
     const params = req.params as unknown as ProductIdParamDtoType;
     await svc.softDeleteProduct(params.id);
-    envelope(res, { status: 200, message: "Product archived" });
+    envelope(res, { status: 200, message: "Moved to the Trash" });
   });
 
   listProductVariants = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

@@ -19,7 +19,12 @@ export class ProductRepository extends BaseRepository<"product"> {
       },
     });
     if (!row) throw new NotFoundError("product", id);
-    return row;
+    // Who made, last changed and deleted it (names for the product page).
+    const r = row as { createdById: bigint | null; updatedById: bigint | null; deletedById: bigint | null };
+    const ids = [r.createdById, r.updatedById, r.deletedById].filter((x): x is bigint => x !== null);
+    const people = ids.length ? await prisma.adminUser.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+    const name = (x: bigint | null) => (x === null ? null : (people.find((p) => p.id === x)?.name ?? "A former team member"));
+    return { ...row, audit: { createdBy: name(r.createdById), updatedBy: name(r.updatedById), deletedBy: name(r.deletedById) } };
   }
 
   async findBySlug(ctx: RequestContext, slug: string, include?: unknown): Promise<unknown | null> {
@@ -43,7 +48,12 @@ export class ProductRepository extends BaseRepository<"product"> {
   ): Promise<Paginated<unknown>> {
     const where: Record<string, unknown> = {};
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
-    if (filters.status) where.status = filters.status;
+    // The Trash has its own view ("deleted"); every other view leaves it out.
+    if (filters.status === "deleted") where.deletedAt = { not: null };
+    else {
+      where.deletedAt = null;
+      if (filters.status) where.status = filters.status;
+    }
     if (filters.brandId) where.brandId = BigInt(filters.brandId);
     if (filters.categoryId) {
       where.categories = { some: { categoryId: BigInt(filters.categoryId) } };

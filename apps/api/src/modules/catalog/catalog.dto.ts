@@ -8,8 +8,21 @@ const noXss = (v: string | null | undefined): boolean => {
   return !XSS_RE.test(v);
 };
 
+/** A product's status. Always stored lowercase; only "published" shows on the storefront. */
+export const PRODUCT_STATUSES = ["draft", "published", "scheduled", "archived"] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+/** Older admin screens sent "PUBLISHED" / "ACTIVE": one spelling from here on. */
+const normalizeStatus = (v: unknown) => {
+  if (typeof v !== "string") return v;
+  const s = v.trim().toLowerCase();
+  if (s === "") return undefined;
+  return s === "active" ? "published" : s;
+};
+const ProductStatusDto = z.preprocess(normalizeStatus, z.enum(PRODUCT_STATUSES));
+
 export const ProductSearchQueryDto = PaginationSchema.extend({
-  status: z.string().optional(),
+  /** A status, or "deleted" for the Trash (left out otherwise). */
+  status: z.preprocess(normalizeStatus, z.enum([...PRODUCT_STATUSES, "deleted"])).optional(),
   categoryId: z.coerce.bigint().optional(),
   brandId: z.coerce.bigint().optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
@@ -150,7 +163,7 @@ const BaseCreateProductDto = z.object({
   virtual: z.boolean().default(false),
   individuallySold: z.boolean().default(false),
   requireShipping: z.boolean().default(true),
-  status: z.string().default("published"),
+  status: ProductStatusDto.default("published"),
   featured: z.boolean().default(false),
   allowReviews: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().nullable().refine(noXss, "No JavaScript injection allowed"),

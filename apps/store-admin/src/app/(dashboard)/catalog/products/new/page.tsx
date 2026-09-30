@@ -81,9 +81,9 @@ const ProductTypeValues = [
 ];
 
 const StatusValues = [
-  { value: "DRAFT", label: "Draft" },
-  { value: "PUBLISHED", label: "Active / Published" },
-  { value: "SCHEDULED", label: "Scheduled" },
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  { value: "scheduled", label: "Scheduled" },
 ];
 
 const productCreateSchema = z.object({
@@ -101,7 +101,7 @@ const productCreateSchema = z.object({
   type: z.enum([ProductType.SIMPLE, ProductType.VARIABLE, ProductType.DIGITAL]).or(
     z.enum(["SUBSCRIPTION", "MADE_TO_ORDER"] as any)
   ),
-  status: z.enum(["DRAFT", "PUBLISHED", "SCHEDULED", "ARCHIVED"] as any).default("DRAFT"),
+  status: z.enum(["draft", "published", "scheduled", "archived"] as any).default("draft"),
   sku: z.string().min(1, { message: "SKU is required" }).max(100),
   shortDescription: z.string().max(500).optional().or(z.literal("")),
   description: z.string().max(20000).optional().or(z.literal("")),
@@ -173,7 +173,7 @@ export default function NewProductPage() {
     name: "",
     slug: "",
     type: ProductType.SIMPLE,
-    status: "DRAFT",
+    status: "draft",
     sku: "",
     shortDescription: "",
     description: "",

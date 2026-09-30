@@ -28,6 +28,10 @@ export interface ProductVariant {
 
 export interface Product {
   id: string | number;
+  /** Set while the product is in the Trash. */
+  deletedAt?: string | null;
+  /** Who made, last changed and deleted it (product page only). */
+  audit?: { createdBy: string | null; updatedBy: string | null; deletedBy: string | null };
   /** Lower-case search and filter words. */
   tags?: string[];
   /** Rows of the product page's specifications table. */
@@ -380,18 +384,35 @@ export const catalogApiSlice = api.injectEndpoints({
       ],
     }),
 
+    /** Moves products to the Trash (restore them from the Deleted view). */
     bulkDeleteProducts: builder.mutation<void, BulkDeleteProductsDto>({
       query: (body) => ({
-        url: "/admin/products/bulk-archive",
+        url: "/admin/products/bulk-delete",
         method: "POST",
         body,
       }),
       invalidatesTags: [{ type: "Product", id: "LIST" }],
     }),
 
+    restoreProducts: builder.mutation<{ count: number }, { ids: (string | number)[] }>({
+      query: (body) => ({ url: "/admin/products/restore", method: "POST", body }),
+      invalidatesTags: [{ type: "Product", id: "LIST" }, "Product"],
+    }),
+
+    /** Deletes products in the Trash for good; ones something depends on stay, with the reason. */
+    purgeProducts: builder.mutation<{ deleted: number; kept: { id: string; name: string; reason: string }[] }, { ids: (string | number)[] }>({
+      query: (body) => ({ url: "/admin/products/purge", method: "POST", body }),
+      invalidatesTags: [{ type: "Product", id: "LIST" }],
+    }),
+
     bulkUpdateProducts: builder.mutation<void, BulkUpdateProductsDto>({
       query: ({ ids, patch }) => {
-        const endpoint = patch.status === ProductStatus.DRAFT ? "/admin/products/bulk-unpublish" : "/admin/products/bulk-archive";
+        const endpoint =
+          patch.status === ProductStatus.DRAFT
+            ? "/admin/products/bulk-unpublish"
+            : patch.status === ProductStatus.PUBLISHED
+              ? "/admin/products/bulk-publish"
+              : "/admin/products/bulk-archive";
         return {
           url: endpoint,
           method: "POST",
@@ -653,6 +674,8 @@ export const {
   useDeleteProductMutation,
   useBulkDeleteProductsMutation,
   useBulkUpdateProductsMutation,
+  useRestoreProductsMutation,
+  usePurgeProductsMutation,
   useGetCategoriesQuery,
   useGetCategoryTreeQuery,
   useCreateCategoryMutation,

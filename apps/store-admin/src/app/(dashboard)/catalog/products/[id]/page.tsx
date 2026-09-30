@@ -22,7 +22,9 @@ import {
   Package,
   Star,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
+import { STOREFRONT_URL } from "@/components/content/shared";
 import {
   Button,
   Card,
@@ -55,6 +57,7 @@ import {
 } from "@/components/ui";
 import {
   useGetProductQuery,
+  useRestoreProductsMutation,
   useUpdateProductMutation,
   useGetCategoriesQuery,
   useGetBrandsQuery,
@@ -83,10 +86,10 @@ const ProductTypeValues = [
 ];
 
 const StatusValues = [
-  { value: "DRAFT", label: "Draft" },
-  { value: "PUBLISHED", label: "Active / Published" },
-  { value: "SCHEDULED", label: "Scheduled" },
-  { value: "ARCHIVED", label: "Archived" },
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "archived", label: "Archived" },
 ];
 
 const productEditSchema = z.object({
@@ -104,7 +107,7 @@ const productEditSchema = z.object({
   type: z.enum([ProductType.SIMPLE, ProductType.VARIABLE, ProductType.DIGITAL]).or(
     z.enum(["SUBSCRIPTION", "MADE_TO_ORDER"] as any)
   ),
-  status: z.enum(["DRAFT", "PUBLISHED", "SCHEDULED", "ARCHIVED"] as any).default("DRAFT"),
+  status: z.enum(["draft", "published", "scheduled", "archived"] as any).default("draft"),
   sku: z.string().min(1, { message: "SKU is required" }).max(100),
   shortDescription: z.string().max(500).optional().or(z.literal("")),
   description: z.string().max(20000).optional().or(z.literal("")),
@@ -167,6 +170,7 @@ export default function EditProductPage() {
   });
 
   const [updateProduct, { isLoading: isSaving }] = useUpdateProductMutation();
+  const [restoreProducts] = useRestoreProductsMutation();
   const [uploadMedia, { isLoading: isUploading }] = useUploadMediaMutation();
 
   const { data: categoriesData } = useGetCategoriesQuery();
@@ -185,7 +189,7 @@ export default function EditProductPage() {
       name: "",
       slug: "",
       type: ProductType.SIMPLE,
-      status: "DRAFT",
+      status: "draft",
       sku: "",
       shortDescription: "",
       description: "",
@@ -222,7 +226,7 @@ export default function EditProductPage() {
         name: product.name || "",
         slug: product.slug || "",
         type: (product.type as any) || ProductType.SIMPLE,
-        status: (product.status as any) || "DRAFT",
+        status: ((product.status as string | undefined)?.toLowerCase() as any) || "draft",
         sku: product.sku || "",
         shortDescription: product.shortDescription || "",
         description: product.description || "",
@@ -494,6 +498,30 @@ export default function EditProductPage() {
     <FormProvider {...methods}>
       <Form onSubmit={handleSubmit(onSubmit, onInvalid)} className="min-h-screen">
         <div className="p-6 space-y-4">
+          {product?.deletedAt && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200" role="status">
+              <span>
+                <Trash2 className="mr-1.5 inline h-4 w-4" aria-hidden />
+                In the Trash since {new Date(product.deletedAt).toLocaleString()}
+                {product.audit?.deletedBy ? ` (moved by ${product.audit.deletedBy})` : ""}. It's off the store and can't be changed until it's restored.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await restoreProducts({ ids: [product.id] }).unwrap();
+                    toast.success("Restored", { description: "Back with the status it had." });
+                  } catch {
+                    toast.error("Couldn't restore the product");
+                  }
+                }}
+              >
+                <RotateCcw className="mr-1.5 h-4 w-4" /> Restore
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="icon" onClick={() => router.back()} title="Back">
@@ -510,18 +538,32 @@ export default function EditProductPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Last updated: {product?.updatedAt ? new Date(product.updatedAt).toLocaleString() : "—"}
+                  {product?.audit?.updatedBy && <> by {product.audit.updatedBy}</>}
+                  {product?.audit?.createdBy && <> · added by {product.audit.createdBy}</>}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => toast.success("Preview opened")}>
-                <Eye className="mr-2 h-4 w-4" /> Preview
-              </Button>
-              <Button type="button" variant="secondary" onClick={handleSubmit(onSubmit, onInvalid)} disabled={isSaving}>
+              {product?.status === "published" && !product.deletedAt && (
+                <Button type="button" variant="outline" asChild>
+                  <a href={`${STOREFRONT_URL}/products/${product.slug}`} target="_blank" rel="noreferrer">
+                    <Eye className="mr-2 h-4 w-4" /> View on store
+                  </a>
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setValue("status", "draft" as any);
+                  void handleSubmit(onSubmit, onInvalid)();
+                }}
+                disabled={isSaving || !!product?.deletedAt}
+              >
                 {isSaving ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Save Draft
               </Button>
-              <Button type="submit" disabled={isSaving}>
+              <Button type="submit" disabled={isSaving || !!product?.deletedAt}>
                 {isSaving ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>

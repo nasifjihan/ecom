@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ import {
   Package,
   Check,
   X,
+  RotateCcw,
 } from "lucide-react";
 import {
   Button,
@@ -72,20 +73,31 @@ import {
   useDeleteProductMutation,
   useBulkDeleteProductsMutation,
   useBulkUpdateProductsMutation,
+  useRestoreProductsMutation,
+  usePurgeProductsMutation,
   useGetCategoriesQuery,
   useGetBrandsQuery,
   type Product,
 } from "@/lib/features/catalog/catalog-api-slice";
 import { cn } from "@/components/ui";
+import { errorText } from "@/lib/features/content/content-api-slice";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All Status" },
-  { value: "PUBLISHED", label: "Active" },
-  { value: "DRAFT", label: "Draft" },
-  { value: "ARCHIVED", label: "Archived" },
-  { value: "SCHEDULED", label: "Scheduled" },
-  { value: "OUT_OF_STOCK", label: "Out of Stock" },
-  { value: "DISCONTINUED", label: "Discontinued" },
+  { value: "published", label: "Published" },
+  { value: "draft", label: "Draft" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "archived", label: "Archived" },
+  { value: "deleted", label: "Deleted (Trash)" },
+];
+
+/** Quick views over the list; "Deleted" is the Trash. */
+const VIEWS = [
+  { value: "", label: "All" },
+  { value: "published", label: "Published" },
+  { value: "draft", label: "Drafts" },
+  { value: "archived", label: "Archived" },
+  { value: "deleted", label: "Deleted" },
 ];
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
@@ -120,7 +132,7 @@ function formatBDT(amount: number | null | undefined): string {
 function StatusBadge({ status }: { status: string }) {
   const s = status.toUpperCase();
   if (s === "PUBLISHED" || s === "ACTIVE") {
-    return <Badge variant="success">Active</Badge>;
+    return <Badge variant="success">Published</Badge>;
   }
   if (s === "DRAFT") {
     return <Badge variant="secondary">Draft</Badge>;
@@ -130,12 +142,6 @@ function StatusBadge({ status }: { status: string }) {
   }
   if (s === "SCHEDULED") {
     return <Badge variant="default">Scheduled</Badge>;
-  }
-  if (s === "OUT_OF_STOCK") {
-    return <Badge variant="destructive">Out of Stock</Badge>;
-  }
-  if (s === "DISCONTINUED") {
-    return <Badge variant="outline">Discontinued</Badge>;
   }
   return <Badge variant="outline">{status}</Badge>;
 }
@@ -182,9 +188,9 @@ function DeleteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete Product{name ? `: ${name}` : ""}</DialogTitle>
+          <DialogTitle>Move to Trash{name ? `: ${name}` : ""}</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. The product will be permanently deleted.
+            It's taken off the store at once. You can restore it from Deleted, or delete it for good from there.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -192,7 +198,7 @@ function DeleteDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={loading}>
-            {loading ? "Deleting..." : "Delete"}
+            {loading ? "Moving..." : "Move to Trash"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -217,9 +223,9 @@ function BulkDeleteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Bulk Delete {count} Products</DialogTitle>
+          <DialogTitle>Move {count} products to the Trash</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete {count} selected products? This action cannot be undone.
+            They're taken off the store at once. You can restore them from Deleted, or delete them for good from there.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -227,7 +233,7 @@ function BulkDeleteDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={loading}>
-            {loading ? "Deleting..." : `Delete ${count} Products`}
+            {loading ? "Moving..." : `Move ${count} to Trash`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -402,6 +408,22 @@ export default function ProductsPage() {
   const { data, isLoading, error, refetch } = useGetProductsQuery(queryParams);
 
   const [deleteProduct] = useDeleteProductMutation();
+  const [restoreMut] = useRestoreProductsMutation();
+  const [purge, { isLoading: purging }] = usePurgeProductsMutation();
+  const [purgeIds, setPurgeIds] = useState<(string | number)[]>([]);
+  const isTrash = appliedFilters.status === "deleted";
+  const restore = useCallback(
+    async (ids: (string | number)[]) => {
+      try {
+        const r = await restoreMut({ ids }).unwrap();
+        toast.success(`${r.count} restored`, { description: "Back with the status they had." });
+        setRowSelection({});
+      } catch (err) {
+        toast.error(errorText(err, "Couldn't restore"));
+      }
+    },
+    [restoreMut],
+  );
   const [bulkDelete] = useBulkDeleteProductsMutation();
   const [bulkUpdate] = useBulkUpdateProductsMutation();
 
@@ -563,6 +585,17 @@ export default function ProductsPage() {
         size: 100,
         cell: ({ row }) => {
           const p = row.original;
+          if (isTrash)
+            return (
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => void restore([p.id])} title="Restore">
+                  <RotateCcw className="mr-1 h-4 w-4" /> Restore
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => setPurgeIds([p.id])} title="Delete forever" aria-label={`Delete ${p.name} forever`}>
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
+              </div>
+            );
           return (
             <div className="flex items-center gap-1">
               <Button
@@ -576,16 +609,8 @@ export default function ProductsPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => toast.success("Product duplicated")}
-                title="Duplicate"
-              >
-                <Copy className="h-4 w-4 text-slate-600 dark:text-slate-300" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
                 onClick={() => setDeleteDialog({ open: true, id: p.id, name: p.name })}
-                title="Delete"
+                title="Move to Trash"
               >
                 <Trash2 className="h-4 w-4 text-red-500" />
               </Button>
@@ -594,7 +619,7 @@ export default function ProductsPage() {
         },
       },
     ],
-    [router]
+    [router, isTrash, restore]
   );
 
   const table = useReactTable({
@@ -627,7 +652,7 @@ export default function ProductsPage() {
     if (!deleteDialog.id) return;
     try {
       await deleteProduct(deleteDialog.id).unwrap();
-      toast.success("Product deleted successfully");
+      toast.success("Moved to the Trash", { description: "Restore it from Deleted if you change your mind." });
       setDeleteDialog({ open: false });
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to delete product");
@@ -638,7 +663,7 @@ export default function ProductsPage() {
     if (selectedIds.length === 0) return;
     try {
       await bulkDelete({ ids: selectedIds }).unwrap();
-      toast.success(`Deleted ${selectedIds.length} products`);
+      toast.success(`${selectedIds.length} moved to the Trash`);
       setBulkDeleteOpen(false);
       setRowSelection({});
     } catch (err: any) {
@@ -646,11 +671,31 @@ export default function ProductsPage() {
     }
   };
 
+  const handlePurge = async () => {
+    try {
+      const r = await purge({ ids: purgeIds }).unwrap();
+      if (r.deleted) toast.success(`${r.deleted} deleted for good`);
+      for (const k of r.kept) toast.error(`${k.name} stays in the Trash`, { description: k.reason });
+      setPurgeIds([]);
+      setRowSelection({});
+    } catch (err) {
+      toast.error(errorText(err, "Couldn't delete the products"));
+    }
+  };
+
+  const setView = (status: string) => {
+    const next = { ...appliedFilters, status };
+    setFilters(next);
+    setAppliedFilters(next);
+    setRowSelection({});
+    setPage(1);
+  };
+
   const handleBulkStatus = async (status: string) => {
     if (selectedIds.length === 0) return;
     try {
       await bulkUpdate({ ids: selectedIds, patch: { status } }).unwrap();
-      toast.success(`Updated ${selectedIds.length} products status to ${status}`);
+      toast.success(`${selectedIds.length} products: ${status}`);
       setRowSelection({});
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to update status");
@@ -702,10 +747,17 @@ export default function ProductsPage() {
                 <DropdownMenuContent className="w-56">
                   <DropdownMenuLabel>Bulk Actions</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => toast.success("Bulk edit not implemented")}>
-                    <Edit3 className="mr-2 h-4 w-4" /> Bulk Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  {isTrash ? (
+                    <>
+                      <DropdownMenuItem onClick={() => void restore(selectedIds)}>
+                        <RotateCcw className="mr-2 h-4 w-4" /> Restore
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setPurgeIds(selectedIds)} className="text-red-600 focus:text-red-600">
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete forever
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                  <>
                   <DropdownMenuLabel>Export</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => toast.success("CSV export started")}>
                     <Download className="mr-2 h-4 w-4" /> Export CSV
@@ -717,29 +769,63 @@ export default function ProductsPage() {
                     <Download className="mr-2 h-4 w-4" /> Export PDF
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleBulkStatus("PUBLISHED")}>
+                  <DropdownMenuItem onClick={() => handleBulkStatus("published")}>
                     <Badge variant="success" className="mr-2">
-                      Active
+                      Published
                     </Badge>
-                    Mark Active
+                    Publish
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatus("DRAFT")}>
+                  <DropdownMenuItem onClick={() => handleBulkStatus("draft")}>
                     <Badge variant="secondary" className="mr-2">
                       Draft
                     </Badge>
-                    Mark Draft
+                    Unpublish
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatus("archived")}>
+                    <Badge variant="outline" className="mr-2">
+                      Archived
+                    </Badge>
+                    Archive
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => setBulkDeleteOpen(true)}
                     className="text-red-600 focus:text-red-600"
                   >
-                    <Trash2 className="mr-2 h-4 w-4" /> Bulk Delete
+                    <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
                   </DropdownMenuItem>
+                  </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
+
+          <div className="flex flex-wrap gap-1 border-b" role="tablist" aria-label="Product views">
+            {VIEWS.map((v) => (
+              <button
+                key={v.value}
+                type="button"
+                role="tab"
+                aria-selected={(appliedFilters.status ?? "") === v.value}
+                onClick={() => setView(v.value)}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                  (appliedFilters.status ?? "") === v.value
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v.value === "deleted" && <Trash2 className="mr-1.5 inline h-3.5 w-3.5" aria-hidden />}
+                {v.label}
+              </button>
+            ))}
+          </div>
+          {isTrash && (
+            <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+              Products in the Trash are off the store. Restore puts them back with the status they had; Delete forever removes them for good.
+            </p>
+          )}
 
           {filterOpen && (
             <FilterPanel
@@ -903,6 +989,24 @@ export default function ProductsPage() {
         onConfirm={handleDeleteConfirm}
         name={deleteDialog.name}
       />
+      <Dialog open={purgeIds.length > 0} onOpenChange={(o) => !o && setPurgeIds([])}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {purgeIds.length === 1 ? "this product" : `${purgeIds.length} products`} for good?</DialogTitle>
+            <DialogDescription>
+              This can't be undone. Past orders and stock history keep their lines. A product a gift box, landing page, purchase or stock transfer uses stays in the Trash.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurgeIds([])} disabled={purging}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handlePurge()} disabled={purging}>
+              {purging ? "Deleting..." : "Delete forever"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <BulkDeleteDialog
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}

@@ -96,7 +96,7 @@ export class InventoryLogRepository extends BaseRepository<"inventoryLog"> {
     opts?: { productId?: bigint; brandId?: bigint; categoryId?: bigint },
   ): Promise<unknown[]> {
     const variantWhere: Record<string, unknown> = {};
-    const productWhere: Record<string, unknown> = {};
+    const productWhere: Record<string, unknown> = { deletedAt: null };
     if (ctx.storeId !== undefined) {
       productWhere.storeId = ctx.storeId;
     }

@@ -83,7 +83,7 @@ export class InventoryService extends BaseService {
    */
   async stockList(q: { search?: string; lowStock?: boolean; outOfStock?: boolean; page: number; perPage: number }) {
     const storeId = this.ctx.storeId;
-    const where: Record<string, unknown> = { ...(storeId !== undefined ? { storeId } : {}), manageStock: true };
+    const where: Record<string, unknown> = { ...(storeId !== undefined ? { storeId } : {}), manageStock: true, deletedAt: null };
     if (q.search) {
       where.OR = [
         { name: { contains: q.search, mode: "insensitive" } },
@@ -194,7 +194,7 @@ export class InventoryService extends BaseService {
   }> {
     const storeId = this.ctx.storeId;
     const variantWhere: Record<string, unknown> = {};
-    const productWhere: Record<string, unknown> = {};
+    const productWhere: Record<string, unknown> = { deletedAt: null };
     if (storeId !== undefined) productWhere.storeId = storeId;
 
     const variants = await prisma.productVariant.findMany({

@@ -15,13 +15,12 @@ export enum ProductType {
   BOOKING = "BOOKING",
 }
 
+/** A product's status, as stored (lowercase). Only "published" shows on the storefront. */
 export enum ProductStatus {
-  DRAFT = "DRAFT",
-  PUBLISHED = "PUBLISHED",
-  SCHEDULED = "SCHEDULED",
-  ARCHIVED = "ARCHIVED",
-  OUT_OF_STOCK = "OUT_OF_STOCK",
-  DISCONTINUED = "DISCONTINUED",
+  DRAFT = "draft",
+  PUBLISHED = "published",
+  SCHEDULED = "scheduled",
+  ARCHIVED = "archived",
 }
 
 export enum StockStatus {

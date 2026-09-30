@@ -904,7 +904,15 @@ model Product {
   virtual               Boolean                @default(false)
   individuallySold      Boolean                @default(false)
   requireShipping       Boolean                @default(true)
+  /// draft | published | scheduled | archived (always lowercase; only "published" shows on the storefront)
   status                String                 @default("published")
+  /// In the Trash (Catalog > Products > Deleted): hidden everywhere, can be restored.
+  deletedAt             DateTime?
+  deletedById           BigInt?
+  /// The status to go back to when restored from the Trash.
+  statusBeforeDelete    String?
+  createdById           BigInt?
+  updatedById           BigInt?
   featured              Boolean                @default(false)
   allowReviews          Boolean                @default(true)
   seoTitle              String?
@@ -947,6 +955,7 @@ model Product {
   @@index([storeId, brandId])
   @@index([storeId, type])
   @@index([tags], type: Gin)
+  @@index([storeId, deletedAt])
 }
 
 model ProductImage {

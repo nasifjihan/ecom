@@ -3424,3 +3424,72 @@ Shoppers fill a gift box themselves at `/gift-boxes/{slug}`: they pick the box's
 - **Changing a box in the cart:** remove it and build it again.
 - **Staff orders:** the New order screen can't build gift boxes.
 - **Menu link:** `/gift-boxes` has to be added to a menu by hand (Online Store → Menus).
+
+## ✅ BATCH #34 (part 1) — Product statuses fixed, Trash, who changed what (2026-09-30)
+Batch 34 is catalog tools. This first part fixes a bug that hid products from the store, and adds a proper Trash for products.
+
+### 34.1 The status bug
+- **What happened:** statuses were spelled two ways. The storefront, reports and pickers look for `published` / `archived` in lowercase, but the admin's product forms and bulk actions sent `PUBLISHED`, `DRAFT` and `ARCHIVED` in capitals.
+- **So:**
+  - publishing a new product from the editor, or changing an existing product's status there, saved `PUBLISHED`, and the product never appeared in the shop;
+  - the list's status filter found nothing;
+  - bulk "Mark Active" called the archive endpoint and archived the products;
+  - bulk "Delete" only archived them.
+- **The fix:**
+  - one set of statuses, `draft | published | scheduled | archived` (`PRODUCT_STATUSES`);
+  - the API accepts any capitalisation (and "active") and stores lowercase;
+  - the shared `ProductStatus` enum now holds the lowercase values; `OUT_OF_STOCK` and `DISCONTINUED`, which weren't statuses, are removed;
+  - the migration lowercases existing rows;
+  - bulk Publish gets its own endpoint (`/bulk-publish`), and the admin sends each bulk action to the right endpoint.
+
+### 34.2 Data (migration `product_trash`)
+- **`Product`:** `deletedAt`, `deletedById`, `statusBeforeDelete`, `createdById`, `updatedById`, and an index on `(storeId, deletedAt)`.
+
+### 34.3 The Trash
+- **Delete** (one product or in bulk, `POST /bulk-delete`) moves products to the Trash:
+  - `deletedAt` and who did it are saved;
+  - the old status is kept, and the status becomes `archived`.
+
+  So they drop out of everything that sells or counts stock: the storefront, carts and checkout ("no longer available"), pickers, reports, the stock pages and the dashboard's low-stock count.
+- **Lists:** the admin list leaves the Trash out; `status=deleted` shows only the Trash.
+- **Editing** a product in the Trash is refused ("Restore it before changing it").
+- **Restore** (`POST /restore`) puts products back with the status they had.
+- **Delete forever** (`POST /purge`) works only on products in the Trash:
+  - refused, with the reason, while a gift box uses it as its box, a landing page sells it, or it's on a purchase or a stock transfer (these would otherwise block or be deleted with it);
+  - past orders and stock history keep their lines (names and prices are copied onto them; the link to the product is cleared).
+- **Who and when:** products record who created them, last changed them and deleted them. The product endpoint returns their names (`audit`).
+
+### 34.4 Store admin
+- **Products list:**
+  - view tabs: All, Published, Drafts, Archived, Deleted;
+  - status labels and the filter use the real statuses;
+  - bulk Publish, Unpublish, Archive and Move to Trash;
+  - honest dialogs ("Move to Trash … you can restore it");
+  - in the Deleted view, rows and bulk actions become Restore and Delete forever, and products kept in the Trash are listed with the reason.
+- **Product page:**
+  - a red banner while the product is in the Trash (when, by whom, and Restore); saving is disabled until it's restored;
+  - "Last updated … by … · added by …";
+  - "View on store" (only while published);
+  - "Save Draft" now really saves as a draft.
+- **Placeholders removed:** a "Duplicate" button and a "Bulk Edit" item that only showed a message.
+
+### 34.5 Checked
+- **Tests:** 646/646 API tests. New: 4 database tests:
+  - statuses saved lowercase from "PUBLISHED" and "Active", and "SOLD_OUT" refused;
+  - the storefront shows a product published from the editor;
+  - who made and changed a product;
+  - the Trash: hidden from the list and the store, edits refused, restored to "draft" and "published";
+  - delete forever refused for a product with a landing page, and allowed for one with nothing depending on it.
+- **Chromium:**
+  - on the product page, Draft saved as `draft` and the store answered 404; Published saved `published`, and the store answered 200;
+  - the "last updated by" line showed the owner;
+  - Move to Trash showed the dialog, and the store answered 404; the product was gone from All and listed under Deleted;
+  - the product page showed the banner, and Restore brought it back published (store 200);
+  - Delete forever of two products removed the test product and kept "Gift box — kraft" ("It's the box of a gift box"), which was then restored;
+  - no page errors.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 34.6 Not done
+- **Emptying the Trash:** no automatic emptying after 30 days.
+- **Addresses:** a product in the Trash keeps its web address, so a new product with the same name gets "-2".
+- **Other items:** categories, brands and other items are still deleted directly.

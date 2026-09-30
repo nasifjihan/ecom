@@ -410,6 +410,7 @@ export class StoreDashboardRepo {
     const products = await prisma.product.findMany({
       where: {
         manageStock: true,
+        deletedAt: null,
         variants: { none: {} },
         ...this.storeWhere(),
       } as any,

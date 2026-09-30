@@ -6,6 +6,7 @@ import { ctrl, envelope, paginate, NotFoundError, TooLargeError, UnsupportedMedi
 import { PaginationSchema } from "@ecom/zod-schemas";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { catalogController } from "./catalog.controller";
+import { CatalogService } from "./catalog.service";
 import {
   ProductSearchQueryDto,
   CreateProductDto,
@@ -91,6 +92,50 @@ adminProductsRouter.post(
   rbacMiddleware("products.edit"),
   validate({ body: BulkProductStatusDto }),
   catalogController.unpublishBulk,
+);
+
+// The Trash: move products in, take them out, or delete them for good.
+const TrashDto = z.object({ ids: z.array(z.coerce.bigint().positive()).min(1).max(500) });
+const trashIds = (req: Request) => (req.body as z.infer<typeof TrashDto>).ids;
+adminProductsRouter.post(
+  "/bulk-delete",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.delete"),
+  validate({ body: TrashDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const r = await new CatalogService(req.ctx).trashProducts(trashIds(req));
+    envelope(res, { data: r, message: `${r.count} moved to the Trash` });
+  }),
+);
+adminProductsRouter.post(
+  "/bulk-publish",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.edit"),
+  validate({ body: TrashDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const r = await new CatalogService(req.ctx).publishProducts(trashIds(req));
+    envelope(res, { data: { count: r.count }, message: `published ${r.count}` });
+  }),
+);
+adminProductsRouter.post(
+  "/restore",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.delete"),
+  validate({ body: TrashDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const r = await new CatalogService(req.ctx).restoreProducts(trashIds(req));
+    envelope(res, { data: r, message: `${r.count} restored` });
+  }),
+);
+adminProductsRouter.post(
+  "/purge",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.delete"),
+  validate({ body: TrashDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const r = await new CatalogService(req.ctx).purgeProducts(trashIds(req));
+    envelope(res, { data: r, message: `${r.deleted} deleted for good` });
+  }),
 );
 
 adminProductsRouter.delete(
