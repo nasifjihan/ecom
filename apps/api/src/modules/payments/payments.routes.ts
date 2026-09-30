@@ -15,6 +15,7 @@
  *   GET|PUT /api/admin/payment-methods/:code/keys    bKash / SSLCommerz merchant keys (masked; blank keeps)
  *   POST /api/admin/payment-methods/:code/keys/test  checks the keys with the gateway
  *   POST /api/admin/payments/attempts/:id/recheck    asks the gateway again about an online payment try
+ *   POST /api/admin/payments/refunds/:id/check       how a refund SSLCommerz was still processing ended
  *   POST /api/storefront/account/orders/:orderRef/payments   the customer reports a transfer
  *   POST /api/storefront/checkout/orders/:orderKey/payment   same, from the thank-you page (no login)
  *   POST /api/storefront/checkout/orders/:orderKey/pay       a new online payment try ("Pay now")
@@ -65,6 +66,7 @@ adminPaymentRecordsRouter.get("/", rbacMiddleware("payments.view"), validate({ q
 adminPaymentRecordsRouter.post("/:id/verify", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: VerifyDto }), send((r) => svc(r).verify(id(r), r.body as VerifyDto)));
 adminPaymentRecordsRouter.post("/:id/reject", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: RejectDto }), send((r) => svc(r).reject(id(r), r.body as RejectDto)));
 adminPaymentRecordsRouter.post("/:id/not-collected", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: NotCollectedDto }), send((r) => svc(r).markNotCollected(id(r), r.body as NotCollectedDto)));
+adminPaymentRecordsRouter.post("/refunds/:id/check", rbacMiddleware("payments.edit"), validate({ params: IdParam }), send((r) => online(r).checkRefund(id(r))));
 adminPaymentRecordsRouter.post("/attempts/:id/recheck", rbacMiddleware("payments.edit"), validate({ params: IdParam }), send((r) => online(r).recheck(id(r))));
 
 /** Mounted on /api/admin/orders before the orders router. */
@@ -172,7 +174,12 @@ paymentReturnRouter.all("/:gateway", validate({ params: Gateway, query: Back }),
     const q = req.query as unknown as z.infer<typeof Back>;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const valId = typeof body.val_id === "string" ? body.val_id : null;
-    const { redirect } = await OnlinePaymentsService.finish(gateway, q.attempt, { valId, result: q.result ?? null });
+    const { redirect } = await OnlinePaymentsService.finish(
+      gateway,
+      q.attempt,
+      { valId, result: q.result ?? null },
+      { source: "return", payload: { ...(req.query as Record<string, unknown>), ...body }, ip: req.ip },
+    );
     res.redirect(303, redirect);
   } catch (e) {
     next(e);
@@ -183,7 +190,7 @@ paymentReturnRouter.all("/:gateway", validate({ params: Gateway, query: Back }),
 export const paymentIpnRouter = Router();
 paymentIpnRouter.post("/sslcommerz", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { outcome } = await OnlinePaymentsService.ipn("sslcommerz", (req.body ?? {}) as Record<string, unknown>);
+    const { outcome } = await OnlinePaymentsService.ipn("sslcommerz", (req.body ?? {}) as Record<string, unknown>, req.ip);
     res.status(200).json({ received: true, status: outcome });
   } catch (e) {
     next(e);

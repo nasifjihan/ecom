@@ -1,6 +1,8 @@
 "use client";
 
 /** Order page: return requests, their history, and refunds (by item, extra amount, or against a return). */
+import { useIdempotencyKey } from "@/lib/idempotency";
+import { useCheckGatewayRefundMutation } from "@/lib/features/operations/payments-api-slice";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Undo2, Wallet } from "lucide-react";
@@ -193,8 +195,10 @@ export function ReturnsCard({ order, canEdit }: Props) {
               <div className="text-xs text-slate-500">
                 {when(f.createdAt)}
                 {f.returnRequestId && <> · for {returns.find((r) => r.id === f.returnRequestId)?.code ?? "a return"}</>}
-                {f.gatewayRefunded && <> · sent back through the gateway</>}
+                {f.gatewayStatus === "done" && <> · sent back through the gateway{f.gatewayRef ? ` (${f.gatewayRef})` : ""}</>}
               </div>
+              {f.gatewayStatus === "processing" && <GatewayRefundCheck refundId={f.id} orderId={String(order.id)} />}
+              {f.gatewayStatus === "failed" && <div className="text-xs text-red-600">{f.gatewayNote ?? "The gateway didn't complete it: pay it back another way"}</div>}
             </div>
           ))}
         </div>
@@ -356,6 +360,8 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
   const [note, setNote] = useState("");
   const [restock, setRestock] = useState(!ret);
   const [createRefund, { isLoading }] = useCreateRefundMutation();
+  // A double click refunds once.
+  const withKey = useIdempotencyKey();
 
   const items = Object.entries(qty).filter(([, q]) => q > 0).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
   const itemsTotal = r2(items.reduce((s, i) => {
@@ -367,7 +373,7 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
 
   async function submit() {
     try {
-      const f = await createRefund({
+      const f = await createRefund(withKey({
         orderId: order.id,
         items: items.length ? items : undefined,
         extraAmount: Number(extra) > 0 ? Number(extra) : undefined,
@@ -376,7 +382,7 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
         note: note.trim() || undefined,
         restock,
         returnRequestId: returnId,
-      }).unwrap();
+      })).unwrap();
       toast.success(`Refunded ${money(f.amount)}${f.gatewayRefunded ? " through the payment gateway" : ""}`);
       onClose();
     } catch (e) {
@@ -443,6 +449,12 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
           {method === "store_credit" && (
             <p className="text-xs text-slate-500">The amount is added to the customer's store credit.</p>
           )}
+          {method === "original" && ["BKASH", "SSLCOMMERZ"].includes(order.paymentMethod.toUpperCase()) && (
+            <p className="text-xs text-slate-500">
+              If the order was paid online, the money goes back through {order.paymentMethod.toUpperCase() === "BKASH" ? "bKash" : "SSLCommerz"} straight
+              away. If it refuses, nothing is refunded and you can try again or pick another way.
+            </p>
+          )}
           <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
             <span className="text-sm text-slate-500">Refund total</span>
             <span className={cn("text-2xl font-bold", total > room ? "text-red-600" : "text-slate-900 dark:text-white")}>{money(total)}</span>
@@ -456,5 +468,28 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A refund SSLCommerz is still sending: say so, and ask it again. */
+function GatewayRefundCheck({ refundId, orderId }: { refundId: string; orderId: string }) {
+  const [check, { isLoading }] = useCheckGatewayRefundMutation();
+  const onCheck = async () => {
+    try {
+      const r = await check({ refundId, orderId }).unwrap();
+      if (r.status === "done") toast.success("The gateway finished the refund");
+      else if (r.status === "failed") toast.error("The gateway didn't complete the refund: pay it back another way");
+      else toast.info("Still processing at the gateway; check again later");
+    } catch (e) {
+      toast.error(apiError(e, "Couldn't ask the gateway"));
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-400">
+      <span>The gateway is still processing this refund.</span>
+      <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={isLoading} onClick={() => void onCheck()}>
+        Check refund
+      </Button>
+    </div>
   );
 }

@@ -23,6 +23,13 @@ import { useCan } from "@/lib/permissions";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const MANUAL = ["bkash", "nagad", "rocket", "bank_transfer"];
+const EVENT_SOURCES: Record<string, string> = {
+  return: "Customer came back",
+  ipn: "Gateway notice",
+  recheck: "Checked again",
+  refund: "Refund",
+  refund_check: "Refund checked",
+};
 const TRY_LABELS: Record<string, string> = { started: "Not finished", paid: "Paid", failed: "Failed", cancelled: "Cancelled", review: "Needs a check" };
 const TRY_STYLES: Record<string, string> = {
   started: "text-slate-600",
@@ -118,6 +125,20 @@ function OnlineTries({ tries, canEdit }: { tries: PaymentAttempt[]; canEdit: boo
           </div>
           <div className="mt-0.5 font-mono text-[11px] text-slate-500">{t.code}{t.transactionId ? ` · ${t.transactionId}` : ""}</div>
           {t.note && <div className={cn("mt-0.5", t.status === "review" ? "text-amber-800 dark:text-amber-400" : "text-slate-500")}>{t.note}</div>}
+          {t.refundedAmount > 0 && <div className="mt-0.5 text-purple-700 dark:text-purple-400">{money(t.refundedAmount)} sent back</div>}
+          {t.events.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[11px] text-slate-500">Gateway notices ({t.events.length})</summary>
+              <ul className="mt-1 space-y-0.5 text-[11px] text-slate-500">
+                {t.events.map((e, i) => (
+                  <li key={i}>
+                    {when(e.at)} · {EVENT_SOURCES[e.source] ?? e.source}: <span className="font-medium">{e.outcome}</span>
+                    {e.note ? ` — ${e.note}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <div className="mt-0.5 flex items-center justify-between gap-2 text-slate-400">
             <span>{when(t.createdAt)}</span>
             {canEdit && (t.status === "started" || t.status === "failed") && (

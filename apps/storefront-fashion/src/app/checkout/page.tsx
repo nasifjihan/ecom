@@ -62,6 +62,7 @@ import {
   CouponAppliedState,
   mapCouponTypeToDisplay,
   AddressFormData,
+  useIdempotencyKey,
 } from "@ecom/storefront-base";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { useMyLoyaltyQuery } from "@/lib/loyalty";
@@ -329,6 +330,8 @@ export default function CheckoutPage() {
 
   const [applyCoupon, { isLoading: applyingCoupon }] = useApplyCouponMutation();
   const [placeOrder, { isLoading: placingOrder }] = usePlaceOrderMutation();
+  // The same order sent twice (double click, lost connection) is placed once.
+  const withKey = useIdempotencyKey();
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -531,7 +534,7 @@ export default function CheckoutPage() {
               ? { transactionId: wallet.transactionId.trim(), senderNumber: wallet.accountNumber?.trim() || undefined }
               : undefined;
 
-      const result = await placeOrder({
+      const result = await placeOrder(withKey({
         email: contactEmail.trim() || customerEmail || shippingPayload.email || undefined,
         phone: shippingPayload.phone,
         isGuest: !signedIn,
@@ -567,7 +570,7 @@ export default function CheckoutPage() {
         termsAgreed: true,
         useWallet: walletUsed > 0,
         salesCode: salesCode(),
-      }).unwrap();
+      })).unwrap();
 
       toast.success(t("Order placed!"), { description: t("Order #{ref} created successfully", { ref: result.orderRef }) });
       clearCart();

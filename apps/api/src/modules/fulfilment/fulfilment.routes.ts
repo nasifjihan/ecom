@@ -15,7 +15,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../config";
 import { BadRequestError, NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
-import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
+import { authMiddleware, rbacMiddleware, validate, idempotent } from "../../middleware";
 import { FulfilmentService } from "./fulfilment.service";
 import {
   CreateParcelDto,
@@ -75,6 +75,7 @@ adminOrderFulfilmentRouter.post(
   authMiddleware("adminOrSuper"),
   rbacMiddleware("orders.edit"),
   validate({ params: IdParam, body: CreateRefundDto }),
+  idempotent("refund"),
   send((r) => svc(r).createRefund(id(r), r.body as CreateRefundDto), 201),
 );
 adminOrderFulfilmentRouter.get(

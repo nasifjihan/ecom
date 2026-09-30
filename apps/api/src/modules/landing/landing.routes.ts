@@ -11,7 +11,7 @@
 import { Router, type Request, type Response } from "express"
 import { z } from "zod"
 import { ctrl, envelope, type RequestContext } from "../../core"
-import { authMiddleware, rbacMiddleware, validate } from "../../middleware"
+import { authMiddleware, rbacMiddleware, validate, idempotent } from "../../middleware"
 import { LandingService, type LandingInput, type LandingOrderInput } from "./landing.service"
 
 type Req = Request & { ctx: RequestContext }
@@ -140,6 +140,7 @@ storefrontLandingRouter.post(
 storefrontLandingRouter.post(
   "/:slug/order",
   validate({ params: SlugParam, query: PreviewQuery, body: OrderDto }),
+  idempotent("landing"),
   ctrl(async (req: Req, res: Response) => {
     const r = await svc(req).order(slugOf(req), req.body as LandingOrderInput, previewOf(req))
     envelope(res, { status: 201, data: r, message: "Order placed" })

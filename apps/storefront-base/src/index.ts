@@ -123,6 +123,7 @@ export * from "./components/ui";
 
 export * from "./lib/features/catalog/catalog-api-slice";
 export * from "./lib/features/checkout/checkout-api-slice";
+export * from "./lib/idempotency";
 
 export * from "./lib/seo";
 

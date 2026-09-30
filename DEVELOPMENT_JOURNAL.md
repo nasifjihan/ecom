@@ -3792,3 +3792,86 @@ The online payment code was a simulation.
   - part 3: VAT-inclusive prices, BIN / trade licence and an order number prefix on invoices.
 - **Other gateways:** Nagad, Rocket, cards (Stripe, aamarPay) are not connected; they stay "send money" or off.
 - **Landing pages:** their one-page order form takes cash on delivery only, so there's no online payment there yet.
+
+## ✅ BATCH #35 (part 2) — Gateway refunds, placing an order once, and a log of gateway notices (2026-10-01)
+- **Refunds:** a refund "to the original method" on an order paid through bKash or SSLCommerz now sends the money back through that gateway. It is saved only if the gateway agrees.
+- **Placing an order once:** checkout, landing-page orders and refunds carry a one-time key. A double click, a retry after a lost connection or a reload places one order or refund.
+- **Notice log:** everything a gateway sends or answers is kept and shown under each payment try.
+
+### 35.9 Data (migration `refunds_idempotency`)
+- **Refund:**
+  - `paymentAttemptId`: the online payment it went back to;
+  - `gatewayStatus`: done, processing or failed;
+  - `gatewayNote`;
+  - `gatewayTransactionId` now holds the gateway's refund id (bKash refundTrxID, SSLCommerz refund_ref_id).
+- **PaymentAttempt:** `refundedAmount` is how much has gone back through the gateway.
+- **PaymentEvent:** one row for each thing a gateway sent or answered about a try.
+  - It records the source (return, IPN, re-check, refund, refund check), what we made of it, a note, what was received (keys and signatures removed), and the sender's IP.
+- **IdempotencyKey:** store, scope (checkout / landing / refund), key, a fingerprint of the request, working/done, the saved answer, and an expiry a day later.
+
+### 35.10 Refunds through the gateway
+- **Gateway calls:**
+  - bKash: `tokenized/checkout/payment/refund` with paymentID, trxID, amount and reason; it answers at once ("Completed" and a refundTrxID).
+  - SSLCommerz: the refund API with bank_tran_id and amount; it answers "success" or "processing", and "processing" is asked about later by refund_ref_id.
+- **When staff refund "to the original method":**
+  1. The amount is reserved on the paid try with one conditional update (`refundedAmount + x ≤ amount`), so two refunds at once can't both reach the gateway. The second is told another refund is going through.
+  2. The gateway is asked.
+  3. If it clearly refuses, the reservation is released, nothing is recorded, and staff see the gateway's reason ("Nothing was refunded; try again or refund another way").
+  4. If it doesn't answer at all (a timeout), the money may already have moved. The amount stays reserved so it can't be sent twice, and staff are asked to check the gateway's panel first.
+  5. If the refund can't be saved after the gateway sent the money, the order history says so ("Don't refund it again; record it by hand").
+- **More than was paid online:** refunding more than is left on the payment is refused with how much can still go back.
+- **Other orders:** orders paid by hand or cash on delivery work as before: the refund is recorded for staff to pay out.
+- **Admin:**
+  - the refund dialog says the money goes back through bKash / SSLCommerz straight away;
+  - each refund shows "sent back through the gateway (refund id)";
+  - an SSLCommerz refund still processing has "Check refund";
+  - each payment try shows how much was sent back.
+
+### 35.11 Placing an order once (`middleware/15-idempotency.ts`)
+- **The header:** requests may carry an `Idempotency-Key` header (8–100 letters, digits, - or _).
+  - The first one runs.
+  - A repeat with the same key and the same body gets the first answer (`Idempotent-Replayed: true`) without running again.
+  - A repeat that arrives while the first is still running waits for it (up to 15 s) and gets the same answer, so a double click shows no error.
+  - The same key with a different body is refused.
+  - Only successful answers are kept, for a day; after an error the key is freed so the request can be fixed and sent again.
+- **Where it applies:** checkout, landing-page orders, and admin refunds.
+- **The browser side:** it sends a new key whenever the order changes and the same key while it doesn't (`useIdempotencyKey` in storefront-base and the admin).
+- **Fixed during the check:**
+  - The API's CORS settings didn't allow the new header, so browsers blocked checkout entirely.
+  - Fingerprinting the validated body (whose ids are BigInts) threw outside the error handling, so the request hung.
+  - Both are fixed, with a test for BigInt bodies.
+
+### 35.12 Log of gateway notices
+- **What's logged:** every customer return, IPN, staff "Check again", refund and refund check is logged with what we made of it.
+  - A notice for a try that was already settled is logged as "Already settled; nothing changed".
+- **Where it shows:** on the order page, each payment try has "Gateway notices (n)" with the time, what it was, the outcome and the note.
+
+### 35.13 Checked
+- **Tests:**
+  - 2 more unit tests: bKash refund request and refusal; SSLCommerz refund success, processing, refused, and asking later.
+  - 3 more integration tests with the gateways faked over HTTP:
+    - two ৳600 refunds at once on a ৳1,000 bKash payment: one reached bKash and the other was refused; then ৳400 more made it fully refunded, and nothing is left to send back;
+    - a refusal records nothing; a timeout records nothing but keeps ৳300 held;
+    - SSLCommerz: processing, then "Check refund" gives done; a refusal records nothing;
+    - the notice log reads: return paid, refund done, refund done.
+  - 3 tests for Idempotency-Key on a small app against Postgres:
+    - a retry gets the same answer and the route runs once;
+    - a double click gets the same answer twice and runs once;
+    - a different body with the same key is refused;
+    - a failure frees the key;
+    - no key runs every time;
+    - a bad key is refused;
+    - BigInt bodies work.
+  - Full API suite: 688 passing.
+- **Chromium against the local mock gateways** (now with refunds):
+  - A bKash order was paid.
+  - A cash-on-delivery "Place Order" was clicked twice in the same instant: two requests with the same key, one order, no error.
+  - In the admin, a ৳1,000 refund "to the original method" said "Refunded ৳1,000 through the payment gateway". The refund was saved as done with bKash's refund id, and the try showed "৳1,000 sent back" and two gateway notices.
+- **Lint and builds:** no new lint errors; API typecheck, admin and storefront builds pass.
+- **Dev data:** five test orders (20260930000007–11): three bKash (two partly refunded, ৳1,000 each) and two cash on delivery. bKash and SSLCommerz are turned off again.
+
+### 35.14 Not done
+- **Refunds to other methods:** a refund to cash, bKash send-money, Nagad or bank is still recorded for staff to pay by hand, as before.
+- **Other forms:** manual orders and quotation conversion don't send a key yet (staff screens, low risk). The storefront's "Pay now" is protected by the per-order try limit instead.
+- **Real sandboxes:** still not tried against bKash's or SSLCommerz's own sandboxes (blocked by this environment's network policy).
+- **Next:** part 3: VAT-inclusive prices, BIN / trade licence and an order number prefix on invoices.

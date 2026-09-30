@@ -20,6 +20,7 @@ import {
   toast,
   useT,
   type LocationValue,
+  useIdempotencyKey,
 } from "@ecom/storefront-base";
 import type { Faq } from "@/lib/content";
 import { useLandingOrderMutation, useLandingQuoteMutation, useLandingViewMutation, type LandingPageData, type LandingQuote } from "@/lib/landing";
@@ -172,6 +173,8 @@ export function LandingView({ page, faqs, preview }: { page: LandingPageData; fa
   }, [quote, allOptions, methodId]);
 
   const [placeOrder, { isLoading: placing }] = useLandingOrderMutation();
+  // The same order sent twice (double click, lost connection) is placed once.
+  const withKey = useIdempotencyKey();
   const phoneOk = MOBILE.test(phone.replace(/[\s()-]/g, ""));
   const nameOk = name.trim().length >= 2;
   const addressOk = !!address.district && line1.trim().length >= 3;
@@ -182,7 +185,7 @@ export function LandingView({ page, faqs, preview }: { page: LandingPageData; fa
     setTried(true);
     if (!ready || !methodId) return;
     try {
-      const r = await placeOrder({
+      const r = await placeOrder(withKey({
         slug,
         preview,
         name: name.trim(),
@@ -193,7 +196,7 @@ export function LandingView({ page, faqs, preview }: { page: LandingPageData; fa
         shippingMethodId: methodId,
         note: note.trim() || null,
         salesCode: salesCode() ?? null,
-      }).unwrap();
+      })).unwrap();
       toast.success(t("Order placed!"), { description: t("Order #{ref} created successfully", { ref: r.number }) });
       router.push(`/checkout/thank-you?key=${encodeURIComponent(r.orderKey)}`);
     } catch (err) {

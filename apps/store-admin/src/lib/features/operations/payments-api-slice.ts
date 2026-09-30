@@ -244,6 +244,9 @@ export interface PaymentAttempt {
   note: string | null;
   createdAt: string;
   paidAt: string | null;
+  refundedAmount: number;
+  /** What the gateway sent or answered about it, newest first. */
+  events: { source: string; outcome: string; note: string | null; at: string }[];
 }
 
 export interface OrderPayments {
@@ -369,6 +372,10 @@ export const paymentsApi = api.injectEndpoints({
       query: (code) => ({ url: `/admin/payment-methods/${code}/keys/test`, method: "POST" }),
       invalidatesTags: (_r, _e, code) => [{ type: "Store", id: `KEYS-${code}` }, { type: "Store", id: "PAYMENT_METHODS" }],
     }),
+    checkGatewayRefund: b.mutation<{ status: string | null }, { refundId: string; orderId: string }>({
+      query: ({ refundId }) => ({ url: `/admin/payments/refunds/${refundId}/check`, method: "POST" }),
+      invalidatesTags: (_r, _e, { orderId }) => [...TAGS, { type: "Order" as const, id: orderId }],
+    }),
     recheckPaymentAttempt: b.mutation<{ status: string }, string>({
       query: (id) => ({ url: `/admin/payments/attempts/${id}/recheck`, method: "POST" }),
       invalidatesTags: TAGS,
@@ -395,4 +402,5 @@ export const {
   useSaveGatewayKeysMutation,
   useTestGatewayKeysMutation,
   useRecheckPaymentAttemptMutation,
+  useCheckGatewayRefundMutation,
 } = paymentsApi;

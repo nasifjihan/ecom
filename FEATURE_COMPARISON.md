@@ -201,8 +201,8 @@ These are our advantages. Keep them.
 | Item | Status |
 |---|---|
 | Money and stock in DB transactions, server re-prices | ✅ |
-| Idempotency key on order create and webhooks | ❌ |
-| Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 | Batch 35: bKash Checkout and SSLCommerz, each payment confirmed with the gateway's own API (amount, order code, currency), settled once. Built to the gateways' published APIs and a local mock; not yet run against their sandboxes. Nagad, aamarPay, PayPal not connected |
+| Idempotency key on order create and webhooks | ✅ | Batch 35: Idempotency-Key on checkout, landing-page orders and refunds (a repeat or double click gets the first answer); gateway notices settle each payment once |
+| Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 | Batch 35: bKash Checkout and SSLCommerz, each payment confirmed with the gateway's own API (amount, order code, currency), settled once. Built to the gateways' published APIs and a local mock; not yet run against their sandboxes. Every return, notice, re-check and refund is logged on the order. Refunds go back through the gateway. Nagad, aamarPay, PayPal not connected |
 | Encrypted secrets for gateway/courier/SMS keys | ✅ | Batch 22: courier keys, webhook secrets and tokens; Batch 24: SMS keys (AES-256-GCM); Batch 35: payment gateway keys (per store, no longer in env) |
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
 | OpenAPI docs at `/api/docs` | ❌ |

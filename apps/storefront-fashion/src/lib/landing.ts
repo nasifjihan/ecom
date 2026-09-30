@@ -77,9 +77,15 @@ const landingApi = api.injectEndpoints({
         shippingMethodId: string;
         note?: string | null;
         salesCode?: string | null;
+        idempotencyKey?: string;
       }
     >({
-      query: ({ slug, preview, ...body }) => ({ url: url({ slug, preview }, "order"), method: "POST", body }),
+      query: ({ slug, preview, idempotencyKey, ...body }) => ({
+        url: url({ slug, preview }, "order"),
+        method: "POST",
+        body,
+        ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}),
+      }),
     }),
   }),
 });

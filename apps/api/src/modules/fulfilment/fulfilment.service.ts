@@ -13,6 +13,7 @@ import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
 import { OrdersService, STATUS_TRANSITIONS } from "../orders/orders.service";
+import { OnlinePaymentsService } from "../payments/gateways/online.service";
 import { recordParcelCash } from "../payments/payments.records";
 import { defaultWarehouseId, moveStock, releaseOrderStock, splitBack } from "../stock";
 import { onOrderClosed, onOrderRefunded, walletMove } from "../loyalty/loyalty.ledger";
@@ -516,10 +517,12 @@ export class FulfilmentService {
       throw new BadRequestError((e as Error).message, "REFUND_AMOUNT_EXCEEDS_PAID");
     }
 
-    // Refunds through bKash / SSLCommerz come in Batch 35 part 2: until then every refund is
-    // recorded for staff to pay out by hand (never shown as sent back by the gateway).
-    const gatewayRefunded = false;
-    const gatewayTransactionId: string | null = null;
+    // "Original method" on an order paid online: the money goes back through bKash / SSLCommerz
+    // first; if the gateway refuses, nothing is recorded (staff can retry or refund another way).
+    // Otherwise (cash, bank, a hand-checked transfer) staff pay it out and record it here.
+    const online = dto.method === "original" ? await new OnlinePaymentsService(this.ctx).refundOnline(orderId, priced.amount, dto.reason) : null;
+    const gatewayRefunded = online?.state === "done";
+    const gatewayTransactionId = online?.ref ?? null;
 
     const full = r2(num(o.refundedTotal) + priced.amount) >= r2(num(o.grandTotal)) - 0.001;
     const refund = await tx(async (t: T) => {
@@ -534,6 +537,9 @@ export class FulfilmentService {
           restockItems: dto.restock,
           gatewayRefunded,
           gatewayTransactionId,
+          paymentAttemptId: online?.attemptId ?? null,
+          gatewayStatus: online?.state ?? null,
+          gatewayNote: online ? (online.state === "done" ? `Sent back by ${online.name}` : `${online.name} is processing the refund`) : null,
           noteToCustomer: dto.note || null,
           status: "completed",
           returnRequestId: ret?.id ?? null,
@@ -572,7 +578,7 @@ export class FulfilmentService {
         data: {
           orderId,
           status: full ? "REFUNDED" : o.status,
-          note: `Refunded ৳${priced.amount.toFixed(2)} (${dto.method.replace(/_/g, " ")})${ret ? ` for return ${ret.code}` : ""}: ${dto.reason}`,
+          note: `Refunded ৳${priced.amount.toFixed(2)} (${online ? `through ${online.name}${online.state === "processing" ? ", processing" : ""}${online.ref ? `, ${online.ref}` : ""}` : dto.method.replace(/_/g, " ")})${ret ? ` for return ${ret.code}` : ""}: ${dto.reason}`,
           notifyCustomer: false,
           adminId: this.adminId,
         },
@@ -583,6 +589,22 @@ export class FulfilmentService {
       }
       await this.recompute(t, orderId);
       return rf;
+    }).catch(async (e: unknown) => {
+      // The gateway already sent the money back but the refund couldn't be saved: say so on the order.
+      if (online) {
+        logger.error({ err: (e as Error).message, orderId: String(orderId) }, "Gateway refund sent but not recorded");
+        await prisma.orderStatusLog
+          .create({
+            data: {
+              orderId,
+              status: o.status,
+              note: `${online.name} sent ৳${priced.amount.toFixed(2)} back${online.ref ? ` (${online.ref})` : ""}, but the refund couldn't be saved. Don't refund it again; record it by hand.`,
+              adminId: this.adminId,
+            },
+          })
+          .catch(() => undefined);
+      }
+      throw e;
     });
     return { ...refund, fullyRefunded: full, gatewayRefunded };
   }

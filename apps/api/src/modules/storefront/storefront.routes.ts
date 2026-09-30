@@ -11,7 +11,7 @@
 import { Router, type Request, type Response } from "express";
 import { UnauthorizedError, ctrl, type RequestContext } from "../../core";
 import { InvoiceService, sendInvoice } from "../invoices";
-import { authMiddleware, validate } from "../../middleware";
+import { authMiddleware, validate, idempotent } from "../../middleware";
 import { storefrontController } from "./storefront.controller";
 import {
   StorefrontProductsQueryDto,
@@ -48,6 +48,7 @@ storefrontCheckoutRouter.post(
   "/",
   authMiddleware("optional"),
   validate({ body: PlaceOrderDto }),
+  idempotent("checkout"),
   storefrontController.placeOrder,
 );
 

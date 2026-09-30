@@ -340,11 +340,12 @@ export const checkoutApi = api.injectEndpoints({
       invalidatesTags: ["Coupon"],
     }),
 
-    placeOrder: builder.mutation<OrderResult, PlaceOrderBody>({
-      query: (body) => ({
+    placeOrder: builder.mutation<OrderResult, PlaceOrderBody & { idempotencyKey?: string }>({
+      query: ({ idempotencyKey, ...body }) => ({
         url: `/storefront/checkout`,
         method: "POST",
         body,
+        ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}),
       }),
       invalidatesTags: ["Order"],
     }),

@@ -403,3 +403,37 @@ describe("SSLCommerz", () => {
     expect(bad.calls[0]!.url).toContain("securepay.sslcommerz.com")
   })
 })
+
+describe("refunds", () => {
+  it("bKash: sends paymentID, trxID and the amount; a refusal is an error", async () => {
+    const { f, calls } = fakeFetch({
+      "/token/grant": () => ({ body: { id_token: "T", expires_in: 3600 } }),
+      "/payment/refund": () => ({ body: { transactionStatus: "Completed", refundTrxID: "RF123", originalTrxID: "BK1", amount: "250.00" } }),
+    })
+    const g = new BkashGateway({ gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf" } }, f)
+    expect(await g.refund({ reference: "PAY1", txnId: "BK1", amount: 250, reason: "Size too small" })).toMatchObject({ state: "done", ref: "RF123" })
+    const sent = JSON.parse(calls.find((c) => c.url.endsWith("/payment/refund"))!.body) as Record<string, string>
+    expect(sent).toMatchObject({ paymentID: "PAY1", trxID: "BK1", amount: "250.00", reason: "Size too small" })
+
+    const no = fakeFetch({
+      "/token/grant": () => ({ body: { id_token: "T", expires_in: 3600 } }),
+      "/payment/refund": () => ({ body: { statusCode: "2071", statusMessage: "Refund amount exceeds" } }),
+    })
+    await expect(new BkashGateway({ gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf2" } }, no.f).refund({ reference: "P", txnId: "T", amount: 1, reason: "" })).rejects.toThrow("Refund amount exceeds")
+  })
+
+  it("SSLCommerz: success, still processing, refused, and asking later", async () => {
+    const keys = { storeId: "s", storePassword: "p" }
+    const answer = (status: string, extra: object = {}) =>
+      fakeFetch({ "/merchantTransIDvalidationAPI.php": () => ({ body: { APIConnect: "DONE", status, refund_ref_id: "R1", ...extra } }) })
+    const g = (f: Fetch) => new SslcommerzGateway({ gateway: "sslcommerz", mode: "sandbox", credentials: keys }, f)
+    const ok = answer("success")
+    expect(await g(ok.f).refund({ reference: null, txnId: "BANK1", amount: 99.5, reason: "Damaged" })).toMatchObject({ state: "done", ref: "R1" })
+    expect(Object.fromEntries(new URL(ok.calls[0]!.url).searchParams)).toMatchObject({ bank_tran_id: "BANK1", refund_amount: "99.50", refund_remarks: "Damaged" })
+    expect((await g(answer("processing").f).refund({ reference: null, txnId: "B", amount: 1, reason: "x" })).state).toBe("processing")
+    await expect(g(answer("failed", { errorReason: "Already refunded" }).f).refund({ reference: null, txnId: "B", amount: 1, reason: "x" })).rejects.toThrow("Already refunded")
+    expect((await g(answer("refunded").f).refundStatus("R1")).state).toBe("done")
+    expect((await g(answer("processing").f).refundStatus("R1")).state).toBe("processing")
+    expect((await g(answer("cancelled").f).refundStatus("R1")).state).toBe("failed")
+  })
+})

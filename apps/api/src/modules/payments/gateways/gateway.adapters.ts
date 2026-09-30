@@ -60,6 +60,15 @@ export interface GatewayResult {
   raw: Record<string, unknown>
 }
 
+/** What the gateway said about a refund. */
+export interface RefundResult {
+  /** done: the money is on its way back; processing: the gateway is still working on it (check later). */
+  state: "done" | "processing"
+  /** bKash refundTrxID, SSLCommerz refund_ref_id. */
+  ref: string | null
+  raw: Record<string, unknown>
+}
+
 export class GatewayError extends Error {
   constructor(
     message: string,
@@ -79,6 +88,10 @@ export interface OnlineGateway {
     code: string
     valId?: string | null
   }): Promise<GatewayResult>
+  /** Sends money back for a paid payment; throws GatewayError when the gateway refuses. */
+  refund(input: { reference: string | null; txnId: string; amount: number; reason: string }): Promise<RefundResult>
+  /** How a refund that was still processing ended (SSLCommerz; bKash refunds finish at once). */
+  refundStatus(ref: string): Promise<RefundResult | { state: "failed"; ref: string; raw: Record<string, unknown> }>
 }
 
 /** The keys each gateway needs, with labels for the admin form. */
@@ -295,6 +308,25 @@ export class BkashGateway implements OnlineGateway {
       r.message = this.message(exec.json, r.message)
     return r
   }
+
+  async refund(i: { reference: string | null; txnId: string; amount: number; reason: string }): Promise<RefundResult> {
+    if (!i.reference) throw new GatewayError("No bKash payment to refund")
+    const { status, json } = await this.post("/tokenized/checkout/payment/refund", {
+      paymentID: i.reference,
+      trxID: i.txnId,
+      amount: i.amount.toFixed(2),
+      sku: "order",
+      reason: i.reason.slice(0, 255) || "Refund",
+    })
+    if (status !== 200 || str(json.transactionStatus) !== "Completed" || !str(json.refundTrxID))
+      throw new GatewayError(this.message(json, "bKash didn't accept the refund"), status)
+    return { state: "done", ref: str(json.refundTrxID), raw: json }
+  }
+
+  refundStatus(ref: string): Promise<RefundResult> {
+    // bKash answers a refund at once: there's nothing still processing to ask about.
+    return Promise.resolve({ state: "done", ref, raw: {} })
+  }
 }
 
 // ================================================================ SSLCommerz
@@ -437,6 +469,32 @@ export class SslcommerzGateway implements OnlineGateway {
       message: paid ? "Paid" : st || "Not paid",
       raw: json,
     }
+  }
+
+  async refund(i: { reference: string | null; txnId: string; amount: number; reason: string }): Promise<RefundResult> {
+    const q = new URLSearchParams({
+      bank_tran_id: i.txnId,
+      refund_amount: i.amount.toFixed(2),
+      refund_remarks: i.reason.slice(0, 255) || "Refund",
+      ...this.auth,
+      v: "1",
+      format: "json",
+    })
+    const { status, json } = await call(this.f, `${this.base}/validator/api/merchantTransIDvalidationAPI.php?${q.toString()}`, {})
+    const st = str(json.status)
+    if (status !== 200 || str(json.APIConnect) !== "DONE" || (st !== "success" && st !== "processing"))
+      throw new GatewayError(str(json.errorReason) || "SSLCommerz didn't accept the refund", status)
+    return { state: st === "success" ? "done" : "processing", ref: str(json.refund_ref_id) || null, raw: json }
+  }
+
+  async refundStatus(ref: string) {
+    const q = new URLSearchParams({ refund_ref_id: ref, ...this.auth, format: "json" })
+    const { status, json } = await call(this.f, `${this.base}/validator/api/merchantTransIDvalidationAPI.php?${q.toString()}`, {})
+    if (status !== 200 || str(json.APIConnect) !== "DONE") throw new GatewayError(str(json.errorReason) || "SSLCommerz couldn't say how the refund went", status)
+    const st = str(json.status)
+    if (st === "refunded") return { state: "done" as const, ref, raw: json }
+    if (st === "processing") return { state: "processing" as const, ref, raw: json }
+    return { state: "failed" as const, ref, raw: json }
   }
 }
 

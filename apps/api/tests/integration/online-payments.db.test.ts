@@ -25,8 +25,21 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
   const gw = {
     executed: new Map<string, { amount: string; invoice: string; status: string }>(),
     sslValid: new Map<string, { amount: string; status: string }>(),
+    /** How the next bKash refund goes, and how many reached "bKash". */
+    bkashRefund: "ok" as "ok" | "refuse" | "timeout",
+    bkashRefundCalls: 0,
+    /** SSLCommerz: the refund's first answer, then what its status query says. */
+    sslRefund: "processing" as "success" | "processing" | "failed",
+    sslRefundStatus: "processing" as "refunded" | "processing" | "cancelled",
   }
-  const fake: Fetch = (input, init) => Promise.resolve(answer(input, init))
+  const fake: Fetch = (input, init) => {
+    const u = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    if (u.includes("/payment/refund")) {
+      gw.bkashRefundCalls++
+      if (gw.bkashRefund === "timeout") return Promise.reject(new Error("socket hang up"))
+    }
+    return Promise.resolve(answer(input, init))
+  }
   const answer = (input: Parameters<Fetch>[0], init: Parameters<Fetch>[1]): Response => {
     const url = new URL(
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url,
@@ -43,6 +56,18 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
         status: "Initiated",
       })
       return json({ statusCode: "0000", paymentID: id, bkashURL: `https://pay.bka.test/${id}` })
+    }
+    if (url.pathname.endsWith("/payment/refund")) {
+      const b = JSON.parse(body) as { paymentID: string; trxID: string; amount: string }
+      if (gw.bkashRefund === "refuse") return json({ statusCode: "2071", statusMessage: "Duplicate for all transactions" })
+      return json({ completedTime: "now", transactionStatus: "Completed", originalTrxID: b.trxID, refundTrxID: `RF${b.trxID}`, amount: b.amount, currency: "BDT" })
+    }
+    if (url.pathname.endsWith("/merchantTransIDvalidationAPI.php") && url.searchParams.get("bank_tran_id")) {
+      if (gw.sslRefund === "failed") return json({ APIConnect: "DONE", status: "failed", errorReason: "Refund amount is greater than the transaction amount" })
+      return json({ APIConnect: "DONE", bank_tran_id: url.searchParams.get("bank_tran_id"), refund_ref_id: "SSLREF1", status: gw.sslRefund })
+    }
+    if (url.pathname.endsWith("/merchantTransIDvalidationAPI.php") && url.searchParams.get("refund_ref_id")) {
+      return json({ APIConnect: "DONE", refund_ref_id: url.searchParams.get("refund_ref_id"), status: gw.sslRefundStatus })
     }
     if (url.pathname.endsWith("/checkout/execute") || url.pathname.endsWith("/payment/status")) {
       const { paymentID } = JSON.parse(body) as { paymentID: string }
@@ -147,19 +172,16 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     ] as const) {
       await prisma.paymentGatewayConfig.create({ data: { storeId, code, name, mode, enabled } })
     }
-    admin = {
-      storeId,
-      requestId: "test",
-      locale: "en",
-      currency: "BDT",
-      admin: { id: 1n, role: "ADMIN", permissions: ["*"] },
-    }
+    const role = await prisma.role.create({ data: { storeId, name: "Owner", slug: `own-${suffix}` } })
+    const staff = await prisma.adminUser.create({ data: { storeId, email: `o-${suffix}@x.test`, name: "Owner", passwordHash: "x", roleId: role.id } })
+    admin = { storeId, requestId: "test", locale: "en", currency: "BDT", admin: { id: staff.id, role: "ADMIN", permissions: ["*"] } }
   })
 
   afterAll(async () => {
     setFetch?.(null)
     if (!prisma) return
     await prisma.order.deleteMany({ where: { storeId } })
+    await prisma.adminUser.deleteMany({ where: { storeId } })
     await prisma.store.delete({ where: { id: storeId } })
     await prisma.$disconnect()
   })
@@ -358,5 +380,91 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
       canPayOnline: true,
       due: 300,
     })
+  })
+
+  // ---------------------------------------------------------------- refunds
+
+  const payOnline = async (gateway: "bkash" | "sslcommerz", total: number) => {
+    await prisma.paymentGatewayConfig.updateMany({ where: { storeId, code: gateway }, data: { enabled: true, mode: "online" } })
+    const order = await makeOrder(gateway, total)
+    const { attempt } = await new Online({ storeId, requestId: "t", locale: "en", currency: "BDT" }).start(order.id)
+    if (gateway === "bkash") {
+      gw.executed.get(`PAY-${attempt}`)!.status = "Completed"
+      expect((await Online.finish("bkash", attempt)).outcome).toBe("paid")
+    } else {
+      gw.sslValid.set(attempt, { amount: total.toFixed(2), status: "VALID" })
+      expect((await Online.ipn("sslcommerz", { tran_id: attempt, val_id: `VAL-${attempt}` })).outcome).toBe("paid")
+    }
+    return order
+  }
+  const refund = async (orderId: bigint, amount: number) => {
+    const { FulfilmentService } = await import("../../src/modules/fulfilment/fulfilment.service")
+    const { CreateRefundDto } = await import("../../src/modules/fulfilment/fulfilment.dto")
+    return new FulfilmentService(admin).createRefund(orderId, CreateRefundDto.parse({ extraAmount: amount, method: "original", reason: "Customer changed mind", restock: false }))
+  }
+
+  it("refunds through bKash, and two refunds at once can't both reach bKash", async () => {
+    const order = await payOnline("bkash", 1000)
+    gw.bkashRefund = "ok"
+    gw.bkashRefundCalls = 0
+    const both = await Promise.allSettled([refund(order.id, 600), refund(order.id, 600)])
+    expect(both.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"])
+    expect(gw.bkashRefundCalls).toBe(1)
+    const lost = both.find((r): r is PromiseRejectedResult => r.status === "rejected")
+    expect(String(lost?.reason)).toMatch(/Another refund on this payment/)
+    const rest = await refund(order.id, 400)
+    expect(rest).toMatchObject({ gatewayRefunded: true, fullyRefunded: true })
+    const rows = await prisma.refund.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } })
+    expect(rows.map((r) => [Number(r.amount), r.gatewayStatus, r.gatewayRefunded, r.gatewayTransactionId?.startsWith("RFTRX")])).toEqual([
+      [600, "done", true, true],
+      [400, "done", true, true],
+    ])
+    const tryRow = await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: order.id, status: "paid" } })
+    expect(Number(tryRow.refundedAmount)).toBe(1000)
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).paymentStatus).toBe("refunded")
+    // Nothing is left to send back.
+    const o2 = await payOnline("bkash", 500)
+    await refund(o2.id, 500)
+    await expect(new Online(admin).refundOnline(o2.id, 10, "again")).rejects.toThrow(/already been refunded/)
+    // The notice log: the customer's return, then each refund.
+    const [t] = await new Online(admin).attempts(order.id)
+    expect(t!.events.map((e) => [e.source, e.outcome]).reverse()).toEqual([
+      ["return", "paid"],
+      ["refund", "done"],
+      ["refund", "done"],
+    ])
+  })
+
+  it("records nothing when bKash refuses, and keeps the money held when bKash doesn't answer", async () => {
+    const order = await payOnline("bkash", 800)
+    gw.bkashRefund = "refuse"
+    await expect(refund(order.id, 300)).rejects.toThrow(/bKash didn't send the money back: Duplicate for all transactions. Nothing was refunded/)
+    expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(0)
+    const held = () => prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: order.id, status: "paid" } }).then((a) => Number(a.refundedAmount))
+    expect(await held()).toBe(0)
+    gw.bkashRefund = "timeout"
+    await expect(refund(order.id, 300)).rejects.toThrow(/didn't answer, so we can't tell whether the money went back/)
+    expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(0)
+    // bKash may have sent it: the ৳300 stays held so a retry can't refund it twice.
+    expect(await held()).toBe(300)
+    gw.bkashRefund = "ok"
+  })
+
+  it("SSLCommerz: a refund still processing is checked later", async () => {
+    const order = await payOnline("sslcommerz", 700)
+    gw.sslRefund = "processing"
+    const r = await refund(order.id, 700)
+    expect(r).toMatchObject({ gatewayRefunded: false, gatewayStatus: "processing", gatewayTransactionId: "SSLREF1" })
+    const online = new Online(admin)
+    gw.sslRefundStatus = "processing"
+    expect(await online.checkRefund(r.id)).toEqual({ status: "processing" })
+    gw.sslRefundStatus = "refunded"
+    expect(await online.checkRefund(r.id)).toEqual({ status: "done" })
+    expect(await prisma.refund.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ gatewayRefunded: true, gatewayStatus: "done" })
+    // Refused outright: nothing recorded.
+    const o2 = await payOnline("sslcommerz", 200)
+    gw.sslRefund = "failed"
+    await expect(refund(o2.id, 200)).rejects.toThrow(/greater than the transaction amount/)
+    expect(await prisma.refund.count({ where: { orderId: o2.id } })).toBe(0)
   })
 })

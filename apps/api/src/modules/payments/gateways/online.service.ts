@@ -12,9 +12,9 @@
  *  4. Each attempt is settled once: the return link, the IPN and a reload can all arrive, and only
  *     the first one to move the attempt out of "started" changes anything.
  */
-import { type Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { decrypt, encrypt, env, logger, prisma, tx } from "../../../config"
-import { BadRequestError, NotFoundError, type RequestContext } from "../../../core"
+import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../../core"
 import { PaymentsService } from "../payments.service"
 import {
   GATEWAY_FIELDS,
@@ -68,6 +68,42 @@ async function loadConfig(storeId: bigint, code: OnlineGatewayCode): Promise<Gat
 }
 
 const apiBase = () => env.API_BASE_URL.replace(/\/$/, "")
+
+/** Where a gateway's word came from, for the notice log. */
+export interface Seen {
+  source: "return" | "ipn" | "recheck"
+  payload?: Record<string, unknown>
+  ip?: string | null
+}
+
+/** Records what a gateway sent or answered (never fails the request it's part of). */
+async function logEvent(e: {
+  storeId: bigint
+  attemptId: bigint | null
+  gateway: string
+  source: string
+  outcome: string
+  note?: string | null
+  payload?: Record<string, unknown>
+  ip?: string | null
+}) {
+  try {
+    await prisma.paymentEvent.create({
+      data: {
+        storeId: e.storeId,
+        attemptId: e.attemptId,
+        gateway: e.gateway,
+        source: e.source,
+        outcome: e.outcome,
+        note: e.note?.slice(0, 500) ?? null,
+        payload: e.payload ? (scrub(e.payload) as Prisma.InputJsonValue) : Prisma.DbNull,
+        ip: e.ip?.slice(0, 64) ?? null,
+      },
+    })
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "Couldn't log a payment event")
+  }
+}
 
 export class OnlinePaymentsService {
   constructor(private readonly ctx: RequestContext) {}
@@ -305,17 +341,24 @@ export class OnlinePaymentsService {
     gateway: OnlineGatewayCode,
     code: string,
     params: { valId?: string | null; result?: string | null } = {},
+    seen: Seen = { source: "return" },
   ) {
     const attempt = await prisma.paymentAttempt.findUnique({ where: { code } })
     if (attempt?.gateway !== gateway) throw new NotFoundError("Payment")
     const back = (outcome: string) => `${attempt.returnUrl}&payment=${outcome}`
-    if (isFinal(attempt.status))
+    const log = (outcome: string, note?: string | null) => logEvent({ storeId: attempt.storeId, attemptId: attempt.id, gateway, outcome, note, ...seen })
+    if (isFinal(attempt.status)) {
+      await log(attempt.status, "Already settled; nothing changed")
       return {
         outcome: attempt.status,
         redirect: back(attempt.status === "paid" ? "paid" : "review"),
       }
+    }
     const cfg = await loadConfig(attempt.storeId, gateway)
-    if (!cfg) return { outcome: "pending", redirect: back("pending") }
+    if (!cfg) {
+      await log("pending", "No keys saved for this gateway")
+      return { outcome: "pending", redirect: back("pending") }
+    }
     let result: GatewayResult
     try {
       result = await gatewayFor(
@@ -328,6 +371,7 @@ export class OnlinePaymentsService {
       })
     } catch (e) {
       logger.warn({ err: (e as Error).message, attempt: code }, "Couldn't check an online payment")
+      await log("error", (e as Error).message)
       return { outcome: "pending", redirect: back("pending") }
     }
     // SSLCommerz's fail/cancel pages: nothing was paid when its API has nothing paid either.
@@ -341,6 +385,7 @@ export class OnlinePaymentsService {
     }
     const verdict = judge({ code: attempt.code, amount: num(attempt.amount) }, result)
     const outcome = await OnlinePaymentsService.settle(attempt.id, verdict, result)
+    await log(outcome, verdict.note ?? result.message)
     return {
       outcome,
       redirect: back(outcome === "paid" ? "paid" : outcome === "review" ? "review" : outcome),
@@ -433,11 +478,86 @@ export class OnlinePaymentsService {
   }
 
   /** SSLCommerz's payment notice (IPN): the tran_id says which try, the validation API says the rest. */
-  static async ipn(gateway: OnlineGatewayCode, body: Record<string, unknown>) {
+  static async ipn(gateway: OnlineGatewayCode, body: Record<string, unknown>, ip?: string | null) {
     const code = typeof body.tran_id === "string" ? body.tran_id : ""
     const valId = typeof body.val_id === "string" ? body.val_id : null
     if (!code) throw new BadRequestError("No tran_id", "BAD_REQUEST")
-    return OnlinePaymentsService.finish(gateway, code, { valId })
+    return OnlinePaymentsService.finish(gateway, code, { valId }, { source: "ipn", payload: body, ip })
+  }
+
+  // ================================================================ refunds
+
+  /**
+   * Sends part of an order's online payment back through its gateway (a refund "to the original
+   * method"). The amount is first reserved on the paid try with one conditional update, so two
+   * refunds at once can't both reach the gateway. A clear refusal releases it; no answer at all
+   * (a timeout) keeps it, since the gateway may have sent the money: staff check its panel.
+   */
+  async refundOnline(orderId: bigint, amount: number, reason: string) {
+    const tries = await prisma.paymentAttempt.findMany({ where: { orderId, storeId: this.storeId, status: "paid" }, orderBy: { paidAt: "asc" } })
+    if (!tries.length) return null
+    const left = (t: (typeof tries)[number]) => Math.round((num(t.amount) - num(t.refundedAmount)) * 100) / 100
+    const a = tries.find((t) => left(t) >= amount - 0.009)
+    const name = NAMES[tries[0]!.gateway as OnlineGatewayCode] ?? tries[0]!.gateway
+    if (!a) {
+      const most = Math.max(...tries.map(left))
+      throw new BadRequestError(
+        most > 0 ? `At most ৳${most.toFixed(2)} can go back through ${name} in one refund` : `This order's ${name} payment has already been refunded`,
+        "REFUND_AMOUNT_EXCEEDS_PAID",
+      )
+    }
+    const gateway = a.gateway as OnlineGatewayCode
+    const cfg = await loadConfig(this.storeId, gateway)
+    if (!cfg) throw new BadRequestError(`Add your ${name} keys to refund through ${name}, or refund another way`, "PAYMENT_GATEWAY_ERROR")
+    if (!a.gatewayTxnId) throw new BadRequestError(`${name} gave no transaction id for this payment; refund another way`, "PAYMENT_GATEWAY_ERROR")
+    const reserved = await prisma.$executeRaw`UPDATE "PaymentAttempt" SET "refundedAmount" = "refundedAmount" + ${amount} WHERE id = ${a.id} AND "refundedAmount" + ${amount} <= "amount" + 0.009`
+    if (reserved === 0) throw new ConflictError("Another refund on this payment is going through; reload the order and try again")
+    const log = (outcome: string, note: string | null, payload?: Record<string, unknown>) =>
+      logEvent({ storeId: this.storeId, attemptId: a.id, gateway, source: "refund", outcome, note, payload })
+    try {
+      const r = await gatewayFor({ ...cfg, mode: a.mode === "live" ? "live" : "sandbox" }, gatewayFetch).refund({
+        reference: a.reference,
+        txnId: a.gatewayTxnId,
+        amount,
+        reason,
+      })
+      await log(r.state, `৳${amount.toFixed(2)}${r.ref ? `, refund ${r.ref}` : ""}`, r.raw)
+      return { attemptId: a.id, gateway, name, state: r.state, ref: r.ref }
+    } catch (e) {
+      const answered = e instanceof GatewayError && e.httpStatus !== undefined
+      if (answered) {
+        await prisma.$executeRaw`UPDATE "PaymentAttempt" SET "refundedAmount" = GREATEST(0, "refundedAmount" - ${amount}) WHERE id = ${a.id}`
+        await log("error", (e as Error).message)
+        throw new BadRequestError(`${name} didn't send the money back: ${(e as Error).message}. Nothing was refunded; try again or refund another way.`, "PAYMENT_GATEWAY_ERROR")
+      }
+      await log("unknown", (e as Error).message)
+      logger.error({ err: (e as Error).message, attempt: a.code }, "Gateway refund: no answer")
+      throw new BadRequestError(
+        `${name} didn't answer, so we can't tell whether the money went back. Check the ${name} merchant panel before trying again.`,
+        "PAYMENT_GATEWAY_ERROR",
+      )
+    }
+  }
+
+  /** A refund SSLCommerz was still processing: ask how it ended and update the refund. */
+  async checkRefund(refundId: bigint) {
+    const rf = await prisma.refund.findFirst({ where: { id: refundId, storeId: this.storeId }, include: { paymentAttempt: true } })
+    if (!rf?.paymentAttempt) throw new NotFoundError("Refund")
+    if (rf.gatewayStatus !== "processing" || !rf.gatewayTransactionId) return { status: rf.gatewayStatus }
+    const a = rf.paymentAttempt
+    const gateway = a.gateway as OnlineGatewayCode
+    const cfg = await loadConfig(this.storeId, gateway)
+    if (!cfg) throw new BadRequestError("The gateway's keys aren't saved", "PAYMENT_GATEWAY_ERROR")
+    const r = await gatewayFor({ ...cfg, mode: a.mode === "live" ? "live" : "sandbox" }, gatewayFetch).refundStatus(rf.gatewayTransactionId)
+    await logEvent({ storeId: this.storeId, attemptId: a.id, gateway, source: "refund_check", outcome: r.state, note: `Refund ${rf.gatewayTransactionId}`, payload: r.raw })
+    if (r.state === "processing") return { status: "processing" }
+    const note = r.state === "done" ? `Refunded by ${NAMES[gateway]}` : `${NAMES[gateway]} didn't complete the refund: pay it back another way`
+    await tx(async (t: T) => {
+      await t.refund.update({ where: { id: rf.id }, data: { gatewayStatus: r.state, gatewayRefunded: r.state === "done", gatewayNote: note } })
+      if (r.state === "failed") await t.$executeRaw`UPDATE "PaymentAttempt" SET "refundedAmount" = GREATEST(0, "refundedAmount" - ${rf.amount}) WHERE id = ${a.id}`
+      await t.orderStatusLog.create({ data: { orderId: rf.orderId, status: (await t.order.findUniqueOrThrow({ where: { id: rf.orderId }, select: { status: true } })).status, note: `৳${num(rf.amount).toFixed(2)} refund: ${note}` } })
+    })
+    return { status: r.state }
   }
 
   // ================================================================ staff
@@ -446,6 +566,7 @@ export class OnlinePaymentsService {
   async attempts(orderId: bigint) {
     const rows = await prisma.paymentAttempt.findMany({
       where: { orderId, storeId: this.storeId },
+      include: { events: { orderBy: { createdAt: "desc" }, take: 10 } },
       orderBy: { createdAt: "desc" },
       take: 20,
     })
@@ -454,14 +575,18 @@ export class OnlinePaymentsService {
       gateway: a.gateway,
       code: a.code,
       amount: num(a.amount),
+      refundedAmount: num(a.refundedAmount),
       mode: a.mode,
       status: a.status,
       transactionId: a.gatewayTxnId,
       note: a.note,
       createdAt: a.createdAt,
       paidAt: a.paidAt,
+      /** What the gateway sent or answered about it (newest first). */
+      events: a.events.map((e) => ({ source: e.source, outcome: e.outcome, note: e.note, at: e.createdAt })),
     }))
   }
+
 
   /** Staff: ask the gateway again about a try that's still open (the customer closed the tab …). */
   async recheck(attemptId: bigint) {
@@ -469,7 +594,7 @@ export class OnlinePaymentsService {
       where: { id: attemptId, storeId: this.storeId },
     })
     if (!a) throw new NotFoundError("Payment try")
-    const { outcome } = await OnlinePaymentsService.finish(a.gateway as OnlineGatewayCode, a.code)
+    const { outcome } = await OnlinePaymentsService.finish(a.gateway as OnlineGatewayCode, a.code, {}, { source: "recheck" })
     return { status: outcome }
   }
 }

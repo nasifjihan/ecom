@@ -9,6 +9,7 @@
  *   BKASH_API_URL=http://localhost:4020/bkash
  *   SSLCOMMERZ_API_URL=http://localhost:4020/sslcommerz
  *
+ * Refunds: bKash answers at once; SSLCommerz says "processing" and "refunded" from the second check.
  * The payment pages have Pay / Fail / Cancel buttons and send the customer back like the real
  * gateways do (bKash: GET callbackURL?paymentID&status; SSLCommerz: POST val_id to success_url and
  * the IPN).
@@ -19,6 +20,7 @@ import { randomBytes } from "node:crypto";
 const PORT = Number(process.env.MOCK_PAYMENTS_PORT ?? 4020);
 const bkash = new Map(); // paymentID -> { amount, invoice, callbackURL, status, trxID }
 const ssl = new Map(); // tran_id -> { amount, success_url, fail_url, cancel_url, ipn_url, status, val_id, bank_tran_id }
+const refunds = new Map(); // refund_ref_id -> { asked }
 const id = (p) => `${p}${randomBytes(5).toString("hex").toUpperCase()}`;
 
 const readBody = (req) =>
@@ -83,6 +85,15 @@ http
       return json(res, { statusCode: "0000", paymentID, trxID: pay.trxID, transactionStatus: pay.status === "Authorized" ? "Initiated" : pay.status, amount: pay.amount, currency: "BDT", intent: "sale", merchantInvoiceNumber: pay.invoice });
     }
 
+    if (p.endsWith("/tokenized/checkout/payment/refund")) {
+      const { paymentID, trxID, amount } = JSON.parse(raw || "{}");
+      const pay = bkash.get(paymentID);
+      if (!pay || pay.status !== "Completed" || pay.trxID !== trxID) return json(res, { statusCode: "2072", statusMessage: "Invalid transaction for refund" });
+      pay.refunded = Number(pay.refunded ?? 0) + Number(amount);
+      if (pay.refunded > Number(pay.amount) + 0.001) return json(res, { statusCode: "2071", statusMessage: "Refund amount exceeds the paid amount" });
+      return json(res, { completedTime: new Date().toISOString(), transactionStatus: "Completed", originalTrxID: trxID, refundTrxID: id("RF"), amount, currency: "BDT", charge: "0.00" });
+    }
+
     // ------------------------------------------------------------ SSLCommerz
     if (p.endsWith("/gwprocess/v4/api.php")) {
       const f = Object.fromEntries(new URLSearchParams(raw));
@@ -114,6 +125,18 @@ http
       if (!found) return json(res, { status: "INVALID_TRANSACTION" });
       const [tran, s] = found;
       return json(res, { status: s.status === "VALID" ? "VALID" : s.status, tran_id: tran, val_id: v, amount: s.amount, currency_type: "BDT", currency_amount: s.amount, bank_tran_id: s.bank_tran_id, risk_level: "0" });
+    }
+    // SSLCommerz refunds: asked with bank_tran_id; "processing" first, "refunded" when asked again.
+    if (p.endsWith("/merchantTransIDvalidationAPI.php") && url.searchParams.get("bank_tran_id")) {
+      const ref = id("REF");
+      refunds.set(ref, { asked: 0 });
+      return json(res, { APIConnect: "DONE", bank_tran_id: url.searchParams.get("bank_tran_id"), refund_ref_id: ref, status: "processing" });
+    }
+    if (p.endsWith("/merchantTransIDvalidationAPI.php") && url.searchParams.get("refund_ref_id")) {
+      const r = refunds.get(url.searchParams.get("refund_ref_id"));
+      if (!r) return json(res, { APIConnect: "DONE", status: "cancelled" });
+      r.asked++;
+      return json(res, { APIConnect: "DONE", refund_ref_id: url.searchParams.get("refund_ref_id"), status: r.asked > 1 ? "refunded" : "processing" });
     }
     if (p.endsWith("/merchantTransIDvalidationAPI.php")) {
       if (url.searchParams.get("store_passwd") === "wrong") return json(res, { APIConnect: "INVALID_REQUEST" });

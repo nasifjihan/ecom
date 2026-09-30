@@ -15,3 +15,4 @@ export { default as authMiddleware } from "./11-auth";
 export { default as rbacMiddleware } from "./12-rbac";
 export { default as validate } from "./13-zod-validate";
 export { default as globalErrorHandler } from "./14-global-error-handler";
+export { default as idempotent } from "./15-idempotency";

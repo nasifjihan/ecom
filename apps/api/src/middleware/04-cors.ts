@@ -29,8 +29,10 @@ const corsMw = cors({
     "X-Store-Id",
     "X-CSRF-Token",
     "X-Locale",
+    // Placing an order / a refund once however often it's sent (15-idempotency).
+    "Idempotency-Key",
   ],
-  exposedHeaders: ["X-Request-Id", "X-Total-Count", "Link"],
+  exposedHeaders: ["X-Request-Id", "X-Total-Count", "Link", "Idempotent-Replayed"],
   maxAge: 86400,
   preflightContinue: false,
   optionsSuccessStatus: 204,

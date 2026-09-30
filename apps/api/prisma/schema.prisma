@@ -68,6 +68,8 @@ model Store {
   shipments            Shipment[]
   paymentRecords       PaymentRecord[]
   paymentAttempts      PaymentAttempt[]
+  paymentEvents        PaymentEvent[]
+  idempotencyKeys      IdempotencyKey[]
   courierSettlements   CourierSettlement[]
   courierAccounts      CourierAccount[]
   locationsOff         StoreLocationOff[]
@@ -1605,37 +1607,86 @@ model CourierAccount {
 /// One try at paying an order online (bKash checkout, SSLCommerz). The order is only marked paid
 /// after the gateway itself confirms the payment to the server (never from the browser's word).
 model PaymentAttempt {
-  id           BigInt    @id @default(autoincrement())
-  storeId      BigInt
-  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  orderId      BigInt
-  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id             BigInt         @id @default(autoincrement())
+  storeId        BigInt
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId        BigInt
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   /// bkash | sslcommerz
-  gateway      String
+  gateway        String
   /// Our id for this try, sent to the gateway (SSLCommerz tran_id) and in return links.
-  code         String    @unique
+  code           String         @unique
   /// The gateway's id for it (bKash paymentID, SSLCommerz sessionkey).
-  reference    String?
-  amount       Decimal   @db.Decimal(14, 2)
+  reference      String?
+  amount         Decimal        @db.Decimal(14, 2)
   /// sandbox | live
-  mode         String
+  mode           String
   /// started | paid | failed | cancelled | review (the gateway said paid but something didn't match)
-  status       String    @default("started")
+  status         String         @default("started")
   /// The gateway's transaction id once paid (bKash trxID, SSLCommerz bank_tran_id).
-  gatewayTxnId String?
+  gatewayTxnId   String?
   /// Why it failed or needs a look.
-  note         String?
+  note           String?
   /// Where the customer goes back to on the storefront.
-  returnUrl    String
+  returnUrl      String
+  /// Money sent back through the gateway so far.
+  refundedAmount Decimal        @default(0) @db.Decimal(14, 2)
+  refunds        Refund[]
+  events         PaymentEvent[]
   /// The gateway's last answer (no keys).
-  raw          Json?
-  paidAt       DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  raw            Json?
+  paidAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@unique([gateway, reference])
   @@index([orderId])
   @@index([storeId, status])
+}
+
+/// Everything a gateway sent us or answered about a try: the customer coming back, an IPN, a
+/// staff re-check, a refund. Kept for checking disputes; keys and signatures are left out.
+model PaymentEvent {
+  id        BigInt          @id @default(autoincrement())
+  storeId   BigInt
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  attemptId BigInt?
+  attempt   PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  gateway   String
+  /// return | ipn | recheck | refund | refund_check
+  source    String
+  /// What we made of it: paid | failed | cancelled | pending | review | done | processing | error | unknown
+  outcome   String
+  note      String?
+  /// What was received (form / query), without keys.
+  payload   Json?
+  ip        String?
+  createdAt DateTime        @default(now())
+
+  @@index([attemptId, createdAt])
+  @@index([storeId, createdAt])
+}
+
+/// "Idempotency-Key" on requests that must not happen twice (placing an order, a refund): a repeat
+/// with the same key gets the first answer back instead of doing it again. Kept for a day.
+model IdempotencyKey {
+  id           BigInt   @id @default(autoincrement())
+  storeId      BigInt
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// What it's for (checkout, landing, refund) and the key the client sent.
+  scope        String
+  key          String
+  /// A fingerprint of the request, so the same key can't be reused for a different one.
+  requestHash  String
+  /// working | done
+  status       String   @default("working")
+  responseCode Int?
+  response     Json?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([storeId, scope, key])
+  @@index([expiresAt])
 }
 
 model PaymentRecord {
@@ -1744,26 +1795,33 @@ model Invoice {
 }
 
 model Refund {
-  id                   BigInt         @id @default(autoincrement())
+  id                   BigInt          @id @default(autoincrement())
   storeId              BigInt
-  store                Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store                Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orderId              BigInt
-  order                Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   adminId              BigInt?
-  admin                AdminUser?     @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  admin                AdminUser?      @relation(fields: [adminId], references: [id], onDelete: SetNull)
   reason               String
   items                RefundItem[]
-  amount               Decimal        @db.Decimal(14, 2)
+  amount               Decimal         @db.Decimal(14, 2)
   /// original | cash | bkash | nagad | bank | store_credit
-  method               String         @default("original")
+  method               String          @default("original")
   returnRequestId      BigInt?
-  returnRequest        ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
-  restockItems         Boolean        @default(true)
-  gatewayRefunded      Boolean        @default(false)
+  returnRequest        ReturnRequest?  @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+  restockItems         Boolean         @default(true)
+  gatewayRefunded      Boolean         @default(false)
   gatewayTransactionId String?
-  noteToCustomer       String?        @db.Text
-  status               String         @default("completed")
-  createdAt            DateTime       @default(now())
+  /// The online payment it went back to (bKash / SSLCommerz), when refunded through the gateway.
+  paymentAttemptId     BigInt?
+  paymentAttempt       PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  /// done | processing (SSLCommerz is still sending it) | null (not through a gateway)
+  gatewayStatus        String?
+  /// The gateway's refund id (bKash refundTrxID, SSLCommerz refund_ref_id) or what it said.
+  gatewayNote          String?
+  noteToCustomer       String?         @db.Text
+  status               String          @default("completed")
+  createdAt            DateTime        @default(now())
 }
 
 model RefundItem {

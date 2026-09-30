@@ -199,6 +199,11 @@ export interface RefundRow {
   method: string;
   returnRequestId: string | null;
   gatewayRefunded: boolean;
+  /** Through bKash / SSLCommerz: done, processing (SSLCommerz still sending it) or failed. */
+  gatewayStatus: string | null;
+  /** The gateway's refund id, and what happened. */
+  gatewayRef: string | null;
+  gatewayNote: string | null;
   createdAt: string;
   items: { orderItemId: string; quantity: number; amount: number }[];
 }
@@ -302,6 +307,9 @@ export interface ApiRefund {
   method?: string | null;
   returnRequestId?: string | null;
   gatewayRefunded?: boolean;
+  gatewayStatus?: string | null;
+  gatewayTransactionId?: string | null;
+  gatewayNote?: string | null;
   createdAt: string;
   items?: ApiItem[];
 }
@@ -378,6 +386,9 @@ export function fromApiRefund(r: ApiRefund): RefundRow {
     method: r.method ?? "original",
     returnRequestId: r.returnRequestId ?? null,
     gatewayRefunded: !!r.gatewayRefunded,
+    gatewayStatus: r.gatewayStatus ?? null,
+    gatewayRef: r.gatewayTransactionId ?? null,
+    gatewayNote: r.gatewayNote ?? null,
     createdAt: r.createdAt,
     items: (r.items ?? []).map((i) => ({ orderItemId: i.orderItemId, quantity: i.quantity, amount: Number(i.amount ?? 0) })),
   };
@@ -488,8 +499,13 @@ export const fulfilmentApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { orderId }) => [...orderTags(orderId), "Product"],
     }),
 
-    createRefund: b.mutation<RefundRow, CreateRefundInput>({
-      query: ({ orderId, ...body }) => ({ url: `/admin/orders/${orderId}/refunds`, method: "POST", body: clean(body) }),
+    createRefund: b.mutation<RefundRow, CreateRefundInput & { idempotencyKey?: string }>({
+      query: ({ orderId, idempotencyKey, ...body }) => ({
+        url: `/admin/orders/${orderId}/refunds`,
+        method: "POST",
+        body: clean(body),
+        ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}),
+      }),
       transformResponse: fromApiRefund,
       invalidatesTags: (_r, _e, { orderId }) => [...orderTags(orderId), "Product", "Customer"],
     }),
