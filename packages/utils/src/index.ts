@@ -95,3 +95,4 @@ export function deepClone<T>(obj: T): T {
  */
 export const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+export * from "./variants";

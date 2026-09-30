@@ -40,7 +40,7 @@ These are our advantages. Keep them.
 | Products, variants, categories, brands, attributes, media | ✅ | |
 | Product tags (EN/BN) | ✅ | Batch 26: tags saved, searched and filterable (`/products?tag=`); one language |
 | Specifications table (group / label / value) | ✅ | Batch 26 |
-| Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ❌ | Variants are added one by one today |
+| Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ✅ | Batch 34: up to 3 options and 100 combinations, only missing ones added, SKUs that don't clash; variant table with a column per option and "set for all" |
 | Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
 | Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
 | Soft delete + "Deleted only" filter, created/updated by | ✅ | Batch 34: Trash with Deleted view, restore to the old status, delete forever (refused while a gift box, landing page, purchase or transfer needs it), created/updated/deleted by |

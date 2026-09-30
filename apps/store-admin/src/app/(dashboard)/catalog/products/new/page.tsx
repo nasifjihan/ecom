@@ -65,6 +65,7 @@ import {
 import { ProductStatus, ProductType } from "@ecom/shared-types";
 import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
 import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTexts } from "@/components/catalog/bangla-fields";
+import { VariantsEditor, withKeys, type EditableVariant } from "@/components/products/variants-editor";
 
 const BANGLA_FIELDS: BanglaField[] = [
   { key: "name", label: "Name" },
@@ -164,7 +165,7 @@ export default function NewProductPage() {
   const { data: relatedProducts } = useGetProductsQuery({ page: 1, perPage: 50 });
 
   const [gallery, setGallery] = useState<MediaImage[]>([]);
-  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [variants, setVariants] = useState<EditableVariant[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [relatedSearch, setRelatedSearch] = useState("");
   const [activeTab, setActiveTab] = useState("basic");
@@ -306,21 +307,6 @@ export default function NewProductPage() {
     }
   };
 
-  const addVariant = () => {
-    setVariants((v) => [
-      ...v,
-      {
-        sku: `VAR-${Date.now()}`,
-        regularPrice: null,
-        stockQty: 0,
-        manageStock: true,
-      },
-    ]);
-  };
-
-  const removeVariant = (idx: number) => {
-    setVariants((v) => v.filter((_, i) => i !== idx));
-  };
 
   // Surface the first failing field instead of silently doing nothing.
   const onInvalid = (errors: Record<string, { message?: string } | undefined>) => {
@@ -415,14 +401,19 @@ export default function NewProductPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => toast.success("Preview opened")}>
-                <Eye className="mr-2 h-4 w-4" /> Preview
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => handleSubmit(onSubmit, () => {})()} disabled={isCreating}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setValue("status", "draft" as any);
+                  void handleSubmit(onSubmit, () => {})();
+                }}
+                disabled={isCreating}
+              >
                 {isCreating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Save Draft
               </Button>
-              <Button type="submit" disabled={isCreating}>
+              <Button type="submit" disabled={isCreating} onClick={() => setValue("status", "published" as any)}>
                 {isCreating ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 {isCreating ? "Publishing..." : "Publish"}
               </Button>
@@ -662,92 +653,13 @@ export default function NewProductPage() {
                 </TabsContent>
 
                 <TabsContent value="variants">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle>Product Variants</CardTitle>
-                        <CardDescription>Manage options like Size, Color, Material — each with its own SKU, price, stock.</CardDescription>
-                      </div>
-                      <Button type="button" onClick={addVariant} variant="outline" size="sm">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Variant
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      {variants.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
-                          <Plus className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No variants yet. Add options like Color/Size.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {variants.map((v, idx) => (
-                            <div key={idx} className="border rounded-lg p-4 space-y-4">
-                              <div className="flex items-center justify-between">
-                                <Label className="font-medium">Variant #{idx + 1}</Label>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeVariant(idx)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" /> Remove
-                                </Button>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Attribute Values</Label>
-                                  <Input
-                                    defaultValue={JSON.stringify(v.attributeValues || {})}
-                                    placeholder='{"Color":"Red","Size":"M"}'
-                                    onChange={(e) => {
-                                      try {
-                                        const parsed = JSON.parse(e.target.value || "{}");
-                                        setVariants((vs) => vs.map((x, i) => (i === idx ? { ...x, attributeValues: parsed } : x)));
-                                      } catch {}
-                                    }}
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">SKU</Label>
-                                  <Input
-                                    defaultValue={v.sku || ""}
-                                    onChange={(e) => setVariants((vs) => vs.map((x, i) => (i === idx ? { ...x, sku: e.target.value } : x)))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Stock Qty</Label>
-                                  <Input
-                                    type="number"
-                                    defaultValue={v.stockQty || 0}
-                                    onChange={(e) => setVariants((vs) => vs.map((x, i) => (i === idx ? { ...x, stockQty: Number(e.target.value) } : x)))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Regular Price ৳</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    defaultValue={v.regularPrice ?? ""}
-                                    onChange={(e) => setVariants((vs) => vs.map((x, i) => (i === idx ? { ...x, regularPrice: e.target.value ? Number(e.target.value) : null } : x)))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Sale Price ৳</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    defaultValue={v.salePrice ?? ""}
-                                    onChange={(e) => setVariants((vs) => vs.map((x, i) => (i === idx ? { ...x, salePrice: e.target.value ? Number(e.target.value) : null } : x)))}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <VariantsEditor
+                    variants={variants}
+                    onChange={setVariants}
+                    skuPrefix={watch("sku") || undefined}
+                    defaultPrice={watch("regularPrice") ?? null}
+                    defaultCost={watch("costPrice") ?? null}
+                  />
                 </TabsContent>
 
                 <TabsContent value="pricing">
@@ -1343,20 +1255,12 @@ export default function NewProductPage() {
 
                   <Separator />
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button type="submit" variant="secondary" className="w-full" disabled={isCreating}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button type="submit" variant="secondary" className="w-full" disabled={isCreating} onClick={() => setValue("status", "draft" as any)}>
                       {isCreating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                       Save Draft
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => toast.success("Preview opened")}
-                      className="w-full"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button type="submit" className="w-full" disabled={isCreating}>
+                    <Button type="submit" className="w-full" disabled={isCreating} onClick={() => setValue("status", "published" as any)}>
                       {isCreating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Publish
                     </Button>

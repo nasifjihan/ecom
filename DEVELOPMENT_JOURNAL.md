@@ -3493,3 +3493,44 @@ Batch 34 is catalog tools. This first part fixes a bug that hid products from th
 - **Emptying the Trash:** no automatic emptying after 30 days.
 - **Addresses:** a product in the Trash keeps its web address, so a new product with the same name gets "-2".
 - **Other items:** categories, brands and other items are still deleted directly.
+
+## ✅ BATCH #34 (part 2) — Variant generator (2026-09-30)
+Staff type a product's options once (Size: S, M, L; Colour: Red, Sky Blue) and get every combination as a variant, with a SKU, price, sale price, cost and stock. A proper variant table replaces the old one, where options were typed as JSON.
+
+### 34.7 The generator (`packages/utils/src/variants.ts`, shared)
+- **Values:** "S, M,  l ,M" becomes S, M, l (trimmed; empties and repeats in any case dropped). Options with no name or no values are skipped, and a repeated option name is merged.
+- **Combinations:** every combination, with the first option varying slowest (S/Red, S/Blue, M/Red …). At most 100 per run; above that it's refused, with the count shown.
+- **Stored options:** keyed by the option name in lowercase (`{ size: "M", colour: "Sky Blue" }`), which the storefront shows as "Size: M • Colour: Sky Blue".
+- **SKUs:** prefix + each value, uppercase letters and digits ("TS-01" + M / Sky Blue → `TS-01-M-SKYBLUE`; Bangla digits kept). A clash within the product gets "-2".
+- **Only missing combinations are added.** A product's existing variants are matched by option names and values (any case) and left as they are, so it's safe to run again after adding a colour.
+- **Starting point:** the generator starts from the options a product's variants already use (`optionsOf`).
+
+### 34.8 Store admin (`components/products/variants-editor.tsx`, on the new and edit product pages)
+- **Generate variants:**
+  - up to 3 options (name and comma-separated values);
+  - SKU prefix (defaults to the product's SKU), price and cost (default to the product's), sale price, stock each;
+  - a live count ("6 combinations: 5 new, 1 already here (kept as they are)") and a preview of the new ones with their SKUs;
+  - "Add N variants".
+- **Variant table:**
+  - a column per option, then SKU, price, sale, cost, stock, remove;
+  - "Set for all N" fills price, sale, cost or stock for every variant;
+  - a sale price above the price is marked;
+  - rows keep a stable key: the old editor keyed inputs by position, so removing a row could show another row's values.
+- **Saving:** variants are saved with the product. The API keeps existing variants by id, creates new ones, deletes removed ones, and sets stock through the stock ledger.
+- **Fixed along the way (new product page):** both "Publish" buttons submitted whatever status was selected (Draft by default), so "Publish" saved a draft. Publish now publishes, and Save Draft saves a draft. The "Preview" buttons that only showed a message were removed; on the edit page, the sidebar eye button now opens the product on the store.
+
+### 34.9 Checked
+- **Tests:** 7 unit tests for the generator (in `@ecom/utils`): cleaning values, merging options, order of combinations, SKUs (Bangla digits too), only missing ones added with clash numbering, the 100 limit, reading existing options.
+- **Chromium, on a variable product (SKU GTT, price ৳1,200, cost ৳700):**
+  - Size "S, M, L, m" × Colour "Red, Sky Blue" showed "6 combinations: 6 new" with prefix, price and cost filled in;
+  - after adding them, "set for all" price ৳1,250, one stock set to 9, one variant removed, and a sale price of ৳1,500 marked as too high, then ৳1,100;
+  - saved: 5 variants `GTT-S-RED` … `GTT-L-RED` with the right options, prices, cost ৳700 and stock;
+  - reopening showed "6 combinations: 1 new, 5 already here";
+  - the storefront listed "Size: S • Colour: Red ৳1,100" and the rest.
+- **Chromium, new product page:** "Publish" saved the product as `published`.
+- **Lint and builds:** no new lint errors; typechecks pass; admin and storefront build.
+
+### 34.10 Not done
+- **Adding a new option to existing variants:** variants that had only a size don't get the new option filled in; the new combinations are added alongside them.
+- **Per-option pictures:** there's no picture per option value (for example one photo per colour).
+- **Storefront choosers:** the product page still lists combinations; it doesn't show a separate size and colour picker.
