@@ -14,8 +14,8 @@ import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext, tr } from "../../core";
 import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
-import { getPaymentProvider } from "../../services/payments";
-import type { PaymentMethod } from "../../services/payments/types";
+import { OnlinePaymentsService } from "../payments/gateways/online.service";
+import { isOnlineGateway, methodUsable } from "../payments/gateways/gateway.rules";
 import { newId } from "@ecom/utils";
 import type {
   StorefrontProductsQueryDto,
@@ -1011,7 +1011,7 @@ export class StorefrontService {
 
     const gateway = await prisma.paymentGatewayConfig.findFirst({ where: { storeId, code: input.paymentGateway } });
     const offered = gatewayOffered((await this.storefront()).paymentGateways, input.paymentGateway);
-    if (!gateway || (input.requireEnabledGateway && (!gateway.enabled || !offered))) {
+    if (!gateway || (input.requireEnabledGateway && (!gateway.enabled || !offered || !methodUsable(gateway, isManualCapable(gateway.code))))) {
       fail(`Payment method "${input.paymentGateway}" is not available for this store`, "PAYMENT_GATEWAY_ERROR");
     }
 
@@ -1416,7 +1416,8 @@ export class StorefrontService {
     return { transactionId, senderNumber };
   }
 
-  async placeOrder(dto: PlaceOrderDto) {
+  /** `origin`: the storefront address the checkout came from (where the gateway sends the customer back). */
+  async placeOrder(dto: PlaceOrderDto, origin?: string | null) {
     const quote = await this.quoteOrder({
       strict: true,
       items: dto.items,
@@ -1454,26 +1455,15 @@ export class StorefrontService {
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
 
     const { grandTotal } = quote.totals;
-    const bill = quote.bill;
+    // Online: open the gateway's page. If it can't be opened the order stays, unpaid, and the
+    // thank-you page offers "Pay now" (with the reason).
     let redirectPaymentURL: string | undefined;
-    if (!OFFLINE_GATEWAYS.has(dto.paymentGateway) && !manual) {
+    let paymentError: string | undefined;
+    if (!OFFLINE_GATEWAYS.has(dto.paymentGateway) && !manual && isOnlineGateway(dto.paymentGateway)) {
       try {
-        const provider = getPaymentProvider(dto.paymentGateway as PaymentMethod);
-        const init = await provider.initiate({
-          orderId: order.id,
-          orderNumber: order.number,
-          amount: grandTotal,
-          currencyCode: "BDT",
-          customerEmail: dto.email ?? "",
-          customerName: `${bill.firstName} ${bill.lastName}`,
-          customerPhone: bill.phone,
-          redirectUrl: "",
-          ipnUrl: "",
-          metadata: { orderKey: order.orderKey },
-        } as any);
-        redirectPaymentURL = init.redirectUrl;
-      } catch {
-        redirectPaymentURL = undefined;
+        redirectPaymentURL = (await new OnlinePaymentsService(this.ctx).start(order.id, origin)).payUrl;
+      } catch (e) {
+        paymentError = (e as Error).message;
       }
     }
 
@@ -1489,6 +1479,7 @@ export class StorefrontService {
       customerEmail: dto.email,
       createdAt: order.createdAt.toISOString(),
       redirectPaymentURL,
+      paymentError,
     };
   }
 
@@ -1502,7 +1493,7 @@ export class StorefrontService {
       }),
       this.storefront(),
     ]);
-    return rows.filter((g) => gatewayOffered(sf.paymentGateways, g.code)).map((g) => ({
+    return rows.filter((g) => gatewayOffered(sf.paymentGateways, g.code) && methodUsable(g, isManualCapable(g.code))).map((g) => ({
       code: g.code,
       name: g.name,
       description: g.description ?? undefined,
@@ -1543,6 +1534,9 @@ export class StorefrontService {
       instructions: manual ? g!.instructions : null,
       due: state.due,
       canSubmit: manual && state.canSubmit && !["CANCELLED", "FAILED", "REFUNDED"].includes(o.status),
+      /** An unpaid bKash / SSLCommerz order: the page offers "Pay now". */
+      canPayOnline:
+        !manual && !!g?.enabled && isOnlineGateway(o.paymentGatewayCode) && state.due > 0 && !["CANCELLED", "FAILED", "REFUNDED"].includes(o.status),
       transfers: o.paymentRecords
         .filter((r) => r.kind === "transfer")
         .map((r) => ({

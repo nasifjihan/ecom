@@ -63,6 +63,8 @@ export type OrderPayment = {
   due: number;
   /** A transaction ID can be sent now (nothing waiting to be checked, money still due). */
   canSubmit: boolean;
+  /** An unpaid bKash / SSLCommerz order: "Pay now" opens the gateway's page again. */
+  canPayOnline?: boolean;
   transfers: { transactionId: string | null; amount: number; status: "to_verify" | "verified" | "rejected" | string; rejectReason: string | null; createdAt: string }[];
 };
 
@@ -218,6 +220,8 @@ export type OrderResult = {
   grandTotal: number;
   currency: string;
   redirectPaymentURL?: string;
+  /** Online payment couldn't be opened (the order is placed, unpaid); the thank-you page offers "Pay now". */
+  paymentError?: string;
   customerEmail?: string;
   createdAt?: string;
   expectedDeliveryDate?: string;
@@ -359,6 +363,11 @@ export const checkoutApi = api.injectEndpoints({
       query: ({ orderKey, ...body }) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}/payment`, method: "POST", body }),
       invalidatesTags: (_res, _err, { orderKey }) => [{ type: "Order" as const, id: orderKey }],
     }),
+
+    /** A new online payment try for an unpaid bKash / SSLCommerz order; open `payUrl` next. */
+    payOrderOnline: builder.mutation<{ payUrl: string; attempt: string }, string>({
+      query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}/pay`, method: "POST" }),
+    }),
   }),
   overrideExisting: true,
 });
@@ -374,6 +383,7 @@ export const {
   useGetPaymentMethodsQuery,
   useGetOrderByKeyQuery,
   useSubmitOrderPaymentMutation,
+  usePayOrderOnlineMutation,
 } = checkoutApi;
 
 /**

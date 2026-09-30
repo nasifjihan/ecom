@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "worker": "tsx src/workers/index.ts",
     "couriers:mock": "node scripts/mock-couriers.mjs",
+    "payments:mock": "node scripts/mock-payments.mjs",
     "sms:mock": "node scripts/mock-sms.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",

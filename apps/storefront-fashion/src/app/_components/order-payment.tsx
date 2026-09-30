@@ -3,9 +3,10 @@
 /**
  * Paying a bKash / Nagad / Rocket / bank order by hand: where to send the money, what the shop
  * made of each transaction ID, and a form to send one (thank-you page and the account's order page).
+ * OnlinePaymentCard: an unpaid bKash / SSLCommerz order, with "Pay now" back to the gateway.
  */
 import * as React from "react";
-import { Wallet } from "lucide-react";
+import { AlertTriangle, CreditCard, Loader2, Wallet } from "lucide-react";
 import {
   Badge,
   Button,
@@ -21,6 +22,7 @@ import {
   toast,
   useT,
   msg,
+  usePayOrderOnlineMutation,
   type OrderPayment,
   type TransferInput,
 } from "@ecom/storefront-base";
@@ -129,6 +131,67 @@ export function OrderPaymentCard({
         )}
         {!p.canSubmit && p.due > 0 && p.transfers.some((tr) => tr.status === "to_verify") && (
           <p className="text-muted-foreground">{t("We're checking your payment. The order is confirmed as soon as it's verified.")}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** What happened on the gateway's page, from the ?payment= the API adds when it sends the customer back. */
+const OUTCOME: Record<string, string> = {
+  failed: msg("The payment didn't go through. No money was taken; you can try again."),
+  cancelled: msg("The payment was cancelled. You can pay again below."),
+  pending: msg("We couldn't confirm the payment yet. If money was taken, it will show here shortly; otherwise, try again."),
+  review: msg("We received a payment that needs a check by the shop. They'll contact you; please don't pay again."),
+};
+
+/** An unpaid bKash / SSLCommerz order: why, and "Pay now" to open the gateway's page again. */
+export function OnlinePaymentCard({
+  orderKey,
+  payment: p,
+  currency,
+  outcome,
+}: {
+  orderKey: string;
+  payment: OrderPayment;
+  currency: string;
+  outcome?: string | null;
+}) {
+  const t = useT();
+  const [pay, { isLoading }] = usePayOrderOnlineMutation();
+  const [opening, setOpening] = React.useState(false);
+  const message = outcome ? OUTCOME[outcome] : undefined;
+  const onPay = async () => {
+    try {
+      setOpening(true);
+      const { payUrl } = await pay(orderKey).unwrap();
+      window.location.href = payUrl;
+    } catch (err) {
+      setOpening(false);
+      toast.error(apiErrorMessage(err, t("Could not open the payment page. Please try again.")));
+    }
+  };
+  return (
+    <Card className="border-amber-200 dark:border-amber-900">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" /> {t("Payment not completed")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {message && (
+          <p className={cn("flex items-start gap-2 rounded-lg p-3 text-sm", outcome === "review" ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-muted")}>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {t(message)}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {t("Your order is saved. Pay {amount} with {method} to confirm it.", { amount: formatMoney(p.due, currency), method: p.methodName })}
+        </p>
+        {outcome !== "review" && (
+          <Button className="w-full sm:w-auto" disabled={isLoading || opening} onClick={() => void onPay()}>
+            {(isLoading || opening) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {t("Pay {amount} with {method}", { amount: formatMoney(p.due, currency), method: p.methodName })}
+          </Button>
         )}
       </CardContent>
     </Card>

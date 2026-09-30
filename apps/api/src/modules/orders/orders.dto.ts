@@ -33,15 +33,6 @@ const PAYMENT_GATEWAYS = [
 
 const REFUND_METHODS = ["original", "store_credit", "cash"] as const;
 const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
-const IPN_PROVIDERS = [
-  "stripe",
-  "bkash",
-  "nagad",
-  "rocket",
-  "sslcommerz",
-  "bank_transfer",
-  "cod",
-] as const;
 
 /** Query-string arrays: accepts ?status=A,B, ?status=A&status=B or a real array. */
 const csvArray = <T extends z.ZodTypeAny>(item: T) =>
@@ -215,34 +206,6 @@ export const CreateRefundDto = BaseCreateRefundDto.superRefine((v, ctx) => {
 });
 export type CreateRefundDto = z.infer<typeof CreateRefundDto>;
 
-const BasePaymentInitiateDto = z.object({
-  orderId: z.coerce.bigint().positive(),
-  method: z.string().min(1),
-  redirectUrl: z.string().max(500).url(),
-  ipnUrl: z.string().max(500).url().optional(),
-  amount: z.coerce.number().nonnegative(),
-  currencyCode: z.string().length(3).default("BDT"),
-});
-
-export const PaymentInitiateDto = BasePaymentInitiateDto.superRefine((v, ctx) => {
-  if (!PAYMENT_GATEWAYS.includes(v.method as any)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `method must be one of: ${PAYMENT_GATEWAYS.join(", ")}`,
-      path: ["method"],
-    });
-  }
-});
-export type PaymentInitiateDto = z.infer<typeof PaymentInitiateDto>;
-
-export const PaymentConfirmDto = z.object({
-  gatewayTxnId: z.string().max(100),
-  method: z.string(),
-  rawPayload: z.record(z.string(), z.unknown()).default({}),
-  ipnSignature: z.string().max(500).optional().nullable(),
-});
-export type PaymentConfirmDto = z.infer<typeof PaymentConfirmDto>;
-
 export const CartItemLineDto = z.object({
   productId: z.coerce.bigint().positive(),
   variantId: z.coerce.bigint().positive().optional().nullable(),
@@ -286,14 +249,6 @@ export const UpdateCartItemDto = z.object({
   unitPrice: z.coerce.number().nonnegative().optional().nullable(),
 });
 export type UpdateCartItemDto = z.infer<typeof UpdateCartItemDto>;
-
-export const IpnProviderParamDto = z.object({
-  provider: z.string().refine(
-    (v) => IPN_PROVIDERS.includes(v as any),
-    `provider must be one of: ${IPN_PROVIDERS.join(", ")}`,
-  ),
-});
-export type IpnProviderParamDto = z.infer<typeof IpnProviderParamDto>;
 
 const BaseExportOrdersDto = PaginationSchema.extend({
   status: csvArray(z.enum(ORDER_STATUSES)).optional(),

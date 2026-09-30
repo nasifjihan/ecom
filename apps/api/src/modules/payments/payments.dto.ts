@@ -90,3 +90,9 @@ export const UpdatePaymentMethodDto = z.object({
   sortOrder: z.coerce.number().int().min(0).max(100).optional(),
 });
 export type UpdatePaymentMethodDto = z.infer<typeof UpdatePaymentMethodDto>;
+
+/** bKash / SSLCommerz merchant keys; blank values keep what's saved. */
+export const GatewayKeysDto = z.object({
+  mode: z.enum(["sandbox", "live"]),
+  credentials: z.record(z.string().max(40), z.string().trim().max(500)).default({}),
+});

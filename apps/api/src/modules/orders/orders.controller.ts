@@ -7,9 +7,6 @@ import type {
   OrderIdParamDto as OrderIdParamDtoType,
   OrderNumberParamDto as OrderNumberParamDtoType,
   CreateRefundDto as CreateRefundDtoType,
-  PaymentInitiateDto as PaymentInitiateDtoType,
-  PaymentConfirmDto as PaymentConfirmDtoType,
-  IpnProviderParamDto as IpnProviderParamDtoType,
   CreateCartDto as CreateCartDtoType,
   AddCartItemDto as AddCartItemDtoType,
   ExportOrdersDto as ExportOrdersDtoType,
@@ -47,32 +44,6 @@ class OrdersController extends BaseController {
     const params = req.params as unknown as OrderNumberParamDtoType;
     const order = await svc.getOrderByNumber(params.number);
     envelope(res, { status: 200, data: order });
-  });
-
-  initiatePayment = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const params = req.params as unknown as OrderIdParamDtoType;
-    const dto = req.body as PaymentInitiateDtoType;
-    const order = await svc.getOrderById(params.id);
-    const result = await svc.initiatePayment(dto, order);
-    envelope(res, { status: 200, data: result });
-  });
-
-  confirmPayment = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const dto = req.body as PaymentConfirmDtoType;
-    const result = await svc.confirmPayment(dto);
-    envelope(res, { status: 200, data: result, message: "Payment confirmed" });
-  });
-
-  ipnWebhook = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const params = req.params as unknown as IpnProviderParamDtoType;
-    const rawBody = (req as any).rawBody ?? Buffer.from(JSON.stringify(req.body)).toString("utf8");
-    const headers = req.headers as Record<string, string | string[] | undefined>;
-    const query = req.query as Record<string, unknown>;
-    const result = await svc.parsePaymentIpn(params.provider as any, headers, rawBody, query);
-    envelope(res, { status: 200, data: result });
   });
 
   listCarts = ctrl(async (_req: Request & { ctx: RequestContext }, res: Response) => {

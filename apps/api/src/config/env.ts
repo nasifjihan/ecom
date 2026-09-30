@@ -83,34 +83,12 @@ const envSchema = z.object({
   SSLWIRELESS_API_TOKEN: z.string().optional(),
   SSLWIRELESS_SID: z.string().optional(),
 
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-
-  BKASH_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
-  BKASH_TEST_USERNAME: z.string().optional(),
-  BKASH_TEST_PASSWORD: z.string().optional(),
-  BKASH_TEST_APPKEY: z.string().optional(),
-  BKASH_TEST_APPSECRET: z.string().optional(),
-  BKASH_LIVE_USERNAME: z.string().optional(),
-  BKASH_LIVE_PASSWORD: z.string().optional(),
-  BKASH_LIVE_APPKEY: z.string().optional(),
-  BKASH_LIVE_APPSECRET: z.string().optional(),
-
-  SSLCOMMERZ_IS_SANDBOX: z.enum(["true", "false"]).default("true"),
-  SSLCOMMERZ_STORE_ID: z.string().optional(),
-  SSLCOMMERZ_STORE_PASSWORD: z.string().optional(),
-
-  NAGAD_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
-  NAGAD_API_URL: z.string().optional(),
-  NAGAD_MERCHANT_ID: z.string().optional(),
-  NAGAD_PUBLIC_KEY: z.string().optional(),
-  NAGAD_PRIVATE_KEY: z.string().optional(),
-
-  ROCKET_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
-  ROCKET_API_URL: z.string().optional(),
-  ROCKET_USER: z.string().optional(),
-  ROCKET_PIN: z.string().optional(),
+  /**
+   * Online payment gateways. Each store enters its own keys in the admin (encrypted in the
+   * database); these only point the API somewhere else, e.g. a local mock. Blank = the real API.
+   */
+  BKASH_API_URL: z.string().optional(),
+  SSLCOMMERZ_API_URL: z.string().optional(),
 
   PATHAO_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
   PATHAO_API_URL: z.string().optional(),

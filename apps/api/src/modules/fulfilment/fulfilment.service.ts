@@ -12,8 +12,6 @@ import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.co
 import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
-import { getPaymentProvider } from "../../services/payments";
-import type { PaymentMethod } from "../../services/payments/types";
 import { OrdersService, STATUS_TRANSITIONS } from "../orders/orders.service";
 import { recordParcelCash } from "../payments/payments.records";
 import { defaultWarehouseId, moveStock, releaseOrderStock, splitBack } from "../stock";
@@ -37,7 +35,6 @@ const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 /** Orders that are over: no new parcels, returns or refunds. */
 const CLOSED = new Set(["CANCELLED", "FAILED"]);
 /** Gateways where "refund to the original method" means handing money back by hand. */
-const OFFLINE = new Set(["cod", "bank_transfer"]);
 
 export class FulfilmentService {
   constructor(private readonly ctx: RequestContext) {}
@@ -519,22 +516,10 @@ export class FulfilmentService {
       throw new BadRequestError((e as Error).message, "REFUND_AMOUNT_EXCEEDS_PAID");
     }
 
-    // Money back through the gateway when it was paid online and staff chose "original method".
-    let gatewayRefunded = false;
-    let gatewayTransactionId: string | null = null;
-    if (dto.method === "original" && !OFFLINE.has(o.paymentGatewayCode)) {
-      try {
-        const res = (await getPaymentProvider(o.paymentGatewayCode as PaymentMethod).refund({ orderId, amount: priced.amount, reason: dto.reason } as never)) as {
-          success?: boolean;
-          refundId?: string;
-          transactionId?: string;
-        };
-        gatewayRefunded = res?.success !== false;
-        gatewayTransactionId = res?.refundId ?? res?.transactionId ?? null;
-      } catch (e) {
-        logger.warn({ err: (e as Error).message, orderId: String(orderId) }, "Gateway refund failed; recorded for manual payout");
-      }
-    }
+    // Refunds through bKash / SSLCommerz come in Batch 35 part 2: until then every refund is
+    // recorded for staff to pay out by hand (never shown as sent back by the gateway).
+    const gatewayRefunded = false;
+    const gatewayTransactionId: string | null = null;
 
     const full = r2(num(o.refundedTotal) + priced.amount) >= r2(num(o.grandTotal)) - 0.001;
     const refund = await tx(async (t: T) => {

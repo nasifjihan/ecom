@@ -3677,3 +3677,118 @@ With more than one storefront, a product's own price in a storefront used to app
 - **One storefront:** per-option prices are only for stores with more than one storefront (the card is hidden with one). Each option's normal price is set in the variant table as before.
 - **Import/export:** the sourcing and country aren't columns in product import/export yet.
 - **Badge on cards:** the badge shows on the product page only, not on product cards.
+
+## ✅ BATCH #35 (part 1) — Real online payments: bKash and SSLCommerz (2026-10-01)
+The online payment code was a simulation.
+- **What it did:**
+  - "bKash" and "SSLCommerz" never called the gateways; they made up payment IDs and links.
+  - "Confirm payment" (admin) reported success for any transaction ID.
+  - The public payment notice "checked" bKash with a home-made 32-bit hash.
+  - Refunds were recorded as sent back by the gateway when no money moved.
+  - Keys came from the server's .env, one set for every store.
+- **What it does now:** each store enters its own bKash / SSLCommerz merchant keys (encrypted). Customers pay on the gateway's real page, and an order is marked paid only when the gateway's own API confirms that payment, for that order, in taka, for the right amount.
+- **Removed:** the simulated providers (bKash, Nagad, Rocket, Stripe, SSLCommerz, COD, bank) and their routes.
+
+### 35.1 Data (migration `online_payments`)
+- **PaymentGatewayConfig:**
+  - `secrets` holds the merchant keys, AES-256-GCM encrypted like courier and SMS keys;
+  - `keysTestedAt` / `keysTestOk` / `keysTestNote` record the last "Test connection". Changing the keys or mode clears it.
+- **PaymentAttempt:** one try at paying an order online.
+  - `code` is our own unique id: the order number plus a random tail (FBD-1042-K7Q2XM).
+  - `reference` is the gateway's id (bKash paymentID, SSLCommerz sessionkey).
+  - It also stores the amount, sandbox/live, and a status: started, paid, failed, cancelled or review.
+  - Plus the gateway's transaction id, a note, the storefront page to return to, and the gateway's last answer with anything key-like removed.
+- **PaymentRecord:** a new kind, `gateway`. A paid attempt adds a verified record, which counts toward "paid" like a verified transfer.
+
+### 35.2 Gateways (`payments/gateways/gateway.adapters.ts`, built to the published APIs)
+- **bKash Tokenized Checkout v1.2.0-beta:**
+  - grant token (cached per app key, refreshed once on 401/403);
+  - create (mode 0011, our code as merchantInvoiceNumber, callback to our API);
+  - execute on return;
+  - "payment/status" when execute refuses (already executed, cancelled …);
+  - sandbox `tokenized.sandbox.bka.sh`, live `tokenized.pay.bka.sh`.
+- **SSLCommerz v4:**
+  - open a session (our code as tran_id; success, fail and cancel links; IPN link);
+  - a payment counts only when the validation API says VALID / VALIDATED for its val_id;
+  - without a val_id, the payment is found by our tran_id;
+  - `risk_level` 1 goes to staff;
+  - sandbox `sandbox.sslcommerz.com`, live `securepay.sslcommerz.com`.
+- **Test connection:** bKash grants a token; SSLCommerz checks the store ID and password with its transaction query ("DONE").
+- **Local testing:** `BKASH_API_URL` / `SSLCOMMERZ_API_URL` point at a local mock: `pnpm --filter @ecom/api payments:mock` (scripts/mock-payments.mjs, with Pay, Fail and Cancel pages). The old per-gateway .env keys were removed.
+
+### 35.3 When an order is paid (`gateway.rules.ts`, `online.service.ts`)
+- **Checks:** "paid" needs all of these from the gateway's API: this try's code, taka, and the amount asked (to the paisa).
+  - Money taken with a different code or amount, in another currency, or flagged by the bank becomes "review".
+  - For "review", the order stays unpaid and the order history says what didn't match, for staff to check in the gateway's panel.
+- **Settled once:** a try moves out of "started" in a single conditional update. So the return link, SSLCommerz's IPN, a page reload or two arriving at once change the order only once. A later "paid" can still replace an earlier "failed".
+- **When paid:** a verified gateway payment record, then the order is paid (paid date, transaction id), then pending moves to processing with the usual email.
+- **Return links:**
+  - The gateway sends the customer to our API (`/api/payments/return/:gateway?attempt=`).
+  - It asks the gateway, then redirects to the storefront's thank-you page with `&payment=paid|failed|cancelled|pending|review`.
+  - The storefront address comes from the checkout's Origin, but only if it's one of the store's own domains (never an address the request makes up); otherwise the store's own domain.
+- **IPN:** SSLCommerz posts to `/api/payments/ipn/sslcommerz`, which is checked the same way. bKash Checkout has no IPN: its return is checked instead.
+- **Limits:**
+  - at most 10 tries per order;
+  - a try only for an unpaid, open, online order, for what's still due;
+  - never when the method is off or has no keys.
+
+### 35.4 Checkout and storefront
+- **Checkout offers online methods only when they work:** bKash (online) or SSLCommerz with keys saved. Nagad, Rocket and Stripe can't be put online at all. Cash on delivery and send-money methods are unchanged.
+- **Placing an order:**
+  - It opens the gateway's page.
+  - If the page can't be opened, the order is kept, unpaid, with a toast.
+  - The thank-you page then shows "Payment not completed" with "Pay ৳X with bKash" (a new try), plus a line for what happened on the gateway ("cancelled", "didn't go through", "needs a check by the shop").
+  - For "review" there's no pay button, so the customer doesn't pay twice.
+- **Bangla:** all the new text has Bangla.
+
+### 35.5 Admin
+- **Settings → Payments:**
+  - bKash (online mode) and SSLCommerz get a "merchant keys" box: sandbox or live, each key, Save keys, Test connection with its result.
+  - Saved keys come back masked (secrets as dots only). Leave a box empty to keep what's saved.
+  - SSLCommerz shows the IPN URL to paste into its panel.
+  - A method can't be turned on in online mode until its keys are saved and the test passed.
+  - Nagad and Rocket only offer "send to our number"; Stripe shows "Not available yet".
+- **Order page → Payments:**
+  - "Online payment tries" lists each try: gateway, amount, sandbox, status, our code, transaction id, note.
+  - "Check again" asks the gateway about a try that didn't finish (e.g. the customer closed the tab).
+- **Fixed along the way:** the payment method form reset its own unsaved edits whenever the list refreshed. Saving keys switched the mode back and hid the keys box.
+
+### 35.6 Refunds
+- A refund "to the original method" on a bKash / SSLCommerz order is now recorded for staff to pay out, not marked as sent back by the gateway.
+- Real refunds through the gateways come in part 2.
+
+### 35.7 Checked
+- **Tests:**
+  - 13 unit tests against simulated gateway answers:
+    - when an answer marks an order paid (amount, code, currency, risk);
+    - return addresses only on the store's own domains;
+    - which methods are offered;
+    - masking and keeping keys out of stored answers;
+    - bKash grant/create/execute, falling back to status, token refresh, bad keys;
+    - SSLCommerz session form, VALID only, lookup by tran_id, good and bad keys.
+  - 5 integration tests against Postgres with the gateways faked over HTTP:
+    - keys stored encrypted, masked, going online refused until tested;
+    - bKash paid only by bKash's answer, cancelled then paid with "Pay now", two returns at once give one payment record, the order moves to processing;
+    - an amount mismatch goes to review, not paid;
+    - SSLCommerz: a forged IPN changes nothing, IPN + return settle once;
+    - a gateway that won't open leaves the order unpaid with "Pay now".
+  - One older test turned bKash on in online mode without keys. That setup is no longer offered at checkout, so it now uses bKash send-money.
+  - Full API suite: 680 passing. The Bangla text test passes.
+- **Chromium against the local mock gateways (the real sandboxes are blocked by this environment's network policy):**
+  - Settings → Payments: switched bKash to online, entered keys, saved (encrypted, no plain password in the database), tested ("bKash sandbox keys work"), turned it on.
+  - Checkout with bKash went to the gateway page, "Pay", back on the thank-you page "paid". The order was paid and processing with one gateway record. Reloading the return link added nothing.
+  - A second order was cancelled on the gateway. The page showed "The payment was cancelled" and "Pay ৳5,060.00 with bKash", which went back to the gateway and paid. The tries were: cancelled, paid.
+  - The admin order page showed both tries. The cancelled one first showed bKash's raw "Invalid Payment State"; it now says "Cancelled on bKash".
+  - The same with SSLCommerz (form-post return plus IPN): paid once, cancel then "Pay now" paid.
+- **Lint and builds:** no new lint errors; API typecheck, admin and storefront builds pass.
+- **Dev data:**
+  - bKash (online) and SSLCommerz have sandbox keys saved and are turned off. Without the mock, the dev API would call the real gateways, which this environment can't reach.
+  - Six test orders (four bKash, two SSLCommerz, all paid in the end) and their 9 tries are in dev data.
+
+### 35.8 Not done
+- **Real sandboxes:** not yet run against bKash's or SSLCommerz's own sandbox. The hosts `tokenized.sandbox.bka.sh` and `sandbox.sslcommerz.com` are blocked here; allowing them in the environment's network settings would let this be tried.
+- **Next parts:**
+  - part 2: gateway refunds, placing an order twice by mistake making one order (idempotency key), a log of gateway notices;
+  - part 3: VAT-inclusive prices, BIN / trade licence and an order number prefix on invoices.
+- **Other gateways:** Nagad, Rocket, cards (Stripe, aamarPay) are not connected; they stay "send money" or off.
+- **Landing pages:** their one-page order form takes cash on delivery only, so there's no online payment there yet.

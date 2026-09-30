@@ -15,6 +15,8 @@ import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core";
 import { OrdersService } from "../orders/orders.service";
+import { isOnlineGateway } from "./gateways/gateway.rules";
+import { OnlinePaymentsService } from "./gateways/online.service";
 import {
   amountDue,
   canMovePayment,
@@ -83,9 +85,9 @@ export class PaymentsService {
     return t.orderStatusLog.create({ data: { orderId, status: status as never, note, adminId: this.adminId } });
   }
 
-  /** Payment status and paid date from verified transfers; returns the new status. */
-  private async syncTransfers(t: T, orderId: bigint) {
-    const o = await t.order.findUniqueOrThrow({ where: { id: orderId }, include: { paymentRecords: { where: { kind: "transfer", status: "verified" }, orderBy: { checkedAt: "desc" } } } });
+  /** Payment status and paid date from verified transfers and online payments; returns the new status. */
+  async syncTransfers(t: T, orderId: bigint) {
+    const o = await t.order.findUniqueOrThrow({ where: { id: orderId }, include: { paymentRecords: { where: { kind: { in: ["transfer", "gateway"] }, status: "verified" }, orderBy: { checkedAt: "desc" } } } });
     const verified = r2(o.paymentRecords.reduce((s, r) => s + num(r.amount), 0));
     const status = transferPaymentStatus(o.paymentStatus, num(o.grandTotal), verified);
     await t.order.update({
@@ -100,7 +102,7 @@ export class PaymentsService {
   }
 
   /** A paid pending order goes to processing (with the usual email). */
-  private async startIfPaid(orderId: bigint, sync: { before: string; after: string; orderStatus: string }) {
+  async startIfPaid(orderId: bigint, sync: { before: string; after: string; orderStatus: string }) {
     if (sync.after !== "paid" || sync.before === "paid" || sync.orderStatus !== "PENDING") return;
     try {
       await new OrdersService(this.ctx).transitionStatus(orderId, { newStatus: "PROCESSING", note: "Payment received", notifyCustomer: true } as never);
@@ -112,7 +114,7 @@ export class PaymentsService {
   /** Summary of an order's payments for the customer (what's due, what's pending, rejections). */
   static transferState(o: { grandTotal: unknown; paymentStatus: string; paymentGatewayCode: string; paymentRecords: { kind: string; status: string; amount: unknown }[] }) {
     const transfers = o.paymentRecords.filter((r) => r.kind === "transfer");
-    const verified = transfers.filter((r) => r.status === "verified").reduce((s, r) => s + num(r.amount), 0);
+    const verified = o.paymentRecords.filter((r) => (r.kind === "transfer" || r.kind === "gateway") && r.status === "verified").reduce((s, r) => s + num(r.amount), 0);
     const pending = transfers.some((r) => r.status === "to_verify");
     const due = ["paid", "refunded", "partially_refunded"].includes(o.paymentStatus) ? 0 : amountDue(num(o.grandTotal), verified);
     return { due, pending, canSubmit: isManualCapable(o.paymentGatewayCode) && due > 0 && !pending };
@@ -251,7 +253,8 @@ export class PaymentsService {
       include: { settlement: { select: { id: true, code: true } }, shipment: { select: { code: true } } },
       orderBy: { createdAt: "asc" },
     });
-    return { ...PaymentsService.transferState(o), records: rows };
+    const attempts = await new OnlinePaymentsService(this.ctx).attempts(orderId);
+    return { ...PaymentsService.transferState(o), records: rows, attempts };
   }
 
   // ================================================================ cash on delivery
@@ -403,7 +406,13 @@ export class PaymentsService {
   async listMethods() {
     const rows = await prisma.paymentGatewayConfig.findMany({ where: { storeId: this.storeId }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
     // Merchant API keys never leave the server.
-    return rows.map(({ credentials: _c, ...g }) => ({ ...g, manualCapable: isManualCapable(g.code) }));
+    return rows.map(({ credentials: _c, secrets, ...g }) => ({
+      ...g,
+      manualCapable: isManualCapable(g.code),
+      /** bKash / SSLCommerz: can take payments online with the store's own keys. */
+      onlineCapable: isOnlineGateway(g.code),
+      keysSet: Boolean(secrets),
+    }));
   }
 
   async updateMethod(code: string, dto: UpdatePaymentMethodDto) {
@@ -423,6 +432,12 @@ export class PaymentsService {
     const instructions = dto.instructions !== undefined ? dto.instructions || null : g.instructions;
     if (enabled && code === "bank_transfer" && !instructions) {
       throw new BadRequestError("Add your bank details (bank, branch, account name and number) before turning bank transfer on", "VALIDATION_FAILED");
+    }
+    // Online payments only through a connected gateway whose keys passed "Test connection".
+    if (enabled && mode === "online" && code !== "cod") {
+      if (!isOnlineGateway(code)) throw new BadRequestError(`${g.name} can't take payments online yet; use it by hand (manual) or turn it off`, "VALIDATION_FAILED");
+      if (!g.secrets) throw new BadRequestError(`Add your ${g.name} keys before turning online payments on`, "VALIDATION_FAILED");
+      if (!g.keysTestOk) throw new BadRequestError(`Test your ${g.name} keys ("Test connection") before turning online payments on`, "VALIDATION_FAILED");
     }
     if (!enabled && g.enabled) {
       const left = await prisma.paymentGatewayConfig.count({ where: { storeId: this.storeId, enabled: true, code: { not: code } } });

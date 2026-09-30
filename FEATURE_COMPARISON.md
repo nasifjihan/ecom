@@ -179,7 +179,7 @@ These are our advantages. Keep them.
 | Colour scheme presets (10) + custom schemes | 🟡 (one brand colour) |
 | Product display toggles (show rating, show sales count, low-stock threshold) | ❌ |
 | Checkout style (single page vs steps), guest checkout | 🟡 |
-| Payment gateway credentials per store, sandbox/live, **encrypted**, test button | 🟡 |
+| Payment gateway credentials per store, sandbox/live, **encrypted**, test button | ✅ | Batch 35: bKash and SSLCommerz merchant keys, masked in the admin, "Test connection" required before going online |
 | Login methods: **phone OTP**, email OTP, Google, Facebook | 🟡 | Batch 24: phone OTP; email OTP / Google / Facebook not yet |
 | SMS provider settings | ✅ | Batch 24: BulkSMSBD, Alpha SMS, SSL Wireless; encrypted keys, test send, log |
 | Invoice name / note / order prefix | 🟡 |
@@ -202,8 +202,8 @@ These are our advantages. Keep them.
 |---|---|
 | Money and stock in DB transactions, server re-prices | ✅ |
 | Idempotency key on order create and webhooks | ❌ |
-| Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 (classes exist, untested) |
-| Encrypted secrets for gateway/courier/SMS keys | 🟡 | Batch 22: courier keys, webhook secrets and tokens; Batch 24: SMS keys (AES-256-GCM). Payment gateway keys still come from env |
+| Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 | Batch 35: bKash Checkout and SSLCommerz, each payment confirmed with the gateway's own API (amount, order code, currency), settled once. Built to the gateways' published APIs and a local mock; not yet run against their sandboxes. Nagad, aamarPay, PayPal not connected |
+| Encrypted secrets for gateway/courier/SMS keys | ✅ | Batch 22: courier keys, webhook secrets and tokens; Batch 24: SMS keys (AES-256-GCM); Batch 35: payment gateway keys (per store, no longer in env) |
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
 | OpenAPI docs at `/api/docs` | ❌ |
 | Audit row on every admin change | ✅ |
@@ -235,7 +235,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
 | 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
 | 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
-| 35 | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
+| 35 🟡 | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
 | 36 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |

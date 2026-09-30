@@ -41,7 +41,6 @@ import {
 import {
   adminOrdersRouter,
   checkoutRouter,
-  paymentIpnRouter,
 } from "./modules/orders";
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
@@ -73,6 +72,8 @@ import {
   adminOrderPaymentsRouter,
   adminPaymentMethodsRouter,
   adminPaymentRecordsRouter,
+  paymentIpnRouter,
+  paymentReturnRouter,
   storefrontAccountPaymentsRouter,
   storefrontCheckoutPaymentsRouter,
 } from "./modules/payments";
@@ -163,7 +164,8 @@ export function buildApp(): Express {
   app.use("/api/storefront/checkout", storefrontCheckoutPaymentsRouter);
   app.use("/api/storefront/checkout", storefrontCheckoutRouter); // Batch #10: POST / , /coupons/apply, GET /orders/:orderKey
   app.use("/api/storefront/checkout", checkoutRouter);
-  app.use("/api/payments/ipn", paymentIpnRouter);
+  app.use("/api/payments/ipn", paymentIpnRouter);                  // SSLCommerz payment notices
+  app.use("/api/payments/return", paymentReturnRouter);            // back from bKash / SSLCommerz
   app.use("/api/webhooks/couriers", courierWebhooksRouter);        // courier status webhooks
   app.use("/api/admin/customers", adminCustomersRouter);
   app.use("/api/storefront/account", storefrontAccountPaymentsRouter);

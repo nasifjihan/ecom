@@ -42,7 +42,7 @@ export const storefrontController = {
   }),
 
   placeOrder: ctrl(async (req: Req, res: Response) => {
-    envelope(res, { status: 201, data: await svc(req).placeOrder(req.body) });
+    envelope(res, { status: 201, data: await svc(req).placeOrder(req.body, req.get("origin") ?? req.get("referer")) });
   }),
 
   paymentMethods: ctrl(async (req: Req, res: Response) => {

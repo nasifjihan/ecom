@@ -12,9 +12,6 @@ import {
   OrderNumberParamDto,
   TransitionStatusDto,
   ExportOrdersDto,
-  PaymentInitiateDto,
-  PaymentConfirmDto,
-  IpnProviderParamDto,
   CreateCartDto,
   AddCartItemDto,
   InvoiceIdsQueryDto,
@@ -165,22 +162,6 @@ adminOrdersRouter.post(
   ordersController.exportOrders,
 );
 
-adminOrdersRouter.post(
-  "/:id/payments",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.edit"),
-  validate({ params: OrderIdParamDto, body: PaymentInitiateDto }),
-  ordersController.initiatePayment,
-);
-
-adminOrdersRouter.post(
-  "/payments/confirm",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("orders.edit"),
-  validate({ body: PaymentConfirmDto }),
-  ordersController.confirmPayment,
-);
-
 adminOrdersRouter.get(
   "/dashboard/stats",
   authMiddleware("adminOrSuper"),
@@ -211,13 +192,6 @@ checkoutRouter.post(
 );
 
 checkoutRouter.post(
-  "/payments/initiate",
-  authMiddleware("optional"),
-  validate({ body: PaymentInitiateDto }),
-  ordersController.initiatePayment,
-);
-
-checkoutRouter.post(
   "/carts",
   authMiddleware("optional"),
   validate({ body: CreateCartDto }),
@@ -229,12 +203,4 @@ checkoutRouter.post(
   authMiddleware("optional"),
   validate({ body: AddCartItemDto }),
   ordersController.addItemToCart,
-);
-
-export const paymentIpnRouter = Router();
-
-paymentIpnRouter.post(
-  "/:provider",
-  validate({ params: IpnProviderParamDto }),
-  ordersController.ipnWebhook,
 );

@@ -75,7 +75,10 @@ describe.skipIf(!runDb)("storefront settings (Postgres)", () => {
       ["cod", "Cash on delivery"],
       ["bkash", "bKash"],
     ] as const) {
-      await prisma.paymentGatewayConfig.create({ data: { storeId, code, name, enabled: true } })
+      // bKash by hand (send money): an online bKash without merchant keys isn't offered at all.
+      await prisma.paymentGatewayConfig.create({
+        data: { storeId, code, name, enabled: true, ...(code === "bkash" ? { mode: "manual", accountNumber: "01712345678" } : {}) },
+      })
     }
     productId = (
       await prisma.product.create({

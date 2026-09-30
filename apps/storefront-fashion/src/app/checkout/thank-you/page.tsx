@@ -1,6 +1,6 @@
 "use client";
 
-import { OrderPaymentCard } from "../../_components/order-payment";
+import { OnlinePaymentCard, OrderPaymentCard } from "../../_components/order-payment";
 import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -248,6 +248,14 @@ export default function ThankYouPage() {
 
       <div className="grid lg:grid-cols-3 gap-6 mb-10">
         <div className="lg:col-span-2 space-y-6">
+          {order.payment?.canPayOnline && (
+            <OnlinePaymentCard orderKey={orderKey} payment={order.payment} currency={order.currency} outcome={searchParams.get("payment")} />
+          )}
+          {order.paymentStatus === "paid" && searchParams.get("payment") === "paid" && (
+            <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+              <CheckCircle2 className="h-5 w-5" /> {t("Payment received. Thank you!")}
+            </p>
+          )}
           {order.payment?.manual && (
             <OrderPaymentCard
               payment={order.payment}

@@ -574,6 +574,7 @@ export default function CheckoutPage() {
       setCompletedStepIds((prev) => [...prev, "information", "shipping", "payment"]);
       setCurrentStepId("confirmation");
 
+      if (result.paymentError) toast.error(t("Payment page not opened"), { description: result.paymentError });
       if (result.redirectPaymentURL) {
         window.location.href = result.redirectPaymentURL;
       } else {

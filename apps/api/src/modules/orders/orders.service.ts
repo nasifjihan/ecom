@@ -1,10 +1,8 @@
 import { prisma, tx, cacheGet, cacheSet, cacheDel, CACHE_KEYS } from "../../config";
 import { recordOrderCash } from "../payments/payments.records";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, ForbiddenError, type RequestContext } from "../../core";
-import { getPaymentProvider, PAYMENT_METHODS } from "../../services/payments";
-import type { PaymentMethod, PaymentStatus } from "../../services/payments/types";
 import { OrderRepository, CartRepository } from "./orders.repository";
-import type { TransitionStatusDto, OrderSearchQueryDto, CreateCartDto, PaymentInitiateDto, PaymentConfirmDto, ExportOrdersDto } from "./orders.dto";
+import type { TransitionStatusDto, OrderSearchQueryDto, CreateCartDto, ExportOrdersDto } from "./orders.dto";
 import { newId, slugify } from "@ecom/utils";
 import { Prisma } from "@prisma/client";
 import { emitOrderStatusChanged } from "../notifications";
@@ -135,109 +133,6 @@ export class OrdersService extends BaseService {
     const order = await this.orders.findByNumber(number, this.ctx);
     if (!order) throw new NotFoundError("order", number);
     return order;
-  }
-
-  async initiatePayment(dto: PaymentInitiateDto, order: any) {
-    const provider = getPaymentProvider(dto.method as PaymentMethod);
-    const customer = {
-      email: (order as any).billingEmail,
-      name: `${(order as any).billingFirstName ?? ""} ${(order as any).billingLastName ?? ""}`.trim(),
-      phone: (order as any).billingPhone,
-    };
-    return provider.initiate({
-      orderId: BigInt(dto.orderId),
-      orderNumber: (order as any).number,
-      amount: dto.amount,
-      currencyCode: dto.currencyCode,
-      customerEmail: customer.email,
-      customerName: customer.name,
-      customerPhone: customer.phone,
-      redirectUrl: dto.redirectUrl,
-      ipnUrl: dto.ipnUrl,
-      metadata: { orderKey: (order as any).orderKey },
-    });
-  }
-
-  async confirmPayment(dto: PaymentConfirmDto) {
-    const provider = getPaymentProvider(dto.method as PaymentMethod);
-    const confirmResult = await provider.confirm({
-      gatewayTxnId: dto.gatewayTxnId,
-      payload: dto.rawPayload,
-      signature: dto.ipnSignature ?? undefined,
-    } as any);
-
-    if (!confirmResult.success) {
-      throw new BadRequestError(
-        confirmResult.errorMessage ?? "Payment confirmation failed",
-        "PAYMENT_FAILED",
-      );
-    }
-
-    const orderNumber = (confirmResult as any).orderNumber;
-    let order: any;
-    if (orderNumber) {
-      order = await this.orders.findByNumber(orderNumber, this.ctx);
-    }
-    if (!order && (confirmResult as any).orderId) {
-      order = await this.orders.findById(this.ctx, BigInt((confirmResult as any).orderId));
-    }
-    if (!order) {
-      throw new NotFoundError("order", "for payment txn " + dto.gatewayTxnId);
-    }
-
-    const oid = BigInt((order as any).id);
-    await prisma.order.update({
-      where: { id: oid },
-      data: {
-        paymentStatus: confirmResult.status,
-        paidAt: confirmResult.paidAt ?? new Date(),
-        transactionId: confirmResult.transactionId ?? dto.gatewayTxnId,
-      } as any,
-    });
-
-    return { order, confirmResult };
-  }
-
-  async parsePaymentIpn(
-    provider: PaymentMethod,
-    headers: Record<string, string | string[] | undefined>,
-    rawBody: string,
-    query: Record<string, unknown>,
-  ) {
-    const prov = getPaymentProvider(provider);
-    const ipnResult = await prov.parseIpn({
-      rawBody,
-      headers,
-      query,
-      provider,
-    });
-
-    if (!ipnResult.verified) {
-      throw new BadRequestError("IPN signature verification failed", "BAD_REQUEST");
-    }
-
-    let order: any = null;
-    if (ipnResult.orderNumber) {
-      order = await this.orders.findByNumber(ipnResult.orderNumber, this.ctx);
-    }
-
-    if (ipnResult.status === "paid" && order) {
-      const confirmResult = await prov.confirm({
-        orderId: BigInt((order as any).id),
-        gatewayTxnId: ipnResult.transactionId,
-      } as any);
-      const oid = BigInt((order as any).id);
-      await prisma.order.update({
-        where: { id: oid },
-        data: {
-          paymentStatus: confirmResult.status ?? "paid",
-          paidAt: confirmResult.paidAt ?? new Date(),
-          transactionId: ipnResult.transactionId,
-        } as any,
-      });
-    }
-
-    return { verified: true, ipnResult, order };
   }
 
   async createGuestCart(dto: CreateCartDto & { items?: Array<{ productId: bigint; variantId?: bigint | null; quantity: number; unitPrice?: number | null }> }) {

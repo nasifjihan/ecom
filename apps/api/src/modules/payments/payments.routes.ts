@@ -12,15 +12,23 @@
  *   POST /api/admin/cod/settlements/:id/resolve  { note }
  *   GET  /api/admin/payment-methods              payment method settings
  *   PATCH /api/admin/payment-methods/:code
+ *   GET|PUT /api/admin/payment-methods/:code/keys    bKash / SSLCommerz merchant keys (masked; blank keeps)
+ *   POST /api/admin/payment-methods/:code/keys/test  checks the keys with the gateway
+ *   POST /api/admin/payments/attempts/:id/recheck    asks the gateway again about an online payment try
  *   POST /api/storefront/account/orders/:orderRef/payments   the customer reports a transfer
  *   POST /api/storefront/checkout/orders/:orderKey/payment   same, from the thank-you page (no login)
+ *   POST /api/storefront/checkout/orders/:orderKey/pay       a new online payment try ("Pay now")
+ *   GET|POST /api/payments/return/:gateway?attempt=           back from bKash / SSLCommerz (redirects)
+ *   POST /api/payments/ipn/sslcommerz                         SSLCommerz's payment notice
  */
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../config";
 import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { PaymentsService } from "./payments.service";
+import { OnlinePaymentsService } from "./gateways/online.service";
+import { isOnlineGateway } from "./gateways/gateway.rules";
 import {
   CodeParam,
   ConfirmCashDto,
@@ -35,6 +43,7 @@ import {
   SubmitTransferDto,
   UpdatePaymentMethodDto,
   VerifyDto,
+  GatewayKeysDto,
 } from "./payments.dto";
 
 type Req = Request & { ctx: RequestContext };
@@ -56,6 +65,7 @@ adminPaymentRecordsRouter.get("/", rbacMiddleware("payments.view"), validate({ q
 adminPaymentRecordsRouter.post("/:id/verify", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: VerifyDto }), send((r) => svc(r).verify(id(r), r.body as VerifyDto)));
 adminPaymentRecordsRouter.post("/:id/reject", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: RejectDto }), send((r) => svc(r).reject(id(r), r.body as RejectDto)));
 adminPaymentRecordsRouter.post("/:id/not-collected", rbacMiddleware("payments.edit"), validate({ params: IdParam, body: NotCollectedDto }), send((r) => svc(r).markNotCollected(id(r), r.body as NotCollectedDto)));
+adminPaymentRecordsRouter.post("/attempts/:id/recheck", rbacMiddleware("payments.edit"), validate({ params: IdParam }), send((r) => online(r).recheck(id(r))));
 
 /** Mounted on /api/admin/orders before the orders router. */
 export const adminOrderPaymentsRouter = Router();
@@ -91,6 +101,16 @@ adminPaymentMethodsRouter.patch(
   validate({ params: CodeParam, body: UpdatePaymentMethodDto }),
   send((r) => svc(r).updateMethod((r.params as { code: string }).code, r.body as UpdatePaymentMethodDto)),
 );
+const online = (req: Req) => new OnlinePaymentsService(req.ctx);
+const code = (req: Req) => (req.params as { code: string }).code;
+adminPaymentMethodsRouter.get("/:code/keys", rbacMiddleware("settings.view"), validate({ params: CodeParam }), send((r) => online(r).keys(code(r))));
+adminPaymentMethodsRouter.put(
+  "/:code/keys",
+  rbacMiddleware("settings.edit"),
+  validate({ params: CodeParam, body: GatewayKeysDto }),
+  send((r) => online(r).saveKeys(code(r), r.body as z.infer<typeof GatewayKeysDto>)),
+);
+adminPaymentMethodsRouter.post("/:code/keys/test", rbacMiddleware("settings.edit"), validate({ params: CodeParam }), send((r) => online(r).testKeys(code(r))));
 
 // ------------------------------------------------------------------ storefront
 
@@ -119,6 +139,15 @@ storefrontAccountPaymentsRouter.post(
 export const storefrontCheckoutPaymentsRouter = Router();
 const OrderKey = z.object({ orderKey: z.string().min(10).max(80) });
 storefrontCheckoutPaymentsRouter.post(
+  "/orders/:orderKey/pay",
+  authMiddleware("optional"),
+  validate({ params: OrderKey }),
+  send(async (r) => {
+    const { orderKey } = r.params as unknown as z.infer<typeof OrderKey>;
+    return online(r).startByOrderKey(orderKey, r.get("origin") ?? r.get("referer"));
+  }),
+);
+storefrontCheckoutPaymentsRouter.post(
   "/orders/:orderKey/payment",
   authMiddleware("optional"),
   validate({ params: OrderKey, body: SubmitTransferDto }),
@@ -129,3 +158,34 @@ storefrontCheckoutPaymentsRouter.post(
     return reply(await svc(r).submitTransfer(o.id, r.body as SubmitTransferDto, "customer"));
   }, 201),
 );
+
+// ------------------------------------------------------------------ back from the gateway (public)
+
+/** Where the gateway sends the customer back: checks the payment with the gateway, then redirects to the order page. */
+export const paymentReturnRouter = Router();
+const Gateway = z.object({ gateway: z.string().refine(isOnlineGateway, "Unknown gateway") });
+const Back = z.object({ attempt: z.string().min(5).max(80), result: z.string().max(20).optional() }).passthrough();
+paymentReturnRouter.all("/:gateway", validate({ params: Gateway, query: Back }), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const gateway = (req.params as { gateway: string }).gateway;
+    if (!isOnlineGateway(gateway)) throw new NotFoundError("Payment");
+    const q = req.query as unknown as z.infer<typeof Back>;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const valId = typeof body.val_id === "string" ? body.val_id : null;
+    const { redirect } = await OnlinePaymentsService.finish(gateway, q.attempt, { valId, result: q.result ?? null });
+    res.redirect(303, redirect);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** SSLCommerz's payment notice (form post). bKash Checkout has no notice: its return is checked instead. */
+export const paymentIpnRouter = Router();
+paymentIpnRouter.post("/sslcommerz", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { outcome } = await OnlinePaymentsService.ipn("sslcommerz", (req.body ?? {}) as Record<string, unknown>);
+    res.status(200).json({ received: true, status: outcome });
+  } catch (e) {
+    next(e);
+  }
+});

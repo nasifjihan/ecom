@@ -67,6 +67,7 @@ model Store {
   shippingZones        ShippingZone[]
   shipments            Shipment[]
   paymentRecords       PaymentRecord[]
+  paymentAttempts      PaymentAttempt[]
   courierSettlements   CourierSettlement[]
   courierAccounts      CourierAccount[]
   locationsOff         StoreLocationOff[]
@@ -592,27 +593,33 @@ model StoreLocalizationSetting {
 // PAYMENT, SHIPPING, TAX
 // ============================================================
 model PaymentGatewayConfig {
-  id            BigInt   @id @default(autoincrement())
+  id            BigInt    @id @default(autoincrement())
   storeId       BigInt
-  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   code          String
   name          String
   description   String?
-  enabled       Boolean  @default(false)
-  testMode      Boolean  @default(true)
-  sortOrder     Int      @default(0)
+  enabled       Boolean   @default(false)
+  testMode      Boolean   @default(true)
+  sortOrder     Int       @default(0)
   credentials   Json?
-  instructions  String?  @db.Text
+  /// Online gateways: the merchant API keys, encrypted (config/crypto). Never sent to the browser.
+  secrets       String?   @db.Text
+  /// Last "Test connection": when, whether it worked, and what the gateway said.
+  keysTestedAt  DateTime?
+  keysTestOk    Boolean?
+  keysTestNote  String?
+  instructions  String?   @db.Text
   /// bKash / Nagad / Rocket: "manual" = customers send money to accountNumber and enter the
   /// transaction ID, staff verify it; "online" = the gateway's checkout page.
-  mode          String   @default("online")
+  mode          String    @default("online")
   accountNumber String?
   /// personal | agent | merchant (how the customer should send: Send Money, Cash Out, Payment)
   accountType   String?
-  feeFixed      Decimal  @default(0) @db.Decimal(12, 2)
-  feePercent    Decimal  @default(0) @db.Decimal(5, 2)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  feeFixed      Decimal   @default(0) @db.Decimal(12, 2)
+  feePercent    Decimal   @default(0) @db.Decimal(5, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([storeId, code])
 }
@@ -1443,6 +1450,7 @@ model Order {
   shipments              Shipment[]
   refunds                Refund[]
   returns                ReturnRequest[]
+  paymentAttempts        PaymentAttempt[]
   paymentRecords         PaymentRecord[]
   reviews                Review[]
   invoice                Invoice?
@@ -1594,6 +1602,42 @@ model CourierAccount {
 
 /// Money for an order that staff must check: a bKash/Nagad/bank transfer the customer reports
 /// (kind "transfer"), or cash collected on delivery (kind "cod").
+/// One try at paying an order online (bKash checkout, SSLCommerz). The order is only marked paid
+/// after the gateway itself confirms the payment to the server (never from the browser's word).
+model PaymentAttempt {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId      BigInt
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// bkash | sslcommerz
+  gateway      String
+  /// Our id for this try, sent to the gateway (SSLCommerz tran_id) and in return links.
+  code         String    @unique
+  /// The gateway's id for it (bKash paymentID, SSLCommerz sessionkey).
+  reference    String?
+  amount       Decimal   @db.Decimal(14, 2)
+  /// sandbox | live
+  mode         String
+  /// started | paid | failed | cancelled | review (the gateway said paid but something didn't match)
+  status       String    @default("started")
+  /// The gateway's transaction id once paid (bKash trxID, SSLCommerz bank_tran_id).
+  gatewayTxnId String?
+  /// Why it failed or needs a look.
+  note         String?
+  /// Where the customer goes back to on the storefront.
+  returnUrl    String
+  /// The gateway's last answer (no keys).
+  raw          Json?
+  paidAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([gateway, reference])
+  @@index([orderId])
+  @@index([storeId, status])
+}
+
 model PaymentRecord {
   id            BigInt             @id @default(autoincrement())
   storeId       BigInt
