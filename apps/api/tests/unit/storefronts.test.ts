@@ -6,6 +6,7 @@ import {
   listedIn,
   onStorefront,
   storefrontCode,
+  optionPrices,
   storefrontPriceRow,
   storefrontZones,
 } from "../../src/modules/storefronts/storefronts.rules"
@@ -103,5 +104,37 @@ describe("storefront settings", () => {
     expect(storefrontZones([shared, kids], 1n).map((z) => z.id)).toEqual(["shared"])
     expect(storefrontZones([shared, main], 1n).map((z) => z.id)).toEqual(["main"])
     expect(storefrontZones([kids], 1n)).toEqual([])
+  })
+})
+
+describe("own prices per option", () => {
+  const row = { regularPrice: 1000, salePrice: 800, salePriceStartAt: null, salePriceEndAt: null }
+  const own = {
+    listed: true,
+    regularPrice: 1500,
+    salePrice: null,
+    variantPrices: { "7": { regularPrice: 1800, salePrice: 1600 }, "8": { regularPrice: 900, salePrice: 950 }, "9": { regularPrice: "x" } },
+  }
+
+  it("uses the option's own price first, then the product's own price", () => {
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, own, 7n)).toMatchObject({ regularPrice: 1800, salePrice: 1600 })
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, own, "7")).toMatchObject({ regularPrice: 1800, salePrice: 1600 })
+    // Another option (or none) falls back to the product's own price there.
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, own, 5n)).toMatchObject({ regularPrice: 1500, salePrice: null })
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, own)).toMatchObject({ regularPrice: 1500 })
+  })
+
+  it("drops a sale price that isn't below the option's price, and ignores broken entries", () => {
+    expect(storefrontPriceRow(row, null, own, 8n)).toMatchObject({ regularPrice: 900, salePrice: null })
+    expect(storefrontPriceRow(row, null, own, 9n)).toMatchObject({ regularPrice: 1500 })
+    expect(optionPrices(own.variantPrices).size).toBe(2)
+    expect(optionPrices(null).size).toBe(0)
+    expect(optionPrices([1, 2]).size).toBe(0)
+  })
+
+  it("with only option prices, other options use the storefront's adjustment", () => {
+    const onlyOptions = { listed: true, regularPrice: null, salePrice: null, variantPrices: { "7": { regularPrice: 1800, salePrice: null } } }
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, onlyOptions, 7n)).toMatchObject({ regularPrice: 1800, salePrice: null })
+    expect(storefrontPriceRow(row, { priceAdjustPercent: 10 }, onlyOptions, 5n)).toMatchObject({ regularPrice: 1100, salePrice: 880 })
   })
 })

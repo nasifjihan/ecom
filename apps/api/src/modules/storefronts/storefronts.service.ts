@@ -7,11 +7,24 @@ import { Prisma } from "@prisma/client"
 import { cacheDel, CACHE_KEYS, prisma, tx } from "../../config"
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core"
 import { assertStaffStorefront, defaultStorefrontId, forgetStorefronts, staffStorefronts } from "./storefronts.context"
-import { cleanHostname, storefrontCode } from "./storefronts.rules"
+import { cleanHostname, optionPrices, storefrontCode } from "./storefronts.rules"
 import type { ProductStorefrontsInput, StorefrontInput } from "./storefronts.dto"
 
 type T = Prisma.TransactionClient
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+/** What an option sells for on the product (its sale price when lower, as the store takes it), before any storefront change. */
+const optionBase = (v: { regularPrice: unknown; salePrice: unknown }, p: { regularPrice: unknown; salePrice: unknown }): number | null => {
+  const regular = n(v.regularPrice) ?? n(p.regularPrice)
+  const sale = n(v.salePrice) ?? (n(v.regularPrice) !== null ? null : n(p.salePrice))
+  return sale !== null && regular !== null && sale < regular ? sale : regular
+}
+/** "Size: M • Colour: Red" from a variant's options. */
+const optionLabel = (values: unknown): string =>
+  values && typeof values === "object"
+    ? Object.entries(values as Record<string, unknown>)
+        .map(([k, v]) => `${k.charAt(0).toUpperCase()}${k.slice(1)}: ${typeof v === "string" || typeof v === "number" ? v : ""}`)
+        .join(" • ")
+    : ""
 
 export class StorefrontsService {
   constructor(private readonly ctx: RequestContext) {}
@@ -52,7 +65,7 @@ export class StorefrontsService {
       prisma.order.groupBy({ by: ["storefrontId"], where: { storeId: this.storeId }, _count: { _all: true } }),
       prisma.productStorefront.groupBy({
         by: ["storefrontId"],
-        where: { storeId: this.storeId, regularPrice: { not: null } },
+        where: { storeId: this.storeId, OR: [{ regularPrice: { not: null } }, { variantPrices: { not: Prisma.DbNull } }] },
         _count: { _all: true },
       }),
       prisma.productStorefront.groupBy({ by: ["storefrontId"], where: { storeId: this.storeId, listed: false }, _count: { _all: true } }),
@@ -269,7 +282,12 @@ export class StorefrontsService {
   async productStorefronts(productId: bigint) {
     const product = await prisma.product.findFirst({
       where: { id: productId, storeId: this.storeId },
-      select: { id: true, regularPrice: true, salePrice: true, variants: { select: { id: true }, take: 1 } },
+      select: {
+        id: true,
+        regularPrice: true,
+        salePrice: true,
+        variants: { select: { id: true, attributeValues: true, sku: true, regularPrice: true, salePrice: true }, orderBy: { id: "asc" } },
+      },
     })
     if (!product) throw new NotFoundError("Product")
     await defaultStorefrontId(this.storeId)
@@ -292,6 +310,17 @@ export class StorefrontsService {
         listed: row ? row.listed : includeNew,
         regularPrice: n(row?.regularPrice),
         salePrice: n(row?.salePrice),
+        /** Each option with its own price here (null: uses the product's price there). */
+        options: product.variants.map((v) => {
+          const own = optionPrices(row?.variantPrices).get(String(v.id))
+          return {
+            variantId: String(v.id),
+            label: optionLabel(v.attributeValues) !== "" ? optionLabel(v.attributeValues) : (v.sku ?? `#${v.id}`),
+            basePrice: optionBase(v, product),
+            regularPrice: own?.regularPrice ?? null,
+            salePrice: own?.salePrice ?? null,
+          }
+        }),
       }
     })
   }
@@ -301,9 +330,18 @@ export class StorefrontsService {
     const product = await prisma.product.findFirst({ where: { id: productId, storeId: this.storeId }, select: { id: true } })
     if (!product) throw new NotFoundError("Product")
     const sfs = await prisma.storefront.findMany({ where: { storeId: this.storeId } })
+    const variantIds = new Set(
+      (await prisma.productVariant.findMany({ where: { productId }, select: { id: true } })).map((v) => String(v.id)),
+    )
     for (const r of d.storefronts) {
       if (r.salePrice != null && (r.regularPrice == null || r.salePrice >= r.regularPrice)) {
         throw new BadRequestError("A sale price needs a regular price above it", "BAD_REQUEST", { salePrice: ["Must be below the regular price"] })
+      }
+      for (const o of r.options ?? []) {
+        if (!variantIds.has(String(o.variantId))) throw new NotFoundError("Option", o.variantId)
+        if (o.salePrice != null && (o.regularPrice == null || o.salePrice >= o.regularPrice)) {
+          throw new BadRequestError("An option's sale price needs a price above it", "BAD_REQUEST", { salePrice: ["Must be below the option's price"] })
+        }
       }
     }
     await tx(async (t: T) => {
@@ -312,13 +350,29 @@ export class StorefrontsService {
         if (!sf) throw new NotFoundError("Storefront", r.storefrontId)
         assertStaffStorefront(this.ctx, sf.id)
         const includeNew = sf.isDefault ? true : sf.includeNewProducts
-        const plain = r.listed === includeNew && r.regularPrice == null
+        const current = await t.productStorefront.findUnique({ where: { productId_storefrontId: { productId, storefrontId: sf.id } } })
+        // Options left out keep what they had; an option sent without a price loses its own price.
+        const opts = new Map([...optionPrices(current?.variantPrices)].filter(([vid]) => variantIds.has(vid)))
+        for (const o of r.options ?? []) {
+          if (o.regularPrice == null) opts.delete(String(o.variantId))
+          else opts.set(String(o.variantId), { regularPrice: o.regularPrice, salePrice: o.salePrice ?? null })
+        }
+        const json: Prisma.InputJsonObject = Object.fromEntries(
+          [...opts].map(([vid, o]) => [vid, { regularPrice: o.regularPrice, salePrice: o.salePrice }]),
+        )
+        const variantPrices = opts.size ? json : Prisma.DbNull
+        const plain = r.listed === includeNew && r.regularPrice == null && opts.size === 0
         const key = { productId_storefrontId: { productId, storefrontId: sf.id } }
         if (plain) {
           await t.productStorefront.deleteMany({ where: { productId, storefrontId: sf.id } })
           continue
         }
-        const data = { listed: r.listed, regularPrice: r.regularPrice ?? null, salePrice: r.regularPrice == null ? null : (r.salePrice ?? null) }
+        const data = {
+          listed: r.listed,
+          regularPrice: r.regularPrice ?? null,
+          salePrice: r.regularPrice == null ? null : (r.salePrice ?? null),
+          variantPrices,
+        }
         await t.productStorefront.upsert({
           where: key,
           update: data,

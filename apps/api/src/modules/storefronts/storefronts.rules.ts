@@ -2,10 +2,11 @@
  * STOREFRONT RULES — pure pricing and range rules for a store with more than one storefront.
  *
  * A product's price in a storefront is, in order:
- *   1. its own price there (ProductStorefront.regularPrice / salePrice), the same for every option;
- *   2. otherwise the product's (or option's) price with the storefront's adjustment (+/- %),
+ *   1. the option's own price there (ProductStorefront.variantPrices, by variant id);
+ *   2. otherwise the product's own price there (ProductStorefront.regularPrice / salePrice), for every option;
+ *   3. otherwise the product's (or option's) price with the storefront's adjustment (+/- %),
  *      rounded to whole taka, sale window kept;
- *   3. otherwise the product's price as it is.
+ *   4. otherwise the product's price as it is.
  * A product is sold in a storefront when its row there says so, or, with no row, when the
  * storefront takes new products automatically.
  */
@@ -29,6 +30,28 @@ export interface OwnPrice {
   listed: boolean
   regularPrice: Num
   salePrice: Num
+  /** Own prices per option, by variant id (JSON). */
+  variantPrices?: unknown
+}
+
+export interface OptionPrice {
+  regularPrice: number
+  salePrice: number | null
+}
+
+/** The own prices per option in a storefront row, keeping only well-formed ones (by variant id). */
+export function optionPrices(raw: unknown): Map<string, OptionPrice> {
+  const out = new Map<string, OptionPrice>()
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue
+    const { regularPrice, salePrice } = v as { regularPrice?: unknown; salePrice?: unknown }
+    const reg = typeof regularPrice === "number" ? regularPrice : Number(regularPrice)
+    if (regularPrice === null || regularPrice === undefined || !Number.isFinite(reg) || reg < 0) continue
+    const sale = salePrice === null || salePrice === undefined ? null : Number(salePrice)
+    out.set(id, { regularPrice: reg, salePrice: sale !== null && Number.isFinite(sale) && sale < reg ? sale : null })
+  }
+  return out
 }
 
 /** Grows or shrinks a price by `percent`, to whole taka, never below zero. */
@@ -38,7 +61,16 @@ export function adjust(price: number, percent: number): number {
 }
 
 /** The price row a storefront sells from (see the order above). */
-export function storefrontPriceRow(row: PriceRow, sf: StorefrontPricing | null, own: OwnPrice | null | undefined): PriceRow {
+export function storefrontPriceRow(
+  row: PriceRow,
+  sf: StorefrontPricing | null,
+  own: OwnPrice | null | undefined,
+  variantId?: bigint | string | null,
+): PriceRow {
+  if (own && variantId !== null && variantId !== undefined) {
+    const opt = optionPrices(own.variantPrices).get(String(variantId))
+    if (opt) return { regularPrice: opt.regularPrice, salePrice: opt.salePrice, salePriceStartAt: null, salePriceEndAt: null }
+  }
   const ownRegular = num(own?.regularPrice)
   if (own && ownRegular !== null) {
     const sale = num(own.salePrice)

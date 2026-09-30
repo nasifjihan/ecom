@@ -135,6 +135,73 @@ describe.skipIf(!runDb)("storefronts (Postgres)", () => {
     ).rejects.toThrow(/sale price needs a regular price above it/)
   })
 
+  it("prices each option on its own in a storefront, falling back to the product's", async () => {
+    const tee = await prisma.product.create({
+      data: {
+        storeId,
+        name: "Tee",
+        slug: `tee-${suffix}`,
+        type: "VARIABLE",
+        status: "published",
+        regularPrice: 500,
+        manageStock: false,
+        sourcing: "imported",
+        originCountry: "India",
+        variants: {
+          create: [
+            { attributeValues: { size: "S" }, sku: `T-S-${suffix}`, regularPrice: 500, manageStock: false },
+            { attributeValues: { size: "XL" }, sku: `T-XL-${suffix}`, regularPrice: 600, manageStock: false },
+          ],
+        },
+      },
+      include: { variants: { orderBy: { id: "asc" } } },
+    })
+    const s = tee.variants[0]!
+    const xl = tee.variants[1]!
+    const admin$ = new Admin(admin)
+    await admin$.saveProductStorefronts(tee.id, {
+      storefronts: [{ storefrontId: kidsId, listed: true, options: [{ variantId: xl.id, regularPrice: 900, salePrice: 850 }] }],
+    })
+    const kids = (await admin$.productStorefronts(tee.id)).find((r) => r.storefrontId === String(kidsId))!
+    expect(kids.options.map((o) => [o.label, o.basePrice, o.regularPrice, o.salePrice])).toEqual([
+      ["Size: S", 500, null, null],
+      ["Size: XL", 600, 900, 850],
+    ])
+    const page = (sf: bigint) => new Shop(at(sf)).getProductBySlug(`tee-${suffix}`)
+    // Kids: XL has its own price; S uses the storefront's +10%. Main: the product's prices.
+    expect((await page(kidsId)).variants.map((v) => [v.label, v.price, v.compareAtPrice])).toEqual([
+      ["Size: S", 550, null],
+      ["Size: XL", 850, 900],
+    ])
+    expect((await page(mainId)).variants.map((v) => [v.label, v.price])).toEqual([
+      ["Size: S", 500],
+      ["Size: XL", 600],
+    ])
+    // The cart charges the same.
+    const [line] = await new Shop(at(kidsId)).quoteLines([{ productId: tee.id, variantId: xl.id, qty: 1 }])
+    expect(line!.priced?.unitPrice).toBe(850)
+    // Saving without that option keeps its price; sending it without a price clears it.
+    await admin$.saveProductStorefronts(tee.id, { storefronts: [{ storefrontId: kidsId, listed: true, regularPrice: 700 }] })
+    expect((await page(kidsId)).variants.map((v) => v.price)).toEqual([700, 850])
+    await admin$.saveProductStorefronts(tee.id, {
+      storefronts: [{ storefrontId: kidsId, listed: true, options: [{ variantId: xl.id, regularPrice: null }] }],
+    })
+    expect(await prisma.productStorefront.count({ where: { productId: tee.id } })).toBe(0)
+    await expect(
+      admin$.saveProductStorefronts(tee.id, {
+        storefronts: [{ storefrontId: kidsId, listed: true, options: [{ variantId: s.id, regularPrice: 100, salePrice: 100 }] }],
+      }),
+    ).rejects.toThrow(/sale price needs a price above it/)
+    await expect(
+      admin$.saveProductStorefronts(ids.Cap!, {
+        storefronts: [{ storefrontId: kidsId, listed: true, options: [{ variantId: s.id, regularPrice: 100 }] }],
+      }),
+    ).rejects.toThrow(/Option/)
+    // The sourcing badge's data.
+    expect(await page(mainId)).toMatchObject({ sourcing: "imported", originCountry: "India" })
+    expect((await page(mainId)).variants).toHaveLength(2)
+  })
+
   it("uses the main look until a storefront saves its own, then goes back on reset", async () => {
     const main = new Content(admin)
     const saved = await main.getTheme()

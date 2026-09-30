@@ -33,6 +33,9 @@ export type ProductSummary = {
   variants?: ProductVariantOption[];
   tags?: string[];
   weightKG?: number;
+  /** Where it's made, for the badge: local (Made in Bangladesh) or imported (with the country, if known). */
+  sourcing?: "local" | "imported";
+  originCountry?: string;
   /** True when the product has size/colour variants and needs a choice before add-to-cart. */
   hasVariants?: boolean;
   isNew?: boolean;

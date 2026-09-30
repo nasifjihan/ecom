@@ -3617,3 +3617,63 @@ Staff can upload a CSV or Excel sheet of products, see what will happen to each 
 - **Missing categories and brands:** these aren't created automatically; the row is skipped with a message.
 - **Deletes:** variants missing from a sheet are kept, not deleted, and products aren't deleted by import.
 - **Phone layout:** on a phone, the admin's sidebar stays open and squeezes every page, including this one. This is an existing layout issue, not part of this change.
+
+## ✅ BATCH #34 (part 4) — Per-option storefront prices and sourcing badge (2026-10-01)
+With more than one storefront, a product's own price in a storefront used to apply to every option. Now each option (Size XL, say) can have its own price and sale price per storefront. Products can also show a "Made in Bangladesh", "Imported" or "Imported from India" badge on the store. This finishes Batch 34.
+
+### 34.16 Data (migration `option_prices_sourcing`)
+- `ProductStorefront.variantPrices` (JSON): own prices per option, by variant id (`{ "12": { regularPrice, salePrice } }`). A JSON field on the existing row, so the storefront's product queries read it at no extra cost.
+- `Product.sourcing` (`local` | `imported` | empty) and `Product.originCountry`.
+
+### 34.17 Price order (`storefronts.rules.ts`)
+- **New rule order:**
+  1. the option's own price in that storefront;
+  2. else the product's own price there;
+  3. else the price with the storefront's +/- % change;
+  4. else the price as it is.
+- **Consistent everywhere:** the product page, the cart, checkout and staff orders all use it.
+- **Bad entries:** an option sale price that isn't below its price is dropped, and broken entries are ignored.
+- **Own prices count:** a storefront with option prices counts as having own prices, for price filters and on the Storefronts list.
+
+### 34.18 Admin
+- **Storefronts card** (product → Pricing): each storefront the product is sold on has a "Prices per option (N of M set)" section.
+  - A row per option with its price and sale price.
+  - Without an own price, it shows what the option sells for there: its sale price when lower, then the product's own price there or the storefront's change.
+  - Saving sends every option; clearing an option's price removes its own price. A row with nothing left is removed as before.
+- **API checks:** the options must belong to the product, and an option's sale price must be below its price. Options not sent keep their prices.
+- **Product editor** (new and edit, Inventory tab): "Where it's made":
+  - Sourcing: "Don't show", "Made in Bangladesh" or "Imported";
+  - Country of origin, shown only for Imported.
+
+### 34.19 Storefront
+- **Badge:** the product page shows "Made in Bangladesh", "Imported from {country}" or "Imported" next to the brand badge.
+- **Bangla:** বাংলাদেশে তৈরি / {country} থেকে আমদানি করা / আমদানি করা.
+
+### 34.20 Checked
+- **Tests:**
+  - 3 unit tests: order of prices with option prices, bad entries, only-option prices with a % change.
+  - 1 integration test against Postgres:
+    - XL's own price in the +10% storefront (৳850, marked down from ৳900) while S gets ৳550;
+    - the other storefront is unchanged;
+    - the cart charges ৳850;
+    - options left out keep their price, and clearing one removes it;
+    - errors for a sale price that's too high and for another product's option;
+    - the product's sourcing.
+  - Full API suite: 662 passing. The Bangla text test passes.
+- **Chromium, dev data, with a temporary second storefront (+10%):**
+  - Set XL to ৳3,500 / sale ৳3,100 on the main storefront and M to ৳2,999 on the second, then saved.
+  - The rows were saved and the card showed "1 of 3 set".
+  - The store API sold XL at ৳3,100 (was ৳3,500) while M and L stayed at ৳2,790.
+  - The first "Shows" hints ignored the options' sale prices (৳3,290 where the store sells at ৳2,790). The hint now uses the price the option actually sells for.
+  - Sourcing "Imported" + India saved. The store showed "Imported from India" in English and Bangla.
+  - Switching to "Made in Bangladesh" cleared the country, and switching back saved it again.
+- **Lint and builds:** no new lint errors; API typecheck, admin and storefront builds pass.
+- **Dev data:**
+  - The temporary storefront and the option prices were removed afterwards.
+  - FBD-0001 (Richman Formal Cotton Shirt — Navy) is left as "Imported from India" to show the badge.
+
+### 34.21 Not done
+- **Product lists:** cards and lists still show the product's price, not the cheapest option's own price in a storefront. The option's price shows on the product page and in the cart.
+- **One storefront:** per-option prices are only for stores with more than one storefront (the card is hidden with one). Each option's normal price is set in the variant table as before.
+- **Import/export:** the sourcing and country aren't columns in product import/export yet.
+- **Badge on cards:** the badge shows on the product page only, not on product cards.

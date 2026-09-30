@@ -134,6 +134,8 @@ const productEditSchema = z.object({
   length: z.coerce.number().min(0).nullable().optional(),
   width: z.coerce.number().min(0).nullable().optional(),
   height: z.coerce.number().min(0).nullable().optional(),
+  sourcing: z.enum(["local", "imported"]).nullable().optional(),
+  originCountry: z.string().max(60).nullable().optional(),
   isFeatured: z.boolean().default(false),
   categoryIds: z.array(z.coerce.bigint()).default([]),
   brandId: z.coerce.bigint().nullable().optional(),
@@ -208,6 +210,8 @@ export default function EditProductPage() {
       length: null,
       width: null,
       height: null,
+      sourcing: null,
+      originCountry: null,
       isFeatured: false,
       categoryIds: [],
       brandId: null,
@@ -245,6 +249,8 @@ export default function EditProductPage() {
         length: product.length ?? null,
         width: product.width ?? null,
         height: product.height ?? null,
+        sourcing: product.sourcing ?? null,
+        originCountry: product.originCountry ?? null,
         isFeatured: !!product.featured,
         categoryIds: (product.categoryIds as any) || [],
         brandId: (product.brandId as any) || null,
@@ -404,6 +410,8 @@ export default function EditProductPage() {
           length: values.length ?? null,
           width: values.width ?? null,
           height: values.height ?? null,
+          sourcing: values.sourcing ?? null,
+          originCountry: values.sourcing === "imported" && values.originCountry?.trim() ? values.originCountry.trim() : null,
           categoryIds: values.categoryIds as any,
           brandId: values.brandId as any,
           featured: values.isFeatured,
@@ -1043,6 +1051,43 @@ export default function EditProductPage() {
                               </FormItem>
                             )}
                           />
+                        </div>
+                      </div>
+                      <Separator />
+
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="font-medium">Where it&apos;s made</Label>
+                          <p className="text-xs text-muted-foreground">Shown as a badge on the store. Leave it on &quot;Don&apos;t show&quot; for no badge.</p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="product-sourcing">Sourcing</Label>
+                            <Select
+                              id="product-sourcing"
+                              aria-label="Sourcing"
+                              value={watch("sourcing") ?? "none"}
+                              onValueChange={(v) =>
+                                setValue("sourcing", v === "local" || v === "imported" ? v : null, { shouldDirty: true })
+                              }
+                            >
+                              <SelectItem value="none">Don&apos;t show</SelectItem>
+                              <SelectItem value="local">Made in Bangladesh</SelectItem>
+                              <SelectItem value="imported">Imported</SelectItem>
+                            </Select>
+                          </div>
+                          {watch("sourcing") === "imported" && (
+                            <div className="space-y-2">
+                              <Label htmlFor="product-origin">Country of origin</Label>
+                              <Input
+                                id="product-origin"
+                                placeholder="e.g. India"
+                                maxLength={60}
+                                value={watch("originCountry") ?? ""}
+                                onChange={(e) => setValue("originCountry", e.target.value, { shouldDirty: true })}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>

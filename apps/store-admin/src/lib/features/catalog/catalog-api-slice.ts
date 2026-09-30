@@ -63,6 +63,9 @@ export interface Product {
   length?: number | null;
   width?: number | null;
   height?: number | null;
+  /** Shown as a badge on the store: local (Made in Bangladesh) or imported; null shows none. */
+  sourcing?: "local" | "imported" | null;
+  originCountry?: string | null;
   brandId?: string | number | null;
   taxClassId?: string | number | null;
   categoryIds?: (string | number)[];

@@ -42,7 +42,7 @@ These are our advantages. Keep them.
 | Specifications table (group / label / value) | ✅ | Batch 26 |
 | Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ✅ | Batch 34: up to 3 options and 100 combinations, only missing ones added, SKUs that don't clash; variant table with a column per option and "set for all" |
 | Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
-| Sourcing badge (Made in BD / Imported), weight | 🟡 | Weight ✅, sourcing ❌ |
+| Sourcing badge (Made in BD / Imported), weight | ✅ | Weight ✅, sourcing badge Batch 34 (with country of origin) |
 | Soft delete + "Deleted only" filter, created/updated by | ✅ | Batch 34: Trash with Deleted view, restore to the old status, delete forever (refused while a gift box, landing page, purchase or transfer needs it), created/updated/deleted by |
 | Product landing page `/lp/{slug}` built from blocks | ✅ | Batch 33: offer price and countdown, blocks, reviews, order form with cash on delivery on the page, visits and conversion per page |
 | Gift box components + Gift Box Builder | ✅ | Batch 33: /gift-boxes builder (box styles, items from chosen categories/products, min–max, message card), boxes in cart and checkout, checked by the server, box and card on the order |
@@ -234,7 +234,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 31 ✅ | **Bangla language** on storefront + Unicode invoice font (fixes "?" and ৳) | Local market | M |
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
 | 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
-| 34 🟡 | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
+| 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
 | 35 | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
 | 36 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |

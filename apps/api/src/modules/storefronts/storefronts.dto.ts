@@ -34,6 +34,11 @@ export const ProductStorefrontsDto = z.object({
         listed: z.boolean(),
         regularPrice: money.nullish(),
         salePrice: money.nullish(),
+        /** Own prices per option here; an option left out (or without a price) uses the product's. */
+        options: z
+          .array(z.object({ variantId: id, regularPrice: money.nullish(), salePrice: money.nullish() }))
+          .max(500)
+          .optional(),
       }),
     )
     .max(50),

@@ -208,18 +208,20 @@ model Storefront {
 /// A product in one storefront: whether it's sold there and, optionally, its own price there
 /// (which then applies to all of its options). No row means the storefront's default.
 model ProductStorefront {
-  id           BigInt     @id @default(autoincrement())
-  storeId      BigInt
-  store        Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  productId    BigInt
-  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  storefrontId BigInt
-  storefront   Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
-  listed       Boolean    @default(true)
-  regularPrice Decimal?   @db.Decimal(12, 2)
-  salePrice    Decimal?   @db.Decimal(12, 2)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            BigInt     @id @default(autoincrement())
+  storeId       BigInt
+  store         Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId     BigInt
+  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storefrontId  BigInt
+  storefront    Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  listed        Boolean    @default(true)
+  regularPrice  Decimal?   @db.Decimal(12, 2)
+  salePrice     Decimal?   @db.Decimal(12, 2)
+  /// Own prices per option here, by variant id: { "12": { "regularPrice": 1500, "salePrice": 1300 } }.
+  variantPrices Json?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   @@unique([productId, storefrontId])
   @@index([storefrontId, listed])
@@ -877,6 +879,10 @@ model Product {
   length                Decimal?               @db.Decimal(10, 3)
   width                 Decimal?               @db.Decimal(10, 3)
   height                Decimal?               @db.Decimal(10, 3)
+  /// Where it's made, shown as a badge on the store: "local" (Made in Bangladesh) or "imported"; empty shows none.
+  sourcing              String?                @db.VarChar(16)
+  /// Country an imported product comes from ("Made in China" on the badge).
+  originCountry         String?                @db.VarChar(60)
   brandId               BigInt?
   brand                 Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
   taxClassId            BigInt?

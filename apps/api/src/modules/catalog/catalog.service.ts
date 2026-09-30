@@ -156,6 +156,8 @@ export class CatalogService extends BaseService {
         length: dto.length ?? null,
         width: dto.width ?? null,
         height: dto.height ?? null,
+        sourcing: dto.sourcing ?? null,
+        originCountry: dto.sourcing === "imported" ? (dto.originCountry ?? null) : null,
         brandId: dto.brandId ?? null,
         taxClassId: dto.taxClassId ?? null,
         isDigital: dto.isDigital,

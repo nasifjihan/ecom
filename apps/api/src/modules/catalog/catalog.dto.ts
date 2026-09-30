@@ -151,6 +151,10 @@ const BaseCreateProductDto = z.object({
   length: z.coerce.number().nonnegative().optional().nullable(),
   width: z.coerce.number().nonnegative().optional().nullable(),
   height: z.coerce.number().nonnegative().optional().nullable(),
+  /** Where it's made, shown as a badge on the store: local (Made in Bangladesh) or imported; empty shows none. */
+  sourcing: z.preprocess((v) => (v === "" ? null : v), z.enum(["local", "imported"]).optional().nullable()),
+  /** Country an imported product comes from. */
+  originCountry: z.string().trim().max(60).optional().nullable().transform((v) => (v === "" ? null : v)),
   brandId: z.coerce.bigint().optional().nullable(),
   taxClassId: z.coerce.bigint().optional().nullable(),
   categoryIds: z.array(z.coerce.bigint()).default([]),

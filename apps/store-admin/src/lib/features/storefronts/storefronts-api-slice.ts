@@ -64,6 +64,17 @@ export interface ProductStorefront {
   listed: boolean;
   regularPrice: number | null;
   salePrice: number | null;
+  /** Each option with its own price here (null: uses the product's price there). */
+  options: ProductStorefrontOption[];
+}
+
+export interface ProductStorefrontOption {
+  variantId: string;
+  label: string;
+  /** What the option sells for on the product (sale price when lower), before any storefront change. */
+  basePrice: number | null;
+  regularPrice: number | null;
+  salePrice: number | null;
 }
 
 export interface ProductStorefrontInput {
@@ -71,6 +82,8 @@ export interface ProductStorefrontInput {
   listed: boolean;
   regularPrice?: number | null;
   salePrice?: number | null;
+  /** Own prices per option; an option sent without a price loses its own price. */
+  options?: { variantId: string; regularPrice: number | null; salePrice: number | null }[];
 }
 
 const LIST = { type: "Store" as const, id: "STOREFRONTS" };

@@ -348,9 +348,20 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
-            <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
-              {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ") || "Fashion BD"}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
+                {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ") || "Fashion BD"}
+              </Badge>
+              {product.sourcing && (
+                <Badge variant="outline" className="text-[11px] py-1">
+                  {product.sourcing === "local"
+                    ? t("Made in Bangladesh")
+                    : product.originCountry
+                      ? t("Imported from {country}", { country: product.originCountry })
+                      : t("Imported")}
+                </Badge>
+              )}
+            </div>
             {inStock ? (
               <Badge variant="success" className="gap-1">
                 <CheckCircle2 className="h-3 w-3" /> {t("In Stock")}

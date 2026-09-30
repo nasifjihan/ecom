@@ -115,10 +115,20 @@ function variantLabel(values: unknown): string {
     .join(" • ");
 }
 
+/** The sourcing badge's data: local (Made in Bangladesh) or imported (with the country, if known). */
+function sourcingOf(p: { sourcing?: string | null; originCountry?: string | null }): {
+  sourcing?: "local" | "imported";
+  originCountry?: string;
+} {
+  if (p.sourcing === "local") return { sourcing: "local" };
+  if (p.sourcing === "imported") return { sourcing: "imported", originCountry: p.originCountry ?? undefined };
+  return {};
+}
+
 /** A product's row for the request's storefront (own price / whether it's sold there), if any. */
 const ownRow = (storefrontId: bigint) => ({
   where: { storefrontId },
-  select: { listed: true, regularPrice: true, salePrice: true },
+  select: { listed: true, regularPrice: true, salePrice: true, variantPrices: true },
 });
 
 /** Products sold in a storefront (see storefronts.rules listedIn). */
@@ -230,8 +240,8 @@ export class StorefrontService {
   }
 
   /** The price row a product (or one of its options) sells from in this storefront. */
-  private sfRow(sf: StorefrontInfo, p: { storefronts?: OwnPrice[] }, row: PriceRow): PriceRow {
-    return storefrontPriceRow(row, sf, p.storefronts?.[0]);
+  private sfRow(sf: StorefrontInfo, p: { storefronts?: OwnPrice[] }, row: PriceRow, variantId?: bigint | null): PriceRow {
+    return storefrontPriceRow(row, sf, p.storefronts?.[0], variantId);
   }
 
   private toSummary(p: any, flashSales: FlashSales, sf: StorefrontInfo) {
@@ -264,6 +274,8 @@ export class StorefrontService {
       stockStatus: stockStatus(qty, p.lowStockThreshold),
       sku: p.sku ?? undefined,
       weightKG: p.weight !== null && p.weight !== undefined ? num(p.weight) : undefined,
+      /** Where it's made, for the badge: local (Made in Bangladesh) or imported (with the country, if known). */
+      ...sourcingOf(p as { sourcing?: string | null; originCountry?: string | null }),
       brandId: p.brandId ? String(p.brandId) : undefined,
       brand: p.brand ? { id: String(p.brand.id), name: tr(p.brand, L, "name"), slug: p.brand.slug } : undefined,
       categoryId: primary ? String(primary.category.id) : undefined,
@@ -331,7 +343,9 @@ export class StorefrontService {
     }
     // A storefront with its own prices is filtered on them in memory (below), not in the database.
     const ownPrices = sf.priceAdjustPercent !== 0 ||
-      (await prisma.productStorefront.count({ where: { storefrontId: sf.id, regularPrice: { not: null } } })) > 0;
+      (await prisma.productStorefront.count({
+        where: { storefrontId: sf.id, OR: [{ regularPrice: { not: null } }, { variantPrices: { not: Prisma.DbNull } }] },
+      })) > 0;
     const priceRange = q.minPrice !== undefined || q.maxPrice !== undefined;
     if (priceRange && !ownPrices) {
       // Filter on the price a shopper pays: salePrice when set, otherwise regularPrice.
@@ -505,7 +519,7 @@ export class StorefrontService {
       })),
       reviews,
       variants: p.variants.map((v) => {
-        const vp = pricedWith(flash, p, v.id, this.sfRow(sf, p, variantPriceRow(p, v)));
+        const vp = pricedWith(flash, p, v.id, this.sfRow(sf, p, variantPriceRow(p, v), v.id));
         const values = (v.attributeValues ?? {}) as Record<string, unknown>;
         const qty = available(v);
         return {
@@ -618,7 +632,7 @@ export class StorefrontService {
       } else if (p.variants.length > 0) {
         return { line, problem: { message: `Please choose an option for "${p.name}"`, code: "CART_INVALID" as const } };
       }
-      const base = pricedWith(flashSales, p, variant?.id ?? null, this.sfRow(sf, p, variant ? variantPriceRow(p, variant) : p));
+      const base = pricedWith(flashSales, p, variant?.id ?? null, this.sfRow(sf, p, variant ? variantPriceRow(p, variant) : p, variant?.id));
       // Bulk price: the tier this product's quantity in the cart reaches, when cheaper.
       const productTiers = tiers.get(p.id) ?? [];
       const vId = variant?.id ?? null;
