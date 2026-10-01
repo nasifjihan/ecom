@@ -120,6 +120,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/purchasing/purchases", label: "Purchases", icon: ShoppingBag, perm: "purchasing.view" },
       { href: "/purchasing/suppliers", label: "Suppliers", icon: Factory, perm: "purchasing.view" },
       { href: "/purchasing/payments", label: "Supplier payments", icon: HandCoins, perm: "purchasing.view" },
+      { href: "/purchasing/returns", label: "Supplier returns", icon: Undo2, perm: "purchasing.view" },
       { href: "/purchasing/accounts", label: "Accounts", icon: Landmark, perm: "money_accounts.view" },
     ],
   },

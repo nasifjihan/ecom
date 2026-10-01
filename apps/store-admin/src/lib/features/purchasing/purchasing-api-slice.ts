@@ -22,6 +22,13 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   rocket: "Rocket",
   other: "Other",
 };
+export type PurchaseStatus = "ordered" | "partial" | "received" | "cancelled";
+export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
+  ordered: "Ordered",
+  partial: "Part received",
+  received: "Received",
+  cancelled: "Cancelled",
+};
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = { cash: "Cash", bank: "Bank", mobile: "Mobile banking" };
 
 export interface Supplier {
@@ -38,6 +45,8 @@ export interface Supplier {
   purchased: number;
   paid: number;
   purchases: number;
+  /** Goods sent back (credit). */
+  returned: number;
   /** What the shop owes them now (negative = paid ahead). */
   balance: number;
 }
@@ -60,6 +69,7 @@ export interface SupplierPayment {
 export interface SupplierDetail extends Supplier {
   purchaseList: { id: string; number: string; purchasedOn: string; reference: string | null; total: number; status: string; paymentTerm: PaymentTerm }[];
   paymentList: SupplierPayment[];
+  returnList: { id: string; number: string; returnedOn: string; reason: string; total: number; status: string }[];
 }
 
 export type SupplierInput = Partial<{
@@ -86,9 +96,12 @@ export interface PurchaseRow {
   reference: string | null;
   items: number;
   total: number;
+  /** Value of what has arrived. */
+  receivedTotal: number;
+  expectedOn: string | null;
   paid: number;
   paymentTerm: PaymentTerm;
-  status: "received" | "cancelled";
+  status: PurchaseStatus;
 }
 
 export interface PurchaseDetail {
@@ -108,7 +121,12 @@ export interface PurchaseDetail {
   discount: number;
   total: number;
   paymentTerm: PaymentTerm;
-  status: "received" | "cancelled";
+  status: PurchaseStatus;
+  receivedTotal: number;
+  expectedOn: string | null;
+  receivedOn: string | null;
+  /** Closed with units that never came. */
+  closedShort: boolean;
   notes: string | null;
   cancelledAt: string | null;
   createdAt: string;
@@ -120,6 +138,7 @@ export interface PurchaseDetail {
     name: string;
     qualityGrade: string | null;
     qty: number;
+    qtyReceived: number;
     unitCost: number;
     discountPct: number;
     discountAmount: number;
@@ -127,6 +146,30 @@ export interface PurchaseDetail {
     landedUnitCost: number;
   }[];
   payments: SupplierPayment[];
+  returns: { id: string; number: string; total: number; status: string; returnedOn: string }[];
+}
+
+export interface SupplierReturn {
+  id: string;
+  number: string;
+  supplier: { id: string; name: string };
+  purchase: { id: string; number: string } | null;
+  returnedOn: string;
+  reason: string;
+  total: number;
+  status: "returned" | "cancelled";
+  notes: string | null;
+  cancelledAt: string | null;
+  items: { id: string; productId: string; variantId: string | null; name: string; qty: number; unitCost: number; lineTotal: number }[];
+}
+
+export interface SupplierReturnInput {
+  supplierId: string;
+  purchaseId?: string | null;
+  returnedOn: string;
+  reason: string;
+  notes?: string;
+  items: { productId: string; variantId?: string | null; qty: number; unitCost?: number }[];
 }
 
 export interface PurchaseInput {
@@ -138,6 +181,9 @@ export interface PurchaseInput {
   purchasedOn: string;
   /** Warehouse the goods go into; the default one when left out. */
   warehouseId?: string | null;
+  /** false: a purchase order (nothing has arrived yet). */
+  receiveNow?: boolean;
+  expectedOn?: string | null;
   shippingCost?: number;
   customsDuty?: number;
   otherCharges?: number;
@@ -253,7 +299,7 @@ export const purchasingApi = api.injectEndpoints({
 
     purchases: b.query<
       Paginated<PurchaseRow> & { totalValue: number },
-      { supplierId?: string; status?: "received" | "cancelled"; search?: string; from?: string; to?: string; page?: number }
+      { supplierId?: string; status?: PurchaseStatus; search?: string; from?: string; to?: string; page?: number }
     >({
       query: (params) => ({ url: "/admin/purchasing/purchases", params: clean(params) }),
       transformResponse: (items: PurchaseRow[], meta) => ({
@@ -272,6 +318,28 @@ export const purchasingApi = api.injectEndpoints({
     }),
     cancelPurchase: b.mutation<PurchaseDetail, string>({
       query: (id) => ({ url: `/admin/purchasing/purchases/${id}/cancel`, method: "POST" }),
+      invalidatesTags: [...MONEY, { type: "Product", id: "LIST" }],
+    }),
+    receivePurchase: b.mutation<PurchaseDetail, { id: string; items: { itemId: string; qty: number }[]; receivedOn?: string; note?: string }>({
+      query: ({ id, ...body }) => ({ url: `/admin/purchasing/purchases/${id}/receive`, method: "POST", body }),
+      invalidatesTags: [...MONEY, { type: "Product", id: "LIST" }],
+    }),
+    closePurchase: b.mutation<PurchaseDetail, string>({
+      query: (id) => ({ url: `/admin/purchasing/purchases/${id}/close`, method: "POST" }),
+      invalidatesTags: MONEY,
+    }),
+
+    supplierReturns: b.query<Paginated<SupplierReturn>, { supplierId?: string; page?: number }>({
+      query: (params) => ({ url: "/admin/purchasing/returns", params: clean(params) }),
+      transformResponse: (items: SupplierReturn[], meta) => toPaginated(items, meta),
+      providesTags: [T("PURCHASES")],
+    }),
+    createSupplierReturn: b.mutation<SupplierReturn, SupplierReturnInput>({
+      query: (body) => ({ url: "/admin/purchasing/returns", method: "POST", body }),
+      invalidatesTags: [...MONEY, { type: "Product", id: "LIST" }],
+    }),
+    cancelSupplierReturn: b.mutation<SupplierReturn, string>({
+      query: (id) => ({ url: `/admin/purchasing/returns/${id}/cancel`, method: "POST" }),
       invalidatesTags: [...MONEY, { type: "Product", id: "LIST" }],
     }),
 
@@ -323,6 +391,11 @@ export const {
   usePurchaseQuery,
   useCreatePurchaseMutation,
   useCancelPurchaseMutation,
+  useReceivePurchaseMutation,
+  useClosePurchaseMutation,
+  useSupplierReturnsQuery,
+  useCreateSupplierReturnMutation,
+  useCancelSupplierReturnMutation,
   useSupplierPaymentsQuery,
   usePaySupplierMutation,
   useVoidSupplierPaymentMutation,

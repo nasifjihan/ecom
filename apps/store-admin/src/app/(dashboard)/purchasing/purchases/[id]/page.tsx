@@ -5,10 +5,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Ban, ShoppingBag, Wallet } from "lucide-react";
+import { ArrowLeft, Ban, PackageCheck, ShoppingBag, Undo2, Wallet } from "lucide-react";
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { PageTitle } from "@/components/content/shared";
 import { PayDialog, StatusPill } from "@/components/purchasing/shared";
+import { ReceiveDialog, SendBackDialog } from "@/components/purchasing/order-dialogs";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { useCan } from "@/lib/permissions";
 import {
@@ -17,6 +18,7 @@ import {
   shortDate,
   tk,
   useCancelPurchaseMutation,
+  useClosePurchaseMutation,
   usePurchaseQuery,
 } from "@/lib/features/purchasing/purchasing-api-slice";
 
@@ -24,12 +26,18 @@ export default function PurchasePage() {
   const { id } = useParams<{ id: string }>();
   const { data: p, error } = usePurchaseQuery(id);
   const [cancel, { isLoading: cancelling }] = useCancelPurchaseMutation();
+  const [closeOrder, { isLoading: closing }] = useClosePurchaseMutation();
   const [paying, setPaying] = useState(false);
+  const [receiving, setReceiving] = useState(false);
+  const [sendingBack, setSendingBack] = useState(false);
   const { can } = useCan();
 
   if (error) return <p className="p-10 text-center text-sm text-slate-500">{errorText(error, "Purchase not found.")}</p>;
   if (!p) return <Skeleton className="h-64" />;
-  const due = Math.max(0, Math.round((p.total - p.paid) * 100) / 100);
+  // Owed for what has arrived, less what was paid against it.
+  const due = Math.max(0, Math.round((p.receivedTotal - p.paid) * 100) / 100);
+  const open = p.status === "ordered" || p.status === "partial";
+  const arrived = p.status === "received" || p.status === "partial";
 
   return (
     <div className="space-y-6">
@@ -44,17 +52,44 @@ export default function PurchasePage() {
                 <ArrowLeft className="mr-1 h-4 w-4" /> Purchases
               </Link>
             </Button>
-            {p.status === "received" && can("purchasing.create") && (
-              <Button onClick={() => setPaying(true)}>
+            {open && can("purchasing.create") && (
+              <Button onClick={() => setReceiving(true)}>
+                <PackageCheck className="mr-1 h-4 w-4" /> Receive delivery
+              </Button>
+            )}
+            {p.status === "partial" && can("purchasing.create") && (
+              <Button
+                variant="outline"
+                disabled={closing}
+                onClick={async () => {
+                  if (!confirm(`Close ${p.number}? The rest won't arrive; you owe ${p.supplier.name} only for what did.`)) return;
+                  try {
+                    await closeOrder(p.id).unwrap();
+                    toast.success(`${p.number} closed`);
+                  } catch (e) {
+                    toast.error(errorText(e));
+                  }
+                }}
+              >
+                Close order
+              </Button>
+            )}
+            {arrived && can("purchasing.create") && (
+              <Button variant="outline" onClick={() => setSendingBack(true)}>
+                <Undo2 className="mr-1 h-4 w-4" /> Send back
+              </Button>
+            )}
+            {p.status !== "cancelled" && can("purchasing.create") && (
+              <Button variant={open ? "outline" : "default"} onClick={() => setPaying(true)}>
                 <Wallet className="mr-1 h-4 w-4" /> Pay supplier
               </Button>
             )}
-            {p.status === "received" && can("purchasing.delete") && (
+            {p.status !== "cancelled" && can("purchasing.delete") && (
               <Button
                 variant="outline"
                 disabled={cancelling}
                 onClick={async () => {
-                  if (!confirm(`Cancel ${p.number}? Its stock is taken back out. Payments stay on the supplier's account.`)) return;
+                  if (!confirm(p.status === "ordered" ? `Cancel the order ${p.number}? Nothing has arrived. Payments stay on the supplier's account.` : `Cancel ${p.number}? What arrived is taken back out of stock. Payments stay on the supplier's account.`)) return;
                   try {
                     await cancel(p.id).unwrap();
                     toast.success(`${p.number} cancelled and its stock removed`);
@@ -76,9 +111,17 @@ export default function PurchasePage() {
         </p>
       )}
 
+      {open && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {p.status === "ordered" ? "Purchase order: nothing has arrived yet" : `Part received: ${tk(p.receivedTotal)} of ${tk(p.total)} has arrived`}
+          {p.expectedOn ? ` · expected ${shortDate(p.expectedOn)}` : ""}. Stock goes up and you owe for goods as deliveries arrive.
+        </p>
+      )}
+      {p.closedShort && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Closed short: the rest never arrived. You owe {p.supplier.name} for {tk(p.receivedTotal)}.</p>}
+
       <div className="grid gap-4 sm:grid-cols-4">
         {[
-          ["Total", tk(p.total)],
+          ["Total", open || p.closedShort ? `${tk(p.receivedTotal)} of ${tk(p.total)}` : tk(p.total)],
           ["Paid against it", tk(p.paid)],
           ["Payment", PAYMENT_TERM_LABELS[p.paymentTerm]],
           ["Source", `${p.sourcingType === "import" ? `Import${p.originCountry ? ` from ${p.originCountry}` : ""}` : "Local"}${p.warehouse ? ` · into ${p.warehouse.code}` : ""}`],
@@ -104,6 +147,7 @@ export default function PurchasePage() {
                 <TableHead>Item</TableHead>
                 <TableHead>Grade</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Arrived</TableHead>
                 <TableHead className="text-right">Unit cost</TableHead>
                 <TableHead className="text-right">Discount</TableHead>
                 <TableHead className="text-right">Line total</TableHead>
@@ -120,6 +164,7 @@ export default function PurchasePage() {
                   </TableCell>
                   <TableCell>{i.qualityGrade ?? "—"}</TableCell>
                   <TableCell className="text-right">{i.qty}</TableCell>
+                  <TableCell className={i.qtyReceived < i.qty ? "text-right text-amber-700" : "text-right text-slate-500"}>{i.qtyReceived}</TableCell>
                   <TableCell className="text-right">{tk(i.unitCost)}</TableCell>
                   <TableCell className="text-right text-sm text-slate-600">
                     {[i.discountPct ? `${i.discountPct}%` : "", i.discountAmount ? tk(i.discountAmount) : ""].filter(Boolean).join(" + ") || "—"}
@@ -175,10 +220,27 @@ export default function PurchasePage() {
               ))}
             </ul>
           )}
+          {p.returns.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium">Sent back</p>
+              <ul className="divide-y text-sm">
+                {p.returns.map((r) => (
+                  <li key={r.id} className="flex flex-wrap justify-between gap-2 py-2">
+                    <Link href="/purchasing/returns" className="text-blue-600 hover:underline">
+                      {r.number} · {shortDate(r.returnedOn)}
+                    </Link>
+                    <span className={r.status === "cancelled" ? "text-slate-400 line-through" : "font-medium"}>−{tk(r.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {p.notes && <p className="mt-4 whitespace-pre-line text-sm text-slate-600">{p.notes}</p>}
         </CardContent>
       </Card>
 
+      <ReceiveDialog purchase={p} open={receiving} onOpenChange={setReceiving} />
+      <SendBackDialog purchase={p} open={sendingBack} onOpenChange={setSendingBack} />
       <PayDialog
         open={paying}
         onOpenChange={setPaying}

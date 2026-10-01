@@ -99,11 +99,46 @@ export const PurchaseDto = z.object({
   accountId: z.coerce.bigint().positive().nullish(),
   paymentMethod: z.enum(PAYMENT_METHODS).optional(),
   notes: text(1000).nullish(),
+  /** false: a purchase order (nothing arrives yet). */
+  receiveNow: z.boolean().default(true),
+  expectedOn: date.nullish(),
 })
 export type PurchaseDto = z.infer<typeof PurchaseDto>
+
+/** A delivery against a purchase order: how many of each line arrived. */
+export const ReceiveDto = z.object({
+  items: z
+    .array(z.object({ itemId: z.coerce.bigint().positive(), qty: z.coerce.number().int().min(0).max(1_000_000) }))
+    .min(1)
+    .max(200),
+  receivedOn: date.optional(),
+  note: text(300).nullish(),
+})
+
+export const SupplierReturnDto = z.object({
+  supplierId: z.coerce.bigint().positive(),
+  purchaseId: z.coerce.bigint().positive().nullish(),
+  warehouseId: z.coerce.bigint().positive().nullish(),
+  returnedOn: date,
+  reason: text(200).pipe(z.string().min(2, "Say why the goods go back")),
+  notes: text(1000).nullish(),
+  items: z
+    .array(
+      z.object({
+        productId: z.coerce.bigint().positive(),
+        variantId: z.coerce.bigint().positive().nullish(),
+        qty: z.coerce.number().int().min(1).max(1_000_000),
+        /** Left out: the purchase line's landed cost, or the product's cost price. */
+        unitCost: money.optional(),
+      }),
+    )
+    .min(1, "Add at least one item")
+    .max(200),
+})
+export const ReturnsQuery = PageQuery.extend({ supplierId: z.coerce.bigint().positive().optional() })
 export const PurchasesQuery = PageQuery.extend({
   supplierId: z.coerce.bigint().positive().optional(),
-  status: z.enum(["received", "cancelled"]).optional(),
+  status: z.enum(["ordered", "partial", "received", "cancelled"]).optional(),
   search: z.string().trim().max(80).optional(),
   from: date.optional(),
   to: date.optional(),

@@ -135,9 +135,65 @@ export function payNowFor(
   }
 }
 
-/** What the shop owes a supplier: opening balance + purchases received − payments. Negative = paid ahead. */
-export const supplierBalance = (opening: number, purchases: number, payments: number) =>
-  round2(opening + purchases - payments)
+/**
+ * What the shop owes a supplier: opening balance + goods received − payments − goods sent back.
+ * Negative = paid ahead (credit with the supplier).
+ */
+export const supplierBalance = (opening: number, purchases: number, payments: number, returned = 0) =>
+  round2(opening + purchases - payments - returned)
+
+// ---------------------------------------------------------------- purchase orders
+
+export type PurchaseStatus = "ordered" | "partial" | "received" | "cancelled"
+
+export interface OrderedLine {
+  id: string
+  qty: number
+  qtyReceived: number
+  landedUnitCost: number
+}
+
+/**
+ * A delivery against a purchase order: each line's new received count, or why it doesn't fit
+ * (more than is still to come, not a whole number, nothing received).
+ */
+export function receiveDelivery(
+  lines: OrderedLine[],
+  picks: { id: string; qty: number }[],
+): { received: Map<string, number>; units: number } | { error: string } {
+  const received = new Map(lines.map((l) => [l.id, l.qtyReceived]))
+  let units = 0
+  for (const p of picks) {
+    const l = lines.find((x) => x.id === p.id)
+    if (!l) return { error: "That item isn't on this purchase" }
+    if (!Number.isInteger(p.qty) || p.qty < 0) return { error: "Quantities are whole numbers of 0 or more" }
+    const left = l.qty - (received.get(l.id) ?? 0)
+    if (p.qty > left) return { error: `Only ${left} more of a line can arrive` }
+    received.set(l.id, (received.get(l.id) ?? 0) + p.qty)
+    units += p.qty
+  }
+  if (units === 0) return { error: "Enter how many arrived" }
+  return { received, units }
+}
+
+/** ordered while nothing has arrived, partial until everything has, then received. */
+export function orderStatus(lines: { qty: number; qtyReceived: number }[]): PurchaseStatus {
+  const got = lines.reduce((s, l) => s + l.qtyReceived, 0)
+  if (got === 0) return "ordered"
+  return lines.every((l) => l.qtyReceived >= l.qty) ? "received" : "partial"
+}
+
+/**
+ * Value of the goods that have arrived, at landed cost. Everything in: exactly the purchase total
+ * (no rounding left over).
+ */
+export function receivedValue(lines: OrderedLine[], total: number): number {
+  if (lines.every((l) => l.qtyReceived >= l.qty)) return round2(total)
+  return round2(lines.reduce((s, l) => s + l.qtyReceived * l.landedUnitCost, 0))
+}
+
+/** Supplier return number: 3 -> "RTS-000003". */
+export const returnNumber = (n: number) => `RTS-${String(n).padStart(6, "0")}`
 
 /** Purchase number from a running count: 7 -> "PUR-000007". */
 export const purchaseNumber = (n: number) => `PUR-${String(n).padStart(6, "0")}`

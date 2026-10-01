@@ -130,6 +130,9 @@ export default function NewPurchasePage() {
   const [sourceFrom, setSourceFrom] = useState("");
   const [reference, setReference] = useState("");
   const [purchasedOn, setPurchasedOn] = useState(today());
+  // "order": a purchase order (goods not here yet); stock goes up as deliveries arrive.
+  const [mode, setMode] = useState<"received" | "order">("received");
+  const [expectedOn, setExpectedOn] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [shipping, setShipping] = useState("");
   const [customs, setCustoms] = useState("");
@@ -178,7 +181,8 @@ export default function NewPurchasePage() {
     return { subtotal, extras, total, landed };
   }, [lines, shipping, customs, other, discount]);
 
-  const paidNow = term === "instant_full" ? totals.total : term === "instant_partial" ? n(payNow) : 0;
+  const advanceNow = mode === "order" && term === "advance";
+  const paidNow = term === "instant_full" ? totals.total : term === "instant_partial" || advanceNow ? n(payNow) : 0;
   const account = live.find((a) => a.id === accountId);
   const problems = [
     !supplierId && "Choose a supplier",
@@ -188,6 +192,7 @@ export default function NewPurchasePage() {
     lines.some((l) => n(l.qty) * n(l.unitCost) * (1 - n(l.pct) / 100) - n(l.amount) < -0.001) && "A line's discount is more than it's worth",
     totals.total < 0 && "The discount is more than the purchase",
     term === "instant_partial" && !(n(payNow) > 0 && n(payNow) < totals.total) && "Part payment must be above 0 and less than the total",
+    advanceNow && n(payNow) > totals.total && "The advance is more than the order",
     paidNow > 0 && !accountId && "Choose the account the money comes from",
     paidNow > 0 && account && paidNow > account.balance && `${account.name} only has ${tk(account.balance)}`,
   ].filter(Boolean) as string[];
@@ -216,12 +221,14 @@ export default function NewPurchasePage() {
           discountAmount: n(l.amount),
         })),
         paymentTerm: term,
-        payNow: term === "instant_partial" ? n(payNow) : undefined,
+        payNow: term === "instant_partial" || advanceNow ? n(payNow) : undefined,
+        receiveNow: mode === "received",
+        expectedOn: mode === "order" && expectedOn ? expectedOn : null,
         accountId: paidNow > 0 ? accountId : null,
         paymentMethod: method,
         notes,
       }).unwrap();
-      toast.success(`${p.number} recorded and stock added`);
+      toast.success(mode === "order" ? `Purchase order ${p.number} saved` : `${p.number} recorded and stock added`);
       router.push(`/purchasing/purchases/${p.id}`);
     } catch (e) {
       toast.error(errorText(e));
@@ -232,8 +239,12 @@ export default function NewPurchasePage() {
     <div className="space-y-6">
       <PageTitle
         icon={ShoppingBag}
-        title="Record purchase"
-        description="Stock you bought. Saving adds it to stock and updates the cost price."
+        title={mode === "order" ? "New purchase order" : "Record purchase"}
+        description={
+          mode === "order"
+            ? "Goods you've ordered but haven't received. Stock goes up as deliveries arrive (Receive delivery on the purchase)."
+            : "Stock you bought. Saving adds it to stock and updates the cost price."
+        }
         actions={
           <Button variant="outline" asChild>
             <Link href="/purchasing/purchases">
@@ -242,6 +253,26 @@ export default function NewPurchasePage() {
           </Button>
         }
       />
+
+      <div className="inline-flex rounded-lg border p-1" role="radiogroup" aria-label="Have the goods arrived?">
+        {(
+          [
+            ["received", "Goods have arrived"],
+            ["order", "Purchase order (not here yet)"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={mode === k}
+            onClick={() => setMode(k)}
+            className={`rounded-md px-3 py-1.5 text-sm ${mode === k ? "bg-primary text-primary-foreground" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
@@ -263,9 +294,14 @@ export default function NewPurchasePage() {
               </Button>
             </div>
           </Field>
-          <Field label="Date bought" htmlFor="date">
+          <Field label={mode === "order" ? "Date ordered" : "Date bought"} htmlFor="date">
             <Input id="date" type="date" value={purchasedOn} max={today()} onChange={(e) => setPurchasedOn(e.target.value)} />
           </Field>
+          {mode === "order" && (
+            <Field label="Expected on" htmlFor="expected">
+              <Input id="expected" type="date" value={expectedOn} min={purchasedOn} onChange={(e) => setExpectedOn(e.target.value)} />
+            </Field>
+          )}
           <Field label="Invoice / reference" htmlFor="ref">
             <Input id="ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Supplier's invoice no." />
           </Field>
@@ -453,12 +489,16 @@ export default function NewPurchasePage() {
                 ))}
               </select>
             </Field>
-            {term === "instant_partial" && (
-              <Field label="Paid now ৳" htmlFor="paynow" hint={n(payNow) > 0 ? `${tk(r2(totals.total - n(payNow)))} left on credit` : undefined}>
+            {(term === "instant_partial" || advanceNow) && (
+              <Field
+                label={advanceNow ? "Advance paid now ৳ (optional)" : "Paid now ৳"}
+                htmlFor="paynow"
+                hint={n(payNow) > 0 ? `${tk(r2(totals.total - n(payNow)))} ${advanceNow ? "left to pay" : "left on credit"}` : undefined}
+              >
                 <Input id="paynow" type="number" min="0" step="0.01" value={payNow} onChange={(e) => setPayNow(e.target.value)} />
               </Field>
             )}
-            {(term === "instant_full" || term === "instant_partial") &&
+            {(term === "instant_full" || term === "instant_partial" || (advanceNow && n(payNow) > 0)) &&
               (live.length ? (
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="From account" htmlFor="acct">
@@ -500,7 +540,7 @@ export default function NewPurchasePage() {
           <Trash2 className="mr-1 h-4 w-4" /> Clear items
         </Button>
         <Button onClick={save} disabled={isLoading || problems.length > 0}>
-          Save purchase · {tk(totals.total)}
+          {mode === "order" ? "Save purchase order" : "Save purchase"} · {tk(totals.total)}
         </Button>
       </div>
 

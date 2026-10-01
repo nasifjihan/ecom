@@ -14,6 +14,10 @@ import {
   purchaseTotals,
   supplierBalance,
   type PaymentTerm,
+  orderStatus,
+  receiveDelivery,
+  receivedValue,
+  returnNumber,
 } from "./purchasing.rules"
 
 type T = Prisma.TransactionClient
@@ -63,6 +67,10 @@ export interface PurchaseInput {
   accountId?: bigint | null
   paymentMethod?: string
   notes?: string | null
+  /** False: a purchase order. Nothing is received yet; deliveries are recorded as they arrive. */
+  receiveNow?: boolean
+  /** When the supplier said it would arrive (purchase orders). */
+  expectedOn?: Date | null
 }
 
 export interface PaymentInput {
@@ -102,25 +110,27 @@ export class PurchasingService {
   /** Purchases received and payments made per supplier, for balances. */
   private async supplierTotals(ids?: bigint[]) {
     const where = { storeId: this.storeId, ...(ids ? { supplierId: { in: ids } } : {}) }
-    const [bought, paid] = await Promise.all([
+    const [bought, paid, back] = await Promise.all([
       prisma.purchase.groupBy({
         by: ["supplierId"],
-        where: { ...where, status: "received" },
-        _sum: { total: true },
+        where: { ...where, status: { in: ["received", "partial"] } },
+        _sum: { receivedTotal: true },
         _count: true,
       }),
       prisma.supplierPayment.groupBy({ by: ["supplierId"], where, _sum: { amount: true } }),
+      prisma.supplierReturn.groupBy({ by: ["supplierId"], where: { ...where, status: "returned" }, _sum: { total: true } }),
     ])
     return (id: bigint) => {
       const b = bought.find((x) => x.supplierId === id)
       const p = paid.find((x) => x.supplierId === id)
-      return { purchased: num(b?._sum.total), purchases: b?._count ?? 0, paid: num(p?._sum.amount) }
+      const r = back.find((x) => x.supplierId === id)
+      return { purchased: num(b?._sum.receivedTotal), purchases: b?._count ?? 0, paid: num(p?._sum.amount), returned: num(r?._sum.total) }
     }
   }
 
   private supplierView(
     s: Prisma.SupplierGetPayload<object>,
-    t: { purchased: number; purchases: number; paid: number },
+    t: { purchased: number; purchases: number; paid: number; returned: number },
   ) {
     return {
       id: String(s.id),
@@ -136,8 +146,10 @@ export class PurchasingService {
       purchased: t.purchased,
       paid: t.paid,
       purchases: t.purchases,
+      /** Goods sent back (credit). */
+      returned: t.returned,
       /** What the shop owes them now (negative = paid ahead). */
-      balance: supplierBalance(num(s.openingBalance), t.purchased, t.paid),
+      balance: supplierBalance(num(s.openingBalance), t.purchased, t.paid, t.returned),
     }
   }
 
@@ -171,7 +183,7 @@ export class PurchasingService {
   /** A supplier with their purchases and payments, newest first, and a running statement. */
   async supplier(id: bigint) {
     const s = await this.findSupplier(id)
-    const [totals, purchases, payments] = await Promise.all([
+    const [totals, purchases, payments, returns] = await Promise.all([
       this.supplierTotals([id]),
       prisma.purchase.findMany({
         where: { storeId: this.storeId, supplierId: id },
@@ -184,6 +196,11 @@ export class PurchasingService {
         orderBy: [{ paidOn: "desc" }, { id: "desc" }],
         take: 100,
       }),
+      prisma.supplierReturn.findMany({
+        where: { storeId: this.storeId, supplierId: id },
+        orderBy: [{ returnedOn: "desc" }, { id: "desc" }],
+        take: 100,
+      }),
     ])
     return {
       ...this.supplierView(s, totals(id)),
@@ -193,10 +210,12 @@ export class PurchasingService {
         purchasedOn: day(p.purchasedOn),
         reference: p.reference,
         total: num(p.total),
+        receivedTotal: num(p.receivedTotal),
         status: p.status,
         paymentTerm: p.paymentTerm,
       })),
       paymentList: payments.map((p) => this.paymentView(p)),
+      returnList: returns.map((r) => ({ id: String(r.id), number: r.number, returnedOn: day(r.returnedOn), reason: r.reason, total: num(r.total), status: r.status })),
     }
   }
 
@@ -246,13 +265,14 @@ export class PurchasingService {
   /** Only a supplier with no purchases or payments can be deleted; others are turned off. */
   async deleteSupplier(id: bigint) {
     await this.findSupplier(id)
-    const [p, pay] = await Promise.all([
+    const [p, pay, back] = await Promise.all([
       prisma.purchase.count({ where: { supplierId: id } }),
       prisma.supplierPayment.count({ where: { supplierId: id } }),
+      prisma.supplierReturn.count({ where: { supplierId: id } }),
     ])
-    if (p || pay)
+    if (p || pay || back)
       throw new ConflictError(
-        "This supplier has purchases or payments. Turn them off instead of deleting.",
+        "This supplier has purchases, payments or returns. Turn them off instead of deleting.",
         "CONFLICT",
       )
     await prisma.supplier.delete({ where: { id } })
@@ -740,7 +760,7 @@ export class PurchasingService {
         skip: (q.page - 1) * q.perPage,
         take: q.perPage,
       }),
-      prisma.purchase.aggregate({ where: { ...where, status: "received" }, _sum: { total: true } }),
+      prisma.purchase.aggregate({ where: { ...where, status: { in: ["received", "partial"] } }, _sum: { receivedTotal: true } }),
     ])
     return {
       items: rows.map((p) => ({
@@ -755,6 +775,8 @@ export class PurchasingService {
         reference: p.reference,
         items: p._count.items,
         total: num(p.total),
+        receivedTotal: num(p.receivedTotal),
+        expectedOn: p.expectedOn ? day(p.expectedOn) : null,
         paid: round2(p.payments.reduce((s, x) => s + num(x.amount), 0)),
         paymentTerm: p.paymentTerm,
         status: p.status,
@@ -764,7 +786,7 @@ export class PurchasingService {
         perPage: q.perPage,
         total,
         totalPages: Math.max(1, Math.ceil(total / q.perPage)),
-        totalValue: num(sum._sum.total),
+        totalValue: num(sum._sum.receivedTotal),
       },
     }
   }
@@ -780,6 +802,7 @@ export class PurchasingService {
           include: { account: { select: { name: true } }, purchase: { select: { number: true } } },
           orderBy: { id: "asc" },
         },
+        returns: { orderBy: { id: "asc" }, select: { id: true, number: true, total: true, status: true, returnedOn: true } },
       },
     })
     if (!p) throw new NotFoundError("Purchase")
@@ -801,6 +824,10 @@ export class PurchasingService {
       total: num(p.total),
       paymentTerm: p.paymentTerm,
       status: p.status,
+      receivedTotal: num(p.receivedTotal),
+      expectedOn: p.expectedOn ? day(p.expectedOn) : null,
+      receivedOn: p.receivedOn ? day(p.receivedOn) : null,
+      closedShort: p.closedShort,
       notes: p.notes,
       cancelledAt: p.cancelledAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
@@ -812,6 +839,7 @@ export class PurchasingService {
         name: i.name,
         qualityGrade: i.qualityGrade,
         qty: i.qty,
+        qtyReceived: i.qtyReceived,
         unitCost: num(i.unitCost),
         discountPct: num(i.discountPct),
         discountAmount: num(i.discountAmount),
@@ -819,6 +847,7 @@ export class PurchasingService {
         landedUnitCost: num(i.landedUnitCost),
       })),
       payments: p.payments.map((x) => this.paymentView(x)),
+      returns: p.returns.map((r) => ({ id: String(r.id), number: r.number, total: num(r.total), status: r.status, returnedOn: day(r.returnedOn) })),
     }
   }
 
@@ -844,7 +873,14 @@ export class PurchasingService {
       discount: d.discount,
     })
     if ("error" in totals) throw new BadRequestError(totals.error, "VALIDATION_FAILED")
-    const pay = payNowFor(d.paymentTerm, totals.total, d.payNow)
+    const receiveNow = d.receiveNow !== false
+    // An order paid in advance can pay part or all of it now.
+    const pay =
+      !receiveNow && d.paymentTerm === "advance"
+        ? (d.payNow ?? 0) <= totals.total + 0.001
+          ? { amount: Math.max(0, d.payNow ?? 0) }
+          : { error: "The advance is more than the order" }
+        : payNowFor(d.paymentTerm, totals.total, d.payNow)
     if ("error" in pay) throw new BadRequestError(pay.error, "VALIDATION_FAILED")
     if (pay.amount > 0 && !d.accountId)
       throw new BadRequestError("Choose the account the payment comes from", "VALIDATION_FAILED")
@@ -915,6 +951,10 @@ export class PurchasingService {
           discount: d.discount ?? 0,
           total: totals.total,
           paymentTerm: d.paymentTerm,
+          status: receiveNow ? "received" : "ordered",
+          receivedTotal: receiveNow ? totals.total : 0,
+          receivedOn: receiveNow ? d.purchasedOn : null,
+          expectedOn: receiveNow ? null : (d.expectedOn ?? null),
           notes: blankToNull(d.notes),
           createdByAdminId: this.adminId,
           items: {
@@ -924,6 +964,7 @@ export class PurchasingService {
               name: l.name,
               qualityGrade: blankToNull(l.qualityGrade),
               qty: l.qty,
+              qtyReceived: receiveNow ? l.qty : 0,
               unitCost: l.unitCost,
               discountPct: l.discountPct ?? 0,
               discountAmount: l.discountAmount ?? 0,
@@ -934,36 +975,12 @@ export class PurchasingService {
         },
       })
 
-      // Receive the stock and move the cost price to the new average, line by line (a product can
-      // appear twice, so each line reads the stock the previous one left).
-      for (const l of lines) {
-        const row = l.variant
-          ? await t.productVariant.findUniqueOrThrow({
-              where: { id: l.variant.id },
-              select: { stockQty: true, costPrice: true },
-            })
-          : await t.product.findUniqueOrThrow({
-              where: { id: l.productId },
-              select: { stockQty: true, costPrice: true },
-            })
-        const before = row.stockQty ?? 0
-        const cost = averageCost(
-          before,
-          row.costPrice === null ? null : num(row.costPrice),
-          l.qty,
-          l.landed,
-        )
-        const data = { costPrice: cost }
-        if (l.variant) await t.productVariant.update({ where: { id: l.variant.id }, data })
-        else await t.product.update({ where: { id: l.productId }, data })
-        await moveStock(t, {
-          storeId: this.storeId,
+      if (receiveNow) {
+        await this.addStock(t, {
           warehouseId,
-          sku: { productId: l.productId, variantId: l.variant?.id ?? null },
-          onHand: l.qty,
-          reason: "PURCHASE",
           ref: number,
           note: `${supplier.name}${d.reference ? ` · ${d.reference}` : ""}`,
+          lines: lines.map((l) => ({ productId: l.productId, variantId: l.variant?.id ?? null, qty: l.qty, landed: l.landed, name: l.name })),
         })
       }
 
@@ -976,10 +993,124 @@ export class PurchasingService {
           method: d.paymentMethod ?? "cash",
           paidOn: d.purchasedOn,
           reference: d.reference ?? null,
-          notes: `With purchase ${number}`,
+          notes: receiveNow ? `With purchase ${number}` : `Advance on order ${number}`,
         })
       }
       return purchase.id
+    })
+    return this.purchase(id)
+  }
+
+  /**
+   * Receives stock and moves each item's cost price to the new average with its landed cost, line
+   * by line (a product can appear twice, so each line reads the stock the previous one left).
+   */
+  private async addStock(
+    t: T,
+    m: {
+      warehouseId: bigint
+      ref: string
+      note: string
+      lines: { productId: bigint; variantId: bigint | null; qty: number; landed: number; name: string }[]
+    },
+  ) {
+    for (const l of m.lines) {
+      if (l.qty <= 0) continue
+      const row = l.variantId
+        ? await t.productVariant.findUniqueOrThrow({ where: { id: l.variantId }, select: { stockQty: true, costPrice: true } })
+        : await t.product.findUniqueOrThrow({ where: { id: l.productId }, select: { stockQty: true, costPrice: true } })
+      const cost = averageCost(row.stockQty ?? 0, row.costPrice === null ? null : num(row.costPrice), l.qty, l.landed)
+      if (l.variantId) await t.productVariant.update({ where: { id: l.variantId }, data: { costPrice: cost } })
+      else await t.product.update({ where: { id: l.productId }, data: { costPrice: cost } })
+      await moveStock(t, {
+        storeId: this.storeId,
+        warehouseId: m.warehouseId,
+        sku: { productId: l.productId, variantId: l.variantId },
+        onHand: l.qty,
+        reason: "PURCHASE",
+        ref: m.ref,
+        note: m.note,
+      })
+    }
+  }
+
+  /** The purchase row, locked for this transaction (deliveries and returns take turns). */
+  private async lockPurchase(t: T, id: bigint) {
+    await t.$queryRaw`SELECT 1 FROM "Purchase" WHERE "id" = ${id} AND "storeId" = ${this.storeId} FOR UPDATE`
+    const p = await t.purchase.findFirst({
+      where: { id, storeId: this.storeId },
+      include: { items: { orderBy: { id: "asc" } }, supplier: { select: { name: true } } },
+    })
+    if (!p) throw new NotFoundError("Purchase")
+    return p
+  }
+
+  /**
+   * A delivery against a purchase order: the units that arrived go into stock (cost prices move to
+   * the new average) and the order becomes partly or fully received. What the shop owes the
+   * supplier grows by the value of what arrived.
+   */
+  async receivePurchase(id: bigint, d: { items: { itemId: bigint; qty: number }[]; receivedOn?: Date; note?: string | null }) {
+    await tx(async (t: T) => {
+      const p = await this.lockPurchase(t, id)
+      if (p.status !== "ordered" && p.status !== "partial")
+        throw new BadRequestError(
+          p.status === "cancelled" ? "This purchase is cancelled" : "Everything on this purchase has already arrived",
+          "VALIDATION_FAILED",
+        )
+      const ordered = p.items.map((i) => ({ id: String(i.id), qty: i.qty, qtyReceived: i.qtyReceived, landedUnitCost: num(i.landedUnitCost) }))
+      const r = receiveDelivery(ordered, d.items.map((x) => ({ id: String(x.itemId), qty: x.qty })))
+      if ("error" in r) throw new BadRequestError(r.error, "VALIDATION_FAILED")
+      const warehouseId = p.warehouseId ?? (await defaultWarehouseId(t, this.storeId))
+      await this.addStock(t, {
+        warehouseId,
+        ref: p.number,
+        note: [p.supplier.name, p.reference, d.note?.trim()].filter(Boolean).join(" · "),
+        lines: p.items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          qty: (r.received.get(String(i.id)) ?? i.qtyReceived) - i.qtyReceived,
+          landed: num(i.landedUnitCost),
+          name: i.name,
+        })),
+      })
+      for (const i of p.items) {
+        const got = r.received.get(String(i.id)) ?? i.qtyReceived
+        if (got !== i.qtyReceived) await t.purchaseItem.update({ where: { id: i.id }, data: { qtyReceived: got } })
+      }
+      const after = ordered.map((l) => ({ ...l, qtyReceived: r.received.get(l.id) ?? l.qtyReceived }))
+      await t.purchase.update({
+        where: { id },
+        data: {
+          status: orderStatus(after),
+          receivedTotal: receivedValue(after, num(p.total)),
+          receivedOn: d.receivedOn ?? new Date(),
+        },
+      })
+    })
+    return this.purchase(id)
+  }
+
+  /**
+   * Closes a part-received order: the rest won't come. The shop owes only for what arrived.
+   */
+  async closePurchase(id: bigint) {
+    await tx(async (t: T) => {
+      const p = await this.lockPurchase(t, id)
+      if (p.status !== "partial")
+        throw new BadRequestError(
+          p.status === "ordered" ? "Nothing has arrived yet: cancel the order instead" : "Only a part-received order can be closed",
+          "VALIDATION_FAILED",
+        )
+      const short = p.items.reduce((s, i) => s + i.qty - i.qtyReceived, 0)
+      await t.purchase.update({
+        where: { id },
+        data: {
+          status: "received",
+          closedShort: true,
+          notes: [p.notes, `Closed with ${short} unit${short === 1 ? "" : "s"} not delivered.`].filter(Boolean).join("\n"),
+        },
+      })
     })
     return this.purchase(id)
   }
@@ -998,13 +1129,16 @@ export class PurchasingService {
       if (p.status === "cancelled")
         throw new BadRequestError("This purchase is already cancelled", "VALIDATION_FAILED")
       const warehouseId = p.warehouseId ?? (await defaultWarehouseId(t, this.storeId))
+      const returned = await t.supplierReturn.count({ where: { purchaseId: p.id, status: "returned" } })
+      if (returned) throw new BadRequestError("Goods from this purchase were sent back: cancel those returns first", "VALIDATION_FAILED")
       for (const i of p.items) {
+        if (i.qtyReceived <= 0) continue
         try {
           await moveStock(t, {
             storeId: this.storeId,
             warehouseId,
             sku: { productId: i.productId, variantId: i.variantId },
-            onHand: -i.qty,
+            onHand: -i.qtyReceived,
             guard: "onHand",
             reason: "PURCHASE_CANCELLED",
             ref: p.number,
@@ -1021,9 +1155,184 @@ export class PurchasingService {
       }
       await t.purchase.update({
         where: { id },
-        data: { status: "cancelled", cancelledAt: new Date() },
+        data: { status: "cancelled", cancelledAt: new Date(), receivedTotal: 0 },
       })
     })
     return this.purchase(id)
+  }
+
+  // ================================================================ returns to suppliers
+
+  private returnView(r: Prisma.SupplierReturnGetPayload<{ include: { items: true; supplier: { select: { name: true } }; purchase: { select: { number: true } } } }>) {
+    return {
+      id: String(r.id),
+      number: r.number,
+      supplier: { id: String(r.supplierId), name: r.supplier.name },
+      purchase: r.purchaseId ? { id: String(r.purchaseId), number: r.purchase?.number ?? "" } : null,
+      returnedOn: day(r.returnedOn),
+      reason: r.reason,
+      total: num(r.total),
+      status: r.status,
+      notes: r.notes,
+      cancelledAt: r.cancelledAt?.toISOString() ?? null,
+      items: r.items.map((i) => ({
+        id: String(i.id),
+        productId: String(i.productId),
+        variantId: i.variantId ? String(i.variantId) : null,
+        name: i.name,
+        qty: i.qty,
+        unitCost: num(i.unitCost),
+        lineTotal: num(i.lineTotal),
+      })),
+    }
+  }
+
+  async returns(q: { supplierId?: bigint; page: number; perPage: number }) {
+    const where: Prisma.SupplierReturnWhereInput = { storeId: this.storeId, ...(q.supplierId ? { supplierId: q.supplierId } : {}) }
+    const [total, rows] = await Promise.all([
+      prisma.supplierReturn.count({ where }),
+      prisma.supplierReturn.findMany({
+        where,
+        include: { items: true, supplier: { select: { name: true } }, purchase: { select: { number: true } } },
+        orderBy: [{ returnedOn: "desc" }, { id: "desc" }],
+        skip: (q.page - 1) * q.perPage,
+        take: q.perPage,
+      }),
+    ])
+    return { items: rows.map((r) => this.returnView(r)), meta: { page: q.page, perPage: q.perPage, total, totalPages: Math.max(1, Math.ceil(total / q.perPage)) } }
+  }
+
+  async supplierReturn(id: bigint) {
+    const r = await prisma.supplierReturn.findFirst({
+      where: { id, storeId: this.storeId },
+      include: { items: true, supplier: { select: { name: true } }, purchase: { select: { number: true } } },
+    })
+    if (!r) throw new NotFoundError("Return")
+    return this.returnView(r)
+  }
+
+  /**
+   * Sends goods back to a supplier: the units leave the warehouse (only units not held for
+   * orders), and the supplier's balance goes down by their cost. From a purchase, each line can
+   * send back at most what arrived less what was already returned, at its landed cost.
+   */
+  async createReturn(d: {
+    supplierId: bigint
+    purchaseId?: bigint | null
+    warehouseId?: bigint | null
+    returnedOn: Date
+    reason: string
+    notes?: string | null
+    items: { productId: bigint; variantId?: bigint | null; qty: number; unitCost?: number }[]
+  }) {
+    const supplier = await this.findSupplier(d.supplierId)
+    const id = await tx(async (t: T) => {
+      const purchase = d.purchaseId ? await this.lockPurchase(t, d.purchaseId) : null
+      if (purchase && purchase.supplierId !== d.supplierId)
+        throw new BadRequestError("That purchase is from another supplier", "VALIDATION_FAILED")
+      if (purchase && !["received", "partial"].includes(purchase.status))
+        throw new BadRequestError("Only goods that arrived can be sent back", "VALIDATION_FAILED")
+      // Already sent back from this purchase, per product option.
+      const before = purchase
+        ? await t.supplierReturnItem.groupBy({
+            by: ["productId", "variantId"],
+            where: { return: { purchaseId: purchase.id, status: "returned" } },
+            _sum: { qty: true },
+          })
+        : []
+      const sentBack = new Map(before.map((b) => [`${b.productId}:${b.variantId ?? ""}`, b._sum.qty ?? 0]))
+
+      const lines: { productId: bigint; variantId: bigint | null; qty: number; unitCost: number; name: string }[] = []
+      for (const [n, it] of d.items.entries()) {
+        const key = `${it.productId}:${it.variantId ?? ""}`
+        if (purchase) {
+          const onPurchase = purchase.items.filter((x) => x.productId === it.productId && (x.variantId ?? null) === (it.variantId ?? null))
+          if (!onPurchase.length) throw new BadRequestError(`Line ${n + 1}: that item isn't on ${purchase.number}`, "VALIDATION_FAILED")
+          const arrived = onPurchase.reduce((s, x) => s + x.qtyReceived, 0)
+          const already = (sentBack.get(key) ?? 0) + lines.filter((l) => `${l.productId}:${l.variantId ?? ""}` === key).reduce((s, l) => s + l.qty, 0)
+          if (it.qty > arrived - already)
+            throw new BadRequestError(`Line ${n + 1}: only ${Math.max(0, arrived - already)} of "${onPurchase[0]!.name}" can still go back`, "VALIDATION_FAILED")
+          lines.push({ productId: it.productId, variantId: it.variantId ?? null, qty: it.qty, unitCost: it.unitCost ?? num(onPurchase[0]!.landedUnitCost), name: onPurchase[0]!.name })
+        } else {
+          const p = await t.product.findFirst({
+            where: { id: it.productId, storeId: this.storeId },
+            include: { variants: { where: it.variantId ? { id: it.variantId } : { id: -1n }, select: { id: true, costPrice: true, attributeValues: true } } },
+          })
+          if (!p) throw new BadRequestError(`Line ${n + 1}: that product doesn't exist`, "VALIDATION_FAILED")
+          const v = it.variantId ? p.variants[0] : null
+          if (it.variantId && !v) throw new BadRequestError(`Line ${n + 1}: that option isn't one of ${p.name}'s`, "VALIDATION_FAILED")
+          const cost = it.unitCost ?? num(v ? v.costPrice : p.costPrice)
+          const opt = v?.attributeValues && typeof v.attributeValues === "object" ? Object.values(v.attributeValues as Record<string, string>).join(" / ") : ""
+          lines.push({ productId: it.productId, variantId: v?.id ?? null, qty: it.qty, unitCost: cost, name: opt ? `${p.name} (${opt})` : p.name })
+        }
+      }
+
+      let warehouseId = purchase?.warehouseId ?? (await defaultWarehouseId(t, this.storeId))
+      if (d.warehouseId) {
+        const w = await t.warehouse.findFirst({ where: { id: d.warehouseId, storeId: this.storeId }, select: { id: true } })
+        if (!w) throw new BadRequestError("Choose one of your warehouses", "VALIDATION_FAILED")
+        warehouseId = w.id
+      }
+      const last = await t.supplierReturn.findFirst({ where: { storeId: this.storeId }, orderBy: { id: "desc" }, select: { number: true } })
+      const number = returnNumber(last ? Number(/(\d+)$/.exec(last.number)?.[1] ?? 0) + 1 : 1)
+      const total = round2(lines.reduce((s, l) => s + l.qty * l.unitCost, 0))
+      const r = await t.supplierReturn.create({
+        data: {
+          storeId: this.storeId,
+          number,
+          supplierId: d.supplierId,
+          purchaseId: purchase?.id ?? null,
+          warehouseId,
+          returnedOn: d.returnedOn,
+          reason: d.reason.trim(),
+          notes: blankToNull(d.notes),
+          total,
+          createdByAdminId: this.adminId,
+          items: { create: lines.map((l) => ({ productId: l.productId, variantId: l.variantId, name: l.name, qty: l.qty, unitCost: l.unitCost, lineTotal: round2(l.qty * l.unitCost) })) },
+        },
+      })
+      for (const l of lines) {
+        try {
+          await moveStock(t, {
+            storeId: this.storeId,
+            warehouseId,
+            sku: { productId: l.productId, variantId: l.variantId },
+            onHand: -l.qty,
+            guard: "free",
+            reason: "SUPPLIER_RETURN",
+            ref: number,
+            note: `${supplier.name} · ${d.reason.trim()}`,
+            label: l.name,
+          })
+        } catch (e) {
+          if (e instanceof BadRequestError) throw new BadRequestError(`Can't send back ${e.message}`, "VALIDATION_FAILED")
+          throw e
+        }
+      }
+      return r.id
+    })
+    return this.supplierReturn(id)
+  }
+
+  /** Cancels a return recorded by mistake: the units come back into stock and the credit goes. */
+  async cancelReturn(id: bigint) {
+    await tx(async (t: T) => {
+      await t.$queryRaw`SELECT 1 FROM "SupplierReturn" WHERE "id" = ${id} AND "storeId" = ${this.storeId} FOR UPDATE`
+      const r = await t.supplierReturn.findFirst({ where: { id, storeId: this.storeId }, include: { items: true } })
+      if (!r) throw new NotFoundError("Return")
+      if (r.status === "cancelled") throw new BadRequestError("This return is already cancelled", "VALIDATION_FAILED")
+      for (const i of r.items) {
+        await moveStock(t, {
+          storeId: this.storeId,
+          warehouseId: r.warehouseId,
+          sku: { productId: i.productId, variantId: i.variantId },
+          onHand: i.qty,
+          reason: "SUPPLIER_RETURN_CANCELLED",
+          ref: r.number,
+        })
+      }
+      await t.supplierReturn.update({ where: { id }, data: { status: "cancelled", cancelledAt: new Date() } })
+    })
+    return this.supplierReturn(id)
   }
 }

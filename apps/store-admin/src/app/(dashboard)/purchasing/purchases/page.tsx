@@ -17,7 +17,7 @@ export default function PurchasesPage() {
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [supplierId, setSupplierId] = useState("");
-  const [status, setStatus] = useState<"" | "received" | "cancelled">("");
+  const [status, setStatus] = useState<"" | "ordered" | "partial" | "received" | "cancelled">("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
@@ -60,6 +60,8 @@ export default function PurchasesPage() {
         </select>
         <select className={cn(SELECT, "w-36")} value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Status">
           <option value="">Any status</option>
+          <option value="ordered">Ordered</option>
+          <option value="partial">Part received</option>
           <option value="received">Received</option>
           <option value="cancelled">Cancelled</option>
         </select>
@@ -110,6 +112,8 @@ export default function PurchasesPage() {
                     </TableCell>
                     <TableCell>
                       <StatusPill status={p.status} />
+                      {p.status === "partial" && <span className="block text-xs text-slate-500">{tk(p.receivedTotal)} arrived</span>}
+                      {p.status === "ordered" && p.expectedOn && <span className="block text-xs text-slate-500">due {shortDate(p.expectedOn)}</span>}
                     </TableCell>
                   </TableRow>
                 ))}

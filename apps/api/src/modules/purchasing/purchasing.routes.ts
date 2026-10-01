@@ -3,6 +3,8 @@
  *   GET|POST /suppliers, GET|PATCH|DELETE /suppliers/:id
  *   GET|POST /grades, DELETE /grades/:id                  quality grades for purchase lines
  *   GET|POST /purchases, GET /purchases/:id, POST /purchases/:id/cancel
+ *   POST /purchases/:id/receive, POST /purchases/:id/close   purchase orders: deliveries, close short
+ *   GET|POST /returns, GET /returns/:id, POST /returns/:id/cancel   goods sent back to suppliers
  *   GET|POST /payments, DELETE /payments/:id              supplier payments (delete puts the money back)
  *   GET|POST /accounts, PATCH /accounts/:id, GET /accounts/:id/ledger, POST /accounts/move
  */
@@ -22,6 +24,9 @@ import {
   PickQuery,
   PurchaseDto,
   PurchasesQuery,
+  ReceiveDto,
+  ReturnsQuery,
+  SupplierReturnDto,
   SupplierDto,
   SupplierQuery,
   UpdateAccountDto,
@@ -141,7 +146,7 @@ adminPurchasingRouter.post(
     envelope(res, {
       status: 201,
       data: await svc(req).createPurchase(body<typeof PurchaseDto>(req)),
-      message: "Purchase recorded and stock added",
+      message: body<typeof PurchaseDto>(req).receiveNow === false ? "Purchase order saved" : "Purchase recorded and stock added",
     })
   }),
 )
@@ -162,6 +167,58 @@ adminPurchasingRouter.post(
       data: await svc(req).cancelPurchase(id(req)),
       message: "Purchase cancelled and its stock removed",
     })
+  }),
+)
+
+adminPurchasingRouter.post(
+  "/purchases/:id/receive",
+  rbacMiddleware("purchasing.create"),
+  validate({ params: IdParam, body: ReceiveDto }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).receivePurchase(id(req), body<typeof ReceiveDto>(req)), message: "Delivery received and stock added" })
+  }),
+)
+adminPurchasingRouter.post(
+  "/purchases/:id/close",
+  rbacMiddleware("purchasing.create"),
+  validate({ params: IdParam }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).closePurchase(id(req)), message: "Order closed" })
+  }),
+)
+
+// ---- returns to suppliers
+adminPurchasingRouter.get(
+  "/returns",
+  rbacMiddleware("purchasing.view"),
+  validate({ query: ReturnsQuery }),
+  ctrl(async (req: Req, res: Response) => {
+    const r = await svc(req).returns(query<typeof ReturnsQuery>(req))
+    envelope(res, { data: r.items, meta: r.meta })
+  }),
+)
+adminPurchasingRouter.post(
+  "/returns",
+  rbacMiddleware("purchasing.create"),
+  validate({ body: SupplierReturnDto }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { status: 201, data: await svc(req).createReturn(body<typeof SupplierReturnDto>(req)), message: "Return recorded and stock removed" })
+  }),
+)
+adminPurchasingRouter.get(
+  "/returns/:id",
+  rbacMiddleware("purchasing.view"),
+  validate({ params: IdParam }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).supplierReturn(id(req)) })
+  }),
+)
+adminPurchasingRouter.post(
+  "/returns/:id/cancel",
+  rbacMiddleware("purchasing.delete"),
+  validate({ params: IdParam }),
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).cancelReturn(id(req)), message: "Return cancelled and stock put back" })
   }),
 )
 

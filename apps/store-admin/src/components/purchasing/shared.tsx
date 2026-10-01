@@ -30,12 +30,17 @@ export function Balance({ value, className }: { value: number; className?: strin
   );
 }
 
+const PILL: Record<string, { label: string; cls: string }> = {
+  ordered: { label: "Ordered", cls: "bg-amber-100 text-amber-800" },
+  partial: { label: "Part received", cls: "bg-sky-100 text-sky-800" },
+  received: { label: "Received", cls: "bg-emerald-100 text-emerald-800" },
+  returned: { label: "Returned", cls: "bg-violet-100 text-violet-800" },
+  cancelled: { label: "Cancelled", cls: "bg-slate-100 text-slate-600" },
+};
+
 export function StatusPill({ status }: { status: string }) {
-  return (
-    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", status === "cancelled" ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-800")}>
-      {status}
-    </span>
-  );
+  const p = PILL[status] ?? { label: status, cls: "bg-slate-100 text-slate-600" };
+  return <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", p.cls)}>{p.label}</span>;
 }
 
 const num = (s: string) => (s.trim() === "" ? undefined : Number(s));

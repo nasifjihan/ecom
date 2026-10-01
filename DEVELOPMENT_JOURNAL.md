@@ -4110,3 +4110,89 @@ A customer can send an order to someone else as a gift: the address entered is t
 - **Already there before this part:** checkout's "Billing address same as shipping" box has no billing form behind it, so unticking it sends an empty billing address and the order is refused. Gifts avoid it by asking for the buyer's name and phone.
 - **Next:** part 3: purchase orders before goods arrive, and returns to suppliers.
 
+---
+
+## ✅ BATCH #36 (part 3) — Purchase orders and returns to suppliers (2026-10-02)
+Purchases used to be received in full the moment they were recorded. Now a purchase can be saved as an order before the goods come and received in deliveries, and goods can be sent back to the supplier.
+
+### 36.14 Data (migration `purchase_orders_supplier_returns`)
+- **Purchase:**
+  - `status` is now ordered, partial, received or cancelled;
+  - `receivedTotal` is the value of what has arrived, at landed cost;
+  - also `expectedOn`, `receivedOn` and `closedShort`.
+- **PurchaseItem.qtyReceived.**
+- **Older purchases:** the migration marks them fully received.
+- **New tables:** `SupplierReturn` (RTS-000001, supplier, optional purchase, warehouse, date, reason, credit total, returned/cancelled) and `SupplierReturnItem`.
+
+### 36.15 Rules (`purchasing.rules.ts`)
+- **Receiving:** `receiveDelivery` refuses more than is still to come (counting the same line twice), non-whole numbers and empty deliveries.
+- **Status:** `orderStatus` is ordered, then partial, then received.
+- **Value received:** `receivedValue` sums what arrived at landed cost; when everything is in it equals the purchase total exactly.
+- **Supplier balance:** opening balance + goods received − payments − goods returned.
+
+### 36.16 API (`/api/admin/purchasing`)
+- **Creating a purchase:**
+  - `receiveNow: false` saves a purchase order: no stock and nothing owed yet;
+  - "advance" can pay part or all of the order now, from an account;
+  - `expectedOn` records when it's due.
+- **`POST /purchases/:id/receive` (a delivery):**
+  - per-line quantities go into the purchase's warehouse;
+  - cost prices move to the new average with the landed cost;
+  - the status and value received update;
+  - the purchase row is locked, so two deliveries take turns.
+- **`POST /purchases/:id/close`:** closes a part-received order. You owe only for what arrived, and the notes say how many units never came.
+- **Cancelling:**
+  - an order with nothing received just cancels;
+  - otherwise the units that arrived come back out of stock;
+  - refused while goods from it are sent back.
+- **`GET|POST /returns`, `GET /returns/:id`, `POST /returns/:id/cancel`:**
+  - from a purchase: each item goes back at most up to what arrived less what was already returned, at its landed cost;
+  - without a purchase: at the cost price or a cost entered.
+  - Units leave stock only if not held for orders (guard "free"), and the supplier's balance goes down.
+  - Cancelling puts both back.
+- **Lists and suppliers:**
+  - purchase lists and totals count what arrived;
+  - suppliers show "returned";
+  - a supplier with returns can't be deleted (turn them off instead).
+
+### 36.17 Admin
+- **New purchase:**
+  - "Goods have arrived" or "Purchase order (not here yet)";
+  - "Date ordered" and "Expected on";
+  - "Advance paid now" on orders.
+- **Purchase page:**
+  - Receive delivery: per-line quantities, defaulting to what's still to come, with date and note;
+  - Close order, Send back (per-line quantities, reason, the credit shown) and Pay supplier;
+  - an "Arrived" column, a banner for open orders, a closed-short note and the returns made from it.
+- **Purchases list:** status filter (ordered, part received, received, cancelled), what has arrived, and the due date.
+- **Purchasing → Supplier returns (new page):** returns with items, reason and credit, filter by supplier, cancel.
+
+### 36.18 Checked
+- **Tests:** API 728 passing (53 files).
+  - new `tests/unit/purchase-orders.test.ts`;
+  - new `tests/integration/purchase-orders.db.test.ts`:
+    - an order adds no stock;
+    - deliveries add stock at landed cost and grow the balance;
+    - too many refused;
+    - close short;
+    - returns capped at what arrived, and refused when the stock is held for orders;
+    - cancelling a return;
+    - cancelling an order;
+    - an advance on an order.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - purchase order PUR-000001 from a new supplier, Rahman Fabrics: 20 linen shirts at ৳2,500 + ৳1,000 transport, expected 8 Oct, on credit;
+  - saved as ordered; stock stayed 50;
+  - received 12: part received, ৳30,600 owed, stock 62, cost price averaged to ৳2,832.26;
+  - sent 2 back for "Stitching torn": RTS-000001, ৳5,100 credit, stock 60;
+  - closed the order: "Closed with 8 units not delivered";
+  - the supplier list shows ৳25,500 owed.
+  - No page errors.
+- **Dev data:** supplier Rahman Fabrics, purchase PUR-000001 (closed short) and return RTS-000001. The linen shirt's stock is now 60.
+
+### 36.19 Not done
+- **Returns without a purchase** can be made through the API but have no admin form yet. Returns are made from a purchase.
+- **Cash refunds from a supplier:** a return is a credit on the balance. Cash the supplier hands back is recorded as a deposit in Accounts.
+- **Printing:** no printable purchase order to send to the supplier yet.
+- **Batch 36 is done.** Next: Batch 37, customers and messaging.
+

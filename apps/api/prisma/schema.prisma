@@ -73,6 +73,7 @@ model Store {
   idempotencyKeys      IdempotencyKey[]
   courierSettlements   CourierSettlement[]
   courierAccounts      CourierAccount[]
+  supplierReturns      SupplierReturn[]
   locationsOff         StoreLocationOff[]
   taxClasses           TaxClass[]
   emailSettings        StoreEmailSetting?
@@ -2549,6 +2550,7 @@ model Supplier {
   notes                String?
   purchases            Purchase[]
   payments             SupplierPayment[]
+  returns              SupplierReturn[]
   contactPerson        String?
   address              String?
   countryCode          String?
@@ -2565,7 +2567,8 @@ model Supplier {
   @@unique([storeId, slug])
 }
 
-/// Stock bought from a supplier: received at once, updating stock and cost prices. modules/purchasing
+/// Stock bought from a supplier: received at once, or ordered first (a purchase order) and received
+/// in one or more deliveries; each delivery updates stock and cost prices. modules/purchasing
 model Purchase {
   id               BigInt            @id @default(autoincrement())
   storeId          BigInt
@@ -2593,13 +2596,22 @@ model Purchase {
   total            Decimal           @db.Decimal(12, 2)
   /// advance | instant_full | instant_partial | credit
   paymentTerm      String
-  /// received | cancelled
+  /// ordered (nothing arrived) | partial | received | cancelled
   status           String            @default("received")
+  /// Value of the goods that have arrived (landed cost): what the shop owes for so far.
+  receivedTotal    Decimal           @default(0) @db.Decimal(12, 2)
+  /// When the supplier said it would arrive (purchase orders).
+  expectedOn       DateTime?         @db.Date
+  /// When the last delivery arrived.
+  receivedOn       DateTime?         @db.Date
+  /// Ordered units that will never come (an order closed short).
+  closedShort      Boolean           @default(false)
   notes            String?
   createdByAdminId BigInt?
   cancelledAt      DateTime?
   items            PurchaseItem[]
   payments         SupplierPayment[]
+  returns          SupplierReturn[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -2620,6 +2632,8 @@ model PurchaseItem {
   name           String
   qualityGrade   String?
   qty            Int
+  /// Units that have arrived so far.
+  qtyReceived    Int             @default(0)
   unitCost       Decimal         @db.Decimal(12, 2)
   discountPct    Decimal         @default(0) @db.Decimal(5, 2)
   discountAmount Decimal         @default(0) @db.Decimal(12, 2)
@@ -2629,6 +2643,52 @@ model PurchaseItem {
 
   @@index([purchaseId])
   @@index([productId])
+}
+
+/// Goods sent back to a supplier (faulty, wrong, unsold): the stock leaves the warehouse and the
+/// supplier's balance is reduced by the return's value (credit for the shop).
+model SupplierReturn {
+  id               BigInt               @id @default(autoincrement())
+  storeId          BigInt
+  store            Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// RTS-000001
+  number           String
+  supplierId       BigInt
+  supplier         Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// The purchase the goods came from (optional).
+  purchaseId       BigInt?
+  purchase         Purchase?            @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  warehouseId      BigInt
+  returnedOn       DateTime             @db.Date
+  reason           String
+  /// What the supplier credits: the items' cost.
+  total            Decimal              @db.Decimal(12, 2)
+  /// returned | cancelled
+  status           String               @default("returned")
+  notes            String?
+  createdByAdminId BigInt?
+  cancelledAt      DateTime?
+  items            SupplierReturnItem[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([storeId, number])
+  @@index([supplierId])
+}
+
+model SupplierReturnItem {
+  id        BigInt         @id @default(autoincrement())
+  returnId  BigInt
+  return    SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  productId BigInt
+  variantId BigInt?
+  /// Snapshot, e.g. "Cotton Panjabi (M / White)".
+  name      String
+  qty       Int
+  unitCost  Decimal        @db.Decimal(12, 2)
+  lineTotal Decimal        @db.Decimal(12, 2)
+
+  @@index([returnId])
 }
 
 /// Money paid to a supplier, from one of the shop's accounts.

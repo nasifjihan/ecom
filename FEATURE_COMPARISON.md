@@ -128,7 +128,7 @@ These are our advantages. Keep them.
 | Supplier payments (against a purchase or on account), undo | ✅ | Batch 27 |
 | Bank / cash / mobile accounts with a ledger, deposits, withdrawals, transfers, corrections | ✅ | Batch 27: Purchasing → Accounts; balances can't go below zero |
 | Cost price on products and options; cost saved on each order line | ✅ | Batch 27: margin shown in the product editor; `OrderItem.unitCost` feeds Batch 28's profit reports |
-| Purchase returns to supplier, purchase orders before goods arrive | ❌ | |
+| Purchase returns to supplier, purchase orders before goods arrive | ✅ | Batch 36: purchase orders received in deliveries (stock and cost per delivery), close short, advance on order; returns to supplier take stock out and credit the balance |
 
 ### Sales team (reference 18)
 | Feature | Status | Notes |
@@ -236,7 +236,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
 | 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
 | 35 ✅ | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
-| 36 🟡 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
+| 36 ✅ | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
 | 39 | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |
