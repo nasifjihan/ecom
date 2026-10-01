@@ -16,8 +16,6 @@ import {
   ShieldX,
   Edit,
   Trash2,
-  LogIn,
-  KeyRound,
   FileSpreadsheet,
   File,
   ChevronDown,
@@ -80,6 +78,7 @@ import {
   useGetCustomersQuery,
   useGetCustomerGroupsQuery,
   useCreateCustomerMutation,
+  CUSTOMER_SOURCE_LABELS,
   useDeleteCustomerMutation,
   type Customer,
   type CustomerGroup,
@@ -133,7 +132,7 @@ export default function CustomersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
 
   const [form, setForm] = useState({
-    firstName: "", lastName: "", email: "", phone: "", password: "",
+    firstName: "", lastName: "", email: "", phone: "", password: "", source: "phone",
     groupId: "",
   });
   const { data: groupOptions = [] } = useGetCustomerGroupsQuery();
@@ -170,8 +169,15 @@ export default function CustomersPage() {
                 >
                   {c.name}
                 </Link>
+                {c.banned && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">Banned</span>}
                 <div className="text-xs text-slate-500 flex items-center gap-1.5">
-                  <Mail className="h-3 w-3" /> {c.email}
+                  {c.email ? (
+                    <>
+                      <Mail className="h-3 w-3" /> {c.email}
+                    </>
+                  ) : (
+                    c.phone ?? ""
+                  )}
                 </div>
               </div>
             </div>
@@ -306,24 +312,6 @@ export default function CustomersPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-lg text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 dark:hover:text-purple-400"
-                title="Send password reset"
-                onClick={() => toast.success(`Password reset link sent to ${c.email}`)}
-              >
-                <KeyRound className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400"
-                title="Login as customer"
-                onClick={() => toast.success(`Impersonating ${c.name}...`)}
-              >
-                <LogIn className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
                 className="h-8 w-8 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
                 title="Delete"
                 onClick={() => setDeleteTarget(c)}
@@ -353,14 +341,15 @@ export default function CustomersPage() {
       await createCustomer({
         firstName: form.firstName,
         lastName: form.lastName,
-        email: form.email,
+        email: form.email || undefined,
         phone: form.phone || undefined,
-        password: form.password,
+        password: form.password || undefined,
         groupId: form.groupId || undefined,
+        source: form.source || undefined,
       }).unwrap();
       toast.success("Customer created");
       setShowAdd(false);
-      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", groupId: "" });
+      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", groupId: "", source: "phone" });
     } catch (err: any) {
       // Field errors come back as { field: [message] }; show the first one.
       const d = err?.data;
@@ -564,7 +553,7 @@ export default function CustomersPage() {
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-indigo-600" /> Add New Customer
               </DialogTitle>
-              <DialogDescription>Add a new customer to your store manually.</DialogDescription>
+              <DialogDescription>A customer who ordered by phone, Facebook, WhatsApp or in person. A phone number or an email is enough; give a password only if they'll sign in.</DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -584,7 +573,7 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="col-span-2">
-                <Label className="text-xs mb-1.5 block">Email Address *</Label>
+                <Label className="text-xs mb-1.5 block">Email Address</Label>
                 <Input
                   type="email"
                   value={form.email}
@@ -601,13 +590,21 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="col-span-2">
-                <Label className="text-xs mb-1.5 block">Password *</Label>
+                <Label className="text-xs mb-1.5 block">Password (optional)</Label>
                 <Input
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Only if they'll sign in: 8+ characters"
                 />
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">Came from</Label>
+                <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
+                  {Object.entries(CUSTOMER_SOURCE_LABELS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </Select>
               </div>
               <div>
                 <Label className="text-xs mb-1.5 block">Customer Group</Label>
@@ -627,7 +624,7 @@ export default function CustomersPage() {
               <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
               <Button
                 onClick={handleAddCustomer}
-                disabled={!form.firstName || !form.lastName || !form.email || !form.password}
+                disabled={!form.firstName || !form.lastName || (!form.email && !form.phone)}
                 className="gap-1.5"
               >
                 <Plus className="h-4 w-4" /> Create Customer

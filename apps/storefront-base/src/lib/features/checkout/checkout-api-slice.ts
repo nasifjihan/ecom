@@ -413,6 +413,16 @@ export const checkoutApi = api.injectEndpoints({
     payOrderOnline: builder.mutation<{ payUrl: string; attempt: string }, string>({
       query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}/pay`, method: "POST" }),
     }),
+
+    /** Adds an email to the store's newsletter list (the footer form). */
+    subscribeNewsletter: builder.mutation<{ subscribed: boolean }, { email: string; name?: string }>({
+      query: (body) => ({ url: `/storefront/newsletter`, method: "POST", body }),
+    }),
+
+    /** Takes an address off the list with the token from an email's unsubscribe link. */
+    unsubscribeNewsletter: builder.mutation<{ email: string }, string>({
+      query: (token) => ({ url: `/storefront/newsletter/unsubscribe`, method: "POST", body: { token } }),
+    }),
   }),
   overrideExisting: true,
 });
@@ -430,6 +440,8 @@ export const {
   useGetOrderByKeyQuery,
   useSubmitOrderPaymentMutation,
   usePayOrderOnlineMutation,
+  useSubscribeNewsletterMutation,
+  useUnsubscribeNewsletterMutation,
 } = checkoutApi;
 
 /**

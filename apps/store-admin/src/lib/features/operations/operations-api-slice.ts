@@ -264,7 +264,23 @@ export interface Customer {
   createdAt: string;
   billingAddress?: Address;
   shippingAddress?: Address;
+  /** Banned: can't sign in or order. */
+  banned: boolean;
+  banReason?: string;
+  bannedAt?: string;
+  /** How a customer staff added came to the shop. */
+  source?: string;
+  acceptMarketing?: boolean;
 }
+
+export const CUSTOMER_SOURCE_LABELS: Record<string, string> = {
+  phone: "Phone call",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  walk_in: "Walk-in",
+  other: "Other",
+};
 
 export interface CustomerFilters {
   search?: string;
@@ -279,17 +295,23 @@ export interface CustomerFilters {
 export interface CreateCustomerInput {
   firstName: string;
   lastName: string;
-  email: string;
+  /** Optional: customers added by hand often have only a phone. */
+  email?: string;
   phone?: string;
-  password: string;
+  password?: string;
   groupId?: string;
+  source?: string;
 }
 
 interface ApiCustomer {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
+  banReason?: string | null;
+  bannedAt?: string | null;
+  source?: string | null;
+  acceptMarketing?: boolean;
   phone: string | null;
   avatarUrl: string | null;
   isGuest: boolean;
@@ -321,6 +343,9 @@ interface ApiCustomer {
   _count?: { orders?: number; reviews?: number; wishlistItems?: number };
 }
 
+/** The value, or undefined when it is missing or empty (blank form fields are left out). */
+const filled = <T extends string>(v: T | null | undefined): T | undefined => (v === undefined || v === null || v === "" ? undefined : v);
+
 export function fromApiCustomer(c: ApiCustomer): Customer {
   const addresses = (c.addresses ?? []).map((a) => ({
     id: a.id,
@@ -351,8 +376,13 @@ export function fromApiCustomer(c: ApiCustomer): Customer {
     firstName: c.firstName,
     lastName: c.lastName,
     name: `${c.firstName} ${c.lastName}`.trim(),
-    email: c.email,
+    email: c.email ?? "",
     phone: c.phone ?? undefined,
+    banned: ["banned", "suspended"].includes(c.status.toLowerCase()),
+    banReason: c.banReason ?? undefined,
+    bannedAt: c.bannedAt ?? undefined,
+    source: c.source ?? undefined,
+    acceptMarketing: c.acceptMarketing,
     group: c.isGuest ? "Guest" : c.group?.name ?? "No group",
     groupId: c.groupId ?? undefined,
     status: c.status,
@@ -362,7 +392,7 @@ export function fromApiCustomer(c: ApiCustomer): Customer {
     wishlistCount: c._count?.wishlistItems,
     addresses,
     // The schema has no verification flags yet; an active, non-guest account is treated as verified.
-    isVerified: !c.isGuest && c.status === "ACTIVE",
+    isVerified: !c.isGuest && c.status.toLowerCase() === "active",
     emailVerified: false,
     phoneVerified: false,
     avatarUrl: c.avatarUrl ?? undefined,
@@ -935,10 +965,10 @@ export const operationsApiSlice = api.injectEndpoints({
     }),
 
     createCustomer: builder.mutation<Customer, CreateCustomerInput>({
-      query: ({ groupId, phone, ...rest }) => ({
+      query: ({ groupId, phone, email, password, source, ...rest }) => ({
         url: `/admin/customers`,
         method: "POST",
-        body: { ...rest, phone: phone || undefined, groupId: groupId || undefined },
+        body: { ...rest, email: filled(email) ?? null, password: filled(password), phone: filled(phone), groupId: filled(groupId), source: filled(source) ?? null },
       }),
       transformResponse: (c: ApiCustomer) => fromApiCustomer(c),
       invalidatesTags: [{ type: "Customer", id: "LIST" }],
@@ -957,6 +987,15 @@ export const operationsApiSlice = api.injectEndpoints({
         { type: "Customer", id },
         { type: "Customer", id: "LIST" },
       ],
+    }),
+
+    banCustomer: builder.mutation<unknown, { id: string | number; reason: string }>({
+      query: ({ id, reason }) => ({ url: `/admin/customers/${id}/ban`, method: "POST", body: { reason } }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Customer", id: "LIST" }, { type: "Customer", id }],
+    }),
+    unbanCustomer: builder.mutation<unknown, string | number>({
+      query: (id) => ({ url: `/admin/customers/${id}/unban`, method: "POST" }),
+      invalidatesTags: (_r, _e, id) => [{ type: "Customer", id: "LIST" }, { type: "Customer", id }],
     }),
 
     deleteCustomer: builder.mutation<void, string | number>({
@@ -1122,6 +1161,8 @@ export const {
   useGetCustomerGroupsQuery,
   useGetCustomerQuery,
   useCreateCustomerMutation,
+  useBanCustomerMutation,
+  useUnbanCustomerMutation,
   useUpdateCustomerMutation,
   useDeleteCustomerMutation,
   useLazyExportCustomersQuery,

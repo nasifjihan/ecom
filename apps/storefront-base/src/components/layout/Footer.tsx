@@ -14,6 +14,7 @@ import {
 import { Button, Input, Separator } from "../ui";
 import { cn } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
+import { apiErrorMessage, useSubscribeNewsletterMutation } from "../../lib/features/checkout/checkout-api-slice";
 
 export type FooterLink = { label: string; href: string; external?: boolean };
 
@@ -61,12 +62,21 @@ export const Footer: React.FC<FooterProps> = ({
 }) => {
   const [email, setEmail] = React.useState("");
   const [subscribed, setSubscribed] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [subscribe, { isLoading }] = useSubscribeNewsletterMutation();
   const t = useT();
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    onNewsletterSubmit?.(email);
+    setError("");
+    try {
+      if (onNewsletterSubmit) await onNewsletterSubmit(email);
+      else await subscribe({ email }).unwrap();
+    } catch (err) {
+      setError(apiErrorMessage(err, t("Couldn't subscribe. Please try again.")));
+      return;
+    }
     setSubscribed(true);
     setEmail("");
     setTimeout(() => setSubscribed(false), 3000);
@@ -120,7 +130,8 @@ export const Footer: React.FC<FooterProps> = ({
               <h3 className="text-xl font-bold text-foreground mb-1">{t("Subscribe to Our Newsletter")}</h3>
               <p className="text-muted-foreground text-sm">{t("Get the latest offers, new arrivals and exclusive deals delivered to your inbox.")}</p>
             </div>
-            <form onSubmit={handleSubscribe} className="w-full lg:w-auto flex items-center gap-2 max-w-md">
+            <form onSubmit={(e) => void handleSubscribe(e)} className="w-full lg:w-auto max-w-md">
+              <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -132,9 +143,11 @@ export const Footer: React.FC<FooterProps> = ({
                   required
                 />
               </div>
-              <Button type="submit" disabled={subscribed}>
+              <Button type="submit" disabled={subscribed || isLoading}>
                 {subscribed ? t("Subscribed ✓") : t("Subscribe")}
               </Button>
+              </div>
+              {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
             </form>
           </div>
         </div>

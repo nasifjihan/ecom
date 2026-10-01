@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { isBanned } from "../customers/customer.rules";
+import { NewsletterService } from "../customers/newsletter.service";
 import {
   prisma,
   env,
@@ -141,6 +143,12 @@ export class AuthController extends BaseController {
     const svc = this.service(req.ctx);
     const customer = await svc.customerRegister(dto, storeId);
     emitCustomerRegistered({ storeId: String(storeId), customerId: String(customer.id) });
+    // "Send me offers" at sign-up puts them on the newsletter list (never blocks signing up).
+    if (dto.acceptMarketing && customer.email) {
+      await new NewsletterService(BigInt(storeId))
+        .subscribe({ email: customer.email, name: `${customer.firstName} ${customer.lastName}`.trim(), source: "signup", locale: req.ctx.locale })
+        .catch(() => undefined);
+    }
     const tokens = await svc.issueTokens(customer, "customer");
     this.setCookie(res, "customer", tokens.refreshToken);
     envelope(res, {
@@ -302,6 +310,8 @@ export class AuthController extends BaseController {
     const storeId = payload.storeId ? BigInt(payload.storeId) : req.ctx.storeId;
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
     const user = await svc.getCustomerProfile(BigInt(payload.sub), storeId);
+    // A customer banned since signing in loses the session at the next refresh.
+    if (isBanned(user.status)) throw new UnauthorizedError("Account suspended", "AUTH_ACCOUNT_SUSPENDED");
     const tokens = await svc.issueTokens(user, "customer");
     this.setCookie(res, "customer", tokens.refreshToken);
     envelope(res, {

@@ -51,7 +51,8 @@ export class CustomerRepository extends BaseRepository<"customer"> {
   ): Promise<Paginated<unknown>> {
     const where: Record<string, unknown> = {};
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
-    if (filters.status) where.status = filters.status;
+    // Older rows are upper case ("ACTIVE"), newer ones lower case ("banned").
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters.groupId) where.groupId = BigInt(filters.groupId);
     if (filters.acceptMarketing !== undefined) where.acceptMarketing = filters.acceptMarketing;
     if (filters.isGuest !== undefined) where.isGuest = filters.isGuest;

@@ -2,6 +2,7 @@
 
 import { CustomerWalletPanel } from "@/components/customers/wallet-panel";
 import { CustomerBusinessPanel } from "@/components/customers/business-account";
+import { BanBanner, BanButton } from "@/components/customers/ban-panel";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -59,6 +60,7 @@ import {
 import {
   useGetCustomerQuery,
   useGetOrderListQuery,
+  CUSTOMER_SOURCE_LABELS,
   type Customer,
   type CustomerGroup,
 } from "@/lib/features/operations/operations-api-slice";
@@ -156,12 +158,15 @@ export default function CustomerDetailPage() {
                   <Badge variant="outline" className={cn(groupStyle(c.group), "font-medium")}>
                     {c.group}
                   </Badge>
-                  {c.status && c.status !== "ACTIVE" && <Badge variant="outline" className="text-xs">{c.status}</Badge>}
+                  {c.banned && <Badge variant="destructive" className="text-xs">Banned</Badge>}
+                  {c.source && <Badge variant="outline" className="text-xs">Came from {CUSTOMER_SOURCE_LABELS[c.source] ?? c.source}</Badge>}
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
-                  <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">
-                    <Mail className="h-3.5 w-3.5" /> {c.email}
-                  </a>
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">
+                      <Mail className="h-3.5 w-3.5" /> {c.email}
+                    </a>
+                  )}
                   <a href={`tel:${c.phone}`} className="inline-flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">
                     <Phone className="h-3.5 w-3.5" /> {c.phone ?? "—"}
                   </a>
@@ -176,16 +181,21 @@ export default function CustomerDetailPage() {
                 )}
               </div>
               <div className="flex flex-wrap sm:flex-col sm:items-end gap-2">
-                <a href={`mailto:${c.email}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Send className="h-4 w-4" /> Send Email
-                  </Button>
-                </a>
+                {c.email && (
+                  <a href={`mailto:${c.email}`}>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <Send className="h-4 w-4" /> Send Email
+                    </Button>
+                  </a>
+                )}
+                <BanButton customer={c} />
               </div>
             </CardContent>
           </Card>
         </div>
       </motion.div>
+
+      <BanBanner customer={c} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s, i) => (

@@ -939,4 +939,13 @@ export const BN: Record<string, string> = {
   "Gift box removed": "গিফট বক্স সরানো হয়েছে",
   "Gift box": "গিফট বক্স",
   "In the gift box": "গিফট বক্সে",
+  "Unsubscribe from our newsletter": "নিউজলেটার থেকে আনসাবস্ক্রাইব করুন",
+  "This link is incomplete. Use the unsubscribe link at the bottom of our email.": "লিংকটি অসম্পূর্ণ। আমাদের ইমেইলের নিচের আনসাবস্ক্রাইব লিংক ব্যবহার করুন।",
+  "{email} won't get our newsletter any more.": "{email} আর আমাদের নিউজলেটার পাবে না।",
+  "You'll stop getting offers and news by email. Order emails still come.": "ইমেইলে অফার ও খবর আসা বন্ধ হবে। অর্ডারের ইমেইল আগের মতোই আসবে।",
+  "Please wait…": "অপেক্ষা করুন…",
+  "Unsubscribe": "আনসাবস্ক্রাইব",
+  "This unsubscribe link didn't work.": "এই আনসাবস্ক্রাইব লিংকটি কাজ করেনি।",
+  "Back to the shop": "দোকানে ফিরে যান",
+  "Couldn't subscribe. Please try again.": "সাবস্ক্রাইব করা যায়নি। আবার চেষ্টা করুন।",
 };

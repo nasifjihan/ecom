@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CUSTOMER_SOURCES } from "./customer.rules";
 import { PaginationSchema } from "@ecom/zod-schemas";
 import { ExportFormat, CustomerStatus } from "@ecom/shared-types";
 
@@ -48,7 +49,18 @@ export const CustomerAddressDto = BaseCustomerAddressDto;
 export type CustomerAddressDto = z.infer<typeof CustomerAddressDto>;
 
 const BaseCustomerDto = z.object({
-  email: z.string().trim().email().max(254).toLowerCase(),
+  /** Optional for customers staff add by hand (phone, Facebook, walk-in); needed to sign in by email. */
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .toLowerCase()
+    .transform((v) => v || null)
+    .pipe(z.string().email().nullable())
+    .optional()
+    .nullable(),
+  /** Where a customer staff added came from. */
+  source: z.enum(CUSTOMER_SOURCES).optional().nullable(),
   firstName: z.string().min(1).max(100).refine(noXss, noXssMessage),
   lastName: z.string().min(1).max(100).refine(noXss, noXssMessage),
   phone: z
@@ -73,7 +85,8 @@ const BaseCustomerDto = z.object({
   loyaltyPoints: z.coerce.number().int().nonnegative().optional(),
   addresses: z.array(BaseCustomerAddressDto).optional(),
 });
-export const CreateCustomerDto = BaseCustomerDto.superRefine((_v, _ctx) => {
+export const CreateCustomerDto = BaseCustomerDto.superRefine((v, ctx) => {
+  if (!v.email && !v.phone) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a phone number or an email", path: ["phone"] });
 });
 export type CreateCustomerDto = z.infer<typeof CreateCustomerDto>;
 export const UpdateCustomerDto = BaseCustomerDto.partial();

@@ -136,6 +136,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/marketing/promotions", label: "Promotions", icon: Gift, perm: "promotions.view" },
       { href: "/marketing/coupons", label: "Coupons", icon: Percent, perm: "coupons.view" },
+      { href: "/marketing/newsletter", label: "Newsletter", icon: Newspaper, perm: "customers.view" },
       { href: "/marketing/flash-sales", label: "Flash Sales", icon: Zap, perm: "flash_sales.view" },
       { href: "/marketing/festivals", label: "Festival calendar", icon: CalendarHeart, perm: "promotions.view" },
       { href: "/marketing/loyalty", label: "Loyalty & wallet", icon: Wallet, perm: "loyalty.view" },

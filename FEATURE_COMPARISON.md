@@ -74,7 +74,7 @@ These are our advantages. Keep them.
 | **Automatic promotions** (no code): discount, free gift over spend, buy X get Y, free delivery | ✅ | Batch 23: one best discount + stacking buy X get Y, gifts from stock, nudges |
 | Promotion display slots (announcement bar, home hero, cart, checkout, entry popup…) | ✅ | Batch 23 (fixed home positions; no page-builder block yet) |
 | Festival calendar (Eid, Pohela Boishakh, Puja) + quick-start templates | ✅ | Batch 33: 14 built-in festivals (moon dates as estimates), sale windows, prep checklists, linked promotions/flash sales/coupons/landing pages with "run for the sale", last year's sales, reminder email, dashboard card. No ready-made campaign templates |
-| Newsletter subscribers | 🟡 | Storefront shows a signup block; nothing stores subscribers and there's no admin list |
+| Newsletter subscribers | ✅ | Batch 37: footer/checkout/sign-up join one list, Marketing → Newsletter with counts, add, unsubscribe, CSV; unsubscribe page. No sending from the app yet |
 | Search terms analytics (what customers search) | ✅ | Batch 26: Marketing → Search terms, "found nothing" filter, suggestions |
 
 ### Content (reference 13)
@@ -90,7 +90,7 @@ These are our advantages. Keep them.
 | Feature | Status | Note |
 |---|---|---|
 | Customers list/detail, groups, store credit, loyalty points | ✅ | |
-| Admin creates a customer (no login), source, ban | 🟡 | |
+| Admin creates a customer (no login), source, ban | ✅ | Batch 37: phone-only customers, "came from", duplicate phone refused; ban with reason blocks sign-in and orders, guest orders by the same phone/email too |
 | CRM leads (Facebook/Instagram handle, salesperson, tags) | ❌ | |
 | Loyalty levels (Bronze/Silver/Gold, auto discount by lifetime spend) | ✅ | Batch 30: levels by delivered spend, member % off at checkout, extra cashback per level |
 | Referrals + payout sweep | ✅ | Batch 30: refer-a-friend link, both sides rewarded to the wallet when the friend's first order is delivered; admin referral list |

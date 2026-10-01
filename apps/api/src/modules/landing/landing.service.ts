@@ -5,6 +5,7 @@
  * and orders remember their page, so each page shows its visits, orders and sales.
  */
 import type { Prisma } from "@prisma/client"
+import { assertCanOrder } from "../customers/customer-ban"
 import { createHmac } from "node:crypto"
 import { env, prisma } from "../../config"
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
@@ -310,6 +311,7 @@ export class LandingService {
     const phone = bdMobile(d.phone)
     if (!phone) throw new BadRequestError("Enter a mobile number like 01712345678", "VALIDATION_FAILED")
     if (splitName(d.name).firstName.length < 2) throw new BadRequestError("Enter your name", "VALIDATION_FAILED")
+    await assertCanOrder(this.storeId, { customerId: this.ctx.customer?.id ?? null, phone })
     const shop = new StorefrontService(this.ctx)
     const q = await shop.quoteOrder(this.draft(r, { ...d, phone }, true))
     const order = await shop.createOrder(q, {

@@ -4196,3 +4196,91 @@ Purchases used to be received in full the moment they were recorded. Now a purch
 - **Printing:** no printable purchase order to send to the supplier yet.
 - **Batch 36 is done.** Next: Batch 37, customers and messaging.
 
+
+---
+
+## ✅ BATCH #37 (part 1) — Newsletter list, customers added by staff, and banning (2026-10-03)
+The footer's newsletter box used to save nothing. Now sign-ups are kept in a list the shop can see and export. Staff can add a customer who only has a phone number and note where they came from. A customer who causes trouble can be banned.
+
+### 37.1 Data (migration `newsletter_customer_ban`)
+- **Customer:** `banReason`, `bannedAt`, `source` (where they came from: Facebook, Instagram, phone call, walk-in, referral, other).
+- **NewsletterSubscriber:** one row per email per store, with status (subscribed or unsubscribed), where they signed up, language, and a private unsubscribe token.
+- The migration copies customers who had already said yes to marketing into the list.
+
+### 37.2 Rules (`customers/customer.rules.ts`)
+- A customer counts as banned when their status is "banned" or "suspended", in any letter case.
+- **Staying unsubscribed:** someone who unsubscribed can sign up again themselves, but staff and imports can't add them back.
+- Emails shown to the public are masked (`re***@example.com`).
+- CSV cells are made safe for spreadsheets.
+
+### 37.3 API
+- **Storefront:** `POST /api/storefront/newsletter` {email, name?}; `POST /api/storefront/newsletter/unsubscribe` {token}.
+- **Admin** (customers permissions): `GET /api/admin/newsletter` (list with subscribed/unsubscribed counts), `GET /export` (CSV), `POST` (add one), `POST /:id/unsubscribe`.
+- **Signing up anywhere joins the list:** the footer, checkout's "Send me offers" box, and account sign-up with marketing ticked. The customer's marketing flag follows the list.
+- **Ban:** `POST /api/admin/customers/:id/ban` {reason}, `POST /:id/unban`.
+  - A banned customer can't sign in, refresh their session, or place an order.
+  - That includes ordering as a guest with the same phone (any written form: 017…, 88017…, +88017…) or email, from checkout or a landing page.
+  - The message is "Sorry, we can't take orders from this account. Please contact the shop." (code `CUSTOMER_BANNED`).
+  - Bulk "Block" in the customers list now uses the same ban.
+- **Staff-made customers:**
+  - Email is optional; a phone or an email is required.
+  - Password is optional (only for people who will sign in).
+  - Where they came from is optional.
+  - A phone another customer already has is refused (`DUPLICATE_PHONE`).
+- Fixed: adding a customer from the admin always failed with "customer not found". It read the new row outside the transaction that created it.
+
+### 37.4 Admin
+- **Customers → Add customer:** email and password are now optional, with a "Came from" choice.
+- The list shows a Banned badge, and the phone when there's no email.
+- Removed two buttons that did nothing: "Send password reset" and "Login as customer".
+- **Customer page:**
+  - a "Came from …" badge;
+  - a Ban button (asks for a reason);
+  - a red banner with the date and reason, and "Lift ban".
+- **Marketing → Newsletter:**
+  - subscribed and unsubscribed counts;
+  - add an email;
+  - filter and search;
+  - unsubscribe a row;
+  - export CSV (opens in Excel with Bangla names intact).
+
+### 37.5 Storefront
+- The footer box really subscribes, and shows an error if it fails.
+- **New page `/newsletter/unsubscribe?token=…`:** the person clicks a button to leave, so email scanners that open links don't unsubscribe anyone.
+- Bangla text for all of it.
+
+### 37.6 Checked
+- **Tests:** API 736 passing (55 files).
+  - new `tests/unit/customer-rules.test.ts`;
+  - new `tests/integration/customers-newsletter.db.test.ts`:
+    - a phone-only customer;
+    - a duplicate phone refused;
+    - one row per address;
+    - staff can't re-add someone who left;
+    - a banned phone refused as a guest in any written form;
+    - lifting the ban.
+  - The 2 "unhandled errors" vitest prints come from `smoke-batch9` (a stub without an audit log table). They were there before this part.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - added Rahima Khatun with only a phone, from Facebook;
+  - banned her for "Refused 3 COD parcels": badge, banner and database all show it;
+  - lifted the ban;
+  - with another phone-only customer banned, a landing-page order with that phone was refused with the message above, and no order was made;
+  - adding the same phone again was refused;
+  - subscribed from the footer: the address appeared in Marketing → Newsletter, and the CSV downloaded;
+  - opening the unsubscribe link did nothing until the button was clicked. Then: "re***@example.com won't get our newsletter any more."
+  - a bad token shows "Subscription not found";
+  - the page is in Bangla with the Bangla setting;
+  - no sideways scroll at phone width.
+  - No page errors.
+- **Dev data:**
+  - customers Rahima Khatun (01819555444) and a second phone-only customer (01819555445), both from Facebook and not banned;
+  - newsletter rows for the earlier marketing customers;
+  - one footer sign-up, now unsubscribed.
+
+### 37.7 Not done
+- **Sending:** the shop can't send newsletter emails from here yet. The list is exported to an email tool. The unsubscribe page is ready for when sending comes, but the CSV has no unsubscribe link column.
+- **Double opt-in:** no "confirm your email" step.
+- **Customer import:** no "came from" column in the import.
+- **Banned message language:** the ban message comes from the API in English, also on the Bangla storefront.
+- **Next:** part 2, CRM leads.

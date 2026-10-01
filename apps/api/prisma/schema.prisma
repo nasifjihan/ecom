@@ -58,28 +58,29 @@ model Store {
   trialEndsAt DateTime?
   billingSub  BillingSubscription?
 
-  domains              Domain[]
-  admins               AdminUser[]
-  generalSettings      StoreGeneralSetting?
-  brandSettings        StoreBrandSetting?
-  layoutSettings       StoreLayoutSetting?
-  paymentSettings      PaymentGatewayConfig[]
-  shippingZones        ShippingZone[]
-  deliverySlots        DeliverySlot[]
-  shipments            Shipment[]
-  paymentRecords       PaymentRecord[]
-  paymentAttempts      PaymentAttempt[]
-  paymentEvents        PaymentEvent[]
-  idempotencyKeys      IdempotencyKey[]
-  courierSettlements   CourierSettlement[]
-  courierAccounts      CourierAccount[]
-  supplierReturns      SupplierReturn[]
-  locationsOff         StoreLocationOff[]
-  taxClasses           TaxClass[]
-  emailSettings        StoreEmailSetting?
-  seoSettings          StoreSeoSetting?
-  securitySettings     StoreSecuritySetting?
-  localizationSettings StoreLocalizationSetting?
+  domains               Domain[]
+  admins                AdminUser[]
+  generalSettings       StoreGeneralSetting?
+  brandSettings         StoreBrandSetting?
+  layoutSettings        StoreLayoutSetting?
+  paymentSettings       PaymentGatewayConfig[]
+  shippingZones         ShippingZone[]
+  deliverySlots         DeliverySlot[]
+  newsletterSubscribers NewsletterSubscriber[]
+  shipments             Shipment[]
+  paymentRecords        PaymentRecord[]
+  paymentAttempts       PaymentAttempt[]
+  paymentEvents         PaymentEvent[]
+  idempotencyKeys       IdempotencyKey[]
+  courierSettlements    CourierSettlement[]
+  courierAccounts       CourierAccount[]
+  supplierReturns       SupplierReturn[]
+  locationsOff          StoreLocationOff[]
+  taxClasses            TaxClass[]
+  emailSettings         StoreEmailSetting?
+  seoSettings           StoreSeoSetting?
+  securitySettings      StoreSecuritySetting?
+  localizationSettings  StoreLocalizationSetting?
 
   products             Product[]
   categories           Category[]
@@ -689,6 +690,29 @@ model ShippingMethod {
   updatedAt               DateTime     @updatedAt
 }
 
+/// Someone on the store's newsletter list: from the footer box, checkout, sign-up or added by staff.
+/// Unsubscribing keeps the row (status "unsubscribed") so the address isn't added back by accident.
+model NewsletterSubscriber {
+  id             BigInt    @id @default(autoincrement())
+  storeId        BigInt
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email          String
+  name           String?
+  /// subscribed | unsubscribed
+  status         String    @default("subscribed")
+  /// footer | checkout | signup | admin | import
+  source         String    @default("footer")
+  locale         String    @default("en")
+  /// Secret in the unsubscribe link.
+  token          String    @unique
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([storeId, email])
+  @@index([storeId, status])
+}
+
 /// A delivery window customers can pick at checkout with methods that use slots
 /// ("Evening, 5–9 pm"). Times are in the store's time zone.
 model DeliverySlot {
@@ -1180,7 +1204,14 @@ model Customer {
   phone                 String?
   avatarUrl             String?
   isGuest               Boolean                @default(false)
+  /// active | banned (older rows may be upper case)
   status                String                 @default("active")
+  /// Why staff banned this customer, and when (they can't sign in or order).
+  banReason             String?
+  bannedAt              DateTime?
+  /// How a customer staff added came to the shop: phone | facebook | instagram | whatsapp | walk_in | other.
+  /// Empty for customers who signed up or ordered online.
+  source                String?
   acceptMarketing       Boolean                @default(false)
   groupId               BigInt?
   group                 CustomerGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)

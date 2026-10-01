@@ -1,5 +1,8 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { z } from "zod";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
+import { BadRequestError, ctrl, envelope, type RequestContext } from "../../core";
+import { banCustomer, unbanCustomer } from "./customer-ban";
 import { customersController } from "./customers.controller";
 import {
   CustomerSearchQueryDto,
@@ -21,6 +24,34 @@ function multerFallback(_req: Request, _res: Response, next: NextFunction): void
 }
 
 export const adminCustomersRouter = Router();
+
+const BanDto = z.object({ reason: z.string().trim().min(3, "Say why (staff see it on the customer)").max(300) });
+const storeOf = (req: Request & { ctx: RequestContext }): bigint => {
+  if (req.ctx.storeId === undefined) throw new BadRequestError("Store not resolved", "TENANT_NOT_RESOLVED");
+  return BigInt(req.ctx.storeId);
+};
+
+/** Ban a customer (they can't sign in or order) with a reason, or lift the ban. */
+adminCustomersRouter.post(
+  "/:id/ban",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("customers.edit"),
+  validate({ params: CustomerIdParamDto, body: BanDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    await banCustomer(storeOf(req), BigInt(String(req.params.id)), (req.body as z.infer<typeof BanDto>).reason);
+    envelope(res, { status: 200, data: { banned: true }, message: "Customer banned" });
+  }),
+);
+adminCustomersRouter.post(
+  "/:id/unban",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("customers.edit"),
+  validate({ params: CustomerIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    await unbanCustomer(storeOf(req), BigInt(String(req.params.id)));
+    envelope(res, { status: 200, data: { banned: false }, message: "Ban lifted" });
+  }),
+);
 
 adminCustomersRouter.post(
   "/",

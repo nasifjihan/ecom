@@ -46,6 +46,8 @@ import { nextOrderNumber, orderNumberStem } from "../orders/order-number.rules";
 import { DeliverySlotService, slotDayDate } from "../shipping/slots.service";
 import { COURIER_NAMES, type Courier } from "../couriers/couriers.rules";
 import { giftFields, GiftProblem, NOT_A_GIFT, type GiftFields } from "../orders/gift.rules";
+import { assertCanOrder } from "../customers/customer-ban";
+import { NewsletterService } from "../customers/newsletter.service";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -1476,6 +1478,13 @@ export class StorefrontService {
 
   /** `origin`: the storefront address the checkout came from (where the gateway sends the customer back). */
   async placeOrder(dto: PlaceOrderDto, origin?: string | null) {
+    // Banned customers can't order, signed in or as a guest with their phone or email.
+    await assertCanOrder(this.storeId, {
+      customerId: this.ctx.customer?.id ?? null,
+      phone: dto.billingAddress?.phone ?? dto.phone,
+      email: dto.email,
+    });
+    if (dto.billingAddress?.phone && dto.phone !== dto.billingAddress.phone) await assertCanOrder(this.storeId, { phone: dto.phone });
     const quote = await this.quoteOrder({
       strict: true,
       items: dto.items,
@@ -1516,6 +1525,13 @@ export class StorefrontService {
       }
     }
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
+
+    // "Subscribe to our newsletter" ticked at checkout (never blocks the order).
+    if (dto.subscribeNewsletter && dto.email) {
+      await new NewsletterService(this.storeId)
+        .subscribe({ email: dto.email, name: `${quote.bill.firstName} ${quote.bill.lastName}`.trim(), source: "checkout", locale: this.ctx.locale })
+        .catch((err: unknown) => logger.warn({ err, orderId: String(order.id) }, "Newsletter sign-up at checkout failed"));
+    }
 
     const { grandTotal } = quote.totals;
     // Online: open the gateway's page. If it can't be opened the order stays, unpaid, and the

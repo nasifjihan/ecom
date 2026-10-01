@@ -21,6 +21,7 @@ import type {
 } from "./customers.dto";
 import { CustomerStatus, ExportFormat } from "@ecom/shared-types";
 import { addressWithLocation } from "../locations/locations.service";
+import { bdMobile, phoneVariants } from "../sms/sms.rules";
 
 function formatDateForFilename(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -61,12 +62,26 @@ export class CustomersService extends BaseService {
     }
   }
 
+  /** Staff adding a customer by phone: refuses a number another customer already has (any written form). */
+  private async ensureUniquePhone(storeId: bigint | undefined, phone: string): Promise<void> {
+    const mobile = bdMobile(phone);
+    const existing = await prisma.customer.findFirst({
+      where: { ...(storeId !== undefined ? { storeId } : {}), phone: { in: mobile ? phoneVariants(mobile) : [phone] } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictError(`Another customer already has the phone ${phone}`, "DUPLICATE_PHONE");
+    }
+  }
+
   async createCustomer(dto: CreateCustomerDto): Promise<unknown> {
     const storeId = this.ctx.storeId;
-    await this.ensureUniqueEmail(storeId, dto.email);
+    if (dto.email) await this.ensureUniqueEmail(storeId, dto.email);
+    if (dto.phone) await this.ensureUniquePhone(storeId, dto.phone);
 
     const data: Record<string, unknown> = {
-      email: dto.email.toLowerCase(),
+      email: dto.email ? dto.email.toLowerCase() : null,
+      source: dto.source ?? null,
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone ?? null,
@@ -85,7 +100,7 @@ export class CustomersService extends BaseService {
       (data as any).storeId = storeId;
     }
 
-    return tx(async (t: any) => {
+    const id = await tx(async (t: any): Promise<bigint> => {
       const customer = await t.customer.create({ data });
       if (dto.addresses && dto.addresses.length > 0) {
         const byType: Record<string, { dto: CustomerAddressDto; hasDefault: boolean }> = {};
@@ -135,8 +150,10 @@ export class CustomersService extends BaseService {
           await t.customerAddress.createMany({ data: addressesToCreate });
         }
       }
-      return this.customers.findFull(this.ctx, customer.id);
+      return customer.id;
     });
+    // Read back after the transaction has saved (a read inside it would use another connection).
+    return this.customers.findFull(this.ctx, id);
   }
 
   async listCustomers(filters: CustomerSearchQueryDto): Promise<Paginated<any>> {
@@ -160,7 +177,7 @@ export class CustomersService extends BaseService {
     });
     if (!existing) throw new NotFoundError("customer", id);
 
-    if (dto.email !== undefined && dto.email.toLowerCase() !== (existing.email ?? "").toLowerCase()) {
+    if (dto.email && dto.email.toLowerCase() !== (existing.email ?? "").toLowerCase()) {
       await this.ensureUniqueEmail(storeId, dto.email, cid);
     }
 
@@ -169,7 +186,7 @@ export class CustomersService extends BaseService {
       if (key === "password" || key === "addresses") continue;
       (updateData as any)[key] = (dto as any)[key];
     }
-    if (dto.email !== undefined) updateData.email = dto.email.toLowerCase();
+    if (dto.email !== undefined) updateData.email = dto.email ? dto.email.toLowerCase() : null;
     if (dto.password !== undefined) {
       (updateData as any).passwordHash = await bcrypt.hash(dto.password, 12);
     }
@@ -207,11 +224,15 @@ export class CustomersService extends BaseService {
     const data: Record<string, unknown> = {};
     switch (action) {
       case "block":
-        data.status = CustomerStatus.BANNED;
+        data.status = "banned";
+        data.bannedAt = new Date();
+        data.banReason = "Banned from the customer list";
         break;
       case "unblock":
       case "active":
-        data.status = CustomerStatus.ACTIVE;
+        data.status = "active";
+        data.bannedAt = null;
+        data.banReason = null;
         break;
       case "marketing_opt_in":
         data.acceptMarketing = true;
