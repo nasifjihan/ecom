@@ -13,7 +13,27 @@ export type ShippingRate = {
   freeFromSubtotal?: number;
   description?: string;
   estimatedLabel?: string;
+  /** The customer picks a delivery day and time slot with this option. */
+  useSlots?: boolean;
 };
+
+/** A delivery time slot on one day (GET /storefront/checkout/delivery-choices). */
+export interface DeliverySlotChoice {
+  id: string;
+  name: string;
+  /** "17:00–21:00" */
+  window: string;
+  fee: number;
+  left: number | null;
+  available: boolean;
+  reason: "full" | "closed" | null;
+}
+
+export interface DeliveryChoices {
+  days: { date: string; weekday: number; slots: DeliverySlotChoice[] }[];
+  /** Couriers to choose from (empty: the shop picks). */
+  couriers: { id: string; name: string; courier: string }[];
+}
 
 /** Raw shape of GET /storefront/shipping/rates (see ShippingService.computeShippingOptions). */
 type ShippingRatesResponse = {
@@ -27,6 +47,7 @@ type ShippingRatesResponse = {
     savingsBDT: number;
     freeReason?: string | null;
     transit: { minDays: number | null; maxDays: number | null };
+    useSlots?: boolean;
   }[];
   reason?: string | null;
 };
@@ -101,6 +122,9 @@ export type OrderDetail = {
   taxTotal: number;
   /** Prices included VAT: taxTotal is part of grandTotal, not added to it. */
   taxIncluded?: boolean;
+  /** The delivery time slot picked and the courier chosen at checkout. */
+  deliverySlot?: { label: string; date: string | null; fee: number } | null;
+  courier?: string | null;
   feeTotal: number;
   grandTotal: number;
   currency: string;
@@ -193,6 +217,10 @@ export type PlaceOrderBody = {
   shippingMethodId?: string;
   shippingProviderId?: string;
   shippingCost?: number;
+  /** For options that use time slots: the slot and day picked. */
+  deliverySlot?: { slotId: string; date: string };
+  /** The courier picked, when the shop lets customers choose. */
+  courierAccountId?: string;
   paymentGateway: PaymentMethod | string;
   paymentDetails?: Record<string, unknown>;
   /** Manual bKash / Nagad / Rocket / bank payments: the transaction ID and the number paid from. */
@@ -284,6 +312,7 @@ export const checkoutApi = api.injectEndpoints({
             minDeliveryDays: min,
             maxDeliveryDays: max,
             description: o.freeReason ? "Free delivery on this order" : o.description ?? undefined,
+            useSlots: !!o.useSlots,
             estimatedLabel:
               min !== undefined && max !== undefined ? (min === max ? `${max} day${max === 1 ? "" : "s"}` : `${min}-${max} days`) : undefined,
           };
@@ -359,6 +388,10 @@ export const checkoutApi = api.injectEndpoints({
       query: () => ({ url: `/storefront/checkout/payment-methods`, method: "GET" }),
     }),
 
+    getDeliveryChoices: builder.query<DeliveryChoices, void>({
+      query: () => ({ url: `/storefront/checkout/delivery-choices`, method: "GET" }),
+    }),
+
     getOrderByKey: builder.query<OrderDetail, string>({
       query: (orderKey) => ({ url: `/storefront/checkout/orders/${encodeURIComponent(orderKey)}`, method: "GET" }),
       providesTags: (_res, _err, key) => [{ type: "Order" as const, id: key }],
@@ -379,6 +412,7 @@ export const checkoutApi = api.injectEndpoints({
 });
 
 export const {
+  useGetDeliveryChoicesQuery,
   useGetLocationsQuery,
   useGetShippingRatesQuery,
   useLazyGetShippingRatesQuery,

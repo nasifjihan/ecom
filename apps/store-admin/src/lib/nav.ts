@@ -58,6 +58,7 @@ import {
   Zap,
   Megaphone,
   CalendarHeart,
+  CalendarClock,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -166,6 +167,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/shipping/zones", label: "Zones", icon: Map, perm: "shipping.view" },
       { href: "/shipping/locations", label: "Delivery areas", icon: MapPin, perm: "shipping.view" },
+      { href: "/shipping/slots", label: "Delivery slots", icon: CalendarClock, perm: "shipping.view" },
       { href: "/shipping/taxes", label: "Taxes", icon: Receipt, perm: "taxes.view" },
     ],
   },

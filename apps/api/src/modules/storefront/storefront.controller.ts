@@ -49,6 +49,10 @@ export const storefrontController = {
     envelope(res, { data: await svc(req).paymentMethods() });
   }),
 
+  deliveryChoices: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).deliveryChoices() });
+  }),
+
   getOrderByKey: ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).getOrderByKey(String(req.params.orderKey)) });
   }),

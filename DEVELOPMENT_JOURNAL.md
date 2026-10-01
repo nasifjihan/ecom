@@ -3961,3 +3961,87 @@ Before this, VAT was always added on top of prices. The VAT number, trade licenc
 - **Refunds** still don't reduce the tax report (as noted in Batch 28).
 - **Store details tabs:** the Media and Legal tabs still have no storage behind them (saving them says so).
 
+---
+
+## ✅ BATCH #36 (part 1) — Delivery time slots and choosing the courier at checkout (2026-10-02)
+Customers can pick a delivery day and time window with delivery options that offer it, and choose the courier when the shop allows it.
+
+### 36.1 Data (migration `delivery_slots_courier_choice`)
+- **DeliverySlot:** name, start and end time ("HH:MM", in the store's time zone), how long before the start orders close, an extra charge, a daily limit and the weekdays it runs.
+- **ShippingMethod.useSlots:** checkout asks for a slot with this delivery option.
+- **StoreGeneralSetting:** `slotDaysAhead` (how many days customers can book, today included) and `slotClosedDates` (holidays).
+- **Storefront.checkoutCourierIds:** the courier accounts customers choose from (empty: they don't).
+- **Order:**
+  - `deliveryDate`, `deliverySlotId`, `deliverySlotLabel` (e.g. "Fri 2 Oct, Evening 17:00–21:00", kept even if the slot is deleted) and `slotFee`;
+  - `courierAccountId` (the customer's choice).
+  - Indexed on slot and day for counting.
+
+### 36.2 Rules (`shipping/slots.rules.ts`)
+- **The store's own clock:** days and times are worked out in its time zone (Asia/Dhaka by default).
+- **Closing time:** a slot closes when its order-by time passes, counting whole days. A morning slot can close at 18:00 the day before.
+- **Full slots and days off:** a slot is full when its orders that day reach the limit. Cancelled and failed orders free their place. Closed days, and weekdays a slot doesn't run, are left out.
+- **Checks:** times must be 24-hour and end after they start; the order-by time can be 0 minutes to 7 days ahead.
+
+### 36.3 Checkout and orders
+- **`GET /api/storefront/checkout/delivery-choices`:** the bookable days with each slot's charge, places left and why it can't be picked ("full" or "closed"), plus the storefront's couriers.
+- **Placing an order:** checkout sends `deliverySlot` and `courierAccountId`.
+  - An option that uses slots won't go without one.
+  - The slot's charge is added to delivery and isn't waived by free delivery; VAT counts it.
+  - A courier must be one the storefront offers.
+  - In the order's transaction the slot is checked again, taking turns per slot and day, so two customers can't take its last place.
+  - Landing pages and staff orders don't ask for a slot.
+- **Booking:** bulk booking uses the customer's courier before the storefront's. The parcel's "Book courier" dialog picks it first.
+- **Shown to customers:** checkout (day tabs, slot cards with "+৳60", "Closed for orders", "Fully booked", and how many places are left), the thank-you and account order pages, the invoice ("Delivery time"), order emails (a line under the address and `{{order.delivery_time}}`). Bangla text included.
+
+### 36.4 Admin
+- **Shipping → Delivery slots (new page):**
+  - add, edit and delete slots; set the order-by time in hours, the charge, the daily limit and the weekdays;
+  - each slot shows its bookings per day ("2026-10-02: 1 / 20 booked");
+  - the booking window (days ahead) and closed days.
+- **Delivery options:** a "Customer picks a delivery time" switch.
+- **Storefronts:** "Customers choose the courier at checkout" with a box for each courier account (shown when the store has more than one).
+- **Order page:** "Deliver: Fri 2 Oct, Evening 17:00–21:00 (+৳60)" and "Customer chose: …".
+- **Fixed:** Settings → VAT & invoices (part 35.3) linked to Shipping → Taxes, which is still a "coming soon" page. The link is gone; the page says the standard 15% applies.
+
+### 36.5 Checked
+- **Tests:** API 708 passing (49 files).
+  - new `tests/unit/delivery-slots.test.ts`: time zone, order-by times including the day before, closed days, weekdays, full slots, labels;
+  - new `tests/integration/delivery-slots.db.test.ts`:
+    - bad times are refused;
+    - the slot is offered tomorrow;
+    - a timed option needs a slot, and the slot adds its ৳50;
+    - a full slot refuses the next order, and frees up when that order is cancelled;
+    - only the storefront's couriers can be picked, and the choice is saved and shown.
+  - Storefront translation test passes.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - Admin:
+    - added Morning (10:00–13:00, orders close 14 h before) and Evening (17:00–21:00, 2 h, ৳60, 20 a day);
+    - turned the switch on for "Steadfast Express (Same Day)";
+    - ticked Steadfast and Pathao for the storefront.
+  - Checkout:
+    - shows Today / Fri 2 Oct / Sat 3 Oct;
+    - today's Morning shows "Closed for orders";
+    - picked Friday's Evening and Pathao.
+  - The order (FBD-20261001000002):
+    - delivery ৳210 + ৳60 = ৳270, total ৳5,244;
+    - the slot and courier are saved;
+    - the thank-you page shows the delivery time;
+    - the admin order page shows "Deliver: …" and "Customer chose: pathao main";
+    - the slots page shows "1 / 20 booked".
+  - At phone width in Bangla the picker fits.
+  - No page errors.
+- **Dev data:**
+  - two demo courier accounts (Steadfast, Pathao, sandbox, fake keys), both offered at checkout;
+  - two slots;
+  - "Steadfast Express (Same Day)" uses slots;
+  - one test order.
+
+### 36.6 Not done
+- **Slots per zone:** slots are store-wide; a delivery option opts in.
+- **Staff and landing-page orders:** staff (New order) and landing pages can't pick a slot or courier yet.
+- **Slot fee with VAT-inclusive prices:** it's treated like any delivery charge.
+- **Orders list:** no "deliveries by day" view or filter yet. The slot shows on the order page.
+- **Already there before this part:** the checkout step bar (Information … Confirmation) is wider than a phone screen, so the checkout page scrolls sideways at 390 px.
+- **Next:** part 2: gift orders (recipient vs buyer, gift message, prices hidden on the packing slip).
+

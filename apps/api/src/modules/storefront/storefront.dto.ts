@@ -103,6 +103,10 @@ export const PlaceOrderDto = z.object({
   billingAddress: StorefrontAddressDto.optional(),
   billingSameAsShipping: z.boolean().optional().default(true),
   shippingMethodId: z.coerce.bigint().positive(),
+  /** For delivery options that use time slots: the slot and day picked. */
+  deliverySlot: z.object({ slotId: z.string().regex(/^\d{1,18}$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).optional(),
+  /** The courier picked, when the storefront lets customers choose. */
+  courierAccountId: z.string().regex(/^\d{1,18}$/).optional(),
   paymentGateway: z.string().trim().toLowerCase().min(2).max(32),
   /** bKash / Nagad / Rocket / bank sent by hand: what the customer paid from and the transaction ID. */
   payment: z

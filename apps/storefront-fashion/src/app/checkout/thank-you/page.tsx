@@ -49,6 +49,7 @@ import {
   type OrderAddressSummary,
 } from "@ecom/storefront-base";
 import { useOrderInvoiceByKeyMutation } from "@/lib/account";
+import { slotText } from "../_delivery-choices";
 
 const CURRENCY = "BDT";
 const formatBDT = (n: number) => formatMoney(n, CURRENCY);
@@ -390,6 +391,16 @@ export default function ThankYouPage() {
                   {customer.shipping.city}, {customer.shipping.postcode}
                 </div>
                 <div className="text-muted-foreground">{customer.shipping.country}</div>
+                {order.deliverySlot && (
+                  <div className="pt-2 font-medium" data-testid="delivery-slot">
+                    {t("Delivery time")}: {slotText(order.deliverySlot, locale)}
+                  </div>
+                )}
+                {order.courier && (
+                  <div className="text-muted-foreground">
+                    {t("Courier")}: {order.courier}
+                  </div>
+                )}
                 <div className="pt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Phone className="h-3 w-3" /> {customer.phone}
                 </div>

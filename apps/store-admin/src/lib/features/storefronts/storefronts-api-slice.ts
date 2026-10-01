@@ -31,6 +31,8 @@ export interface Storefront {
   /** Payment methods offered here (empty: every enabled one). */
   paymentGateways: string[];
   courierAccountId: string | null;
+  /** Courier accounts customers choose from at checkout (empty: they don't choose). */
+  checkoutCourierIds: string[];
 }
 
 /** A storefront's name for filters and pickers (readable by any staff member). */
@@ -51,6 +53,7 @@ export type StorefrontInput = Partial<{
   sortOrder: number;
   paymentGateways: string[];
   courierAccountId: string | null;
+  checkoutCourierIds: string[];
 }>;
 
 export interface ProductStorefront {

@@ -68,6 +68,7 @@ storefrontCheckoutRouter.post(
 storefrontCheckoutRouter.get("/coupons/available", authMiddleware("optional"), storefrontController.availableCoupons);
 
 storefrontCheckoutRouter.get("/payment-methods", storefrontController.paymentMethods);
+storefrontCheckoutRouter.get("/delivery-choices", storefrontController.deliveryChoices);
 
 storefrontCheckoutRouter.get(
   "/orders/:orderKey",

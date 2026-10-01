@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { adminDeliverySlotsRouter } from "./slots.routes";
 import { Router } from "express";
 import { ctrl, envelope, BaseController, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
@@ -220,6 +221,8 @@ adminShippingRouter.get(
   validate({ query: ExportShippingDto }),
   shippingController.exportShipping,
 );
+
+adminShippingRouter.use("/slots", adminDeliverySlotsRouter);
 
 export const storefrontShippingRouter = Router();
 

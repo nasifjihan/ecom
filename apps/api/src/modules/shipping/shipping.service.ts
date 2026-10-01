@@ -92,6 +92,7 @@ export class ShippingService {
         savingsBDT: price.free ? price.beforeFree : 0,
         freeReason: price.free ? `Free delivery on orders from ${Number(m.freeFromSubtotal).toFixed(2)}` : null,
         transit: { minDays: m.deliveryEstimateMinDays ?? null, maxDays: m.deliveryEstimateMaxDays ?? null },
+        useSlots: Boolean((m as { useSlots?: boolean }).useSlots),
       });
     }
     return out.sort((a, b) => a.finalRateBDT - b.finalRateBDT);

@@ -66,6 +66,8 @@ interface Props {
     lines: OrderLine[];
     parcels?: Parcel[];
   storefront?: { courierAccountId?: string | null };
+    /** The courier the customer chose at checkout (booked with it by default). */
+    courierChoice?: { id: string } | null;
   };
   canEdit: boolean;
 }
@@ -267,7 +269,7 @@ export function ParcelsCard({ order, canEdit }: Props) {
       {booking && (
         <BookCourierDialog
           parcel={{ id: booking.id, orderId: order.id, code: booking.code, weightKg: booking.weightKg }}
-          preferredAccountId={order.storefront?.courierAccountId}
+          preferredAccountId={order.courierChoice?.id ?? order.storefront?.courierAccountId}
           onClose={() => setBooking(null)}
         />
       )}

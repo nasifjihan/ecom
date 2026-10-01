@@ -169,6 +169,7 @@ export default function OrderDetailPage() {
   const loyalty = { discount: orderRaw?.memberDiscount ?? 0, level: orderRaw?.memberLevel, wallet: orderRaw?.walletUsed ?? 0, cashback: orderRaw?.cashback ?? 0 };
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
   const vat = (orderRaw as Order | undefined) ?? { vatAmount: 0, vatIncluded: false, vatRate: null };
+  const delivery: Pick<Order, "deliverySlot" | "courierChoice"> = orderRaw ?? { deliverySlot: null, courierChoice: null };
   const vatName = vat.vatRate ? `VAT ${vat.vatRate}%` : "VAT";
   const placedOn = orderRaw?.storefront;
 
@@ -369,6 +370,21 @@ export default function OrderDetailPage() {
                   {[order.shippingAddress?.upazila, order.shippingAddress?.district, order.shippingAddress?.division, order.shippingAddress?.postcode].filter(Boolean).join(", ")}
                 </div>
               </div>
+              {(delivery.deliverySlot ?? delivery.courierChoice) && (
+                <div className="mt-3 space-y-1 pl-6 text-sm">
+                  {delivery.deliverySlot && (
+                    <div className="rounded-md bg-amber-50 px-2 py-1 text-amber-900 dark:bg-amber-500/10 dark:text-amber-300">
+                      Deliver: <span className="font-medium">{delivery.deliverySlot.label}</span>
+                      {delivery.deliverySlot.fee > 0 && <span className="text-xs"> (+{formatCurrency(delivery.deliverySlot.fee)})</span>}
+                    </div>
+                  )}
+                  {delivery.courierChoice && (
+                    <div className="text-slate-600 dark:text-slate-400">
+                      Customer chose: <span className="font-medium">{delivery.courierChoice.label}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

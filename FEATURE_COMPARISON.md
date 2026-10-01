@@ -104,9 +104,9 @@ These are our advantages. Keep them.
 | Zones, rates, tax rules | ✅ | |
 | **Bangladesh location tree** (8 divisions → 64 districts → upazilas), bilingual | ✅ | Batch 18: 616 areas incl. Dhaka thanas, per-store on/off, checkout pickers |
 | Rules by weight range / min order / free delivery; most specific zone wins | ✅ | Batch 18: weight rows, minimum order, most-specific zone with cheaper tie-break |
-| Delivery time slots (window, cutoff, surcharge, same-day) | ❌ | |
+| Delivery time slots (window, cutoff, surcharge, same-day) | ✅ | Batch 36: slots with order-by time, extra charge, daily limit, weekdays, closed days; per delivery option; checked again when the order is saved |
 | Courier adapters: Steadfast, Pathao, RedX (book, track, label) | ✅ | Batch 22: booking, webhooks + scheduled sync, 4x6 labels with barcode. Built to the couriers' published API shapes and a local mock; not yet run against the live APIs |
-| Customer picks courier at checkout (toggle) | ❌ | |
+| Customer picks courier at checkout (toggle) | ✅ | Batch 36: per storefront, from its courier accounts; booking uses the customer's choice |
 
 ### Wholesale / B2B (reference 16)
 | Feature | Status | Notes |
@@ -236,7 +236,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
 | 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
 | 35 ✅ | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
-| 36 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
+| 36 🟡 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
 | 39 | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |

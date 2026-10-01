@@ -68,6 +68,8 @@ const BaseShippingMethodPlain = z.object({
   minSubtotal: z.coerce.number().min(0).multipleOf(0.01).default(0),
   deliveryEstimateMinDays: z.coerce.number().int().min(0).max(60).nullable().optional(),
   deliveryEstimateMaxDays: z.coerce.number().int().min(0).max(90).nullable().optional(),
+  /** Customers pick a delivery time slot with this method. */
+  useSlots: z.boolean().default(false),
   taxClassId: z.coerce.bigint().nullable().optional(),
 });
 export const CreateShippingMethodDto = BaseShippingMethodPlain.superRefine((v, ctx) => {

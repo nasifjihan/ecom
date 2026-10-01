@@ -173,6 +173,7 @@ export class ShippingMethodRepository {
         freeFromSubtotal: dto.freeFromSubtotal ?? null,
         deliveryEstimateMinDays: dto.deliveryEstimateMinDays ?? null,
         deliveryEstimateMaxDays: dto.deliveryEstimateMaxDays ?? null,
+        useSlots: dto.useSlots,
         taxClassId: dto.taxClassId ?? null,
       },
     });

@@ -51,6 +51,7 @@ import {
   useApplyCouponMutation,
   usePlaceOrderMutation,
   useGetPaymentMethodsQuery,
+  useGetDeliveryChoicesQuery,
   apiErrorMessage,
   ShippingRate,
   CouponApplyInput,
@@ -68,6 +69,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { useMyLoyaltyQuery } from "@/lib/loyalty";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
 import { passwordProblem } from "@/app/account/_components";
+import { CourierPicker, DeliveryTimePicker, type SlotPick } from "./_delivery-choices";
 import { useCartPriceCheck } from "@/lib/cart-prices";
 import { useAvailableCouponsQuery } from "@/lib/promotions";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
@@ -237,11 +239,30 @@ export default function CheckoutPage() {
   }, [rates, selectedShippingRateId]);
 
   const selectedRate = rates.find((r) => r.methodId === selectedShippingRateId);
+
+  // Delivery day and time (options that use slots) and the courier, when the shop lets customers choose.
+  const { data: deliveryChoices } = useGetDeliveryChoicesQuery(undefined, { skip: !mounted || itemCount === 0 });
+  const [slotPick, setSlotPick] = React.useState<SlotPick | null>(null);
+  const [courierPick, setCourierPick] = React.useState<string | null>(null);
+  const slotDays = React.useMemo(() => deliveryChoices?.days ?? [], [deliveryChoices]);
+  const couriers = React.useMemo(() => deliveryChoices?.couriers ?? [], [deliveryChoices]);
+  const pickedSlot = selectedRate?.useSlots && slotPick
+    ? slotDays.find((d) => d.date === slotPick.date)?.slots.find((s) => s.id === slotPick.slotId && s.available) ?? null
+    : null;
+  React.useEffect(() => {
+    // A slot that filled up or closed since it was picked is dropped.
+    if (slotPick && deliveryChoices && !slotDays.some((d) => d.date === slotPick.date && d.slots.some((s) => s.id === slotPick.slotId && s.available))) setSlotPick(null);
+  }, [deliveryChoices, slotDays, slotPick]);
+  React.useEffect(() => {
+    if (couriers.length && !couriers.some((c) => c.id === courierPick)) setCourierPick(couriers[0]!.id);
+  }, [couriers, courierPick]);
+  // The slot's charge isn't waived by free delivery.
+  const slotFee = pickedSlot?.fee ?? 0;
   const couponDiscount = appliedCoupon?.discountAmount ?? 0;
   const isShippingFree = selectedRate
     ? selectedRate.cost === 0 || Boolean(appliedCoupon?.freeShipping) || Boolean(promotions?.freeDelivery && !promotions.droppedForCoupon)
     : false;
-  const shippingAmount = selectedRate && !isShippingFree ? selectedRate.cost : 0;
+  const shippingAmount = (selectedRate && !isShippingFree ? selectedRate.cost : 0) + slotFee;
 
   const { data: enabledGateways } = useGetPaymentMethodsQuery(undefined, { skip: !mounted });
   const paymentGateways = React.useMemo(
@@ -421,6 +442,10 @@ export default function CheckoutPage() {
           toast.error(t("Choose shipping method"), { description: t("Select a shipping method to continue") });
           return false;
         }
+        if (selectedRate?.useSlots && !pickedSlot) {
+          toast.error(t("Pick a delivery time"), { description: t("Choose the day and time you'd like your order.") });
+          return false;
+        }
         if (!shippingAddress.firstName || !shippingAddress.lastName ||
             !shippingAddress.addressLine1 || !shippingAddress.phone ||
             !shippingAddress.district) {
@@ -545,6 +570,8 @@ export default function CheckoutPage() {
         billingAddress: billingPayload,
         billingSameAsShipping,
         shippingMethodId: selectedRate?.methodId,
+        deliverySlot: selectedRate?.useSlots && slotPick ? slotPick : undefined,
+        courierAccountId: couriers.length && courierPick ? courierPick : undefined,
         shippingProviderId: selectedRate?.providerId,
         shippingCost: shippingAmount,
         paymentGateway: selectedPaymentMethod ?? PaymentMethod.COD,
@@ -1063,6 +1090,10 @@ export default function CheckoutPage() {
                       })}
                     </div>
                   )}
+                  {selectedRate?.useSlots && (
+                    <DeliveryTimePicker days={slotDays} value={pickedSlot ? slotPick : null} onChange={setSlotPick} />
+                  )}
+                  {couriers.length > 0 && <CourierPicker couriers={couriers} value={courierPick} onChange={setCourierPick} />}
                   <Separator />
                   <div>
                     <div className="flex items-center justify-between mb-3">

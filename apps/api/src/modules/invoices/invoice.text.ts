@@ -13,6 +13,7 @@ export interface InvoiceText {
   payment: string
   delivery: string
   tracking: string
+  deliveryTime: string
   item: string
   qty: string
   unitPrice: string
@@ -53,6 +54,7 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     payment: "Payment",
     delivery: "Delivery",
     tracking: "Tracking",
+    deliveryTime: "Delivery time",
     item: "Item",
     qty: "Qty",
     unitPrice: "Unit price",
@@ -89,6 +91,7 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     payment: "পেমেন্ট",
     delivery: "ডেলিভারি",
     tracking: "ট্র্যাকিং",
+    deliveryTime: "ডেলিভারির সময়",
     item: "পণ্য",
     qty: "পরিমাণ",
     unitPrice: "একক মূল্য",

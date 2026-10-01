@@ -45,6 +45,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
   const [includeNew, setIncludeNew] = useState(true);
   const [gateways, setGateways] = useState<string[]>([]);
   const [courier, setCourier] = useState("");
+  const [choice, setChoice] = useState<string[]>([]);
   const { data: methods = [] } = usePaymentMethodsQuery();
   const { data: couriers = [] } = useCourierAccountsQuery();
   const [create, c] = useCreateStorefrontMutation();
@@ -56,6 +57,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
     setIncludeNew(storefront?.includeNewProducts ?? true);
     setGateways(storefront?.paymentGateways ?? []);
     setCourier(storefront?.courierAccountId ?? "");
+    setChoice(storefront?.checkoutCourierIds ?? []);
   }, [open, storefront]);
   const pct = Number(f.priceAdjustPercent);
   const pctOk = f.priceAdjustPercent.trim() !== "" && Number.isFinite(pct) && pct >= -90 && pct <= 500;
@@ -67,6 +69,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
       includeNewProducts: includeNew,
       paymentGateways: gateways,
       courierAccountId: courier || null,
+      checkoutCourierIds: choice,
     };
     try {
       if (storefront) await update({ id: storefront.id, ...body, ...(storefront.isDefault ? {} : { isActive: active }) }).unwrap();
@@ -163,6 +166,29 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
                 ))}
               </select>
             </Field>
+          )}
+          {couriers.filter((a) => a.enabled).length > 1 && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Customers choose the courier at checkout</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {couriers
+                  .filter((a) => a.enabled)
+                  .map((a) => (
+                    <label key={a.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={choice.includes(a.id)}
+                        onChange={(e) => setChoice((c) => (e.target.checked ? [...c, a.id] : c.filter((x) => x !== a.id)))}
+                      />
+                      {a.label} ({a.courierName})
+                    </label>
+                  ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                {choice.length ? "Checkout lists the ticked couriers; the order is booked with the one picked." : "None ticked: customers don't choose, and parcels go with the courier above."}
+              </p>
+            </fieldset>
           )}
           {storefront && !storefront.isDefault && (
             <Toggle checked={active} onChange={setActive} label="Open" hint="A closed storefront's web addresses open the default storefront." />

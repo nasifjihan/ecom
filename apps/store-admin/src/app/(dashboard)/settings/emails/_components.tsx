@@ -70,6 +70,7 @@ export const VARIABLE_LABELS: Record<string, string> = {
   "order.status": "Order status",
   "order.payment_method": "Payment method",
   "order.shipping_method": "Delivery method",
+  "order.delivery_time": "Delivery time picked (if any)",
   "order.url": "Link to the order",
   "order.admin_url": "Link to the order in the admin",
   "shipment.carrier": "Courier",

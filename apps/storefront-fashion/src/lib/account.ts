@@ -88,6 +88,9 @@ export interface MyOrder {
   taxTotal: number;
   /** Prices included VAT: taxTotal is part of the total, not added to it. */
   taxIncluded?: boolean;
+  /** The delivery time slot picked and the courier chosen at checkout. */
+  deliverySlot?: { label: string; date: string | null; fee: number } | null;
+  courier?: string | null;
   feeTotal: number;
   grandTotal: number;
   currency: string;

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileDown, Truck, Undo2 } from "lucide-react";
 import { openFile } from "@ecom/api-client";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Separator, Skeleton, apiErrorMessage, cn, msg, orderStatusWord, toast, useT } from "@ecom/storefront-base";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Separator, Skeleton, apiErrorMessage, cn, msg, orderStatusWord, toast, useLocale, useT } from "@ecom/storefront-base";
 import {
   RETURN_REASONS,
   useCancelMyOrderMutation,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/account";
 import { AccountShell, OrderStatusBadge, formatBDT, formatDate } from "../../_components";
 import { OrderPaymentCard } from "../../../_components/order-payment";
+import { slotText } from "../../../checkout/_delivery-choices";
 
 export default function OrderDetailPage() {
   const { ref } = useParams<{ ref: string }>();
@@ -34,6 +35,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
   const [loadInvoice, { isLoading: loadingInvoice }] = useMyOrderInvoiceMutation();
   const [submitPayment] = useSubmitMyOrderPaymentMutation();
   const t = useT();
+  const { locale } = useLocale();
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (isError || !o) {
@@ -158,6 +160,16 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
             <p>{[o.shipping.upazila, o.shipping.city, o.shipping.division, o.shipping.postcode].filter(Boolean).join(", ")}</p>
             {o.phone && <p>{o.phone}</p>}
             {o.shippingMethodName && <p className="text-muted-foreground pt-2">{o.shippingMethodName}</p>}
+            {o.deliverySlot && (
+              <p className="font-medium">
+                {t("Delivery time")}: {slotText(o.deliverySlot, locale)}
+              </p>
+            )}
+            {o.courier && (
+              <p className="text-muted-foreground">
+                {t("Courier")}: {o.courier}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>

@@ -42,6 +42,8 @@ export interface ShippingMethod {
   costRules: string | CostRules | null;
   deliveryEstimateMinDays: number | null;
   deliveryEstimateMaxDays: number | null;
+  /** Customers pick a delivery time slot with this option. */
+  useSlots: boolean;
 }
 
 export interface ZoneLocation {
@@ -93,6 +95,32 @@ export interface MethodInput {
   freeFromSubtotal?: number | null;
   deliveryEstimateMinDays?: number | null;
   deliveryEstimateMaxDays?: number | null;
+  useSlots?: boolean;
+}
+
+export interface DeliverySlot {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  /** Orders close this many minutes before the window starts. */
+  cutoffMinutes: number;
+  fee: number;
+  capacity: number | null;
+  /** 0 = Sunday … 6 = Saturday. */
+  weekdays: number[];
+  enabled: boolean;
+  sortOrder: number;
+  /** Orders booked from today on, per day. */
+  upcoming: { date: string; orders: number }[];
+}
+
+export type SlotInput = Omit<DeliverySlot, "id" | "upcoming">;
+
+export interface SlotSettings {
+  daysAhead: number;
+  closedDates: string[];
+  timeZone: string;
 }
 
 export const parseCostRules = (v: ShippingMethod["costRules"]): CostRules => {
@@ -165,6 +193,27 @@ export const shippingApi = api.injectEndpoints({
       query: (id) => ({ url: `/admin/shipping/methods/${id}`, method: "DELETE" }),
       invalidatesTags: ["ShippingZone"],
     }),
+
+    getDeliverySlots: b.query<{ settings: SlotSettings; slots: DeliverySlot[] }, void>({
+      query: () => ({ url: "/admin/shipping/slots" }),
+      providesTags: ["DeliverySlot"],
+    }),
+    createDeliverySlot: b.mutation<unknown, SlotInput>({
+      query: (body) => ({ url: "/admin/shipping/slots", method: "POST", body }),
+      invalidatesTags: ["DeliverySlot"],
+    }),
+    updateDeliverySlot: b.mutation<unknown, { id: string } & SlotInput>({
+      query: ({ id, ...body }) => ({ url: `/admin/shipping/slots/${id}`, method: "PUT", body }),
+      invalidatesTags: ["DeliverySlot"],
+    }),
+    deleteDeliverySlot: b.mutation<unknown, string>({
+      query: (id) => ({ url: `/admin/shipping/slots/${id}`, method: "DELETE" }),
+      invalidatesTags: ["DeliverySlot"],
+    }),
+    saveSlotSettings: b.mutation<SlotSettings, { daysAhead: number; closedDates: string[] }>({
+      query: (body) => ({ url: "/admin/shipping/slots/settings", method: "PUT", body }),
+      invalidatesTags: ["DeliverySlot"],
+    }),
   }),
 });
 
@@ -179,4 +228,9 @@ export const {
   useCreateMethodMutation,
   useUpdateMethodMutation,
   useDeleteMethodMutation,
+  useGetDeliverySlotsQuery,
+  useCreateDeliverySlotMutation,
+  useUpdateDeliverySlotMutation,
+  useDeleteDeliverySlotMutation,
+  useSaveSlotSettingsMutation,
 } = shippingApi;

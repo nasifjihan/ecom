@@ -187,6 +187,7 @@ const EMPTY_METHOD = {
   freeFromSubtotal: "",
   minDays: "",
   maxDays: "",
+  useSlots: false,
   tiers: [] as Tier[],
 };
 
@@ -226,6 +227,7 @@ export function MethodDialog({
       freeFromSubtotal: method.freeFromSubtotal ? String(Number(method.freeFromSubtotal)) : "",
       minDays: method.deliveryEstimateMinDays?.toString() ?? "",
       maxDays: method.deliveryEstimateMaxDays?.toString() ?? "",
+      useSlots: !!method.useSlots,
       tiers: (r.weightTiers ?? []).map((t) => ({ upToKg: String(t.upToKg), cost: String(t.cost) })),
     });
     setCodeTouched(true);
@@ -253,6 +255,7 @@ export function MethodDialog({
       freeFromSubtotal: optNum(f.freeFromSubtotal),
       deliveryEstimateMinDays: optNum(f.minDays),
       deliveryEstimateMaxDays: optNum(f.maxDays),
+      useSlots: f.useSlots,
     };
     try {
       if (method === "new") await create({ zoneId, code: f.code, ...body }).unwrap();
@@ -382,6 +385,12 @@ export function MethodDialog({
               </div>
             </Field>
           </div>
+          <Toggle
+            checked={f.useSlots}
+            onChange={(v) => set("useSlots", v)}
+            label="Customer picks a delivery time"
+            hint="Checkout asks for a day and time slot (set them under Shipping → Delivery slots). The slot's charge is added."
+          />
           <Toggle checked={f.enabled} onChange={(v) => set("enabled", v)} label="Offer at checkout" />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>

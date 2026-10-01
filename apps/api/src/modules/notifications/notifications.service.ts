@@ -260,6 +260,7 @@ export class EmailService {
       "order.status": statusLabel(order.status),
       "order.payment_method": gateway?.name ?? order.paymentGatewayCode,
       "order.shipping_method": order.shippingMethodName,
+      "order.delivery_time": order.deliverySlotLabel ?? "",
       "order.url": `${urls.storefront}/checkout/thank-you?key=${encodeURIComponent(order.orderKey)}`,
       "order.admin_url": `${urls.admin}/orders/${String(order.id)}`,
     }
@@ -305,6 +306,7 @@ export class EmailService {
           .filter(Boolean)
           .join(" "),
         order.shippingPhone ?? order.billingPhone ?? "",
+        order.deliverySlotLabel ? `Delivery time: ${order.deliverySlotLabel}` : "",
       ].filter((l): l is string => !!l?.trim()),
     }
     const s = order.shipments[0]
@@ -600,6 +602,7 @@ export class EmailService {
         "order.status": key === "order_status_changed" ? "processing" : "shipped",
         "order.payment_method": "Cash on Delivery",
         "order.shipping_method": "Inside Dhaka",
+        "order.delivery_time": "Fri 2 Oct, Evening 17:00–21:00",
         "order.url": `${urls.storefront}/checkout/thank-you?key=sample`,
         "order.admin_url": `${urls.admin}/orders`,
         "shipment.carrier": "Pathao",

@@ -43,7 +43,7 @@ export interface InvoiceDoc {
   billTo: string[]
   shipTo: string[]
   payment: { method: string; status: "paid" | "due" | "refunded"; label: string }
-  delivery: { method: string; tracking: string | null }
+  delivery: { method: string; tracking: string | null; slot?: string | null }
   items: InvoiceItem[]
   totals: { label: string; value: string; strong?: boolean }[]
   note: string | null
@@ -215,6 +215,7 @@ function drawInvoice(doc: PDFKit.PDFDocument, inv: InvoiceDoc): void {
   const paymentLines = [
     inv.payment.method,
     `${T.delivery}: ${inv.delivery.method}`,
+    inv.delivery.slot ? `${T.deliveryTime}: ${inv.delivery.slot}` : "",
     inv.delivery.tracking ? `${T.tracking}: ${inv.delivery.tracking}` : "",
   ]
   const partiesEnd = Math.max(

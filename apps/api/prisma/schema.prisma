@@ -65,6 +65,7 @@ model Store {
   layoutSettings       StoreLayoutSetting?
   paymentSettings      PaymentGatewayConfig[]
   shippingZones        ShippingZone[]
+  deliverySlots        DeliverySlot[]
   shipments            Shipment[]
   paymentRecords       PaymentRecord[]
   paymentAttempts      PaymentAttempt[]
@@ -195,6 +196,8 @@ model Storefront {
   /// Courier account suggested when booking this storefront's parcels.
   courierAccountId   BigInt?
   courierAccount     CourierAccount?     @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  /// Courier accounts customers may choose from at checkout (empty: they don't choose).
+  checkoutCourierIds BigInt[]            @default([])
   sortOrder          Int                 @default(0)
   domains            Domain[]
   menus              Menu[]
@@ -365,6 +368,10 @@ model StoreGeneralSetting {
   orderPrefix      String?
   /// Printed at the bottom of every invoice (return policy, bank details).
   invoiceNote      String?
+  /// How many days ahead customers can book a delivery slot (today counts as day 1).
+  slotDaysAhead    Int      @default(3)
+  /// "YYYY-MM-DD" days with no slot deliveries (holidays).
+  slotClosedDates  String[] @default([])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -673,8 +680,37 @@ model ShippingMethod {
   taxClass                TaxClass?    @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
   deliveryEstimateMinDays Int?
   deliveryEstimateMaxDays Int?
+  /// Customers pick a delivery time slot with this method (Settings: Shipping → Delivery slots).
+  useSlots                Boolean      @default(false)
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
+}
+
+/// A delivery window customers can pick at checkout with methods that use slots
+/// ("Evening, 5–9 pm"). Times are in the store's time zone.
+model DeliverySlot {
+  id            BigInt   @id @default(autoincrement())
+  storeId       BigInt
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name          String
+  /// "HH:MM", 24-hour.
+  startTime     String
+  endTime       String
+  /// Orders close this many minutes before the window starts (0: until it starts).
+  cutoffMinutes Int      @default(120)
+  /// Added to the delivery charge.
+  fee           Decimal  @default(0) @db.Decimal(12, 2)
+  /// Most orders per day in this slot (null: no limit).
+  capacity      Int?
+  /// Days of the week it runs, 0 = Sunday … 6 = Saturday.
+  weekdays      Int[]    @default([0, 1, 2, 3, 4, 5, 6])
+  enabled       Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  orders        Order[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([storeId])
 }
 
 /// Bangladesh administrative areas, shared by every store: division -> district -> upazila,
@@ -1412,6 +1448,16 @@ model Order {
   shippingZone           ShippingZone?        @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
   shippingMethodCode     String
   shippingMethodName     String
+  /// The delivery time slot the customer picked: the day, the slot, its window as text and its charge.
+  deliveryDate           DateTime?            @db.Date
+  deliverySlotId         BigInt?
+  deliverySlot           DeliverySlot?        @relation(fields: [deliverySlotId], references: [id], onDelete: SetNull)
+  deliverySlotLabel      String?
+  /// Extra for the slot (part of shippingTotal).
+  slotFee                Decimal              @default(0) @db.Decimal(12, 2)
+  /// The courier the customer chose at checkout; booking uses it before the storefront's default.
+  courierAccountId       BigInt?
+  courierAccount         CourierAccount?      @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
   trackingNumber         String?
   trackingUrl            String?
   estimatedDelivery      DateTime?
@@ -1488,6 +1534,7 @@ model Order {
   @@index([customerId])
   @@index([paymentStatus])
   @@index([landingPageId])
+  @@index([deliverySlotId, deliveryDate])
 }
 
 model OrderStatusLog {
@@ -1611,6 +1658,8 @@ model CourierAccount {
   lastError     String?
   shipments     Shipment[]
   storefronts   Storefront[]
+  /// Orders whose customer chose this courier at checkout.
+  chosenBy      Order[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

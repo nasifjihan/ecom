@@ -2,8 +2,7 @@
 
 /**
  * VAT & invoices: whether shelf prices already include VAT, the order number prefix and the note
- * printed on every invoice. The BIN, trade licence and registered name are on Store details;
- * the VAT rates themselves are under Shipping → Taxes.
+ * printed on every invoice. The BIN, trade licence and registered name are on Store details.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -66,11 +65,7 @@ export default function TaxSettingsPage() {
             <CardHeader>
               <CardTitle>VAT</CardTitle>
               <CardDescription>
-                The rates are under{" "}
-                <Link href="/shipping/taxes" className="text-primary underline-offset-2 hover:underline">
-                  Shipping → Taxes
-                </Link>
-                . Changing this affects new orders only.
+                Bangladesh&apos;s standard 15% applies to goods and delivery. Changing this affects new orders only.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -160,6 +160,10 @@ export interface Order {
   source: string;
   /** The storefront it was placed on. */
   storefront?: { id: string; name: string; code: string; courierAccountId?: string | null };
+  /** The delivery time slot the customer picked ("Fri 2 Oct, Evening 17:00–21:00") and its charge. */
+  deliverySlot: { label: string; date: string | null; fee: number } | null;
+  /** The courier account the customer chose at checkout. */
+  courierChoice: { id: string; courier: string; label: string } | null;
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
@@ -586,6 +590,10 @@ interface ApiOrder {
   couponUsed: string | null;
   source?: string;
   storefront?: { id: string; name: string; code: string; courierAccountId?: string | null } | null;
+  deliverySlotLabel?: string | null;
+  deliveryDate?: string | null;
+  slotFee?: string;
+  courierAccount?: { id: string; courier: string; label: string } | null;
   manualDiscount?: string;
   memberDiscount?: string;
   memberLevel?: string | null;
@@ -701,6 +709,10 @@ export function fromApiOrder(o: ApiOrder): Order {
           courierAccountId: o.storefront.courierAccountId == null ? null : String(o.storefront.courierAccountId),
         }
       : undefined,
+    deliverySlot: o.deliverySlotLabel
+      ? { label: o.deliverySlotLabel, date: o.deliveryDate ? String(o.deliveryDate).slice(0, 10) : null, fee: Number(o.slotFee ?? 0) }
+      : null,
+    courierChoice: o.courierAccount ? { id: String(o.courierAccount.id), courier: o.courierAccount.courier, label: o.courierAccount.label } : null,
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
     memberDiscount: Number(o.memberDiscount ?? 0),

@@ -277,6 +277,7 @@ export class InvoiceService {
           ? `${order.shippingMethodName} (${shipment.providerName})`
           : order.shippingMethodName,
         tracking: tracking ?? null,
+        slot: order.deliverySlotLabel,
       },
       items: order.items.map((i) => ({
         name: i.productName,

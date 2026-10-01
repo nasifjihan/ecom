@@ -43,6 +43,8 @@ import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
 import { checkOrderBoxes } from "../giftboxes/giftbox.check";
 import { nextOrderNumber, orderNumberStem } from "../orders/order-number.rules";
+import { DeliverySlotService, slotDayDate } from "../shipping/slots.service";
+import { COURIER_NAMES, type Courier } from "../couriers/couriers.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -157,6 +159,8 @@ export type DeliveryOption = {
   freeReason: string | null;
   minDays: number | null;
   maxDays: number | null;
+  /** The customer picks a delivery time slot with this option. */
+  useSlots: boolean;
 };
 
 /** What an order is made of before it's priced. */
@@ -172,6 +176,12 @@ export type OrderDraft = {
   delivery: { methodId: bigint | string } | { customFee: number; name?: string } | { pickup: true };
   /** Also list the zone's delivery options (for the admin form) when delivery isn't a zone method. */
   listShippingOptions?: boolean;
+  /** The delivery time slot picked, for options that use slots. */
+  slot?: { slotId: string; date: string } | null;
+  /** Storefront checkout: an option that uses slots can't go without one. */
+  requireSlot?: boolean;
+  /** The courier the customer chose (one the storefront offers at checkout). */
+  courierAccountId?: string | null;
   couponCode?: string;
   /** Automatic promotions (default on); staff can leave them off a manual order. */
   applyPromotions?: boolean;
@@ -1081,6 +1091,7 @@ export class StorefrontService {
         freeReason: o.freeReason ?? null,
         minDays: o.transit?.minDays ?? null,
         maxDays: o.transit?.maxDays ?? null,
+        useSlots: Boolean((o as { useSlots?: boolean }).useSlots),
       }));
       if (!shippingOptions.length && rates.reason && "methodId" in input.delivery) fail(rates.reason, "SHIPPING_UNAVAILABLE_FOR_ZONE");
     }
@@ -1093,6 +1104,30 @@ export class StorefrontService {
       delivery = { zoneId: null, code: "custom", name: input.delivery.name || "Delivery", fee: round2(input.delivery.customFee) };
     } else {
       delivery = { zoneId: null, code: "pickup", name: "Pickup / walk-in", fee: 0 };
+    }
+
+    // A delivery time slot, for options that use them; its charge is added to delivery.
+    let slot: { id: bigint; date: string; fee: number; label: string } | null = null;
+    const pickedOption = "methodId" in input.delivery ? shippingOptions.find((x) => x.id === String((input.delivery as { methodId: bigint | string }).methodId)) : undefined;
+    if (pickedOption?.useSlots && input.slot) {
+      try {
+        slot = await new DeliverySlotService(storeId).pick(input.slot.slotId, input.slot.date);
+      } catch (e) {
+        fail((e as Error).message, "SLOT_UNAVAILABLE");
+      }
+    } else if (pickedOption?.useSlots && input.requireSlot) {
+      fail("Pick a delivery time", "SLOT_UNAVAILABLE");
+    }
+
+    // The courier the customer chose, if this storefront lets them.
+    let courier: { id: bigint; name: string } | null = null;
+    if (input.courierAccountId) {
+      const offered = (await this.storefront()).checkoutCourierIds.map(String);
+      const a = offered.includes(String(input.courierAccountId))
+        ? await prisma.courierAccount.findFirst({ where: { id: BigInt(input.courierAccountId), storeId, enabled: true }, select: { id: true, courier: true } })
+        : null;
+      if (a) courier = { id: a.id, name: COURIER_NAMES[a.courier as Courier] ?? a.courier };
+      else fail("That courier isn't available. Please pick another.", "VALIDATION_FAILED");
     }
 
     // Automatic promotions, then the coupon, then the staff discount on what's left.
@@ -1135,7 +1170,9 @@ export class StorefrontService {
     const loyalty = await checkoutLoyalty(prisma, storeId, input.customerId);
     const memberDiscount = loyalty.level ? memberDiscountFor(round2(afterCoupon - manualDiscount), loyalty.level.discountPercent) : 0;
     const discountTotal = round2(promotionDiscount + couponDiscount + manualDiscount + memberDiscount);
-    const shippingTotal = freeShipping ? 0 : round2(delivery?.fee ?? 0);
+    // Free delivery waives the delivery charge, not the time slot's.
+    const slotFee = slot ? round2(slot.fee) : 0;
+    const shippingTotal = round2((freeShipping ? 0 : (delivery?.fee ?? 0)) + slotFee);
 
     // Tax on the discounted subtotal + shipping (same inputs the checkout page shows). With
     // VAT-inclusive prices it's the VAT inside them, so it isn't added to the total.
@@ -1170,6 +1207,8 @@ export class StorefrontService {
       bill,
       shippingOptions,
       delivery,
+      slot,
+      courier,
       coupon,
       couponError,
       promotions,
@@ -1178,7 +1217,7 @@ export class StorefrontService {
       gifts,
       member: loyalty.level ? { level: loyalty.level.name, percent: loyalty.level.discountPercent } : null,
       wallet: { balance: loyalty.balance, enabled: loyalty.settings.walletEnabled, maxPercent: Number(loyalty.settings.walletMaxPercent) },
-      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, memberDiscount, discountTotal, shippingTotal, taxTotal, taxIncluded, taxRate, itemTax, feeTotal, orderTotal, walletUsed, grandTotal, qty, weightKG },
+      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, memberDiscount, discountTotal, shippingTotal, slotFee, taxTotal, taxIncluded, taxRate, itemTax, feeTotal, orderTotal, walletUsed, grandTotal, qty, weightKG },
     };
   }
 
@@ -1198,6 +1237,8 @@ export class StorefrontService {
     const status = meta.status ?? "PENDING";
 
     return tx(async (t: Prisma.TransactionClient) => {
+      // The slot may have filled up since the quote: check again, taking turns with other orders.
+      if (q.slot) await new DeliverySlotService(storeId).hold(t, q.slot.id, q.slot.date);
       // Hold the stock in the warehouse the order ships from; the guard stops overselling.
       const skuOf = (x: { product: { id: bigint }; variant?: { id: bigint } | null }) => ({ productId: x.product.id, variantId: x.variant?.id ?? null });
       const warehouseId = await chooseWarehouse(t, storeId, [...lines, ...q.gifts].map((x) => ({ sku: skuOf(x), qty: x.qty })));
@@ -1325,6 +1366,11 @@ export class StorefrontService {
           shippingZoneId: delivery.zoneId,
           shippingMethodCode: delivery.code,
           shippingMethodName: delivery.name,
+          deliveryDate: q.slot ? slotDayDate(q.slot.date) : null,
+          deliverySlotId: q.slot?.id ?? null,
+          deliverySlotLabel: q.slot?.label ?? null,
+          slotFee: q.totals.slotFee,
+          courierAccountId: q.courier?.id ?? null,
           itemsSubtotal,
           discountTotal,
           shippingTotal,
@@ -1434,6 +1480,9 @@ export class StorefrontService {
       billingAddress: dto.billingAddress,
       billingSameAsShipping: dto.billingSameAsShipping,
       delivery: { methodId: dto.shippingMethodId },
+      slot: dto.deliverySlot ?? null,
+      requireSlot: true,
+      courierAccountId: dto.courierAccountId ?? null,
       couponCode: dto.couponCodes[0],
       paymentGateway: dto.paymentGateway,
       requireEnabledGateway: true,
@@ -1491,6 +1540,30 @@ export class StorefrontService {
     };
   }
 
+  /**
+   * Checkout extras: the delivery days and time slots that can be booked now, and the couriers
+   * customers may choose from on this storefront (empty when they don't choose).
+   */
+  async deliveryChoices() {
+    const sf = await this.storefront();
+    const [days, couriers] = await Promise.all([
+      new DeliverySlotService(this.storeId).days(),
+      sf.checkoutCourierIds.length
+        ? prisma.courierAccount.findMany({
+            where: { id: { in: sf.checkoutCourierIds }, storeId: this.storeId, enabled: true },
+            select: { id: true, courier: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const order = sf.checkoutCourierIds.map(String);
+    return {
+      days,
+      couriers: couriers
+        .map((c) => ({ id: String(c.id), name: COURIER_NAMES[c.courier as Courier] ?? c.courier, courier: c.courier }))
+        .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
+    };
+  }
+
   /** Enabled payment gateways, in the admin's sort order. */
   /** The enabled payment methods this storefront offers. */
   async paymentMethods() {
@@ -1519,7 +1592,7 @@ export class StorefrontService {
   async getOrderByKey(orderKey: string) {
     const o = await prisma.order.findFirst({
       where: { storeId: this.storeId, orderKey },
-      include: { items: true, paymentRecords: true },
+      include: { items: true, paymentRecords: true, courierAccount: { select: { courier: true } } },
     });
     if (!o) throw new NotFoundError("Order");
     return { ...orderView(o), payment: await this.paymentView(o) };
@@ -1603,6 +1676,7 @@ export class StorefrontService {
         shipments: { where: { status: { not: "cancelled" } }, include: { items: true }, orderBy: { id: "asc" } },
         returns: { include: { items: true }, orderBy: { id: "asc" } },
         paymentRecords: { orderBy: { createdAt: "asc" } },
+        courierAccount: { select: { courier: true } },
       },
     });
     if (!o) throw new NotFoundError("Order");
@@ -1666,7 +1740,7 @@ export class StorefrontService {
 
 const CUSTOMER_CANCELLABLE = new Set(["PENDING"]);
 
-type OrderWithItems = Prisma.OrderGetPayload<{ include: { items: true } }>;
+type OrderWithItems = Prisma.OrderGetPayload<{ include: { items: true } }> & { courierAccount?: { courier: string } | null };
 
 /** Customer-facing view of an order (thank-you page and My Account). */
 function orderView(o: OrderWithItems) {
@@ -1718,6 +1792,12 @@ function orderView(o: OrderWithItems) {
     promotions: (o.promotions as { name: string; type: string; amount: number }[] | null) ?? [],
     couponUsed: o.couponUsed,
     shippingTotal: num(o.shippingTotal),
+    /** The delivery time slot picked ("Fri 2 Oct, Evening 17:00–21:00"), its day and its charge. */
+    deliverySlot: o.deliverySlotLabel
+      ? { label: o.deliverySlotLabel, date: o.deliveryDate ? o.deliveryDate.toISOString().slice(0, 10) : null, fee: num(o.slotFee) }
+      : null,
+    /** The courier the customer chose at checkout. */
+    courier: o.courierAccount ? (COURIER_NAMES[o.courierAccount.courier as Courier] ?? o.courierAccount.courier) : null,
     taxTotal: num(o.taxTotal),
     /** Prices included VAT: taxTotal is part of grandTotal, not added to it. */
     taxIncluded: o.pricesIncludeTax,

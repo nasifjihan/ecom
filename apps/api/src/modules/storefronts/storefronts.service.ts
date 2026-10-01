@@ -89,6 +89,7 @@ export class StorefrontsService {
       sortOrder: r.sortOrder,
       paymentGateways: r.paymentGateways,
       courierAccountId: r.courierAccountId === null ? null : String(r.courierAccountId),
+      checkoutCourierIds: r.checkoutCourierIds.map(String),
       // Addresses not linked to a storefront open the default one.
       domains: domains
         .filter((d) => (d.storefrontId ?? def?.id) === r.id)
@@ -135,6 +136,10 @@ export class StorefrontsService {
       const a = await prisma.courierAccount.findFirst({ where: { id: d.courierAccountId, storeId: this.storeId }, select: { id: true } })
       if (!a) throw new NotFoundError("Courier account")
     }
+    if (d.checkoutCourierIds?.length) {
+      const found = await prisma.courierAccount.count({ where: { id: { in: d.checkoutCourierIds }, storeId: this.storeId } })
+      if (found !== new Set(d.checkoutCourierIds.map(String)).size) throw new NotFoundError("Courier account")
+    }
   }
 
   async create(d: StorefrontInput) {
@@ -152,6 +157,7 @@ export class StorefrontsService {
           sortOrder: d.sortOrder ?? 0,
           paymentGateways: [...new Set(d.paymentGateways ?? [])],
           courierAccountId: d.courierAccountId ?? null,
+          checkoutCourierIds: [...new Set(d.checkoutCourierIds ?? [])],
         },
       }),
     )
@@ -176,6 +182,7 @@ export class StorefrontsService {
           ...(d.sortOrder !== undefined ? { sortOrder: d.sortOrder } : {}),
           ...(d.paymentGateways !== undefined ? { paymentGateways: [...new Set(d.paymentGateways)] } : {}),
           ...(d.courierAccountId !== undefined ? { courierAccountId: d.courierAccountId } : {}),
+          ...(d.checkoutCourierIds !== undefined ? { checkoutCourierIds: [...new Set(d.checkoutCourierIds)] } : {}),
         },
       })
     })

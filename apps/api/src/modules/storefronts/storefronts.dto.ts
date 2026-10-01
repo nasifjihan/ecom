@@ -20,6 +20,8 @@ export const StorefrontDto = z.object({
   paymentGateways: z.array(z.string().trim().toLowerCase().min(2).max(32)).max(30).optional(),
   /** Courier account suggested for this storefront's parcels. */
   courierAccountId: id.nullish(),
+  /** Courier accounts customers may choose from at checkout; empty: they don't choose. */
+  checkoutCourierIds: z.array(id).max(10).optional(),
 })
 export const UpdateStorefrontDto = StorefrontDto.partial()
 

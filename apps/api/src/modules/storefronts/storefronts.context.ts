@@ -16,6 +16,8 @@ export interface StorefrontInfo {
   /** Payment methods offered here (empty: every enabled one). */
   paymentGateways: string[]
   courierAccountId: bigint | null
+  /** Courier accounts customers may choose from at checkout (empty: they don't choose). */
+  checkoutCourierIds: bigint[]
 }
 
 const TTL = 60_000
@@ -31,6 +33,7 @@ const info = (r: {
   includeNewProducts: boolean
   paymentGateways: string[]
   courierAccountId: bigint | null
+  checkoutCourierIds: bigint[]
 }): StorefrontInfo => ({
   id: r.id,
   code: r.code,
@@ -40,6 +43,7 @@ const info = (r: {
   includeNewProducts: r.isDefault ? true : r.includeNewProducts,
   paymentGateways: r.paymentGateways,
   courierAccountId: r.courierAccountId,
+  checkoutCourierIds: r.checkoutCourierIds,
 })
 
 /** Settings changed: drop what's kept for this store. */

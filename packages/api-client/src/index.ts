@@ -173,6 +173,7 @@ export const api = createApi({
     "EmailTemplate",
     "EmailLog",
     "ShippingZone",
+    "DeliverySlot",
     "Location",
     "AuditLog",
     "Purchasing",

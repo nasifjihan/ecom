@@ -34,6 +34,7 @@ const ORDER = [
   "order.status",
   "order.payment_method",
   "order.shipping_method",
+  "order.delivery_time",
   "order.url",
 ]
 
