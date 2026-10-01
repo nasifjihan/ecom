@@ -3875,3 +3875,89 @@ The online payment code was a simulation.
 - **Other forms:** manual orders and quotation conversion don't send a key yet (staff screens, low risk). The storefront's "Pay now" is protected by the per-order try limit instead.
 - **Real sandboxes:** still not tried against bKash's or SSLCommerz's own sandboxes (blocked by this environment's network policy).
 - **Next:** part 3: VAT-inclusive prices, BIN / trade licence and an order number prefix on invoices.
+
+---
+
+## ✅ BATCH #35 (part 3) — VAT-inclusive prices, BIN / trade licence and order prefix on invoices (2026-10-01)
+Before this, VAT was always added on top of prices. The VAT number, trade licence and registered name boxes on Store details were never saved, and every order number was just the date and a count.
+
+### 35.15 Data (migration `vat_invoice_details`)
+- **StoreGeneralSetting:**
+  - `pricesIncludeTax`: shelf prices and delivery charges already include VAT;
+  - `legalName`, `vatRegNo` (BIN) and `tradeLicenseNo`;
+  - `orderPrefix` (1–6 letters or digits, kept in capitals);
+  - `invoiceNote`, printed on every invoice.
+- **Order:** `pricesIncludeTax` and `taxRate`, kept with the order so later changes don't alter it.
+
+### 35.16 VAT inside prices (`shipping/tax.rules.ts`, `ShippingService.orderTax`)
+- **The maths:** the VAT inside an amount is `amount × tax-on-top ÷ (amount + tax-on-top)`, so ৳1,150 at 15% holds ৳150 of VAT.
+- **Goods and delivery** are worked out separately, so each line's VAT and the delivery's VAT are both right.
+- **One function for every checkout:** storefront checkout, landing pages and staff orders (they share the quote) and the checkout page's tax line all use `orderTax`.
+  - It returns `included`, the goods' share and the delivery's share.
+  - When prices include VAT, the VAT isn't added to the total.
+- **Saved lines:** each line keeps its VAT (`lineTax`). Its total doesn't add the VAT again when it's inside, so refunds (line total ÷ quantity) stay right.
+- **Shown as "Includes VAT ৳X":**
+  - under the total at checkout (with a note), on the thank-you page, the account order page and the landing page form;
+  - in order emails, on the invoice, and on the admin order page and New order page.
+  - Bangla text added.
+- **The admin order page** said "VAT (15%)" whatever the rate; it now shows the rate the order was charged at.
+- **Reports:**
+  - sales, net sales, product revenue and the tax report's sales and delivery take out the VAT inside VAT-inclusive orders;
+  - the goods' VAT is the sum of the lines' VAT, and the delivery's VAT is the rest.
+
+### 35.17 Order numbers (`orders/order-number.rules.ts`)
+- **Format:** prefix, dash, date, and a 6-digit count for the day: FBD-20261001000001. With no prefix, numbers stay as before.
+- **Counting:** each prefix counts on its own, under the same transaction lock as before.
+- **Fits everywhere:** the numbers still fit gateway transaction codes (SSLCommerz takes 30 characters).
+- **Existing orders** keep their numbers.
+
+### 35.18 Invoices
+- **Under the store name:** the registered name (when different from the store name), "BIN: …" and "Trade licence: …", in English or Bangla.
+- **Totals:**
+  - the VAT line reads "VAT 15%", using the rate kept on the order;
+  - when prices include VAT, "Includes VAT 15% ৳X" sits just under the total.
+- **The store's note** prints under the totals, across the page.
+
+### 35.19 Admin
+- **Settings → VAT & invoices (new page):**
+  - "Prices include VAT" switch, with an example of each mode;
+  - order number prefix, showing what the next number will look like;
+  - invoice note.
+  - Links to the VAT rates and to Store details.
+- **Store details:**
+  - "Registered business name", "VAT registration number (BIN)" and "Trade licence number" are saved now (API sections `general` / `address`; new section `tax`);
+  - fixed: the Address / Media / Legal tabs never opened (the tab buttons and the panels each kept their own current tab).
+
+### 35.20 Checked
+- **Tests:** API 698 passing (47 files).
+  - new `tests/unit/vat-invoice.test.ts` (VAT inside, split, label, prefix rules, numbering);
+  - new `tests/integration/vat-invoice.db.test.ts`:
+    - a VAT-inclusive landing order: ৳1,150 + ৳115 delivery charges ৳1,265, with ৳165 VAT inside;
+    - the order keeps rate 15 and is numbered with its prefix, and the next order counts on;
+    - the invoice shows the legal lines, "Includes VAT 15%" and the note;
+    - the reports show sales and delivery without VAT;
+    - turning the switch off adds VAT on top again.
+  - The batch 9 smoke test's database stand-in got the settings table. The invoice PDF test prints legal lines and a note.
+  - Storefront translation test passes.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - on VAT & invoices, a bad prefix shows an error; switching VAT on, prefix "fbd" and a note saves;
+  - registered name, BIN and trade licence save and are still there after a reload;
+  - a cash-on-delivery checkout of a ৳4,290 panjabi + ৳110 delivery charges ৳4,400:
+    - checkout and thank-you say "Includes VAT ৳573.92";
+    - the order is FBD-20261001000001 with rate 15;
+    - the admin order page says "Includes VAT 15%";
+  - the invoice PDF shows the legal lines, the VAT inside the total and the note.
+  - No page errors.
+- **Dev data:**
+  - Fashion BD has a registered name, BIN, trade licence, the FBD prefix and an invoice note.
+  - "Prices include VAT" is switched back off, so checkout behaves as before.
+  - One VAT-inclusive test order, FBD-20261001000001.
+
+### 35.21 Not done
+- **Old products' prices** aren't changed when the switch is flipped. A store that switches has to decide whether its prices already include VAT.
+- **Bangladesh's official Mushak-6.3 VAT invoice layout:** not made; the invoice shows the details a shop needs, not the government form.
+- **Rates per product (tax classes):** still one set of rates for the store, as before.
+- **Refunds** still don't reduce the tax report (as noted in Batch 28).
+- **Store details tabs:** the Media and Legal tabs still have no storage behind them (saving them says so).
+

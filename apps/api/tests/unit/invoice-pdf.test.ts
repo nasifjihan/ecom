@@ -14,6 +14,7 @@ const invoice = (number: string, items: number, lang: InvoiceDoc["lang"] = "en")
     logo: null,
     color: "#0f766e",
     lines: ["Dhaka"],
+    legal: ["Test Store Ltd.", "BIN: 000123456-0101", "Trade licence: TRAD/DNCC/012345/2026"],
     website: "example.com",
   },
   billTo: ["আয়েশা রহমান", "বাড়ি ৫, ধানমন্ডি", "Dhaka 1205"],
@@ -29,6 +30,7 @@ const invoice = (number: string, items: number, lang: InvoiceDoc["lang"] = "en")
   })),
   totals: [{ label: "Total", value: "BDT 100.00", strong: true }],
   note: null,
+  storeNote: "Exchanges within 7 days with this invoice. ৳ refunds go back to the way you paid.",
 })
 
 /** Page count from the PDF's page tree. */

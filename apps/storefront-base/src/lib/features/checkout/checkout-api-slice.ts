@@ -34,6 +34,8 @@ type ShippingRatesResponse = {
 /** Raw shape of GET /storefront/shipping/taxes (see TaxRateRepository.resolveForAddress). */
 type TaxesResponse = {
   totalTax: number;
+  /** The store's prices include VAT: totalTax is inside them, not added on top. */
+  included?: boolean;
   breakdown: { name: string; ratePct: number; base: number; amount: number }[];
 };
 
@@ -97,6 +99,8 @@ export type OrderDetail = {
   couponUsed?: string | null;
   shippingTotal: number;
   taxTotal: number;
+  /** Prices included VAT: taxTotal is part of grandTotal, not added to it. */
+  taxIncluded?: boolean;
   feeTotal: number;
   grandTotal: number;
   currency: string;
@@ -288,7 +292,7 @@ export const checkoutApi = api.injectEndpoints({
     }),
 
     getTaxes: builder.query<
-      { total: number; currency: string; lines: TaxBreakdown[] },
+      { total: number; included: boolean; currency: string; lines: TaxBreakdown[] },
       {
         countryCode?: string;
         division?: string;
@@ -312,6 +316,7 @@ export const checkoutApi = api.injectEndpoints({
       },
       transformResponse: (res: TaxesResponse) => ({
         total: res?.totalTax ?? 0,
+        included: !!res?.included,
         currency: "BDT",
         lines: (res?.breakdown ?? [])
           .filter((b) => b.amount > 0)

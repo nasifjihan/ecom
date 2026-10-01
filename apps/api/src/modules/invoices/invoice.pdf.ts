@@ -36,6 +36,8 @@ export interface InvoiceDoc {
     logo: Buffer | null
     color: string
     lines: string[]
+    /** Registered name, BIN and trade licence, printed under the contact lines. */
+    legal: string[]
     website: string
   }
   billTo: string[]
@@ -45,6 +47,8 @@ export interface InvoiceDoc {
   items: InvoiceItem[]
   totals: { label: string; value: string; strong?: boolean }[]
   note: string | null
+  /** The store's own note for every invoice (return policy, bank details), under the totals. */
+  storeNote: string | null
 }
 
 const INK = "#111827"
@@ -140,6 +144,14 @@ function drawInvoice(doc: PDFKit.PDFDocument, inv: InvoiceDoc): void {
   for (const line of inv.store.lines.filter(Boolean)) {
     doc.text(t(line), PAGE.margin, storeY, { width: 260 })
     storeY = doc.y + 1
+  }
+  if (inv.store.legal.length) {
+    doc.font(FONT.regular).fontSize(8.5).fillColor(INK)
+    storeY += 2
+    for (const line of inv.store.legal) {
+      doc.text(t(line), PAGE.margin, storeY, { width: 260 })
+      storeY = doc.y + 1
+    }
   }
 
   doc
@@ -285,6 +297,7 @@ function drawInvoice(doc: PDFKit.PDFDocument, inv: InvoiceDoc): void {
       .fillColor("#374151")
       .text(note, PAGE.margin, y + 14, { width: noteW })
   }
+  const noteEnd = y + noteH
   const tx = RIGHT - 230
   for (const row of inv.totals) {
     if (row.strong) {
@@ -299,6 +312,20 @@ function drawInvoice(doc: PDFKit.PDFDocument, inv: InvoiceDoc): void {
       doc.text(t(row.value), tx + 110, y, { width: 110, align: "right" })
       y += 18
     }
+  }
+
+  // ---------------------------------------------------------------- the store's note
+  const storeNote = inv.storeNote?.trim() ? t(inv.storeNote.trim()) : ""
+  if (storeNote) {
+    y = Math.max(y, noteEnd) + 12
+    doc.font(FONT.regular).fontSize(8.5)
+    const h = doc.heightOfString(storeNote, { width: WIDTH })
+    if (y + h + 8 > bottom) {
+      doc.addPage()
+      y = PAGE.margin
+    }
+    doc.moveTo(PAGE.margin, y).lineTo(RIGHT, y).lineWidth(0.6).strokeColor(LINE).stroke()
+    doc.fillColor(MUTED).text(storeNote, PAGE.margin, y + 8, { width: WIDTH })
   }
 }
 

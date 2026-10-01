@@ -77,6 +77,7 @@ export type SettingsSection =
   | "products"
   | "inventory"
   | "taxes"
+  | "tax"
   | "shipping"
   | "checkout"
   | "payments"

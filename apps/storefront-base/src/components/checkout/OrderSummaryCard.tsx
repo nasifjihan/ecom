@@ -52,6 +52,8 @@ export type OrderSummaryCardProps = {
   taxAmount?: number;
   taxLines?: { name: string; amount: number; rate?: number }[];
   taxLoading?: boolean;
+  /** Prices already include VAT: the tax is shown as part of the total, not added to it. */
+  taxIncluded?: boolean;
   discounts?: OrderSummaryLineItem[];
   couponCode: string;
   onCouponCodeChange: (code: string) => void;
@@ -88,6 +90,7 @@ export function OrderSummaryCard({
   taxAmount = 0,
   taxLines = [],
   taxLoading = false,
+  taxIncluded = false,
   discounts = [],
   couponCode,
   onCouponCodeChange,
@@ -261,7 +264,7 @@ export function OrderSummaryCard({
               <span className="text-muted-foreground">{t("Taxes & Fees")}</span>
               <Skeleton className="h-5 w-20" />
             </div>
-          ) : taxLines.length > 0 ? (
+          ) : taxIncluded ? null : taxLines.length > 0 ? (
             <div className="space-y-1.5">
               {taxLines.map((line, i) => (
                 <div key={i} className="flex justify-between items-center pl-0">
@@ -355,7 +358,9 @@ export function OrderSummaryCard({
                 {formatMoney(grandTotal, currency)}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {t("Incl. all taxes & fees")}
+                {taxIncluded && taxAmount > 0
+                  ? t("Includes VAT {amount}", { amount: formatMoney(taxAmount, currency) })
+                  : t("Incl. all taxes & fees")}
               </div>
             </div>
           </div>

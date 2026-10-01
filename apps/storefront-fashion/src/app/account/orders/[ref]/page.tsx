@@ -73,7 +73,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
       : []),
     ...((o.memberDiscount ?? 0) > 0 ? ([[t("{level} discount", { level: o.memberLevel ?? t("Member") }), -(o.memberDiscount ?? 0)]] as [string, number][]) : []),
     [t("Delivery"), o.shippingTotal],
-    ...(o.taxTotal > 0 ? ([[t("Tax"), o.taxTotal]] as [string, number][]) : []),
+    ...(o.taxTotal > 0 && !o.taxIncluded ? ([[t("VAT"), o.taxTotal]] as [string, number][]) : []),
     ...(o.feeTotal > 0 ? ([[t("Payment fee"), o.feeTotal]] as [string, number][]) : []),
     ...((o.walletUsed ?? 0) > 0 ? ([[t("Paid from wallet"), -(o.walletUsed ?? 0)]] as [string, number][]) : []),
   ];
@@ -131,6 +131,9 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
               <dt>{t("Total")}</dt>
               <dd className="tabular-nums">{formatBDT(o.grandTotal, o.currency)}</dd>
             </div>
+            {o.taxIncluded && o.taxTotal > 0 && (
+              <p className="text-right text-xs text-muted-foreground">{t("Includes VAT {amount}", { amount: formatBDT(o.taxTotal, o.currency) })}</p>
+            )}
             {(o.cashback ?? 0) > 0 && (
               <p className="pt-1 text-xs text-green-700">{t("{amount} cashback added to your wallet.", { amount: formatBDT(o.cashback ?? 0, o.currency) })}</p>
             )}

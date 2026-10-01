@@ -443,7 +443,7 @@ export function LandingView({ page, faqs, preview }: { page: LandingPageData; fa
                         <dd>−{bdt(quote.totals.discountTotal)}</dd>
                       </div>
                     )}
-                    {quote.totals.taxTotal > 0 && (
+                    {quote.totals.taxTotal > 0 && !quote.totals.taxIncluded && (
                       <div className="flex justify-between gap-4">
                         <dt>{t("VAT")}</dt>
                         <dd>{bdt(quote.totals.taxTotal)}</dd>
@@ -459,6 +459,9 @@ export function LandingView({ page, faqs, preview }: { page: LandingPageData; fa
                       <dt>{t("Total — pay on delivery")}</dt>
                       <dd>{bdt(quote.totals.grandTotal)}</dd>
                     </div>
+                    {quote.totals.taxIncluded && quote.totals.taxTotal > 0 && (
+                      <p className="text-right text-xs text-muted-foreground">{t("Includes VAT {amount}", { amount: bdt(quote.totals.taxTotal) })}</p>
+                    )}
                   </>
                 )}
                 {!address.district && <p className="text-muted-foreground">{t("Pick your district to see the delivery charge.")}</p>}

@@ -98,7 +98,7 @@ export class ShippingController extends BaseController {
   });
 
   resolveTaxes = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const data = await this.svc(req.ctx).resolveTaxes(req.ctx, req.query as any);
+    const data = await this.svc(req.ctx).orderTax(req.ctx, req.query as any);
     envelope(res, { status: 200, data });
   });
 

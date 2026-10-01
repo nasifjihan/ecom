@@ -10,6 +10,8 @@ import { BadRequestError } from "../../core";
 import { locationDepth, offInChain, resolveAddressLocation, storeLocationsOff } from "../locations/locations.service";
 import { methodCost, parseRules, pickZone } from "./shipping.rules";
 import { storefrontZones } from "../storefronts/storefronts.rules";
+import { prisma } from "../../config";
+import { splitTaxOnTop, taxInside } from "./tax.rules";
 import {
   generateCsv, generateXlsx, generatePdf,
   attachmentHeader, formatTimestampFilename,
@@ -104,6 +106,43 @@ export class ShippingService {
   }
 
   resolveTaxes(ctx: RequestContext, d: TaxesForAddressDto) { return this.taxes.resolveForAddress(ctx, d); }
+
+  /**
+   * Tax on an order's goods (after discounts) and delivery. When the store's prices include VAT
+   * (`included`), the amounts are the VAT already inside them and aren't added to the total.
+   * Goods and delivery are worked out separately so each has its own share.
+   */
+  async orderTax(ctx: RequestContext, d: TaxesForAddressDto) {
+    const setting = ctx.storeId === undefined ? null : await prisma.storeGeneralSetting.findUnique({
+      where: { storeId: BigInt(ctx.storeId) },
+      select: { pricesIncludeTax: true },
+    });
+    const included = !!setting?.pricesIncludeTax;
+    const goods = Number(d.subtotal || 0);
+    const delivery = Number(d.shippingTotal || 0);
+    if (!included) {
+      const r = await this.taxes.resolveForAddress(ctx, d);
+      const split = splitTaxOnTop(r.totalTax, goods, delivery);
+      return { ...r, included, itemTax: split.items, shippingTax: split.shipping };
+    }
+    const onGoods = await this.taxes.resolveForAddress(ctx, { ...d, subtotal: goods, shippingTotal: 0 });
+    const onDelivery = delivery > 0 ? await this.taxes.resolveForAddress(ctx, { ...d, subtotal: 0, shippingTotal: delivery }) : null;
+    const itemTax = taxInside(goods, onGoods.totalTax);
+    const shippingTax = onDelivery ? taxInside(delivery, onDelivery.totalTax) : 0;
+    // Each line of the breakdown shrinks by the same factor as its part's total.
+    const scaled = (r: typeof onGoods | null, inside: number) =>
+      r && r.totalTax > 0 ? r.breakdown.map((b) => ({ ...b, amount: Math.round(b.amount * (inside / r.totalTax) * 100) / 100 })) : [];
+    const breakdown = [...scaled(onGoods, itemTax), ...scaled(onDelivery, shippingTax)].filter((b) => b.amount > 0);
+    return {
+      effectiveTaxRatePct: onGoods.effectiveTaxRatePct > 0 ? onGoods.effectiveTaxRatePct : (onDelivery?.effectiveTaxRatePct ?? 0),
+      primaryName: onGoods.primaryName,
+      totalTax: Math.round((itemTax + shippingTax) * 100) / 100,
+      breakdown,
+      included,
+      itemTax,
+      shippingTax,
+    };
+  }
 
   async exportShipping(ctx: RequestContext, zoneId: bigint | undefined, format: "csv" | "xlsx" | "pdf" = "csv") {
     const columns = [

@@ -333,29 +333,40 @@ model AuditLog {
 // STORE SETTINGS (ALL HAVE 1-TO-1 WITH store)
 // ============================================================
 model StoreGeneralSetting {
-  id              BigInt   @id @default(autoincrement())
-  storeId         BigInt   @unique
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  tagline         String?
-  logoUrl         String?
-  faviconUrl      String?
-  emailFrom       String
-  emailFromName   String
-  phone           String?
-  addressLine1    String?
-  addressLine2    String?
-  city            String?
-  state           String?
-  postalCode      String?
-  countryCode     String?
-  timezone        String   @default("Asia/Dhaka")
-  dateFormat      String   @default("DD/MM/YYYY")
-  weightUnit      String   @default("kg")
-  dimensionUnit   String   @default("cm")
-  maintenanceMode Boolean  @default(false)
-  maintenanceMsg  String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               BigInt   @id @default(autoincrement())
+  storeId          BigInt   @unique
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tagline          String?
+  logoUrl          String?
+  faviconUrl       String?
+  emailFrom        String
+  emailFromName    String
+  phone            String?
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  state            String?
+  postalCode       String?
+  countryCode      String?
+  timezone         String   @default("Asia/Dhaka")
+  dateFormat       String   @default("DD/MM/YYYY")
+  weightUnit       String   @default("kg")
+  dimensionUnit    String   @default("cm")
+  maintenanceMode  Boolean  @default(false)
+  maintenanceMsg   String?
+  /// The registered business name printed on invoices (when it differs from the store name).
+  legalName        String?
+  /// VAT registration number (BIN), printed on invoices.
+  vatRegNo         String?
+  tradeLicenseNo   String?
+  /// Shelf prices and delivery charges already include VAT; tax is shown inside the total, not added.
+  pricesIncludeTax Boolean  @default(false)
+  /// Put in front of new order numbers ("FBD" -> FBD-20261001000001). Empty: numbers only.
+  orderPrefix      String?
+  /// Printed at the bottom of every invoice (return policy, bank details).
+  invoiceNote      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model StoreBrandSetting {
@@ -1385,6 +1396,10 @@ model Order {
   discountTotal          Decimal              @default(0) @db.Decimal(14, 2)
   shippingTotal          Decimal              @default(0) @db.Decimal(14, 2)
   taxTotal               Decimal              @default(0) @db.Decimal(14, 2)
+  /// Prices on this order included VAT (taxTotal is inside the total, not added to it).
+  pricesIncludeTax       Boolean              @default(false)
+  /// The VAT rate the order was charged at (%), kept so later rate changes don't alter it.
+  taxRate                Decimal?             @db.Decimal(5, 2)
   feeTotal               Decimal              @default(0) @db.Decimal(14, 2)
   grandTotal             Decimal              @db.Decimal(14, 2)
   currencyCode           String

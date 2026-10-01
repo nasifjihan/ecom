@@ -425,7 +425,7 @@ export default function GeneralSettingsPage() {
           <CardDescription>
             Configure identity, currency, units, legal content, and defaults that apply across your storefront.
           </CardDescription>
-          <Tabs defaultValue="general" className="mt-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger
                 value="general"
@@ -459,7 +459,7 @@ export default function GeneralSettingsPage() {
           </Tabs>
         </CardHeader>
         <CardContent className="pt-6">
-          <Tabs defaultValue="general">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsContent value="general">
               <FormProvider {...generalMethods}>
                 <Form
@@ -485,7 +485,7 @@ export default function GeneralSettingsPage() {
                       name="storeLegalName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Store Legal Name</FormLabel>
+                          <FormLabel>Registered business name</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>
@@ -815,7 +815,7 @@ export default function GeneralSettingsPage() {
                       name="vatNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>VAT / Tax Registration Number</FormLabel>
+                          <FormLabel>VAT registration number (BIN)</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>
@@ -828,7 +828,7 @@ export default function GeneralSettingsPage() {
                       name="companyNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Company Registration Number</FormLabel>
+                          <FormLabel>Trade licence number</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>

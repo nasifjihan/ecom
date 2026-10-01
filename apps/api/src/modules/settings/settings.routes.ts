@@ -10,6 +10,7 @@ import { prisma } from "../../config";
 import { ctrl, envelope, BadRequestError, NotFoundError, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { languagesView, saveStoreLanguages, storeLanguages } from "./languages";
+import { cleanOrderPrefix, nextOrderNumber, orderNumberStem } from "../orders/order-number.rules";
 
 type Req = Request & { ctx: RequestContext };
 
@@ -17,6 +18,7 @@ const opt = z.string().max(255).optional().nullable();
 
 const GeneralDto = z.object({
   storeName: z.string().min(2).max(120).optional(),
+  storeLegalName: z.string().max(200).optional().nullable(),
   storeDescription: z.string().max(255).optional().nullable(),
   defaultCurrency: z.string().length(3).toUpperCase().optional(),
   timezone: z.string().max(64).optional(),
@@ -33,6 +35,16 @@ const AddressDto = z.object({
   city: opt,
   postcode: opt,
   phone: z.string().max(32).optional().nullable(),
+  /** VAT registration number (BIN). */
+  vatNumber: z.string().max(50).optional().nullable(),
+  /** Trade licence number. */
+  companyNumber: z.string().max(50).optional().nullable(),
+});
+
+const TaxDto = z.object({
+  pricesIncludeTax: z.boolean().optional(),
+  orderPrefix: z.string().max(20).optional().nullable(),
+  invoiceNote: z.string().max(1000).optional().nullable(),
 });
 
 const ProfileDto = z.object({
@@ -60,6 +72,12 @@ const PasswordDto = z
     path: ["confirmNewPassword"],
   });
 
+/** Trimmed text, or null when empty. */
+const textOrNull = (v: string | null | undefined): string | null => {
+  const t = v?.trim();
+  return t?.length ? t : null;
+};
+
 const storeIdOf = (req: Req): bigint => {
   if (req.ctx.storeId === undefined) throw new BadRequestError("Store not resolved", "TENANT_NOT_RESOLVED");
   return BigInt(req.ctx.storeId);
@@ -84,6 +102,7 @@ async function readGeneral(storeId: bigint) {
   return {
     general: {
       storeName: store.name,
+      storeLegalName: g?.legalName ?? "",
       storeSlug: store.slug,
       storeDescription: g?.tagline ?? "",
       defaultCurrency: store.localizationSettings?.defaultCurrency ?? "BDT",
@@ -100,6 +119,15 @@ async function readGeneral(storeId: bigint) {
       city: g?.city ?? "",
       postcode: g?.postalCode ?? "",
       phone: g?.phone ?? "",
+      vatNumber: g?.vatRegNo ?? "",
+      companyNumber: g?.tradeLicenseNo ?? "",
+    },
+    tax: {
+      pricesIncludeTax: g?.pricesIncludeTax ?? false,
+      orderPrefix: g?.orderPrefix ?? "",
+      invoiceNote: g?.invoiceNote ?? "",
+      /** What the next order number will look like. */
+      sampleOrderNumber: nextOrderNumber(orderNumberStem(g?.orderPrefix, new Date()), null),
     },
   };
 }
@@ -119,7 +147,7 @@ const profileOf = (u: { id: bigint; name: string; email: string; phone: string |
   };
 };
 
-const SECTIONS = ["general", "address"] as const;
+const SECTIONS = ["general", "address", "tax"] as const;
 
 const LanguagesDto = z.object({
   enabled: z.array(z.string().max(10)).max(10),
@@ -221,6 +249,7 @@ adminSettingsRouter.put(
       const dto = GeneralDto.parse(req.body);
       if (dto.storeName) await prisma.store.update({ where: { id: storeId }, data: { name: dto.storeName } });
       await upsertGeneral(storeId, {
+        ...(dto.storeLegalName !== undefined ? { legalName: textOrNull(dto.storeLegalName) } : {}),
         ...(dto.storeDescription !== undefined ? { tagline: dto.storeDescription || null } : {}),
         ...(dto.timezone ? { timezone: dto.timezone } : {}),
         ...(dto.dateFormat ? { dateFormat: dto.dateFormat } : {}),
@@ -244,6 +273,18 @@ adminSettingsRouter.put(
         city: dto.city || null,
         postalCode: dto.postcode || null,
         phone: dto.phone || null,
+        ...(dto.vatNumber !== undefined ? { vatRegNo: textOrNull(dto.vatNumber) } : {}),
+        ...(dto.companyNumber !== undefined ? { tradeLicenseNo: textOrNull(dto.companyNumber) } : {}),
+      });
+    } else if (section === "tax") {
+      const dto = TaxDto.parse(req.body);
+      const prefix = dto.orderPrefix === undefined ? undefined : cleanOrderPrefix(dto.orderPrefix);
+      if (prefix === undefined && dto.orderPrefix !== undefined)
+        throw new BadRequestError("The order number prefix can be 1–6 letters or digits", "VALIDATION_FAILED");
+      await upsertGeneral(storeId, {
+        ...(dto.pricesIncludeTax !== undefined ? { pricesIncludeTax: dto.pricesIncludeTax } : {}),
+        ...(dto.orderPrefix !== undefined ? { orderPrefix: prefix } : {}),
+        ...(dto.invoiceNote !== undefined ? { invoiceNote: textOrNull(dto.invoiceNote) } : {}),
       });
     } else {
       throw new BadRequestError(`"${section}" settings are not stored yet`, "BAD_REQUEST");

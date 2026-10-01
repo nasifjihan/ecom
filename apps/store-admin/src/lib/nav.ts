@@ -188,6 +188,7 @@ export const SETTINGS_SECTIONS: NavSection[] = [
       { href: "/settings/couriers", label: "Couriers", icon: Truck, perm: "settings.view" },
       { href: "/settings/sms", label: "SMS", icon: MessageSquareText, perm: "settings.view" },
       { href: "/settings/languages", label: "Languages", icon: Languages, perm: "settings.view" },
+      { href: "/settings/tax", label: "VAT & invoices", icon: Receipt, perm: "settings.view" },
       { href: "/settings/emails", label: "Emails", icon: Mail, perm: "emails.view" },
     ],
   },

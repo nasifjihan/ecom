@@ -42,6 +42,7 @@ import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context"
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
 import { checkOrderBoxes } from "../giftboxes/giftbox.check";
+import { nextOrderNumber, orderNumberStem } from "../orders/order-number.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -966,21 +967,21 @@ export class StorefrontService {
   // ------------------------------------------------------------------ checkout
 
   /**
-   * The day's next order number (YYYYMMDD + 6 digits; numbers are unique across the platform).
-   * A transaction lock makes orders placed at the same moment take turns, so two can't get the
-   * same number; it's held until the order is saved.
+   * The day's next order number: the store's prefix (if any), the date and a 6-digit count
+   * (FBD-20261001000001). Numbers are unique across the platform. A transaction lock makes orders
+   * placed at the same moment take turns, so two can't get the same number; it's held until the
+   * order is saved.
    */
   private async nextOrderNumber(t: Prisma.TransactionClient): Promise<string> {
     await t.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('order-number'))`;
-    const d = new Date();
-    const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const setting = await t.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { orderPrefix: true } });
+    const stem = orderNumberStem(setting?.orderPrefix, new Date());
     const last = await t.order.findFirst({
-      where: { number: { startsWith: datePart } },
+      where: { number: { startsWith: stem } },
       orderBy: { number: "desc" },
       select: { number: true },
     });
-    const n = last ? Number(last.number.slice(datePart.length)) || 0 : 0;
-    return `${datePart}${String(n + 1).padStart(6, "0")}`;
+    return nextOrderNumber(stem, last?.number ?? null);
   }
 
   /** A checkout address with its division/district/upazila names taken from the picked area. */
@@ -1136,8 +1137,9 @@ export class StorefrontService {
     const discountTotal = round2(promotionDiscount + couponDiscount + manualDiscount + memberDiscount);
     const shippingTotal = freeShipping ? 0 : round2(delivery?.fee ?? 0);
 
-    // Tax on the discounted subtotal + shipping (same inputs the checkout page shows).
-    const taxes = await this.shipping.resolveTaxes(this.ctx, {
+    // Tax on the discounted subtotal + shipping (same inputs the checkout page shows). With
+    // VAT-inclusive prices it's the VAT inside them, so it isn't added to the total.
+    const taxes = await this.shipping.orderTax(this.ctx, {
       countryCode: ship.country,
       state: ship.division || undefined,
       city: ship.district,
@@ -1146,11 +1148,14 @@ export class StorefrontService {
       shippingTotal,
     });
     const taxTotal = round2(taxes.totalTax);
+    const taxIncluded = taxes.included;
+    const itemTax = taxes.itemTax;
+    const taxRate = taxTotal > 0 ? taxes.effectiveTaxRatePct : 0;
     const feeTotal =
       input.applyGatewayFee && gateway
         ? round2(num(gateway.feeFixed) + ((itemsSubtotal - discountTotal) * num(gateway.feePercent)) / 100)
         : 0;
-    const orderTotal = round2(itemsSubtotal - discountTotal + shippingTotal + taxTotal + feeTotal);
+    const orderTotal = round2(itemsSubtotal - discountTotal + shippingTotal + (taxIncluded ? 0 : taxTotal) + feeTotal);
     // The wallet pays part or all of it; grandTotal is what's left for the payment method.
     const walletUsed = input.useWallet ? walletUse(orderTotal, loyalty.balance, Number(loyalty.settings.walletMaxPercent)) : 0;
     const grandTotal = round2(orderTotal - walletUsed);
@@ -1173,7 +1178,7 @@ export class StorefrontService {
       gifts,
       member: loyalty.level ? { level: loyalty.level.name, percent: loyalty.level.discountPercent } : null,
       wallet: { balance: loyalty.balance, enabled: loyalty.settings.walletEnabled, maxPercent: Number(loyalty.settings.walletMaxPercent) },
-      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, memberDiscount, discountTotal, shippingTotal, taxTotal, feeTotal, orderTotal, walletUsed, grandTotal, qty, weightKG },
+      totals: { itemsSubtotal, promotionDiscount, couponDiscount, manualDiscount, memberDiscount, discountTotal, shippingTotal, taxTotal, taxIncluded, taxRate, itemTax, feeTotal, orderTotal, walletUsed, grandTotal, qty, weightKG },
     };
   }
 
@@ -1272,9 +1277,10 @@ export class StorefrontService {
       const promotionDiscount = q.totals.promotionDiscount;
       const restDiscount = round2(discountTotal - promotionDiscount);
       const restRatio = restDiscount > 0 && itemsSubtotal - promotionDiscount > 0 ? restDiscount / (itemsSubtotal - promotionDiscount) : 0;
-      // Spread the item share of the tax (tax total minus the shipping share) across lines.
+      // Spread the goods' share of the tax across lines (inside each line when prices include VAT).
       const taxable = itemsSubtotal - discountTotal;
-      const itemTaxRatio = taxable > 0 ? (taxTotal * (taxable / (taxable + shippingTotal))) / taxable : 0;
+      const { taxIncluded, taxRate } = q.totals;
+      const itemTaxRatio = taxable > 0 ? q.totals.itemTax / taxable : 0;
 
       const order = await t.order.create({
         data: {
@@ -1323,6 +1329,8 @@ export class StorefrontService {
           discountTotal,
           shippingTotal,
           taxTotal,
+          pricesIncludeTax: taxIncluded,
+          taxRate: taxTotal > 0 ? taxRate : null,
           feeTotal,
           grandTotal,
           couponUsed: coupon?.code ?? null,
@@ -1359,7 +1367,7 @@ export class StorefrontService {
                 lineSubtotal: l.lineSubtotal,
                 lineDiscount,
                 lineTax,
-                lineTotal: round2(l.lineSubtotal - lineDiscount + lineTax),
+                lineTotal: round2(l.lineSubtotal - lineDiscount + (taxIncluded ? 0 : lineTax)),
                 meta:
                   l.flash || l.giftBox
                     ? {
@@ -1711,6 +1719,9 @@ function orderView(o: OrderWithItems) {
     couponUsed: o.couponUsed,
     shippingTotal: num(o.shippingTotal),
     taxTotal: num(o.taxTotal),
+    /** Prices included VAT: taxTotal is part of grandTotal, not added to it. */
+    taxIncluded: o.pricesIncludeTax,
+    taxRate: o.taxRate === null ? null : num(o.taxRate),
     feeTotal: num(o.feeTotal),
     grandTotal: num(o.grandTotal),
     /** Loyalty level discount (part of discountTotal), wallet payment and cashback earned. */

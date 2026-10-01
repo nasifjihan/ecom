@@ -345,10 +345,12 @@ export default function ThankYouPage() {
                     {order.shippingTotal === 0 ? t("FREE") : formatBDT(order.shippingTotal)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t("VAT")}</span>
-                  <span className="font-medium">{formatBDT(order.taxTotal)}</span>
-                </div>
+                {!order.taxIncluded && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t("VAT")}</span>
+                    <span className="font-medium">{formatBDT(order.taxTotal)}</span>
+                  </div>
+                )}
                 {order.feeTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t("Payment fee")}</span>
@@ -366,6 +368,9 @@ export default function ThankYouPage() {
                   <span className="font-semibold">{(order.walletUsed ?? 0) > 0 ? t("Left to pay") : t("Grand Total")}</span>
                   <span className="text-2xl font-black text-primary">{formatBDT(order.grandTotal)}</span>
                 </div>
+                {order.taxIncluded && order.taxTotal > 0 && (
+                  <p className="text-right text-xs text-muted-foreground">{t("Includes VAT {amount}", { amount: formatBDT(order.taxTotal) })}</p>
+                )}
               </div>
             </CardContent>
           </Card>

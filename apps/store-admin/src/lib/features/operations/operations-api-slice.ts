@@ -143,6 +143,10 @@ export interface Order {
   subtotal: number;
   shippingCost: number;
   vatAmount: number;
+  /** Prices included VAT: vatAmount is part of the total, not added to it. */
+  vatIncluded: boolean;
+  /** The rate the order was charged at, when it was kept. */
+  vatRate: number | null;
   discountAmount: number;
   couponCode?: string;
   grandTotal: number;
@@ -576,6 +580,8 @@ interface ApiOrder {
   discountTotal: string;
   shippingTotal: string;
   taxTotal: string;
+  pricesIncludeTax?: boolean;
+  taxRate?: string | null;
   grandTotal: string;
   couponUsed: string | null;
   source?: string;
@@ -675,6 +681,8 @@ export function fromApiOrder(o: ApiOrder): Order {
     subtotal: Number(o.itemsSubtotal),
     shippingCost: Number(o.shippingTotal),
     vatAmount: Number(o.taxTotal),
+    vatIncluded: !!o.pricesIncludeTax,
+    vatRate: o.taxRate == null ? null : Number(o.taxRate),
     discountAmount: Number(o.discountTotal),
     couponCode: o.couponUsed ?? undefined,
     grandTotal: Number(o.grandTotal),

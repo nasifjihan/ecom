@@ -63,7 +63,7 @@ These are our advantages. Keep them.
 | Invoice by SMS | ✅ | Batch 24: order page "Send invoice by SMS" |
 | Gift orders (recipient vs buyer, print labels) | ❌ | |
 | Stock reserved on order, committed when packed | ✅ | Batch 29: an order holds stock in the warehouse it ships from; packing a parcel takes it off the shelf; cancelling releases it |
-| Order code `ORD-YYYYMMDD-XXXXXX`, prefix per store | 🟡 | We use `20260926000001`; add a prefix setting |
+| Order code `ORD-YYYYMMDD-XXXXXX`, prefix per store | ✅ | Batch 35: optional prefix per store (`FBD-20261001000001`), Settings → VAT & invoices |
 
 ### Marketing (reference 12, 07.3–07.5)
 | Feature | Status | Note |
@@ -150,7 +150,7 @@ These are our advantages. Keep them.
 | Couriers: delivered / returned rate, days to deliver, COD outstanding, payouts and shortfall | ✅ Batch 28 |
 | Returns and refunds by reason and method | ✅ Batch 28 |
 | Inventory valuation (at cost and at selling price) | ✅ Batch 28 |
-| Tax collected by day / month | ✅ Batch 28 (tax added on top; VAT-inclusive prices still to do) |
+| Tax collected by day / month | ✅ Batch 28; Batch 35: sales shown before VAT for VAT-inclusive orders |
 | CSV export of every table | ✅ Batch 28 |
 | By storefront, scheduled e-mailed reports, PDF export | 🟡 | Batch 32: every report filters by storefront and sales has a by-storefront table; no scheduled e-mails or PDF |
 
@@ -168,8 +168,8 @@ These are our advantages. Keep them.
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
 | Staff on some sites only | ✅ | Batch 32: staff can be limited to some storefronts (their orders, parcels, returns, payments, reports and storefront content) |
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Email on/off per template ✅ |
-| VAT: prices VAT-inclusive, rate kept per order, VAT report | 🟡 | We add tax on top |
-| Company & legal details (BIN, trade licence) on invoices | 🟡 | |
+| VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
+| Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
 | Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | ❌ | |
 
 ### Per-storefront settings (reference 22)
@@ -182,7 +182,7 @@ These are our advantages. Keep them.
 | Payment gateway credentials per store, sandbox/live, **encrypted**, test button | ✅ | Batch 35: bKash and SSLCommerz merchant keys, masked in the admin, "Test connection" required before going online |
 | Login methods: **phone OTP**, email OTP, Google, Facebook | 🟡 | Batch 24: phone OTP; email OTP / Google / Facebook not yet |
 | SMS provider settings | ✅ | Batch 24: BulkSMSBD, Alpha SMS, SSL Wireless; encrypted keys, test send, log |
-| Invoice name / note / order prefix | 🟡 |
+| Invoice name / note / order prefix | ✅ Batch 35 |
 | robots.txt editable | ❌ |
 
 ### Storefront (reference 50)
@@ -235,7 +235,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 32 ✅ | **Multi-storefront inside one store** (shared stock, per-storefront prices and settings): own web addresses, look, homepage, menus, product range and prices; payment methods, delivery zones, default courier, promotions and coupons per storefront; staff limited to storefronts; reports and manual orders by storefront | Reference's core idea; big change | XL |
 | 33 ✅ | Wholesale/B2B ✅ (accounts, bulk prices, margin screen, quotations), sales-team commission ✅, redirects ✅, landing pages ✅, festival calendar ✅, gift box builder ✅ | Add-ons to sell | L each |
 | 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
-| 35 🟡 | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
+| 35 ✅ | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
 | 36 | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |

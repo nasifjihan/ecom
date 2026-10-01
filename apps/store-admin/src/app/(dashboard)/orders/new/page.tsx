@@ -534,7 +534,7 @@ export default function NewOrderPage() {
                         ? taka(t.shippingTotal)
                         : "Free",
                 ],
-                ["Tax", t ? taka(t.taxTotal) : "—"],
+                ...(t?.taxIncluded ? [] : [["VAT", t ? taka(t.taxTotal) : "—"]]),
                 ...(t?.walletUsed ? [["Paid from wallet", `−${taka(t.walletUsed)}`]] : []),
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
@@ -546,6 +546,7 @@ export default function NewOrderPage() {
                 <span>Total</span>
                 <span>{t ? taka(t.grandTotal) : "—"}</span>
               </div>
+              {t?.taxIncluded && t.taxTotal > 0 && <p className="text-right text-xs text-slate-500">Includes VAT {taka(t.taxTotal)}</p>}
               {result?.promotions.gifts.map((g) => (
                 <p key={g.promotionId} className="rounded-md bg-pink-50 p-2 text-pink-800 dark:bg-pink-500/10 dark:text-pink-300">
                   Free gift: {g.qty} × {g.title} ({g.promotionName})

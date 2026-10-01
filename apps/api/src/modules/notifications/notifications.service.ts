@@ -7,6 +7,7 @@ import { env, logger, prisma } from "../../config"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
 import { storeBrand, storeUrls, type StoreUrls } from "../content/store-details"
 import { dispatchEmail, type EmailLogData } from "./email.queue"
+import { vatLabel } from "../shipping/tax.rules";
 import {
   renderEmail,
   type EmailBrand,
@@ -285,9 +286,11 @@ export class EmailService {
           label: "Delivery",
           value: n(order.shippingTotal) > 0 ? money(order.shippingTotal) : "Free",
         },
-        ...(n(order.taxTotal) > 0 ? [{ label: "Tax", value: money(order.taxTotal) }] : []),
+        ...(n(order.taxTotal) > 0 && !order.pricesIncludeTax ? [{ label: vatLabel(order.taxRate), value: money(order.taxTotal) }] : []),
         ...(n(order.feeTotal) > 0 ? [{ label: "Payment fee", value: money(order.feeTotal) }] : []),
         { label: "Total", value: money(order.grandTotal), strong: true },
+        // VAT-inclusive prices: the VAT is part of the total above.
+        ...(n(order.taxTotal) > 0 && order.pricesIncludeTax ? [{ label: `Includes ${vatLabel(order.taxRate)}`, value: money(order.taxTotal) }] : []),
       ],
       shipTo: [
         `${order.shippingFirstName ?? order.billingFirstName} ${order.shippingLastName ?? order.billingLastName}`.trim(),

@@ -94,6 +94,8 @@ export interface ManualOrderQuote {
     discountTotal: number;
     shippingTotal: number;
     taxTotal: number;
+    /** Prices include VAT: taxTotal is part of grandTotal, not added to it. */
+    taxIncluded?: boolean;
     orderTotal: number;
     walletUsed: number;
     grandTotal: number;

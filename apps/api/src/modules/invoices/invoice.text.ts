@@ -23,6 +23,10 @@ export interface InvoiceText {
   deliveryCharge: string
   free: string
   tax: string
+  /** "Includes VAT 15%" under the total, when prices include VAT. */
+  includes: (what: string) => string
+  bin: string
+  tradeLicence: string
   paymentFee: string
   paidFromWallet: string
   amountPaid: string
@@ -58,7 +62,10 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     discount: "Discount",
     deliveryCharge: "Delivery",
     free: "Free",
-    tax: "Tax",
+    tax: "VAT",
+    includes: (what) => `Includes ${what}`,
+    bin: "BIN",
+    tradeLicence: "Trade licence",
     paymentFee: "Payment fee",
     paidFromWallet: "Paid from wallet",
     amountPaid: "Amount paid",
@@ -91,7 +98,10 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     discount: "ছাড়",
     deliveryCharge: "ডেলিভারি চার্জ",
     free: "ফ্রি",
-    tax: "কর",
+    tax: "ভ্যাট",
+    includes: (what) => `${what} সহ`,
+    bin: "বিআইএন",
+    tradeLicence: "ট্রেড লাইসেন্স",
     paymentFee: "পেমেন্ট ফি",
     paidFromWallet: "ওয়ালেট থেকে পরিশোধ",
     amountPaid: "পরিশোধিত",

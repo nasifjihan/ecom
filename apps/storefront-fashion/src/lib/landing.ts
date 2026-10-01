@@ -49,7 +49,7 @@ export interface LandingQuote {
   unitPrice: number | null;
   problem: string | null;
   shippingOptions: { id: string; name: string; fee: number; freeReason: string | null; minDays: number | null; maxDays: number | null }[];
-  totals: { itemsSubtotal: number; discountTotal: number; shippingTotal: number; taxTotal: number; feeTotal: number; grandTotal: number };
+  totals: { itemsSubtotal: number; discountTotal: number; shippingTotal: number; taxTotal: number; taxIncluded?: boolean; feeTotal: number; grandTotal: number };
   problems: string[];
 }
 

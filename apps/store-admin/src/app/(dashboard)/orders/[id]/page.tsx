@@ -168,6 +168,8 @@ export default function OrderDetailPage() {
   // Loyalty lines, read from the typed order.
   const loyalty = { discount: orderRaw?.memberDiscount ?? 0, level: orderRaw?.memberLevel, wallet: orderRaw?.walletUsed ?? 0, cashback: orderRaw?.cashback ?? 0 };
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
+  const vat = (orderRaw as Order | undefined) ?? { vatAmount: 0, vatIncluded: false, vatRate: null };
+  const vatName = vat.vatRate ? `VAT ${vat.vatRate}%` : "VAT";
   const placedOn = orderRaw?.storefront;
 
   const [updateStatus] = useUpdateOrderStatusMutation();
@@ -474,7 +476,12 @@ export default function OrderDetailPage() {
                 </div>
               )}
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Shipping ({order.shippingMethod})</span><span className="font-medium">{formatCurrency(order.shippingCost)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">VAT (15%)</span><span className="font-medium">{formatCurrency(order.vatAmount)}</span></div>
+              {!vat.vatIncluded && vat.vatAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">{vatName}</span>
+                  <span className="font-medium">{formatCurrency(vat.vatAmount)}</span>
+                </div>
+              )}
               {loyalty.wallet > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">Paid from wallet</span>
@@ -486,6 +493,11 @@ export default function OrderDetailPage() {
                 <span className="font-semibold text-slate-900 dark:text-white">{loyalty.wallet > 0 ? "To pay" : "Grand Total"}</span>
                 <span className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(order.grandTotal)}</span>
               </div>
+              {vat.vatIncluded && vat.vatAmount > 0 && (
+                <p className="text-right text-xs text-slate-500">
+                  Includes {vatName}: {formatCurrency(vat.vatAmount)}
+                </p>
+              )}
               {loyalty.cashback > 0 && <p className="text-xs text-emerald-700">{formatCurrency(loyalty.cashback)} cashback credited to the customer&apos;s wallet.</p>}
             </div>
 

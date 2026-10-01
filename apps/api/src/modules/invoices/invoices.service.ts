@@ -8,6 +8,7 @@ import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
 import { storeBrand, type StoreBrand } from "../content/store-details"
 import { renderInvoicePdf, renderInvoicesPdf, type InvoiceDoc } from "./invoice.pdf"
 import { INVOICE_TEXT, type InvoiceLang } from "./invoice.text"
+import { vatLabel } from "../shipping/tax.rules"
 
 export interface InvoiceFile {
   number: string
@@ -16,6 +17,13 @@ export interface InvoiceFile {
 }
 
 type FullOrder = Order & { items: OrderItem[]; shipments: Shipment[] }
+
+interface LegalDetails {
+  legalName: string | null
+  vatRegNo: string | null
+  tradeLicenseNo: string | null
+  invoiceNote: string | null
+}
 
 const num = (v: unknown) => Number(v) || 0
 
@@ -83,12 +91,19 @@ export class InvoiceService {
     return order
   }
 
-  private storeCache: Promise<{ brand: StoreBrand; logo: Buffer | null }> | null = null
+  private storeCache: Promise<{ brand: StoreBrand; logo: Buffer | null; legal: LegalDetails | null }> | null = null
 
   /** Store details and logo, loaded once per service (so a batch of invoices fetches the logo once). */
   private store() {
-    this.storeCache ??= storeBrand(this.storeId).then(async ({ brand }) => ({
+    this.storeCache ??= Promise.all([
+      storeBrand(this.storeId),
+      prisma.storeGeneralSetting.findUnique({
+        where: { storeId: this.storeId },
+        select: { legalName: true, vatRegNo: true, tradeLicenseNo: true, invoiceNote: true },
+      }),
+    ]).then(async ([{ brand }, legal]) => ({
       brand,
+      legal,
       logo: await fetchLogo(brand.logoUrl),
     }))
     return this.storeCache
@@ -147,7 +162,7 @@ export class InvoiceService {
   }
 
   private async build(order: FullOrder): Promise<InvoiceDoc> {
-    const [invoice, { brand, logo }, gateway] = await Promise.all([
+    const [invoice, { brand, logo, legal }, gateway] = await Promise.all([
       this.record(order),
       this.store(),
       prisma.paymentGatewayConfig.findFirst({
@@ -212,7 +227,9 @@ export class InvoiceService {
         label: T.deliveryCharge,
         value: num(order.shippingTotal) > 0 ? money(order.shippingTotal) : T.free,
       },
-      ...(num(order.taxTotal) > 0 ? [{ label: T.tax, value: money(order.taxTotal) }] : []),
+      ...(num(order.taxTotal) > 0 && !order.pricesIncludeTax
+        ? [{ label: vatLabel(order.taxRate, T.tax), value: money(order.taxTotal) }]
+        : []),
       ...(num(order.feeTotal) > 0 ? [{ label: T.paymentFee, value: money(order.feeTotal) }] : []),
       // Paid from the wallet: the order total, the wallet part, then what the payment method covers.
       ...(num(order.walletUsed) > 0
@@ -227,6 +244,12 @@ export class InvoiceService {
           ? { label: T.amountDue, value: money(order.grandTotal) }
           : { label: T.refunded, value: money(order.grandTotal) },
     ]
+    // VAT-inclusive prices: the VAT is already part of the total, so it's shown just under it.
+    if (num(order.taxTotal) > 0 && order.pricesIncludeTax)
+      totals.splice(totals.findIndex((row) => row.strong) + 1, 0, {
+        label: T.includes(vatLabel(order.taxRate, T.tax)),
+        value: money(order.taxTotal),
+      })
 
     return {
       lang,
@@ -239,6 +262,11 @@ export class InvoiceService {
         logo,
         color: brand.color,
         lines: [brand.address, brand.phone, brand.email],
+        legal: [
+          legal?.legalName && legal.legalName.trim() !== brand.storeName.trim() ? legal.legalName.trim() : "",
+          legal?.vatRegNo ? `${T.bin}: ${legal.vatRegNo}` : "",
+          legal?.tradeLicenseNo ? `${T.tradeLicence}: ${legal.tradeLicenseNo}` : "",
+        ].filter(Boolean),
         website: brand.storeUrl.replace(/^https?:\/\//, ""),
       },
       billTo,
@@ -262,6 +290,7 @@ export class InvoiceService {
       })),
       totals,
       note: order.customerNote,
+      storeNote: legal?.invoiceNote ?? null,
     }
   }
 }

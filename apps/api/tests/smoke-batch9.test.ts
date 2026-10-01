@@ -179,6 +179,10 @@ vi.mock("../src/config/prisma", () => {
       domain: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
+      // No store settings: VAT is added on top of prices.
+      storeGeneralSetting: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
       adminUser: {
         findFirst: vi.fn().mockResolvedValue({ id: 1, roleId: 1, role: { id: 1, name: "SUPER" } }),
       },

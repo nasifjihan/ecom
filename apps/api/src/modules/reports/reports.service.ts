@@ -134,7 +134,7 @@ export class ReportsService {
     return prisma.$queryRaw<FigureRow[]>`
       WITH o AS (
         SELECT o."id", ${key} AS k, o."itemsSubtotal", o."discountTotal", o."shippingTotal",
-               o."taxTotal", o."refundedTotal"
+               o."taxTotal", o."refundedTotal", o."pricesIncludeTax"
         FROM "Order" o
         WHERE o."storeId" = ${this.storeId}${this.sfSql()}
           AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
@@ -150,7 +150,8 @@ export class ReportsService {
         SELECT oi."orderId",
                SUM(oi."quantity") AS units,
                SUM(CASE WHEN oi."unitCost" IS NOT NULL THEN oi."quantity" ELSE 0 END) AS units_cost,
-               SUM(COALESCE(oi."unitCost", 0) * GREATEST(oi."quantity" - COALESCE(b.qty, 0), 0)) AS cogs
+               SUM(COALESCE(oi."unitCost", 0) * GREATEST(oi."quantity" - COALESCE(b.qty, 0), 0)) AS cogs,
+               SUM(oi."lineTax") AS item_tax
         FROM "OrderItem" oi
         JOIN o ON o."id" = oi."orderId"
         LEFT JOIN back b ON b."orderItemId" = oi."id"
@@ -158,9 +159,10 @@ export class ReportsService {
       )
       SELECT o.k::text AS k,
              COUNT(*)::int AS orders,
-             SUM(o."itemsSubtotal")::float8 AS items_subtotal,
+             -- Sales and delivery before VAT: VAT-inclusive orders have it taken out.
+             SUM(o."itemsSubtotal" - CASE WHEN o."pricesIncludeTax" THEN COALESCE(l.item_tax, 0) ELSE 0 END)::float8 AS items_subtotal,
              SUM(o."discountTotal")::float8 AS discounts,
-             SUM(o."shippingTotal")::float8 AS shipping,
+             SUM(o."shippingTotal" - CASE WHEN o."pricesIncludeTax" THEN GREATEST(o."taxTotal" - COALESCE(l.item_tax, 0), 0) ELSE 0 END)::float8 AS shipping,
              SUM(o."taxTotal")::float8 AS tax,
              SUM(o."refundedTotal")::float8 AS refunds,
              COALESCE(SUM(l.cogs), 0)::float8 AS cogs,
@@ -256,7 +258,8 @@ export class ReportsService {
              MAX(oi."productSku") AS sku,
              SUM(oi."quantity")::int AS units,
              COALESCE(SUM(b.qty), 0)::int AS units_back,
-             SUM(oi."lineSubtotal" - oi."lineDiscount")::float8 AS revenue,
+             -- Before VAT: on VAT-inclusive orders the line's VAT is inside its price.
+             SUM(oi."lineSubtotal" - oi."lineDiscount" - CASE WHEN o."pricesIncludeTax" THEN oi."lineTax" ELSE 0 END)::float8 AS revenue,
              COALESCE(SUM(b.amount), 0)::float8 AS refunded,
              SUM(COALESCE(oi."unitCost", 0) * GREATEST(oi."quantity" - COALESCE(b.qty, 0), 0))::float8 AS cogs,
              SUM(CASE WHEN oi."unitCost" IS NOT NULL THEN oi."quantity" ELSE 0 END)::int AS units_cost,
@@ -747,10 +750,13 @@ export class ReportsService {
       SELECT ${ReportsService.bucketSql(bucket, tz)} AS k,
              COUNT(*)::int AS orders,
              COUNT(*) FILTER (WHERE o."taxTotal" > 0)::int AS taxed,
-             SUM(o."itemsSubtotal" - o."discountTotal")::float8 AS sales,
-             SUM(o."shippingTotal")::float8 AS shipping,
+             -- Before VAT: on VAT-inclusive orders the goods' VAT (sum of line VAT) and the
+             -- delivery's VAT (the rest) come out of them.
+             SUM(o."itemsSubtotal" - o."discountTotal" - CASE WHEN o."pricesIncludeTax" THEN COALESCE(lt.item_tax, 0) ELSE 0 END)::float8 AS sales,
+             SUM(o."shippingTotal" - CASE WHEN o."pricesIncludeTax" THEN GREATEST(o."taxTotal" - COALESCE(lt.item_tax, 0), 0) ELSE 0 END)::float8 AS shipping,
              SUM(o."taxTotal")::float8 AS tax
       FROM "Order" o
+      LEFT JOIN LATERAL (SELECT SUM(oi."lineTax") AS item_tax FROM "OrderItem" oi WHERE oi."orderId" = o."id") lt ON true
       WHERE o."storeId" = ${this.storeId}${this.sfSql()}
         AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end}
         AND o."status"::text = ANY(${statusesFor(basis)})

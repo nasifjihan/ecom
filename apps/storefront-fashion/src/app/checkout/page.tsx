@@ -281,6 +281,8 @@ export default function CheckoutPage() {
   });
 
   const actualTaxTotal = taxData?.total ?? 0;
+  // VAT-inclusive prices: the VAT is already inside them, so it isn't added to the total.
+  const taxIncluded = !!taxData?.included;
   const actualTaxLines = taxData?.lines ?? [];
 
   const gatewayFee = selectedGatewayConfig
@@ -316,7 +318,7 @@ export default function CheckoutPage() {
     });
   }
 
-  const orderTotal = Math.max(0, subtotal + shippingAmount + actualTaxTotal + gatewayFee - couponDiscount - promoDiscount - memberDiscount);
+  const orderTotal = Math.max(0, subtotal + shippingAmount + (taxIncluded ? 0 : actualTaxTotal) + gatewayFee - couponDiscount - promoDiscount - memberDiscount);
   // The wallet pays what the shop allows; the payment method covers the rest.
   const walletBalance = loyalty?.wallet.enabled ? loyalty.wallet.balance : 0;
   const walletUsed =
@@ -1086,11 +1088,16 @@ export default function CheckoutPage() {
                           </div>
                         ))}
                         <div className="flex justify-between items-center px-4 py-2.5 bg-card font-semibold">
-                          <span>{t("Total Tax")}</span>
+                          <span>{taxIncluded ? t("VAT included in prices") : t("Total Tax")}</span>
                           <span className="text-primary">{formatBDT(actualTaxTotal)}</span>
                         </div>
                       </div>
                     </div>
+                    {taxIncluded && actualTaxTotal > 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {t("Prices already include VAT, so nothing is added to your total.")}
+                      </p>
+                    )}
                     {(shippingAddress.country ?? "BD") !== "BD" && (
                       <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                         <AlertCircle className="h-3.5 w-3.5" />
@@ -1203,6 +1210,7 @@ export default function CheckoutPage() {
             shippingLoading={ratesLoading}
             taxAmount={actualTaxTotal}
             taxLines={actualTaxLines}
+            taxIncluded={taxIncluded}
             taxLoading={taxLoading}
             discounts={discountsArr}
             customLines={

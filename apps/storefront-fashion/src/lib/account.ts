@@ -86,6 +86,8 @@ export interface MyOrder {
 
   shippingTotal: number;
   taxTotal: number;
+  /** Prices included VAT: taxTotal is part of the total, not added to it. */
+  taxIncluded?: boolean;
   feeTotal: number;
   grandTotal: number;
   currency: string;
