@@ -30,6 +30,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     ...g("orders"),
     ...g("commissions", "view"),
     ...g("customers", "view", "create", "edit"),
+    ...g("leads"),
     ...g("products", "view"),
     ...g("inventory", "view"),
     ...g("shipping", "view"),
@@ -37,6 +38,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
   customer_support: [
     ...g("orders", "view", "create"),
     ...g("customers", "view", "create", "edit"),
+    ...g("leads", "view", "create", "edit"),
     ...g("reviews", "view", "edit"),
     ...g("products", "view"),
   ],
@@ -50,6 +52,7 @@ export const STORE_ROLE_PERMISSIONS: Record<string, string[]> = {
     ...g("products", "view"),
     ...g("categories", "view"),
     ...g("customers", "view"),
+    ...g("leads", "view"),
     ...g("emails"),
   ],
   content: [

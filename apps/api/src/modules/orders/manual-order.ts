@@ -7,6 +7,7 @@
  *   POST /api/admin/orders/manual/quote   price a draft; never saves, lists problems instead of failing
  *   POST /api/admin/orders/manual         create the order
  */
+import { leadForOrder, winLead } from "../leads/leads.service";
 import { z } from "zod";
 import { logger, prisma } from "../../config";
 import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
@@ -87,6 +88,8 @@ const Base = z.object({
   quotationId: z.coerce.bigint().positive().optional(),
   /** The salesperson credited (commission); null: nobody. Default: the quote's maker or whoever enters it, if on the sales team. */
   salespersonId: z.coerce.bigint().positive().nullable().optional(),
+  /** Made from this CRM lead: the lead is won with the order (default salesperson: whoever follows it). */
+  leadId: z.coerce.bigint().positive().optional(),
 });
 
 export const ManualOrderQuoteDto = Base;
@@ -314,6 +317,7 @@ export class ManualOrderService {
   async create(dto: ManualOrderDto) {
     const { quote, customer: found, email, phone, shop, fromQuote } = await this.draft(dto, true);
     const storeId = this.storeId;
+    const lead = dto.leadId ? await leadForOrder(storeId, dto.leadId) : null;
 
     // Keep a customer record for the order (no login until they register on the storefront).
     let customer = found;
@@ -376,7 +380,8 @@ export class ManualOrderService {
     if (fromQuote) {
       await prisma.quotation.update({ where: { id: fromQuote.id }, data: { orderId: order.id } });
     }
-    await this.credit(order.id, dto.salespersonId, fromQuote?.createdById ?? adminId);
+    await this.credit(order.id, dto.salespersonId, lead?.ownerId ?? fromQuote?.createdById ?? adminId);
+    if (lead) await winLead(storeId, lead.id, { id: order.id, number: order.number, customerId: customer.id }, { id: adminId, name: who });
     emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id), notifyCustomer: dto.notifyCustomer, notifyStaff: false });
     return {
       id: String(order.id),

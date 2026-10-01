@@ -91,7 +91,7 @@ These are our advantages. Keep them.
 |---|---|---|
 | Customers list/detail, groups, store credit, loyalty points | ✅ | |
 | Admin creates a customer (no login), source, ban | ✅ | Batch 37: phone-only customers, "came from", duplicate phone refused; ban with reason blocks sign-in and orders, guest orders by the same phone/email too |
-| CRM leads (Facebook/Instagram handle, salesperson, tags) | ❌ | |
+| CRM leads (Facebook/Instagram handle, salesperson, tags) | ✅ | Batch 37: leads with channel and @name, follower, tags, follow-ups (overdue/today), timeline of calls and messages, lost reasons, make customer, New order wins the lead and credits its follower. No auto-import from Facebook |
 | Loyalty levels (Bronze/Silver/Gold, auto discount by lifetime spend) | ✅ | Batch 30: levels by delivered spend, member % off at checkout, extra cashback per level |
 | Referrals + payout sweep | ✅ | Batch 30: refer-a-friend link, both sides rewarded to the wallet when the friend's first order is delivered; admin referral list |
 | Product questions (Q&A) | ✅ | Batch 26: ask on product page, answer in Marketing → Questions |

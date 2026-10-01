@@ -12,6 +12,7 @@ import { AreaSelects, type AreaValue } from "@/components/orders/area-selects";
 import { CustomerPicker, ProductPicker, taka, useDebounced } from "@/components/orders/order-pickers";
 import { useCan } from "@/lib/permissions";
 import { useQuotationQuery } from "@/lib/features/wholesale/quotations-api-slice";
+import { leadOrderSource, useLeadQuery } from "@/lib/features/customers/leads-api-slice";
 import { useSalespeopleQuery } from "@/lib/features/sales/sales-api-slice";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { ORDER_SOURCES, type OrderSource } from "@/lib/features/operations/operations-api-slice";
@@ -91,6 +92,24 @@ export default function NewOrderPage() {
   }, [fromQuote]);
   const locked = !!fromQuote;
 
+  // Opened from a CRM lead (?lead=ID): its customer and channel; the order wins the lead.
+  const [leadId, setLeadId] = useState<string | null>(null);
+  useEffect(() => setLeadId(new URLSearchParams(window.location.search).get("lead")), []);
+  const { data: fromLead } = useLeadQuery(leadId ?? "", { skip: !leadId });
+  useEffect(() => {
+    if (!fromLead) return;
+    if (fromLead.customer) {
+      setCustomer({ id: fromLead.customer.id, name: fromLead.customer.name, phone: fromLead.phone, email: fromLead.email, orderCount: fromLead.customer.orderCount });
+    } else {
+      const [f = "", ...rest] = fromLead.name.trim().split(/\s+/);
+      setFirst(f);
+      setLast(rest.join(" "));
+      if (fromLead.email) setEmail(fromLead.email);
+    }
+    if (fromLead.phone) setPhone(fromLead.phone);
+    setSource(leadOrderSource(fromLead.channel) as OrderSource);
+  }, [fromLead]);
+
   const body: ManualOrderInput = useMemo(
     () => ({
       customer: customer ? { id: customer.id } : { firstName: first.trim(), lastName: last.trim(), phone: phone.trim(), email: email.trim() },
@@ -125,9 +144,10 @@ export default function NewOrderPage() {
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
       ...(fromQuote ? { quotationId: fromQuote.id } : {}),
+      ...(fromLead ? { leadId: fromLead.id } : {}),
       ...(salesperson === "auto" ? {} : { salespersonId: salesperson === "none" ? null : salesperson }),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote, salesperson],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote, fromLead, salesperson],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -263,6 +283,15 @@ export default function NewOrderPage() {
             </CardContent>
           </Card>
 
+          {fromLead && (
+            <p className="rounded-md bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-500/10 dark:text-sky-200">
+              For the lead{" "}
+              <Link href={`/customers/leads/${fromLead.id}`} className="font-medium underline">
+                {fromLead.name}
+              </Link>
+              {fromLead.interest ? `, who wants: ${fromLead.interest}` : ""}. Placing the order marks the lead as won.
+            </p>
+          )}
           {/* Products */}
           <Card>
             <CardHeader>
@@ -453,7 +482,7 @@ export default function NewOrderPage() {
                 {salespeople.length > 0 && (
                   <Field label="Salesperson" htmlFor="order-sp" hint="Who earns the commission on this order.">
                     <select id="order-sp" className={SELECT} value={salesperson} onChange={(e) => setSalesperson(e.target.value)}>
-                      <option value="auto">{fromQuote ? "Whoever made the quote" : "Me, if I'm on the sales team"}</option>
+                      <option value="auto">{fromLead?.owner ? `${fromLead.owner.name}, who follows the lead, if on the sales team` : fromQuote ? "Whoever made the quote" : "Me, if I'm on the sales team"}</option>
                       <option value="none">Nobody</option>
                       {salespeople.map((p) => (
                         <option key={p.id} value={p.id}>

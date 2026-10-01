@@ -67,6 +67,7 @@ model Store {
   shippingZones         ShippingZone[]
   deliverySlots         DeliverySlot[]
   newsletterSubscribers NewsletterSubscriber[]
+  leads                 Lead[]
   shipments             Shipment[]
   paymentRecords        PaymentRecord[]
   paymentAttempts       PaymentAttempt[]
@@ -307,6 +308,7 @@ model AdminUser {
   ordersSold         Order[]           @relation("OrderSalesperson")
   commissions        SalesCommission[]
   salesTargets       SalesTarget[]
+  leadsOwned         Lead[]            @relation("LeadOwner")
   refunds            Refund[]
   authoredPosts      BlogPost[]
   createdAt          DateTime          @default(now())
@@ -711,6 +713,62 @@ model NewsletterSubscriber {
 
   @@unique([storeId, email])
   @@index([storeId, status])
+}
+
+/// Someone who asked about buying (a Facebook comment, an Instagram DM, a call) but hasn't
+/// ordered yet. Staff follow up until it's won (an order) or lost.
+model Lead {
+  id             BigInt     @id @default(autoincrement())
+  storeId        BigInt
+  store          Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  email          String?
+  /// facebook | instagram | whatsapp | messenger | tiktok | phone | walk_in | website | referral | other
+  channel        String     @default("facebook")
+  /// Their name or link on that channel ("rahima.khatun", "@rahima_bd").
+  handle         String?
+  /// What they want, in their words.
+  interest       String?
+  /// Expected order value.
+  value          Decimal?   @db.Decimal(12, 2)
+  tags           String[]   @default([])
+  /// new | contacted | interested | won | lost
+  status         String     @default("new")
+  lostReason     String?
+  ownerId        BigInt?
+  owner          AdminUser? @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  nextFollowUpAt DateTime?
+  lastContactAt  DateTime?
+  customerId     BigInt?
+  customer       Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// The order that won it.
+  orderId        BigInt?
+  createdById    BigInt?
+  closedAt       DateTime?
+  notes          LeadNote[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([storeId, status])
+  @@index([storeId, ownerId])
+  @@index([storeId, nextFollowUpAt])
+  @@index([storeId, phone])
+}
+
+/// The lead's timeline: notes, calls, messages and status changes.
+model LeadNote {
+  id         BigInt   @id @default(autoincrement())
+  leadId     BigInt
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  /// note | call | message | status
+  kind       String   @default("note")
+  body       String
+  authorId   BigInt?
+  authorName String?
+  createdAt  DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }
 
 /// A delivery window customers can pick at checkout with methods that use slots
@@ -1223,6 +1281,7 @@ model Customer {
   lastLoginAt           DateTime?
   lastLoginIp           String?
   addresses             CustomerAddress[]
+  leads                 Lead[]
   orders                Order[]
   reviews               Review[]
   wishlistItems         WishlistItem[]

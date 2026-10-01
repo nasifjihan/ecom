@@ -4284,3 +4284,99 @@ The footer's newsletter box used to save nothing. Now sign-ups are kept in a lis
 - **Customer import:** no "came from" column in the import.
 - **Banned message language:** the ban message comes from the API in English, also on the Bangla storefront.
 - **Next:** part 2, CRM leads.
+
+---
+
+## ✅ BATCH #37 (part 2) — CRM leads (2026-10-03)
+Many sales start as a Facebook comment, an Instagram DM or a call. Until now those people were only remembered in someone's inbox. A lead keeps them in one place until they order or are lost.
+
+### 37.8 Data (migration `crm_leads`)
+- **Lead:**
+  - who: name, phone, email;
+  - where they asked: Facebook, Instagram, WhatsApp, Messenger, TikTok, phone, walk-in, website, referral or other, plus their name or link there;
+  - what they want, the expected value, and tags;
+  - status: new, contacted, interested, won or lost (with a reason);
+  - who follows it, the next follow-up, the last contact;
+  - the customer it became, and the order that won it.
+- **LeadNote:** the timeline of notes, calls, messages and status changes, with who wrote each.
+- **New permission area "Leads"** (Customers group):
+  - order managers get everything;
+  - support can view, add and edit;
+  - marketing and viewers can view.
+  - Roles a store made get what they already had for customers.
+
+### 37.9 Rules (`leads/leads.rules.ts`)
+- Pasted profile links become the name in them (`https://www.facebook.com/rahima.k/` → `rahima.k`, `instagram.com/@x?igsh=…` → `x`); a leading "@" is dropped.
+- Tags are lower case with no repeats, at most 10.
+- **Follow-ups** count as overdue or today by the shop's calendar day (Bangladesh time), not UTC.
+- **Status:** "lost" needs a reason. "Won" can't be picked by hand; a lead is won by making its order.
+- **Channels map to sources:** Messenger → "Facebook" for a customer's "came from", and channels the customer list doesn't have → "other".
+
+### 37.10 API (`/api/admin/leads`)
+- **List:** filters for open, a status, whose leads (me, nobody, a staff member), overdue or due today, tag, and search (name, phone in any written form, @name, email, what they want).
+  - Counts per status come back, plus overdue and due today.
+  - Open leads come in follow-up order.
+- **Add:**
+  - whoever adds it follows it unless another person is chosen;
+  - a second open lead with the same phone is refused, naming the first;
+  - an existing customer with that phone or email is linked.
+- **Edit, delete, change status** (reopening a lost lead is allowed).
+- **Add to the timeline:** a call or message counts as contact. A new lead becomes "contacted", and the next follow-up can be set at the same time.
+- **Make customer:** links the customer with the same phone or email, or makes one with "came from" set from the channel.
+- **New order (`leadId` on staff orders):**
+  - the lead must be open;
+  - after the order is made, the lead is won and linked to the order and customer;
+  - commission goes to whoever follows the lead (if they're on the sales team), unless another salesperson is picked.
+
+### 37.11 Admin
+- **Customers → Leads:**
+  - "Overdue follow-ups" and "Due today" buttons that filter;
+  - status tabs with counts;
+  - filters for whose leads and tag, and search;
+  - each row shows the channel, @name, phone, tags, what they want and value, status, follow-up (red when overdue, amber today) and who follows it.
+- **A lead's page:**
+  - call, "Open on Instagram/Facebook/TikTok/WhatsApp" link, New order, Make customer or Open customer, Edit, Delete;
+  - a won banner with the order, or a lost banner with the reason and Reopen;
+  - "Add to the timeline": Called / Messaged / Note, with Tomorrow / In 3 days / Next week follow-up buttons;
+  - "Move to" Contacted / Interested / Lost (asks why);
+  - details, including changing who follows it.
+- **New order:**
+  - opened with `?lead=` it fills in the customer (or name, phone and email) and the order source from the channel;
+  - it says which lead the order is for;
+  - the "credit to" choice names the lead's follower.
+- The Leads permission appears in the role editor by itself; it comes from the shared permission list.
+
+### 37.12 Checked
+- **Tests:** API 745 passing (57 files).
+  - new `tests/unit/leads-rules.test.ts` (handles, tags, sources, follow-up days around Dhaka midnight, status rules);
+  - new `tests/integration/leads.db.test.ts`:
+    - adding, and a duplicate phone refused;
+    - an existing customer linked;
+    - a call making a lead "contacted";
+    - overdue and "mine" filters, tags and @search;
+    - losing and reopening, and handing over to another person;
+    - making the customer;
+    - a staff order winning the lead and crediting its follower;
+    - a won lead refusing a second order.
+  - The 2 "unhandled errors" are still the older `smoke-batch9` ones.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - added Nusrat Jahan from Instagram by pasting `https://www.instagram.com/@nusrat.style?igsh=abc`. It was saved as `nusrat.style` with tags eid and saree, and the "Open on Instagram" link goes to her profile.
+  - logged a call with "Tomorrow": the status became Contacted, then Interested;
+  - the list shows Open 2 / New 1 / Interested 1 / Lost 1 / All 3;
+  - "Overdue follow-ups" shows only Tanvir Hasan;
+  - the Lost tab shows Mitu Akter;
+  - New order on Nusrat's lead made her a customer (from Instagram), filled in the order with source Instagram and the lead banner;
+  - the order was placed, and the lead shows Won with the order.
+  - No page errors or failed requests.
+- **Dev data:**
+  - leads: Nusrat Jahan (won, with order FBD-20261001000004 for one saree, pickup), Tanvir Hasan (new, overdue), Mitu Akter (lost: "No reply after 3 messages");
+  - customer Nusrat Jahan (01712345670).
+
+### 37.13 Not done
+- **Storefront orders:** a customer who orders on the website doesn't win their lead by itself. Leads are won by staff orders made from the lead.
+- **Bringing leads in:** nothing pulls leads from Facebook/Instagram yet. They're typed or pasted in, and there's no import.
+- **Reminders:** no reminder messages for due follow-ups; the list's Overdue and Due today buttons are the reminder.
+- **No board view:** no drag-between-columns board; the list has status tabs.
+- **Already there before this part:** at phone width the admin sidebar stays 256 px wide, so every admin page (not only Leads) scrolls sideways.
+- **Next:** part 3, who gets which messages (notification settings).

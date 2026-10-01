@@ -43,6 +43,8 @@ export interface ManualOrderInput {
   notifyCustomer: boolean;
   /** Make the order from this quotation (its customer, lines, agreed prices and discount). */
   quotationId?: string;
+  /** Made from this CRM lead (the lead is won). */
+  leadId?: string;
   /** The salesperson credited; null: nobody; left out: the quote's maker or whoever enters it, if on the sales team. */
   salespersonId?: string | null;
 }
@@ -160,7 +162,7 @@ export const manualOrderApi = api.injectEndpoints({
     }),
     createManualOrder: b.mutation<{ id: string; number: string; grandTotal: number; customerId: string }, ManualOrderInput>({
       query: (body) => ({ url: "/admin/orders/manual", method: "POST", body }),
-      invalidatesTags: ["Order", "Customer"],
+      invalidatesTags: ["Order", "Customer", "Lead"],
     }),
   }),
 });

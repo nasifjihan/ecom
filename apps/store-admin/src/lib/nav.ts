@@ -33,6 +33,7 @@ import {
   MessageSquareText,
   Languages,
   Newspaper,
+  Target,
   Package,
   PackagePlus,
   Palette,
@@ -128,6 +129,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Customers",
     items: [
       { href: "/customers", label: "Customers", icon: User2, perm: "customers.view" },
+      { href: "/customers/leads", label: "Leads", icon: Target, perm: "leads.view" },
       { href: "/customers/business", label: "Business accounts", icon: Briefcase, perm: "customers.view" },
     ],
   },

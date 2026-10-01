@@ -35,6 +35,7 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { key: "money_accounts", group: "Purchasing", label: "Bank, cash and mobile accounts", help: "Edit = record deposits, withdrawals and transfers", actions: ["view", "create", "edit"] },
 
   { key: "customers", group: "Customers", label: "Customers", actions: ALL },
+  { key: "leads", group: "Customers", label: "Leads", help: "People who asked but haven't ordered: follow-ups, notes, turning them into customers and orders", actions: ALL },
   { key: "reviews", group: "Customers", label: "Reviews", help: "Edit = approve, mark as spam", actions: ["view", "edit", "delete"] },
 
   { key: "promotions", group: "Marketing", label: "Promotions", help: "Automatic offers: discounts, free gifts, buy X get Y, free delivery", actions: ALL },

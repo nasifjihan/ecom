@@ -62,6 +62,7 @@ import { superPlatformRouter } from "./modules/platform";
 import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
 import { adminNewsletterRouter, storefrontNewsletterRouter } from "./modules/customers/newsletter.routes";
+import { adminLeadsRouter } from "./modules/leads/leads.routes";
 import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter, storefrontEngagementRouter, storefrontWishlistRouter } from "./modules/storefront";
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
@@ -207,6 +208,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/shipping", storefrontShippingRouter);
   app.use("/api/storefront/newsletter", storefrontNewsletterRouter);
   app.use("/api/admin/newsletter", adminNewsletterRouter);
+  app.use("/api/admin/leads", adminLeadsRouter);
   app.use("/api/admin/locations", adminLocationsRouter);             // BD divisions/districts/upazilas + delivery on/off
   app.use("/api/storefront/locations", storefrontLocationsRouter);
   app.use("/api/admin/emails", adminEmailsRouter);                   // email templates, preview, test send, sent log
