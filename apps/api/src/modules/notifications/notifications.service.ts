@@ -307,6 +307,7 @@ export class EmailService {
           .join(" "),
         order.shippingPhone ?? order.billingPhone ?? "",
         order.deliverySlotLabel ? `Delivery time: ${order.deliverySlotLabel}` : "",
+        order.isGift ? `Gift${order.giftMessage ? `, card: “${order.giftMessage.replace(/\n+/g, " ")}”` : ""}` : "",
       ].filter((l): l is string => !!l?.trim()),
     }
     const s = order.shipments[0]

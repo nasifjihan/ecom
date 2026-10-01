@@ -14,6 +14,12 @@ export interface InvoiceText {
   delivery: string
   tracking: string
   deliveryTime: string
+  packingSlip: string
+  gift: string
+  /** "A gift from Ayesha" */
+  giftFrom: (name: string) => string
+  aGift: string
+  giftMessage: string
   item: string
   qty: string
   unitPrice: string
@@ -55,6 +61,11 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     delivery: "Delivery",
     tracking: "Tracking",
     deliveryTime: "Delivery time",
+    packingSlip: "PACKING SLIP",
+    gift: "GIFT",
+    giftFrom: (name) => `A gift from ${name}`,
+    aGift: "A gift for you",
+    giftMessage: "Gift message",
     item: "Item",
     qty: "Qty",
     unitPrice: "Unit price",
@@ -92,6 +103,11 @@ export const INVOICE_TEXT: Record<InvoiceLang, InvoiceText> = {
     delivery: "ডেলিভারি",
     tracking: "ট্র্যাকিং",
     deliveryTime: "ডেলিভারির সময়",
+    packingSlip: "প্যাকিং স্লিপ",
+    gift: "উপহার",
+    giftFrom: (name) => `${name}-এর পক্ষ থেকে উপহার`,
+    aGift: "আপনার জন্য একটি উপহার",
+    giftMessage: "উপহার বার্তা",
     item: "পণ্য",
     qty: "পরিমাণ",
     unitPrice: "একক মূল্য",

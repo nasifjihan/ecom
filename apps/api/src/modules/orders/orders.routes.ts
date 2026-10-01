@@ -3,9 +3,15 @@ import { Router } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { ordersController } from "./orders.controller";
 import type { Request, Response } from "express";
-import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
+import { BadRequestError, NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
 import { EmailService } from "../notifications";
 import { InvoiceService, sendInvoice } from "../invoices";
+import { packingSlips } from "../invoices/packing-slip";
+
+const storeOf = (req: Request & { ctx: RequestContext }): bigint => {
+  if (req.ctx.storeId === undefined) throw new BadRequestError("Store not resolved", "TENANT_NOT_RESOLVED");
+  return BigInt(req.ctx.storeId);
+};
 import {
   OrderSearchQueryDto,
   OrderIdParamDto,
@@ -100,6 +106,28 @@ adminOrdersRouter.get(
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const { ids } = req.query as unknown as { ids: bigint[] };
     sendInvoice(req, res, await InvoiceService.forContext(req.ctx).forOrderIds(ids));
+  }),
+);
+
+/** Packing slips for several orders in one PDF: ?ids=1,2,3 (gifts leave prices off if asked). */
+adminOrdersRouter.get(
+  "/packing-slips",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.view"),
+  validate({ query: InvoiceIdsQueryDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const { ids } = req.query as unknown as { ids: bigint[] };
+    sendInvoice(req, res, { number: "", ...(await packingSlips(storeOf(req), ids)) });
+  }),
+);
+
+adminOrdersRouter.get(
+  "/:id/packing-slip",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.view"),
+  validate({ params: OrderIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    sendInvoice(req, res, { number: "", ...(await packingSlips(storeOf(req), [BigInt((req.params as { id: string }).id)])) });
   }),
 );
 

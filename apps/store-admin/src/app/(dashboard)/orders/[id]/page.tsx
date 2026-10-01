@@ -76,6 +76,7 @@ import {
   useGetOrderQuery,
   useUpdateOrderStatusMutation,
   useOrderInvoiceMutation,
+  usePackingSlipsMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
   VALID_STATUS_TRANSITIONS,
@@ -169,12 +170,13 @@ export default function OrderDetailPage() {
   const loyalty = { discount: orderRaw?.memberDiscount ?? 0, level: orderRaw?.memberLevel, wallet: orderRaw?.walletUsed ?? 0, cashback: orderRaw?.cashback ?? 0 };
   const order = (orderRaw as any) ?? { id: orderId, status: "PENDING", lines: [], notes: [], refunds: [], timeline: [], auditLog: [] };
   const vat = (orderRaw as Order | undefined) ?? { vatAmount: 0, vatIncluded: false, vatRate: null };
-  const delivery: Pick<Order, "deliverySlot" | "courierChoice"> = orderRaw ?? { deliverySlot: null, courierChoice: null };
+  const delivery: Pick<Order, "deliverySlot" | "courierChoice" | "gift"> = orderRaw ?? { deliverySlot: null, courierChoice: null, gift: null };
   const vatName = vat.vatRate ? `VAT ${vat.vatRate}%` : "VAT";
   const placedOn = orderRaw?.storefront;
 
   const [updateStatus] = useUpdateOrderStatusMutation();
   const [loadInvoice] = useOrderInvoiceMutation();
+  const [loadSlips] = usePackingSlipsMutation();
   const [sendEmail] = useSendOrderEmailMutation();
   const [createNote] = useCreateOrderNoteMutation();
   const { can } = useCan();
@@ -199,6 +201,17 @@ export default function OrderDetailPage() {
       await openFile(() => loadInvoice(order.id).unwrap(), { filename: `invoice-INV-${order.orderNumber}.pdf`, mode });
     } catch {
       toast.error("Couldn't load the invoice. Please try again.");
+    }
+  }
+
+  /** The packing slip that goes in the box (a gift's message; prices left off if asked). */
+  async function handlePackingSlip() {
+    try {
+      if (!orderRaw) return;
+      const { id, orderNumber } = orderRaw;
+      await openFile(() => loadSlips([id]).unwrap(), { filename: `packing-slip-${orderNumber}.pdf`, mode: "open" });
+    } catch {
+      toast.error("Couldn't load the packing slip. Please try again.");
     }
   }
 
@@ -293,6 +306,10 @@ export default function OrderDetailPage() {
               <FileText className="h-4 w-4" />
               Download Invoice
             </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void handlePackingSlip()}>
+              <Package className="h-4 w-4" />
+              Packing Slip
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSendEmail}>
               <Mail className="h-4 w-4" />
               Send Email
@@ -370,6 +387,15 @@ export default function OrderDetailPage() {
                   {[order.shippingAddress?.upazila, order.shippingAddress?.district, order.shippingAddress?.division, order.shippingAddress?.postcode].filter(Boolean).join(", ")}
                 </div>
               </div>
+              {delivery.gift && (
+                <div className="mt-3 ml-6 rounded-md border border-pink-200 bg-pink-50 p-2 text-sm text-pink-900 dark:border-pink-500/30 dark:bg-pink-500/10 dark:text-pink-200">
+                  <div className="font-semibold">
+                    Gift{delivery.gift.from ? ` from ${delivery.gift.from}` : ""}
+                    {delivery.gift.hidePrices && <span className="font-normal"> · prices left off the packing slip</span>}
+                  </div>
+                  {delivery.gift.message && <p className="mt-1 whitespace-pre-line italic">“{delivery.gift.message}”</p>}
+                </div>
+              )}
               {(delivery.deliverySlot ?? delivery.courierChoice) && (
                 <div className="mt-3 space-y-1 pl-6 text-sm">
                   {delivery.deliverySlot && (

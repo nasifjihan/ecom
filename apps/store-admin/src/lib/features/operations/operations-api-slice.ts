@@ -164,6 +164,8 @@ export interface Order {
   deliverySlot: { label: string; date: string | null; fee: number } | null;
   /** The courier account the customer chose at checkout. */
   courierChoice: { id: string; courier: string; label: string } | null;
+  /** A gift: shipped to the shipping address; card message, sender, prices off the packing slip. */
+  gift: { message: string | null; from: string | null; hidePrices: boolean } | null;
   /** Staff member who entered the order by hand. */
   createdByName?: string;
   manualDiscount: number;
@@ -594,6 +596,10 @@ interface ApiOrder {
   deliveryDate?: string | null;
   slotFee?: string;
   courierAccount?: { id: string; courier: string; label: string } | null;
+  isGift?: boolean;
+  giftMessage?: string | null;
+  giftFrom?: string | null;
+  giftHidePrices?: boolean;
   manualDiscount?: string;
   memberDiscount?: string;
   memberLevel?: string | null;
@@ -712,6 +718,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     deliverySlot: o.deliverySlotLabel
       ? { label: o.deliverySlotLabel, date: o.deliveryDate ? String(o.deliveryDate).slice(0, 10) : null, fee: Number(o.slotFee ?? 0) }
       : null,
+    gift: o.isGift ? { message: o.giftMessage ?? null, from: o.giftFrom ?? null, hidePrices: o.giftHidePrices !== false } : null,
     courierChoice: o.courierAccount ? { id: String(o.courierAccount.id), courier: o.courierAccount.courier, label: o.courierAccount.label } : null,
     createdByName: o.createdByAdmin?.name ?? undefined,
     manualDiscount: Number(o.manualDiscount ?? 0),
@@ -853,6 +860,10 @@ export const operationsApiSlice = api.injectEndpoints({
     /** Invoices for several orders in one PDF, one after another. */
     orderInvoices: builder.mutation<string, (string | number)[]>({
       query: (ids) => ({ url: "/admin/orders/invoices", params: { ids: ids.join(",") }, responseHandler: fileResponse }),
+    }),
+    /** Packing slips (gifts leave prices off when asked) for one or more orders, as one PDF. */
+    packingSlips: builder.mutation<string, (string | number)[]>({
+      query: (ids) => ({ url: "/admin/orders/packing-slips", params: { ids: ids.join(",") }, responseHandler: fileResponse }),
     }),
 
     sendOrderEmail: builder.mutation<{ success: boolean }, string | number>({
@@ -1104,6 +1115,7 @@ export const {
   useBulkUpdateOrderStatusMutation,
   useOrderInvoiceMutation,
   useOrderInvoicesMutation,
+  usePackingSlipsMutation,
   useSendOrderEmailMutation,
   useCreateOrderNoteMutation,
   useGetCustomersQuery,

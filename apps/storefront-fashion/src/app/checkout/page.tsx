@@ -70,6 +70,7 @@ import { useMyLoyaltyQuery } from "@/lib/loyalty";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
 import { passwordProblem } from "@/app/account/_components";
 import { CourierPicker, DeliveryTimePicker, type SlotPick } from "./_delivery-choices";
+import { GiftSection, NO_GIFT, giftProblem, type GiftState } from "./_gift";
 import { useCartPriceCheck } from "@/lib/cart-prices";
 import { useAvailableCouponsQuery } from "@/lib/promotions";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
@@ -243,6 +244,8 @@ export default function CheckoutPage() {
   // Delivery day and time (options that use slots) and the courier, when the shop lets customers choose.
   const { data: deliveryChoices } = useGetDeliveryChoicesQuery(undefined, { skip: !mounted || itemCount === 0 });
   const [slotPick, setSlotPick] = React.useState<SlotPick | null>(null);
+  const [gift, setGift] = React.useState<GiftState>(NO_GIFT);
+  const giftsOffered = deliveryChoices?.giftOrders ?? false;
   const [courierPick, setCourierPick] = React.useState<string | null>(null);
   const slotDays = React.useMemo(() => deliveryChoices?.days ?? [], [deliveryChoices]);
   const couriers = React.useMemo(() => deliveryChoices?.couriers ?? [], [deliveryChoices]);
@@ -442,6 +445,10 @@ export default function CheckoutPage() {
           toast.error(t("Choose shipping method"), { description: t("Select a shipping method to continue") });
           return false;
         }
+        if (giftsOffered && giftProblem(gift)) {
+          toast.error(t("Gift details"), { description: t(giftProblem(gift)!) });
+          return false;
+        }
         if (selectedRate?.useSlots && !pickedSlot) {
           toast.error(t("Pick a delivery time"), { description: t("Choose the day and time you'd like your order.") });
           return false;
@@ -529,7 +536,11 @@ export default function CheckoutPage() {
         email: contactEmail || shippingAddress.email || customerEmail || undefined,
       };
 
-      const billingPayload = billingSameAsShipping
+      const isGift = giftsOffered && gift.on;
+      // A gift: the address above is the recipient's; the buyer is billed with their own name and phone.
+      const billingPayload = isGift
+        ? { ...shippingPayload, firstName: gift.buyerFirstName.trim(), lastName: gift.buyerLastName.trim() || "-", phone: gift.buyerPhone.replace(/[\s-]/g, "") }
+        : billingSameAsShipping
         ? shippingPayload
         : {
             firstName: billingAddress.firstName ?? "",
@@ -568,7 +579,8 @@ export default function CheckoutPage() {
         subscribeNewsletter,
         shippingAddress: shippingPayload,
         billingAddress: billingPayload,
-        billingSameAsShipping,
+        billingSameAsShipping: billingSameAsShipping && !isGift,
+        gift: isGift ? { message: gift.message, from: gift.from.trim() || gift.buyerFirstName.trim(), hidePrices: gift.hidePrices } : undefined,
         shippingMethodId: selectedRate?.methodId,
         deliverySlot: selectedRate?.useSlots && slotPick ? slotPick : undefined,
         courierAccountId: couriers.length && courierPick ? courierPick : undefined,
@@ -962,21 +974,29 @@ export default function CheckoutPage() {
                       />
                     </div>
                   </div>
-                  <Separator />
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      checked={billingSameAsShipping}
-                      onCheckedChange={setBillingSameAsShipping}
-                    />
-                    <div>
-                      <Label className="font-semibold cursor-pointer">
-                        {t("Billing address same as shipping")}
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {t("Uncheck if billing differs (for corporate/invoice orders)")}
-                      </p>
-                    </div>
-                  </div>
+                  {giftsOffered && (
+                    <GiftSection value={gift} onChange={setGift} cod={selectedPaymentMethod === PaymentMethod.COD} />
+                  )}
+                  {/* A gift's billing is the buyer's name and phone given above. */}
+                  {!(giftsOffered && gift.on) && (
+                    <>
+                      <Separator />
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={billingSameAsShipping}
+                          onCheckedChange={setBillingSameAsShipping}
+                        />
+                        <div>
+                          <Label className="font-semibold cursor-pointer">
+                            {t("Billing address same as shipping")}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {t("Uncheck if billing differs (for corporate/invoice orders)")}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 

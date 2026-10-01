@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Square,
   FileText,
+  Package,
   FileSpreadsheet,
   File,
   CreditCard,
@@ -84,6 +85,7 @@ import {
   useBulkUpdateOrderStatusMutation,
   useOrderInvoiceMutation,
   useOrderInvoicesMutation,
+  usePackingSlipsMutation,
   VALID_STATUS_TRANSITIONS,
   type Order,
   type OrderStatus,
@@ -218,6 +220,7 @@ export default function OrdersPage() {
   const [bulkUpdateStatus] = useBulkUpdateOrderStatusMutation();
   const [loadInvoice] = useOrderInvoiceMutation();
   const [loadInvoices] = useOrderInvoicesMutation();
+  const [loadSlips] = usePackingSlipsMutation();
 
   const orders = data?.items ?? [];
   const statusCounts: Record<string, number> = data?.statusCounts ?? {};
@@ -264,6 +267,11 @@ export default function OrdersPage() {
               >
                 {o.orderNumber}
               </Link>
+              {o.gift && (
+                <span title="Gift order" className="rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-semibold text-pink-800 dark:bg-pink-500/20 dark:text-pink-200">
+                  Gift
+                </span>
+              )}
               {severalFronts && o.storefront && (
                 <span
                   title={`Placed on ${o.storefront.name}`}
@@ -483,6 +491,16 @@ export default function OrdersPage() {
     }
   }
 
+
+  /** One PDF with the packing slips of every selected order. */
+  async function handleBulkSlips() {
+    if (selectedIds.length === 0) return;
+    try {
+      await openFile(() => loadSlips(selectedIds).unwrap(), { filename: "packing-slips.pdf", mode: "open" });
+    } catch {
+      toast.error("Couldn't load the packing slips. Please try again.");
+    }
+  }
 
   function handleBulkEmail() {
     toast.info("Order emails are not available yet (no email queue on the API).");
@@ -796,6 +814,16 @@ export default function OrdersPage() {
               >
                 <FileText className="h-4 w-4" />
                 Print Invoices
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => void handleBulkSlips()}
+                disabled={selectedCount === 0}
+              >
+                <Package className="h-4 w-4" />
+                Packing Slips
               </Button>
 
               <DropdownMenu>

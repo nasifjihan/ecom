@@ -18,6 +18,7 @@ interface TaxSettings {
   pricesIncludeTax: boolean;
   orderPrefix: string;
   invoiceNote: string;
+  giftOrders: boolean;
   sampleOrderNumber: string;
 }
 
@@ -32,12 +33,14 @@ export default function TaxSettingsPage() {
   const [included, setIncluded] = useState(false);
   const [prefix, setPrefix] = useState("");
   const [note, setNote] = useState("");
+  const [gifts, setGifts] = useState(true);
 
   useEffect(() => {
     if (!saved) return;
     setIncluded(saved.pricesIncludeTax);
     setPrefix(saved.orderPrefix);
     setNote(saved.invoiceNote);
+    setGifts(saved.giftOrders);
   }, [saved]);
 
   const prefixOk = PREFIX.test(prefix);
@@ -47,7 +50,7 @@ export default function TaxSettingsPage() {
   const onSave = async () => {
     if (!prefixOk) return;
     try {
-      await save({ section: "tax", values: { pricesIncludeTax: included, orderPrefix: clean, invoiceNote: note } }).unwrap();
+      await save({ section: "tax", values: { pricesIncludeTax: included, orderPrefix: clean, invoiceNote: note, giftOrders: gifts } }).unwrap();
       toast.success("Saved");
     } catch (err) {
       toast.error(errorText(err));
@@ -56,7 +59,7 @@ export default function TaxSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle icon={Receipt} title="VAT & invoices" description="How VAT is shown, how order numbers look, and what every invoice says." />
+      <PageTitle icon={Receipt} title="VAT & invoices" description="How VAT is shown, how order numbers look, what every invoice says, and gift orders." />
       {isLoading || !saved ? (
         <Skeleton className="h-64 w-full" />
       ) : (
@@ -105,6 +108,19 @@ export default function TaxSettingsPage() {
               <Field label="Note on every invoice" htmlFor="invoiceNote" hint="Printed under the totals, e.g. your exchange policy or bank details.">
                 <Textarea id="invoiceNote" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Gift orders</CardTitle>
+              <CardDescription>
+                Shoppers tick &ldquo;This order is a gift&rdquo;, add a card message and their name. The packing slip prints the
+                message and leaves prices off unless they ask for them; the courier label says GIFT.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Toggle checked={gifts} onChange={setGifts} label="Offer gift orders at checkout" />
             </CardContent>
           </Card>
 

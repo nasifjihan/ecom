@@ -61,7 +61,7 @@ These are our advantages. Keep them.
 | Shipments/parcels screen (ready → picked up → in transit → delivered / failed / returned) | ✅ | Batch 20: parcels per order (split shipments, COD per parcel), Shipments page with status tabs. Courier APIs: Batch 22 |
 | Returns screen (request → received → approved → refunded / rejected) | ✅ | Batch 20: customer requests on the storefront (7-day window), staff approve / receive (restock) / reject / refund; Returns page |
 | Invoice by SMS | ✅ | Batch 24: order page "Send invoice by SMS" |
-| Gift orders (recipient vs buyer, print labels) | ❌ | |
+| Gift orders (recipient vs buyer, print labels) | ✅ | Batch 36: gift at checkout (buyer billed, recipient shipped), card message and sender, packing slips without prices, GIFT on the courier label |
 | Stock reserved on order, committed when packed | ✅ | Batch 29: an order holds stock in the warehouse it ships from; packing a parcel takes it off the shelf; cancelling releases it |
 | Order code `ORD-YYYYMMDD-XXXXXX`, prefix per store | ✅ | Batch 35: optional prefix per store (`FBD-20261001000001`), Settings → VAT & invoices |
 

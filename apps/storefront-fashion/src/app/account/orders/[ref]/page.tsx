@@ -165,6 +165,12 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
                 {t("Delivery time")}: {slotText(o.deliverySlot, locale)}
               </p>
             )}
+            {o.gift && (
+              <div className="rounded-md bg-pink-50 p-2 text-pink-900">
+                <p className="font-medium">{t("Gift")}{o.gift.from ? ` · ${t("From")}: ${o.gift.from}` : ""}</p>
+                {o.gift.message && <p className="whitespace-pre-line italic">“{o.gift.message}”</p>}
+              </div>
+            )}
             {o.courier && (
               <p className="text-muted-foreground">
                 {t("Courier")}: {o.courier}

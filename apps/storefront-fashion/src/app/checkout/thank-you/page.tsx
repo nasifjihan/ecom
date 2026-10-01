@@ -396,6 +396,12 @@ export default function ThankYouPage() {
                     {t("Delivery time")}: {slotText(order.deliverySlot, locale)}
                   </div>
                 )}
+                {order.gift && (
+                  <div className="mt-2 rounded-md bg-pink-50 p-2 text-pink-900" data-testid="gift-note">
+                    <div className="font-medium">{t("Gift")}{order.gift.from ? ` · ${t("From")}: ${order.gift.from}` : ""}</div>
+                    {order.gift.message && <p className="whitespace-pre-line italic">“{order.gift.message}”</p>}
+                  </div>
+                )}
                 {order.courier && (
                   <div className="text-muted-foreground">
                     {t("Courier")}: {order.courier}

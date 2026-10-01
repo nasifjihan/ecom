@@ -370,6 +370,8 @@ model StoreGeneralSetting {
   invoiceNote      String?
   /// How many days ahead customers can book a delivery slot (today counts as day 1).
   slotDaysAhead    Int      @default(3)
+  /// Checkout offers "This order is a gift" (message, sender, prices left off the packing slip).
+  giftOrders       Boolean  @default(true)
   /// "YYYY-MM-DD" days with no slot deliveries (holidays).
   slotClosedDates  String[] @default([])
   createdAt        DateTime @default(now())
@@ -1455,6 +1457,14 @@ model Order {
   deliverySlotLabel      String?
   /// Extra for the slot (part of shippingTotal).
   slotFee                Decimal              @default(0) @db.Decimal(12, 2)
+  /// A gift: shipped to someone else (the shipping address); the buyer is the billing address.
+  isGift                 Boolean              @default(false)
+  /// Printed on the gift card and packing slip.
+  giftMessage            String?
+  /// Who it's from, as the card says it ("Ayesha and Rahim").
+  giftFrom               String?
+  /// Leave prices off the packing slip (on by default for gifts).
+  giftHidePrices         Boolean              @default(true)
   /// The courier the customer chose at checkout; booking uses it before the storefront's default.
   courierAccountId       BigInt?
   courierAccount         CourierAccount?      @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)

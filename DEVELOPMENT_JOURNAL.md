@@ -4045,3 +4045,68 @@ Customers can pick a delivery day and time window with delivery options that off
 - **Already there before this part:** the checkout step bar (Information … Confirmation) is wider than a phone screen, so the checkout page scrolls sideways at 390 px.
 - **Next:** part 2: gift orders (recipient vs buyer, gift message, prices hidden on the packing slip).
 
+---
+
+## ✅ BATCH #36 (part 2) — Gift orders and packing slips (2026-10-02)
+A customer can send an order to someone else as a gift: the address entered is the recipient's, the buyer gives their own name and phone, adds a card message and who it's from, and can leave prices off the slip in the box. Every order now has a packing slip.
+
+### 36.7 Data (migration `gift_orders`)
+- **Order:** `isGift`, `giftMessage` (up to 300 characters and 8 lines), `giftFrom`, and `giftHidePrices` (on by default).
+- **StoreGeneralSetting.giftOrders:** whether checkout offers gifts (on by default).
+
+### 36.8 Rules (`orders/gift.rules.ts`)
+- **Tidying:** the message keeps its line breaks; extra spaces and control characters are dropped.
+- **Limits:** a message too long or with too many lines, or a sender name over one line or 60 characters, is refused with a reason ("Gift message: keep it to 300 characters").
+- **Shops that don't take gifts:** a gift is refused when the shop switched gifts off.
+
+### 36.9 Checkout and orders
+- **Placing an order:** checkout sends `gift`. The buyer becomes the billing name and phone, and the address entered is the recipient's (shipping).
+- **`GET /checkout/delivery-choices`** also says whether gifts are offered.
+- **The "This order is a gift" box:**
+  - asks for the buyer's name and mobile, the card message (with a counter), "From" (defaults to the buyer's first name) and "Leave prices off the packing slip";
+  - with cash on delivery it warns that the recipient will pay when the gift arrives;
+  - while it's ticked, the "Billing address same as shipping" box is hidden.
+  - Bangla text included.
+- **Shown on:** the thank-you and account order pages (the gift note) and order emails (a gift line).
+
+### 36.10 Packing slips (`invoices/packing-slip.ts`)
+- **Content:** A5, one per order, in the order's language: shop, order number and date, a GIFT badge, the recipient, the delivery option and time slot, and the items with SKU and quantity.
+- **Prices** are left off for gifts that asked.
+- **Gift message:** prints in a dashed box to cut out, with "— From".
+- **Footer:** gifts say "A gift for you · shop name" instead of thanking the buyer.
+- **Endpoints:** `GET /api/admin/orders/packing-slips?ids=…` (up to 100) and `/:id/packing-slip`.
+- **Fixed while building it:** the footer sat in the bottom margin and pdfkit started a new page for it.
+- **Courier labels:** gift parcels are marked GIFT next to "Deliver to".
+
+### 36.11 Admin
+- **Order page:** a gift card ("Gift from Ayesha & Rahim · prices left off the packing slip" and the message) and a Packing Slip button.
+- **Orders list:** a Gift badge, and a "Packing Slips" button for the selected orders.
+- **Settings → VAT & invoices:** an "Offer gift orders at checkout" switch.
+
+### 36.12 Checked
+- **Tests:** API 717 passing (51 files).
+  - new `tests/unit/gift-orders.test.ts`;
+  - new `tests/integration/gift-orders.db.test.ts`:
+    - a gift saved with the buyer as billing and the recipient as shipping, and shown on the order;
+    - ordinary orders unchanged;
+    - a long message refused;
+    - packing slips for a gift and an ordinary order, one page each;
+    - gifts refused once switched off.
+  - Storefront translation test passes.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - a gift order to Nusrat Jahan (Gulshan) from Ayesha Rahman, with a two-line message, "From: Ayesha & Rahim" and cash on delivery (the warning showed);
+  - order FBD-20261001000003 saved with shipping Nusrat 01811111111 and billing Ayesha Rahman 01712345678;
+  - the thank-you page shows the gift note;
+  - the admin order page shows the gift card, and Packing Slip opens the PDF;
+  - the orders list shows the Gift badge;
+  - the slip shows no prices, and the message in the cut-out box.
+  - No page errors.
+
+### 36.13 Not done
+- **Staff and landing-page orders:** staff orders (New order) and landing pages can't mark an order as a gift yet.
+- **Gift wrap:** no gift-wrap charge.
+- **Recipient messages:** no separate SMS/email to the recipient (the buyer gets the order messages).
+- **Already there before this part:** checkout's "Billing address same as shipping" box has no billing form behind it, so unticking it sends an empty billing address and the order is refused. Gifts avoid it by asking for the buyer's name and phone.
+- **Next:** part 3: purchase orders before goods arrive, and returns to suppliers.
+

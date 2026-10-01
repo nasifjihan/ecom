@@ -28,7 +28,7 @@ interface LegalDetails {
 const num = (v: unknown) => Number(v) || 0
 
 /** "Size: M, Colour: Red" from a variant's attribute values ({ size: "M" } or [{ name, value }]). */
-function variantText(v: Prisma.JsonValue | null): string {
+export function variantText(v: Prisma.JsonValue | null): string {
   const plain = (x: unknown) =>
     typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? String(x) : ""
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

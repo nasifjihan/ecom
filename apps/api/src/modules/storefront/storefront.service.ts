@@ -45,6 +45,7 @@ import { checkOrderBoxes } from "../giftboxes/giftbox.check";
 import { nextOrderNumber, orderNumberStem } from "../orders/order-number.rules";
 import { DeliverySlotService, slotDayDate } from "../shipping/slots.service";
 import { COURIER_NAMES, type Courier } from "../couriers/couriers.rules";
+import { giftFields, GiftProblem, NOT_A_GIFT, type GiftFields } from "../orders/gift.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -216,6 +217,8 @@ export type OrderMeta = {
   notifyCustomer?: boolean;
   /** Placed on this landing page (/lp/…). */
   landingPageId?: bigint | null;
+  /** A gift: card message, sender, prices left off the packing slip. */
+  gift?: GiftFields;
 };
 
 export class StorefrontService {
@@ -1371,6 +1374,7 @@ export class StorefrontService {
           deliverySlotLabel: q.slot?.label ?? null,
           slotFee: q.totals.slotFee,
           courierAccountId: q.courier?.id ?? null,
+          ...(meta.gift ?? NOT_A_GIFT),
           itemsSubtotal,
           discountTotal,
           shippingTotal,
@@ -1490,12 +1494,14 @@ export class StorefrontService {
       customerId: this.ctx.customer?.id ?? null,
       useWallet: !!dto.useWallet && !!this.ctx.customer,
     });
+    const gift = await this.giftFor(dto.gift);
     const manual = quote.gateway!.mode === "manual" && isManualCapable(quote.gateway!.code);
     const transfer = manual && dto.payment?.transactionId ? await this.checkTransfer(quote.gateway!.code, dto.payment) : undefined;
     const order = await this.createOrder(quote, {
       customerId: this.ctx.customer?.id ?? null,
       customerNote: dto.customerNote,
       transfer,
+      gift,
       source: "website",
       historyNote: `Order placed on storefront (${quote.gateway!.name}${transfer ? `, transaction ${transfer.transactionId} to verify` : ""})`,
     });
@@ -1556,12 +1562,28 @@ export class StorefrontService {
         : Promise.resolve([]),
     ]);
     const order = sf.checkoutCourierIds.map(String);
+    const g = await prisma.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { giftOrders: true } });
     return {
+      /** Checkout offers "This order is a gift". */
+      giftOrders: g?.giftOrders ?? true,
       days,
       couriers: couriers
         .map((c) => ({ id: String(c.id), name: COURIER_NAMES[c.courier as Courier] ?? c.courier, courier: c.courier }))
         .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
     };
+  }
+
+  /** The gift details to save, if the store offers gift orders; a 400 says what's wrong. */
+  private async giftFor(input: PlaceOrderDto["gift"]): Promise<GiftFields> {
+    if (!input) return NOT_A_GIFT;
+    const g = await prisma.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { giftOrders: true } });
+    if (g && !g.giftOrders) throw new BadRequestError("This shop doesn't take gift orders", "VALIDATION_FAILED");
+    try {
+      return giftFields(input);
+    } catch (e) {
+      if (e instanceof GiftProblem) throw new BadRequestError(e.message, "VALIDATION_FAILED");
+      throw e;
+    }
   }
 
   /** Enabled payment gateways, in the admin's sort order. */
@@ -1796,6 +1818,8 @@ function orderView(o: OrderWithItems) {
     deliverySlot: o.deliverySlotLabel
       ? { label: o.deliverySlotLabel, date: o.deliveryDate ? o.deliveryDate.toISOString().slice(0, 10) : null, fee: num(o.slotFee) }
       : null,
+    /** A gift: the card message and who it's from. */
+    gift: o.isGift ? { message: o.giftMessage, from: o.giftFrom, hidePrices: o.giftHidePrices } : null,
     /** The courier the customer chose at checkout. */
     courier: o.courierAccount ? (COURIER_NAMES[o.courierAccount.courier as Courier] ?? o.courierAccount.courier) : null,
     taxTotal: num(o.taxTotal),

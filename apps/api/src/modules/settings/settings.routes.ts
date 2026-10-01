@@ -45,6 +45,7 @@ const TaxDto = z.object({
   pricesIncludeTax: z.boolean().optional(),
   orderPrefix: z.string().max(20).optional().nullable(),
   invoiceNote: z.string().max(1000).optional().nullable(),
+  giftOrders: z.boolean().optional(),
 });
 
 const ProfileDto = z.object({
@@ -126,6 +127,7 @@ async function readGeneral(storeId: bigint) {
       pricesIncludeTax: g?.pricesIncludeTax ?? false,
       orderPrefix: g?.orderPrefix ?? "",
       invoiceNote: g?.invoiceNote ?? "",
+      giftOrders: g?.giftOrders ?? true,
       /** What the next order number will look like. */
       sampleOrderNumber: nextOrderNumber(orderNumberStem(g?.orderPrefix, new Date()), null),
     },
@@ -285,6 +287,7 @@ adminSettingsRouter.put(
         ...(dto.pricesIncludeTax !== undefined ? { pricesIncludeTax: dto.pricesIncludeTax } : {}),
         ...(dto.orderPrefix !== undefined ? { orderPrefix: prefix } : {}),
         ...(dto.invoiceNote !== undefined ? { invoiceNote: textOrNull(dto.invoiceNote) } : {}),
+        ...(dto.giftOrders !== undefined ? { giftOrders: dto.giftOrders } : {}),
       });
     } else {
       throw new BadRequestError(`"${section}" settings are not stored yet`, "BAD_REQUEST");

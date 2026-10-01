@@ -91,6 +91,8 @@ export interface MyOrder {
   /** The delivery time slot picked and the courier chosen at checkout. */
   deliverySlot?: { label: string; date: string | null; fee: number } | null;
   courier?: string | null;
+  /** A gift: the card message and who it's from. */
+  gift?: { message: string | null; from: string | null; hidePrices: boolean } | null;
   feeTotal: number;
   grandTotal: number;
   currency: string;

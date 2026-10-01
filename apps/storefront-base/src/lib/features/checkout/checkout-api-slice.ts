@@ -30,6 +30,8 @@ export interface DeliverySlotChoice {
 }
 
 export interface DeliveryChoices {
+  /** Checkout offers "This order is a gift". */
+  giftOrders: boolean;
   days: { date: string; weekday: number; slots: DeliverySlotChoice[] }[];
   /** Couriers to choose from (empty: the shop picks). */
   couriers: { id: string; name: string; courier: string }[];
@@ -125,6 +127,8 @@ export type OrderDetail = {
   /** The delivery time slot picked and the courier chosen at checkout. */
   deliverySlot?: { label: string; date: string | null; fee: number } | null;
   courier?: string | null;
+  /** A gift: the card message and who it's from. */
+  gift?: { message: string | null; from: string | null; hidePrices: boolean } | null;
   feeTotal: number;
   grandTotal: number;
   currency: string;
@@ -221,6 +225,8 @@ export type PlaceOrderBody = {
   deliverySlot?: { slotId: string; date: string };
   /** The courier picked, when the shop lets customers choose. */
   courierAccountId?: string;
+  /** A gift: card message, who it's from, prices off the packing slip. */
+  gift?: { message?: string; from?: string; hidePrices?: boolean };
   paymentGateway: PaymentMethod | string;
   paymentDetails?: Record<string, unknown>;
   /** Manual bKash / Nagad / Rocket / bank payments: the transaction ID and the number paid from. */

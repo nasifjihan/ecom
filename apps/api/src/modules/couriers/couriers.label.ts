@@ -59,6 +59,7 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
           billingPhone: true,
           billingFirstName: true,
           billingLastName: true,
+          isGift: true,
         },
       },
     },
@@ -178,6 +179,11 @@ export async function parcelLabels(storeId: bigint, ids: bigint[]): Promise<Buff
       .filter(Boolean)
       .join(" ")
     doc.font(FONT.regular).fontSize(7.5).fillColor(MUTED).text("DELIVER TO", M, y)
+    // Gifts: handle with care, and the recipient isn't the buyer.
+    if (o.isGift) {
+      doc.roundedRect(W - M - 44, y - 2, 44, 13, 6).fill(INK)
+      doc.font(FONT.bold).fontSize(7.5).fillColor("#ffffff").text("GIFT", W - M - 44, y + 1, { width: 44, align: "center" })
+    }
     y += 10
     doc
       .font(FONT.bold)

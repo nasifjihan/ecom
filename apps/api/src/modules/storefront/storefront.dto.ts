@@ -105,6 +105,14 @@ export const PlaceOrderDto = z.object({
   shippingMethodId: z.coerce.bigint().positive(),
   /** For delivery options that use time slots: the slot and day picked. */
   deliverySlot: z.object({ slotId: z.string().regex(/^\d{1,18}$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).optional(),
+  /** A gift: sent to the shipping address; the card message, who it's from, prices off the packing slip. */
+  gift: z
+    .object({
+      message: z.string().max(400).optional().nullable(),
+      from: z.string().max(80).optional().nullable(),
+      hidePrices: z.boolean().optional(),
+    })
+    .optional(),
   /** The courier picked, when the storefront lets customers choose. */
   courierAccountId: z.string().regex(/^\d{1,18}$/).optional(),
   paymentGateway: z.string().trim().toLowerCase().min(2).max(32),
