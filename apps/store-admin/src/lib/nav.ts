@@ -33,6 +33,7 @@ import {
   MessageSquareText,
   Languages,
   Newspaper,
+  BellRing,
   Target,
   Package,
   PackagePlus,
@@ -196,6 +197,7 @@ export const SETTINGS_SECTIONS: NavSection[] = [
       { href: "/settings/languages", label: "Languages", icon: Languages, perm: "settings.view" },
       { href: "/settings/tax", label: "VAT & invoices", icon: Receipt, perm: "settings.view" },
       { href: "/settings/emails", label: "Emails", icon: Mail, perm: "emails.view" },
+      { href: "/settings/notifications", label: "Notifications", icon: BellRing, perm: "emails.view" },
     ],
   },
   {

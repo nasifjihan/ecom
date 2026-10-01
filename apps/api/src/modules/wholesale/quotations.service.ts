@@ -7,6 +7,7 @@
  *   accept or decline it in their account (staff get an email either way).
  * See quotation.rules.ts for the statuses.
  */
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../../config"
 import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } from "../../core"
@@ -464,6 +465,7 @@ export class QuotationsService {
     })
     const email = new EmailService(this.storeId)
     inBackground("quote request email", () => email.quoteUpdate(q.id, "requested"))
+    alertStaffLater(this.storeId, "quote_request", { title: `Quote ${q.number} requested`, body: dto.note ?? undefined, link: `/orders/quotations/${q.id}` })
     return this.myOne(customerId, q.number)
   }
 
@@ -481,6 +483,11 @@ export class QuotationsService {
     })
     const email = new EmailService(this.storeId)
     inBackground("quote answer email", () => email.quoteUpdate(row.id, action === "accept" ? "accepted" : "declined"))
+    alertStaffLater(this.storeId, "quote_request", {
+      title: `Quote ${row.number} ${action === "accept" ? "accepted" : "declined"}`,
+      body: note ?? undefined,
+      link: `/orders/quotations/${row.id}`,
+    })
     return this.myOne(customerId, number)
   }
 }

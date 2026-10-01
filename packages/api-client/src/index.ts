@@ -155,6 +155,7 @@ export const api = createApi({
     "Order",
     "Customer",
     "Lead",
+    "Notice",
     "Coupon",
     "FlashSale",
     "Review",

@@ -63,6 +63,8 @@ import { adminSettingsRouter } from "./modules/settings/settings.routes";
 import { adminShippingRouter, storefrontShippingRouter } from "./modules/shipping";
 import { adminNewsletterRouter, storefrontNewsletterRouter } from "./modules/customers/newsletter.routes";
 import { adminLeadsRouter } from "./modules/leads/leads.routes";
+import { adminInboxRouter, adminMatrixRouter } from "./modules/staff-alerts/staff-alerts.routes";
+import { registerStaffAlertListeners } from "./modules/staff-alerts/staff-alerts.events";
 import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter, storefrontEngagementRouter, storefrontWishlistRouter } from "./modules/storefront";
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
@@ -130,6 +132,7 @@ export function buildApp(): Express {
 
   // Order and account events turn into queued emails.
   registerEmailListeners();
+  registerStaffAlertListeners();
   registerSmsListeners();
 
   // =============== MODULE ROUTES (Batch #5 wired) ===============
@@ -209,6 +212,8 @@ export function buildApp(): Express {
   app.use("/api/storefront/newsletter", storefrontNewsletterRouter);
   app.use("/api/admin/newsletter", adminNewsletterRouter);
   app.use("/api/admin/leads", adminLeadsRouter);
+  app.use("/api/admin/inbox", adminInboxRouter);                     // the bell: this staff member's alerts
+  app.use("/api/admin/notifications/matrix", adminMatrixRouter);     // who gets which messages
   app.use("/api/admin/locations", adminLocationsRouter);             // BD divisions/districts/upazilas + delivery on/off
   app.use("/api/storefront/locations", storefrontLocationsRouter);
   app.use("/api/admin/emails", adminEmailsRouter);                   // email templates, preview, test send, sent log

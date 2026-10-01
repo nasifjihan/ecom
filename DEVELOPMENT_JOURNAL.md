@@ -4380,3 +4380,94 @@ Many sales start as a Facebook comment, an Instagram DM or a call. Until now tho
 - **No board view:** no drag-between-columns board; the list has status tabs.
 - **Already there before this part:** at phone width the admin sidebar stays 256 px wide, so every admin page (not only Leads) scrolls sideways.
 - **Next:** part 3, who gets which messages (notification settings).
+
+---
+
+## ✅ BATCH #37 (part 3) — Who gets which messages, and a real bell (2026-10-03)
+Customer emails and SMS could already be switched on and off, but on two separate pages. The team only got a "new order" email to the owners. The bell at the top of the admin was a picture with a red dot that never changed. Now one page decides who gets what, and the bell works.
+
+### 37.14 Data (migration `staff_alerts`)
+- **StaffAlertSetting:** one row per store per team alert. It holds the bell, email and SMS switches, and who gets it (empty: the owners). With no row, the built-in defaults apply.
+- **StaffNotice:** the messages in each person's bell: title, line of detail, the admin page it opens, read or not.
+  - `refKey` stops the same alert repeating.
+  - `hidden` keeps that record when the bell is off for the alert, without showing it.
+
+### 37.15 Rules (`staff-alerts/staff-alerts.rules.ts`)
+- **Team alerts and their defaults:**
+
+  | Alert | Bell | Email | When |
+  |---|---|---|---|
+  | New order | on | on | a customer orders on the website or a landing page; not staff-entered orders |
+  | Payment to check | on | off | a customer sends a bKash/Nagad/Rocket/bank transaction ID |
+  | Return asked for | on | on | a customer asks to return an order |
+  | Quote request or answer | on | on | a quote is asked for, accepted or declined |
+  | Low stock | on | off | an order takes a product to its low-stock level; once a day per product |
+  | Lead given to you | on | off | someone gives you a lead; goes only to that person, never for leads you take yourself |
+
+  SMS is off by default for all of them.
+- **Recipients:** only active staff — the people chosen, otherwise the owners.
+- **Staff SMS:** "Store: title", in plain letters (৳ becomes "Tk"), at most 160 characters.
+- **Customer rows** map each order step to its email template and SMS event, so the page changes the same switches as Settings → Emails and Settings → SMS. Nothing is stored twice.
+
+### 37.16 API
+- `alertStaff(storeId, event, alert)` sends on the channels set: bell, email and SMS (to the mobile on the staff profile). It never fails the request that caused it.
+- **Where alerts are sent from:**
+  - the order-placed event (new order and low stock);
+  - a customer sending a payment transaction ID;
+  - a customer asking for a return;
+  - quote request, accept and decline;
+  - a lead being added or given to someone.
+- **Emails:**
+  - "New order" and "Quote request" keep their own email templates; the page turns those on or off, and their staff recipients now include the people chosen.
+  - The other alerts use a new "Team alert" email template, editable on Settings → Emails.
+- **Endpoints:**
+  - `GET /api/admin/inbox`, `POST /api/admin/inbox/:id/read`, `POST /api/admin/inbox/read-all` — each person's own bell;
+  - `GET/PUT /api/admin/notifications/matrix` — "emails" permission.
+
+### 37.17 Admin
+- **Settings → Notifications:**
+  - **Customers:** email and SMS for each order step (placed; confirmed / on hold / out for delivery; shipped; delivered; cancelled), plus email only for refunded, account created and quote sent.
+  - **Your team:** bell, email and SMS for each alert, and a "Who" picker of staff members (nobody ticked means the owners).
+  - Under the picker it lists anyone with SMS on but no mobile on file.
+  - A note shows when SMS is still in test mode.
+- **The bell:**
+  - the unread count, checked every minute and when the tab comes back;
+  - the latest 15 alerts, unread ones highlighted;
+  - clicking one marks it read and opens its page;
+  - "Mark all read", and a link to the settings page.
+
+### 37.18 Checked
+- **Tests:** API 754 passing (59 files).
+  - new `tests/unit/staff-alerts-rules.test.ts`;
+  - new `tests/integration/staff-alerts.db.test.ts`:
+    - owners by default;
+    - reading your own alerts, and not marking someone else's;
+    - chosen people with SMS only to those with a mobile;
+    - low stock once a day, still recorded with the bell off and email on;
+    - the new-order wording;
+    - lead given to you, but not for taking one yourself;
+    - the page saving through email templates and SMS events.
+  - The 2 "unhandled errors" are still the older `smoke-batch9` ones.
+- **Lint and builds:** no lint regressions. The API typechecks; admin and storefront build.
+- **In the browser (Chromium):**
+  - Settings → Notifications: turned "Order delivered" SMS on and saved; it changed the SMS setting itself.
+  - set "Payment to check" to SMS, for the owner and Rina Akter;
+  - a landing-page order (Shirin Akter) put "New order FBD-20261001000005" and "Low stock: Aarong Premium Cotton Panjabi — White (42), 1 left" in the owner's bell;
+  - her bKash transaction ID put "Payment to check" in both people's bells, and SMS were logged to both mobiles;
+  - the bell showed "3 unread"; clicking an alert opened its page and dropped the count; "Mark all read" cleared it.
+  - Found and fixed here: the dropdown stayed open after clicking an alert, and totals showed as ৳4,197.5.
+  - No page errors.
+- **Dev data:**
+  - staff Rina Akter (Order Manager, rina@fashionbd.local, 01712000001, password Rina@12345!);
+  - "Payment to check" set to bell + SMS for the owner and Rina;
+  - orders FBD-20261001000005 and 06 from the landing page (Shirin Akter; 05 has a bKash transaction to check);
+  - "Order delivered" SMS is off again (it was switched on and back during the checks).
+
+### 37.19 Not done
+- **WhatsApp:** no WhatsApp channel.
+- **Personal settings:** nobody can mute an alert just for themselves; the page is for the whole store.
+- **History:** there's no "all notifications" page; the bell shows the latest 15.
+- **Live updates:** no browser push or instant updates; the bell checks once a minute.
+- **More alert types:** reviews and questions waiting, and courier problems, aren't alerts yet.
+- **Running the dev servers:** background tasks in this environment were stopped as soon as they started this time, so the servers were started detached instead.
+- **Next:** part 4, scheduled report emails with a PDF.

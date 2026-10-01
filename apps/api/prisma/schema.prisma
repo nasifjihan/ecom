@@ -68,6 +68,8 @@ model Store {
   deliverySlots         DeliverySlot[]
   newsletterSubscribers NewsletterSubscriber[]
   leads                 Lead[]
+  staffAlertSettings    StaffAlertSetting[]
+  staffNotices          StaffNotice[]
   shipments             Shipment[]
   paymentRecords        PaymentRecord[]
   paymentAttempts       PaymentAttempt[]
@@ -309,6 +311,7 @@ model AdminUser {
   commissions        SalesCommission[]
   salesTargets       SalesTarget[]
   leadsOwned         Lead[]            @relation("LeadOwner")
+  notices            StaffNotice[]
   refunds            Refund[]
   authoredPosts      BlogPost[]
   createdAt          DateTime          @default(now())
@@ -769,6 +772,47 @@ model LeadNote {
   createdAt  DateTime @default(now())
 
   @@index([leadId, createdAt])
+}
+
+/// How the team hears about one kind of event (new order, payment to check, low stock…):
+/// in the admin's bell, by email and/or SMS, and to whom. No row: the built-in defaults.
+model StaffAlertSetting {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// new_order | payment_to_verify | return_requested | quote_request | low_stock | lead_assigned
+  event     String
+  inApp     Boolean  @default(true)
+  email     Boolean  @default(false)
+  sms       Boolean  @default(false)
+  /// Who gets it (empty: the store's owners). Not used for "lead_assigned", which goes to the lead's follower.
+  staffIds  BigInt[] @default([])
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, event])
+}
+
+/// One message in a staff member's bell.
+model StaffNotice {
+  id        BigInt    @id @default(autoincrement())
+  storeId   BigInt
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  adminId   BigInt
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  event     String
+  title     String
+  body      String?
+  /// Admin page it opens ("/orders/12").
+  link      String?
+  /// What it's about ("product:4"), so the same alert isn't repeated.
+  refKey    String?
+  /// Only kept to stop the same alert repeating (the bell was off for it).
+  hidden    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([adminId, readAt])
+  @@index([storeId, event, refKey])
 }
 
 /// A delivery window customers can pick at checkout with methods that use slots

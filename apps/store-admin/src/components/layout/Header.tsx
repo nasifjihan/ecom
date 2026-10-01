@@ -8,7 +8,6 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Search,
-  Bell,
   Sun,
   Moon,
   Menu,
@@ -36,6 +35,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { logout as logoutAction } from "@/lib/features/auth/auth-slice";
 import type { RootState } from "@/lib/store";
+import { NotificationBell } from "./notification-bell";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -102,15 +102,7 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
-        </Button>
+        <NotificationBell />
 
         <Button
           variant="ghost"

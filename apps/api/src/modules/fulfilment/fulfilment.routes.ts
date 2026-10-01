@@ -11,6 +11,7 @@
  *   GET|POST /api/admin/orders/:id/refunds    refunds (items, amount, method, restock, return)
  *   POST /api/storefront/account/orders/:orderRef/returns   the customer asks for a return
  */
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../config";
@@ -104,6 +105,11 @@ storefrontReturnsRouter.post(
     });
     if (!o) throw new NotFoundError("Order", orderRef);
     const created = await svc(r).createReturn(o.id, r.body as CreateReturnDto, "customer");
+    alertStaffLater(BigInt(r.ctx.storeId!), "return_requested", {
+      title: `Return asked for on order ${orderRef}`,
+      body: `Return ${created.code}. Check it and approve or reject it.`,
+      link: "/orders/returns",
+    });
     return { code: created.code, status: created.status };
   }, 201),
 );

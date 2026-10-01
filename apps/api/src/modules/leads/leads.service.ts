@@ -2,6 +2,7 @@
  * CRM LEADS: people who asked and haven't ordered. Staff note every call and message, set
  * the next follow-up, make the lead a customer and, with an order, win it.
  */
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../../config"
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
@@ -104,6 +105,17 @@ export class LeadsService {
   private async log(leadId: bigint, kind: string, body: string, who?: { id: bigint | null; name: string }) {
     const w = who ?? (await this.me())
     await prisma.leadNote.create({ data: { leadId, kind, body, authorId: w.id, authorName: w.name } })
+  }
+
+  /** "Lead given to you" for the follower (not when they gave it to themselves). */
+  private tellFollower(ownerId: bigint | null, leadId: bigint, name: string, by: { id: bigint | null; name: string }) {
+    if (!ownerId) return
+    alertStaffLater(this.storeId, "lead_assigned", {
+      title: `${by.name} gave you a lead: ${name}`,
+      link: `/customers/leads/${leadId}`,
+      assigneeId: ownerId,
+      byId: by.id,
+    })
   }
 
   private dto(r: Row, orderNumber?: string | null) {
@@ -237,6 +249,7 @@ export class LeadsService {
       },
     })
     await this.log(row.id, "status", "Lead added", me)
+    this.tellFollower(row.ownerId, row.id, row.name, me)
     if (d.note?.trim()) await this.log(row.id, "note", d.note.trim(), me)
     return this.get(row.id)
   }
@@ -264,7 +277,9 @@ export class LeadsService {
       await this.checkOwner(d.ownerId)
       data.ownerId = d.ownerId
       const to = d.ownerId ? await prisma.adminUser.findUnique({ where: { id: d.ownerId }, select: { name: true } }) : null
-      await this.log(id, "status", to ? `Given to ${to.name}` : "No one is following this lead now")
+      const me = await this.me()
+      await this.log(id, "status", to ? `Given to ${to.name}` : "No one is following this lead now", me)
+      this.tellFollower(d.ownerId, id, r.name, me)
     }
     await prisma.lead.update({ where: { id }, data })
     return this.get(id)

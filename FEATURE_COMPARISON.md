@@ -167,7 +167,7 @@ These are our advantages. Keep them.
 | 10 default roles | ✅ | |
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
 | Staff on some sites only | ✅ | Batch 32: staff can be limited to some storefronts (their orders, parcels, returns, payments, reports and storefront content) |
-| Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Email on/off per template ✅ |
+| Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Batch 37: Settings → Notifications: customer messages × email/SMS, team alerts (new order, payment to check, return, quote, low stock, lead given to you) × bell/email/SMS and who gets them; real bell in the admin. No WhatsApp |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
 | Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
 | Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | ❌ | |

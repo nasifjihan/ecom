@@ -10,6 +10,7 @@
  *    cash confirmation marks it received. A payout that is less than the parcels' cash minus the
  *    courier's charges is flagged as a shortfall.
  */
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service";
 import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { Prisma } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
@@ -175,6 +176,13 @@ export class PaymentsService {
       return { r, sync };
     });
     if (created.sync) await this.startIfPaid(orderId, created.sync);
+    if (by === "customer") {
+      alertStaffLater(this.storeId, "payment_to_verify", {
+        title: `Payment to check on order ${o.number}`,
+        body: `${methodName(method)} ${money(amount)}, transaction ${trx}${sender ? ` from ${sender}` : ""}.`,
+        link: "/orders/payments",
+      });
+    }
     return this.record(created.r.id);
   }
 

@@ -199,6 +199,17 @@ export const EMAIL_TEMPLATES = {
       "festival.admin_url",
     ],
   },
+  staff_alert: {
+    label: "Team alert",
+    audience: "staff",
+    description:
+      "Sent to your team for the alerts set to email in Settings > Notifications: payments to check, return requests, low stock and leads.",
+    subject: "{{alert.title}}",
+    message: "# {{alert.title}}\n\n{{alert.body}}",
+    blocks: [],
+    button: { label: "Open in admin", url: "alert.url" },
+    variables: [...STORE, "alert.title", "alert.body", "alert.url"],
+  },
 } satisfies Record<string, TemplateDef>
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES

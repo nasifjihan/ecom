@@ -2,6 +2,7 @@
  * EMAIL SERVICE — builds, logs and queues the store's transactional emails, and backs
  * Settings > Emails in the store admin (templates, preview, test send, sent-email log).
  */
+import { TEMPLATE_EVENT } from "../staff-alerts/staff-alerts.rules"
 import type { Prisma } from "@prisma/client"
 import { env, logger, prisma } from "../../config"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
@@ -162,6 +163,13 @@ export class EmailService {
   /** Where staff emails go: the addresses set on the template, else the store owners. */
   private async staffRecipients(key: TemplateKey): Promise<string[]> {
     const { recipients } = await this.templateConfig(key)
+    // The people chosen for this alert in Settings > Notifications, plus any extra addresses.
+    const event = TEMPLATE_EVENT[key]
+    const chosen = event ? await prisma.staffAlertSetting.findUnique({ where: { storeId_event: { storeId: this.storeId, event } }, select: { staffIds: true } }) : null
+    if (chosen?.staffIds.length) {
+      const people = await prisma.adminUser.findMany({ where: { storeId: this.storeId, status: "active", id: { in: chosen.staffIds } }, select: { email: true } })
+      return [...new Set([...people.map((p) => p.email), ...recipients])]
+    }
     if (recipients.length) return recipients
     const owners = await prisma.adminUser.findMany({
       where: { storeId: this.storeId, status: "active", role: { slug: "owner" } },
@@ -503,6 +511,15 @@ export class EmailService {
     })
   }
 
+  /** A team alert by email (Settings > Notifications) to the given addresses. */
+  async teamAlert(to: string[], alert: { title: string; body: string; url: string }) {
+    return this.send("staff_alert", {
+      to,
+      vars: { "alert.title": alert.title, "alert.body": alert.body, "alert.url": alert.url },
+      recipientType: "staff",
+    })
+  }
+
   // ------------------------------------------------------------------ admin: templates
 
   async listTemplates() {
@@ -629,6 +646,9 @@ export class EmailService {
         "festival.last_year": "Last year's sale brought 142 orders, ৳6,84,500.",
         "festival.todo": "- Order enough stock of the best sellers\n- Make the banner and homepage section",
         "festival.admin_url": `${urls.admin}/marketing/festivals`,
+        "alert.title": "Payment to check on order 20261001000012",
+        "alert.body": "Karim Mia sent bKash ৳2,450, transaction 9F3K2L7QWE.",
+        "alert.url": `${urls.admin}/orders/payments`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },
