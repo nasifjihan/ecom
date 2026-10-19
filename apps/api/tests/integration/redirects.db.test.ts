@@ -30,7 +30,7 @@ describe.skipIf(!runDb)("redirects (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.product.deleteMany({ where: { storeId } })
     await prisma.store.delete({ where: { id: storeId } })
     await prisma.$disconnect()

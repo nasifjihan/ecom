@@ -66,7 +66,7 @@ describe.skipIf(!runDb)("VAT and invoice details (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await new Promise((r) => setTimeout(r, 500)) // background emails
     await prisma.invoice.deleteMany({ where: { order: { storeId } } })
     await prisma.order.deleteMany({ where: { storeId } })

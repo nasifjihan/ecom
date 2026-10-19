@@ -100,7 +100,7 @@ describe.skipIf(!runDb)("storefront settings (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.adminUser.deleteMany({ where: { storeId } })
     await prisma.product.deleteMany({ where: { storeId } })
