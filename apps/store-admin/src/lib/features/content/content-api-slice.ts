@@ -32,7 +32,7 @@ export interface BlogCategory {
   _count?: { posts: number };
 }
 
-export type PostStatus = "draft" | "published";
+export type PostStatus = "draft" | "published" | "scheduled";
 export interface BlogPostRow {
   id: string;
   title: string;
@@ -41,8 +41,12 @@ export interface BlogPostRow {
   featuredImageUrl: string | null;
   status: PostStatus;
   publishedAt: string | null;
+  /** Set while it waits to go live. */
+  scheduledAt?: string | null;
   updatedAt: string;
   tags: string[] | null;
+  featured: boolean;
+  viewCount?: number;
   category: { id: string; name: string; slug: string } | null;
   author: { name: string } | null;
 }
@@ -51,6 +55,8 @@ export interface BlogPost extends Omit<BlogPostRow, "author"> {
   content: string | null;
   seoTitle: string | null;
   metaDesc: string | null;
+  /** "Shop this" products, in order. */
+  products: { id: string; name: string }[];
 }
 export interface BlogPostInput {
   title?: string;
@@ -61,6 +67,9 @@ export interface BlogPostInput {
   featuredImageUrl?: string | null;
   tags?: string[];
   status?: PostStatus;
+  scheduledAt?: string | null;
+  featured?: boolean;
+  productIds?: string[];
   seoTitle?: string | null;
   metaDesc?: string | null;
 }

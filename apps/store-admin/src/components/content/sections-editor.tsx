@@ -43,7 +43,8 @@ import {
   type HomepageSectionType,
   type ProductRailConfig,
 } from "@/lib/features/content/content-api-slice";
-import { useGetCategoryTreeQuery, useGetProductsQuery, type Category } from "@/lib/features/catalog/catalog-api-slice";
+import { useGetCategoryTreeQuery, type Category } from "@/lib/features/catalog/catalog-api-slice";
+import { ProductPickList } from "./product-pick-list";
 
 export type Section = HomepageSection & { id: string };
 
@@ -983,19 +984,6 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
   const id = (name: string) => `${uid}-${name}`;
   const { data: tree = [] } = useGetCategoryTreeQuery();
   const categories = React.useMemo(() => flattenCategories(tree), [tree]);
-  const [q, setQ] = React.useState("");
-  const [search, setSearch] = React.useState("");
-  React.useEffect(() => {
-    const t = setTimeout(() => setSearch(q.trim()), 300);
-    return () => clearTimeout(t);
-  }, [q]);
-  const { data: found, isFetching } = useGetProductsQuery({ search, perPage: 8, status: "published" }, { skip: c.source !== "products" || search.length < 2 });
-  const move = (i: number, by: number) => {
-    const next = [...c.products];
-    const [item] = next.splice(i, 1);
-    next.splice(i + by, 0, item!);
-    set({ products: next });
-  };
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -1047,57 +1035,7 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
           </Field>
         )}
       </div>
-      {c.source === "products" && (
-        <div className="space-y-3">
-          <Field label="Add products" htmlFor={id("q")} hint="Type at least 2 letters of a name or SKU. Up to 24.">
-            <Input id={id("q")} value={q} placeholder="Search products…" disabled={c.products.length >= 24} onChange={(e) => setQ(e.target.value)} />
-          </Field>
-          {search.length >= 2 && (
-            <div className="rounded-md border">
-              {isFetching && !found ? (
-                <p className="p-2 text-sm text-slate-500">Searching…</p>
-              ) : !found?.items.length ? (
-                <p className="p-2 text-sm text-slate-500">No published products match.</p>
-              ) : (
-                found.items.map((p) => {
-                  const added = c.products.some((x) => x.id === String(p.id));
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      disabled={added || c.products.length >= 24}
-                      onClick={() => set({ products: [...c.products, { id: String(p.id), name: p.name }] })}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
-                    >
-                      <span className="truncate">{p.name}</span>
-                      <span className="shrink-0 text-xs text-slate-500">{added ? "Added" : (p.sku ?? "")}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          )}
-          {c.products.length > 0 && (
-            <ol className="divide-y rounded-md border">
-              {c.products.map((p, i) => (
-                <li key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                  <span className="w-5 text-xs text-slate-500">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.name} up`}>
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === c.products.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.name} down`}>
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => set({ products: c.products.filter((x) => x.id !== p.id) })} aria-label={`Remove ${p.name}`}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
+      {c.source === "products" && <ProductPickList id={id("q")} value={c.products} onChange={(products) => set({ products })} max={24} />}
     </div>
   );
 }

@@ -38,8 +38,12 @@ import {
   useGetBlogPostsQuery,
   useUpdateBlogCategoryMutation,
   type BlogCategory,
+  type BlogPostRow,
   type PostStatus,
 } from "@/lib/features/content/content-api-slice";
+
+/** On the store now: published, or scheduled for a time that has passed. */
+const isLive = (p: BlogPostRow) => p.status === "published" || (p.status === "scheduled" && !!p.scheduledAt && new Date(p.scheduledAt) <= new Date());
 
 type View = "posts" | "categories";
 
@@ -122,6 +126,7 @@ function PostsTable() {
         >
           <option value="">All statuses</option>
           <option value="published">Published</option>
+          <option value="scheduled">Scheduled</option>
           <option value="draft">Drafts</option>
         </select>
       </div>
@@ -139,6 +144,7 @@ function PostsTable() {
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead className="text-right">Views</TableHead>
                 <TableHead className="w-32 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -149,14 +155,20 @@ function PostsTable() {
                     <Link href={`/content/blog/${p.id}`} className="font-medium hover:underline line-clamp-1">
                       {p.title}
                     </Link>
-                    {p.author && <p className="text-xs text-slate-500">by {p.author.name}</p>}
+                    <p className="text-xs text-slate-500">
+                      {p.featured && <span className="mr-1.5 font-medium text-amber-700 dark:text-amber-400">Featured</span>}
+                      {p.author && `by ${p.author.name}`}
+                    </p>
                   </TableCell>
                   <TableCell className="text-sm">{p.category?.name ?? <span className="text-slate-400">None</span>}</TableCell>
-                  <TableCell>{p.status === "published" ? <Badge variant="success">Published</Badge> : <Badge variant="secondary">Draft</Badge>}</TableCell>
+                  <TableCell>
+                    {isLive(p) ? <Badge variant="success">Published</Badge> : p.status === "scheduled" ? <Badge variant="outline">Scheduled</Badge> : <Badge variant="secondary">Draft</Badge>}
+                  </TableCell>
                   <TableCell className="text-sm text-slate-500">{formatDate(p.publishedAt ?? p.updatedAt)}</TableCell>
+                  <TableCell className="text-right text-sm tabular-nums">{p.viewCount ?? 0}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      {p.status === "published" && (
+                      {isLive(p) && (
                         <Button variant="ghost" size="icon" asChild title="View on store">
                           <a href={`${STOREFRONT_URL}/blog/${p.slug}`} target="_blank" rel="noreferrer">
                             <ExternalLink className="h-4 w-4" />

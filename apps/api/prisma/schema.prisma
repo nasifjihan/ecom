@@ -2449,10 +2449,15 @@ model BlogPost {
   content          String?       @db.Text
   featuredImageUrl String?
   tags             Json?
+  /// draft | published | scheduled (live once scheduledAt has passed)
   status           String        @default("published")
   visibility       String        @default("public")
   password         String?
   scheduledAt      DateTime?
+  /// Pinned to the top of the blog list.
+  featured         Boolean       @default(false)
+  /// "Shop this" products shown under the post, in this order.
+  productIds       BigInt[]      @default([])
   publishedAt      DateTime?
   allowComments    Boolean       @default(true)
   seoTitle         String?

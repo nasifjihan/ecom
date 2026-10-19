@@ -73,7 +73,12 @@ export const CreatePostDto = z.object({
   content: text(200_000).optional().nullable(),
   featuredImageUrl: optLink,
   tags: z.array(text(40).min(1)).max(20).optional(),
-  status: z.enum(["draft", "published"]).default("draft"),
+  /** scheduled: goes live by itself at `scheduledAt`. */
+  status: z.enum(["draft", "published", "scheduled"]).default("draft"),
+  scheduledAt: z.coerce.date().optional().nullable(),
+  featured: z.boolean().optional(),
+  /** "Shop this" products, in the order shown. */
+  productIds: z.array(z.coerce.bigint().positive()).max(12, "At most 12 products").optional(),
   seoTitle: optText(200),
   metaDesc: optText(320),
 })

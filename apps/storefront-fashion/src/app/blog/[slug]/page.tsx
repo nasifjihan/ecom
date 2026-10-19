@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Markdown, markdownToText } from "@ecom/ui";
 import { formatDate, getBlogPost } from "@/lib/content";
+import { ShopThis } from "./shop-this";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -64,6 +65,7 @@ export default async function BlogPostView({ params }: Props) {
           ))}
         </div>
       )}
+      {post.productIds && post.productIds.length > 0 && <ShopThis productIds={post.productIds} />}
     </article>
   );
 }

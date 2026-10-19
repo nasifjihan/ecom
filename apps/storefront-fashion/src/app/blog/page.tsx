@@ -52,24 +52,33 @@ export default async function BlogIndex({ searchParams }: Props) {
         <p className="mt-10 text-muted-foreground">{t("No posts yet. Check back soon.")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {posts.map((p) => (
-            <Link key={p.id} href={`/blog/${p.slug}`} className="group overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md">
-              <div className="aspect-[16/9] bg-gradient-to-br from-primary/20 to-primary/5">
-                {p.featuredImageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.featuredImageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                )}
-              </div>
-              <div className="p-5">
-                <p className="text-xs text-muted-foreground">
-                  {p.category?.name ? `${p.category.name} · ` : ""}
-                  {formatDate(p.publishedAt ?? p.updatedAt)}
-                </p>
-                <h2 className="mt-1.5 text-lg font-semibold leading-snug group-hover:text-primary">{p.title}</h2>
-                {p.excerpt && <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{p.excerpt}</p>}
-              </div>
-            </Link>
-          ))}
+          {posts.map((p, i) => {
+            // Featured posts come first; on page 1 the newest one is shown wide.
+            const lead = i === 0 && page === 1 && !!p.featured;
+            return (
+              <Link
+                key={p.id}
+                href={`/blog/${p.slug}`}
+                className={cn("group overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md", lead && "sm:col-span-2 lg:col-span-3 lg:grid lg:grid-cols-2")}
+              >
+                <div className={cn("aspect-[16/9] bg-gradient-to-br from-primary/20 to-primary/5", lead && "lg:aspect-auto lg:min-h-72")}>
+                  {p.featuredImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.featuredImageUrl} alt="" className="h-full w-full object-cover" loading={lead ? "eager" : "lazy"} />
+                  )}
+                </div>
+                <div className={cn("p-5", lead && "lg:flex lg:flex-col lg:justify-center lg:p-10")}>
+                  <p className="text-xs text-muted-foreground">
+                    {p.featured && <span className="mr-2 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">{t("Featured")}</span>}
+                    {p.category?.name ? `${p.category.name} · ` : ""}
+                    {formatDate(p.publishedAt ?? p.updatedAt)}
+                  </p>
+                  <h2 className={cn("mt-1.5 font-semibold leading-snug group-hover:text-primary", lead ? "text-2xl md:text-3xl" : "text-lg")}>{p.title}</h2>
+                  {p.excerpt && <p className={cn("mt-2 text-sm text-muted-foreground", lead ? "line-clamp-4 md:text-base" : "line-clamp-3")}>{p.excerpt}</p>}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 

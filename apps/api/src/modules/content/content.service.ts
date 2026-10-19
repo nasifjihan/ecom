@@ -46,6 +46,36 @@ const pageMeta = (page: number, perPage: number, total: number) => ({
   totalPages: Math.max(1, Math.ceil(total / perPage)),
 })
 
+export type PostStatus = "draft" | "published" | "scheduled"
+
+/** Posts the public sees: published ones, and scheduled ones whose time has come. */
+export const livePost = (now = new Date()): Prisma.BlogPostWhereInput => ({
+  OR: [{ status: "published" }, { status: "scheduled", scheduledAt: { lte: now } }],
+})
+
+/**
+ * When a post counts as published, for saving. Publishing sets it to now (the first time, or when
+ * a scheduled post is published early); scheduling sets it to the scheduled time, which must be ahead.
+ * A draft keeps whatever it had, so unpublishing and republishing keeps the original date.
+ */
+export function postTiming(
+  status: PostStatus,
+  scheduledAt: Date | null,
+  currentPublishedAt: Date | null,
+  now: Date,
+): { publishedAt?: Date | null; scheduledAt: Date | null } | { error: string } {
+  if (status === "scheduled") {
+    if (!scheduledAt) return { error: "Choose when the post goes live" }
+    if (scheduledAt.getTime() <= now.getTime()) return { error: "Choose a time in the future, or publish it now" }
+    return { publishedAt: scheduledAt, scheduledAt }
+  }
+  if (status === "published") {
+    const keep = currentPublishedAt && currentPublishedAt.getTime() <= now.getTime()
+    return { ...(keep ? {} : { publishedAt: now }), scheduledAt: null }
+  }
+  return { scheduledAt: null, ...(currentPublishedAt && currentPublishedAt.getTime() > now.getTime() ? { publishedAt: null } : {}) }
+}
+
 /** Prisma's unique-violation code, raised when a slug is already taken in this store. */
 const isUniqueViolation = (e: unknown) =>
   e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002"
@@ -216,6 +246,7 @@ export class ContentService {
     publishedAt: true,
     updatedAt: true,
     tags: true,
+    featured: true,
     category: { select: { id: true, name: true, slug: true } },
     author: { select: { name: true } },
   } satisfies Prisma.BlogPostSelect
@@ -234,7 +265,7 @@ export class ContentService {
         orderBy: [{ updatedAt: "desc" }],
         skip: (q.page - 1) * q.perPage,
         take: q.perPage,
-        select: this.postRow,
+        select: { ...this.postRow, scheduledAt: true, viewCount: true },
       }),
     ])
     return { items, meta: pageMeta(q.page, q.perPage, total) }
@@ -246,25 +277,40 @@ export class ContentService {
       include: { category: { select: { id: true, name: true, slug: true } } },
     })
     if (!post) throw new NotFoundError("post")
-    return post
+    // Names for the editor's "shop this" list, in the post's order.
+    const named = post.productIds.length
+      ? await prisma.product.findMany({ where: { storeId: this.storeId, id: { in: post.productIds } }, select: { id: true, name: true } })
+      : []
+    const products = post.productIds.flatMap((pid) => named.filter((p) => p.id === pid).map((p) => ({ id: String(p.id), name: p.name })))
+    return { ...post, products }
   }
 
   private async checkCategory(categoryId: bigint | null | undefined) {
     if (categoryId) await this.blogCategory(categoryId)
   }
 
+  /** "Shop this" products must be this store's own. */
+  private async checkProducts(ids: bigint[] | undefined) {
+    if (!ids?.length) return
+    const found = await prisma.product.count({ where: { storeId: this.storeId, id: { in: ids } } })
+    if (found !== new Set(ids.map(String)).size) throw new BadRequestError("One of the products isn't in this store", "VALIDATION_FAILED")
+  }
+
   async createPost(d: CreatePostDto) {
     await this.checkCategory(d.categoryId)
+    await this.checkProducts(d.productIds)
+    const timing = postTiming(d.status, d.scheduledAt ?? null, null, new Date())
+    if ("error" in timing) throw new BadRequestError(timing.error, "VALIDATION_FAILED")
     const { tags, ...rest } = d
     return this.uniqueSlug("post", () =>
       prisma.blogPost.create({
         data: {
           ...rest,
+          ...timing,
           tags: tags ?? [],
           slug: d.slug ?? slugify(d.title),
           storeId: this.storeId,
           authorId: this.ctx.admin?.id ? BigInt(this.ctx.admin.id) : null,
-          publishedAt: d.status === "published" ? new Date() : null,
         },
       }),
     )
@@ -273,11 +319,14 @@ export class ContentService {
   async updatePost(id: bigint, d: UpdatePostDto) {
     const current = await this.getPost(id)
     await this.checkCategory(d.categoryId)
-    const firstPublish = d.status === "published" && !current.publishedAt
+    await this.checkProducts(d.productIds)
+    const status = d.status ?? (current.status as PostStatus)
+    const timing = postTiming(status, d.scheduledAt !== undefined ? d.scheduledAt : current.scheduledAt, current.publishedAt, new Date())
+    if ("error" in timing) throw new BadRequestError(timing.error, "VALIDATION_FAILED")
     const post = await this.uniqueSlug("post", () =>
       prisma.blogPost.update({
         where: { id },
-        data: { ...d, ...(firstPublish ? { publishedAt: new Date() } : {}) },
+        data: { ...d, ...timing },
       }),
     )
     if (post.slug !== current.slug) await recordMove(prisma, this.storeId, `/blog/${current.slug}`, `/blog/${post.slug}`)
@@ -693,7 +742,7 @@ export class ContentService {
   async publicPosts(q: ListQueryDto) {
     const where: Prisma.BlogPostWhereInput = {
       storeId: this.storeId,
-      status: "published",
+      ...livePost(),
       visibility: "public",
       ...(q.category ? { category: { slug: q.category } } : {}),
     }
@@ -701,7 +750,7 @@ export class ContentService {
       prisma.blogPost.count({ where }),
       prisma.blogPost.findMany({
         where,
-        orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+        orderBy: [{ featured: "desc" }, { publishedAt: "desc" }, { id: "desc" }],
         skip: (q.page - 1) * q.perPage,
         take: q.perPage,
         select: this.postRow,
@@ -712,7 +761,7 @@ export class ContentService {
 
   publicBlogCategories() {
     return prisma.blogCategory.findMany({
-      where: { storeId: this.storeId, isActive: true, posts: { some: { status: "published" } } },
+      where: { storeId: this.storeId, isActive: true, posts: { some: livePost() } },
       orderBy: { name: "asc" },
       select: { name: true, slug: true },
     })
@@ -720,8 +769,8 @@ export class ContentService {
 
   async publicPost(slug: string) {
     const post = await prisma.blogPost.findFirst({
-      where: { storeId: this.storeId, slug, status: "published", visibility: "public" },
-      select: { ...this.postRow, content: true, seoTitle: true, metaDesc: true },
+      where: { storeId: this.storeId, slug, ...livePost(), visibility: "public" },
+      select: { ...this.postRow, content: true, seoTitle: true, metaDesc: true, productIds: true },
     })
     if (!post) throw new NotFoundError("post")
     // Fire-and-forget view counter; a failed increment must not break the page.

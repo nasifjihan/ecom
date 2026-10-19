@@ -4629,3 +4629,54 @@ The homepage and block-built pages had ten blocks. Shops asked for video, pictur
 - **Video:** no autoplay or loop options.
 - **Product row:** "on sale only" isn't a source.
 - **Next:** part 2, the blog: scheduled posts, featured posts and "shop this" products.
+
+---
+
+## ✅ BATCH #38 (part 2) — Blog: scheduled posts, featured posts and "shop this" (2026-10-19)
+Posts could only be published by hand, all looked alike on the blog, and none could lead to products. Now a post can wait for its time, the shop can pin its best ones, and a post can end with the products it talks about.
+
+### 38.6 Data (migration `blog_featured_shop_this`)
+- **BlogPost:**
+  - `featured` (pinned to the top of the blog);
+  - `productIds` (the "shop this" products, in order);
+  - the status can now be `scheduled`. The `scheduledAt` column was already there, unused.
+
+### 38.7 Rules (`content.service.ts`: `livePost`, `postTiming`)
+- **No timer job:** a scheduled post counts as live once `scheduledAt` has passed. The public blog list, the post page, the blog categories and the sitemap all use the same "published, or scheduled and due" rule.
+- **Dates:**
+  - publishing sets the post's date to now (the first time, or when a scheduled post is published early);
+  - scheduling sets it to the scheduled time, which must be ahead;
+  - unpublishing and republishing keeps the original date;
+  - turning a scheduled post back into a draft drops its pending date.
+- **Order:** featured posts first, then newest.
+- **"Shop this" products:** 12 at most, and they must belong to the store. The storefront loads them live by id, so unpublished or deleted ones drop out.
+
+### 38.8 Admin
+- **Post editor:** a new **Publishing** card holds the Featured switch and an optional "Go live later" time (shop time, in the browser). With a future time the buttons become **Schedule** and **Publish now**. A scheduled post shows "Scheduled: goes live Mon 19 Oct, 17:34", with **Unschedule**, **Publish now** and **Save changes**.
+- **Shop this post card:** the same product search and ordered list as the product-row block. The picker was moved to `components/content/product-pick-list.tsx`, so both use one component.
+- **Blog list:** a Scheduled filter, a Scheduled badge (it shows Published once its time passes), a "Featured" label, and a **Views** column (posts already counted views).
+
+### 38.9 Storefront
+- **Blog list:** featured posts carry a "Featured" (বিশেষ) label. On page 1 the newest featured post is shown as a wide card.
+- **Post page:** a **Shop this post** (এই লেখার পণ্যগুলো কিনুন) row of product cards in the picked order, with add to cart and wishlist.
+
+### 38.10 Checked
+- **Tests:** API 781 passing (64 files), 0 unhandled errors.
+  - new `tests/unit/blog-posts.test.ts`: publish now, keep the date, schedule only ahead, publish early, draft drops a pending date;
+  - new `tests/integration/blog-posts.db.test.ts`: a future post is hidden (list and page) and shows once due, featured comes first, products from another store are refused, and republishing keeps the date.
+  - The migration matches the schema (`prisma migrate diff` is empty). It's applied to the dev and `ecom_test` databases.
+- **Types and lint:** API, admin and storefront typecheck. No new lint errors in the changed files.
+- **In the browser:**
+  - wrote "How to wear a panjabi this Eid" in the admin: Featured, with two panjabis as "shop this", then Publish; after reload the products came back in order;
+  - wrote "Eid sale starts tonight" and scheduled it an hour ahead; the editor and list showed it as Scheduled;
+  - on the storefront blog the featured post was first, wide, with the বিশেষ label, and the scheduled post wasn't listed;
+  - its address gave 404 from the API, while the featured post gave 200;
+  - the post page showed "এই লেখার পণ্যগুলো কিনুন" with the white, then the maroon panjabi.
+- **Dev data:**
+  - post 3, "How to wear a panjabi this Eid" (featured, 2 products);
+  - post 4, "Eid sale starts tonight", scheduled for 19 Oct 17:34. It will be live by the time you look.
+
+### 38.11 Not done
+- **Old URLs:** no notice when a scheduled post's address is visited early (it's a plain 404, the same as a draft).
+- **Featured order:** no "featured first" ordering inside a category filter beyond the normal pinning.
+- **Next:** part 3, colour presets, product display switches and an editable robots.txt.

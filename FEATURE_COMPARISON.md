@@ -82,7 +82,7 @@ These are our advantages. Keep them.
 |---|---|---|
 | Pages, blog + categories, FAQs, header/footer menus, block builder | ✅ | |
 | Sliders as a separate reusable item | 🟡 | Hero slides live inside the homepage section |
-| Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | 🟡 | `scheduledAt` column exists; no linked products or view count |
+| Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | ✅ | Batch 38: schedule a post (goes live by itself, no timer needed), featured posts pinned and shown large, up to 12 "shop this" products under a post, view count in the admin list; SEO title and description as before |
 | Redirects (301/302) | ✅ | Batch 33: Online Store → Redirects; automatic 301 when an address changes; broken-link log |
 | Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | ✅ | Batch 38: all seven, on the homepage, pages and landing pages; product row from picked products (in order), a category or a tag; video from YouTube (no-cookie), Vimeo, Facebook or an .mp4 |
 

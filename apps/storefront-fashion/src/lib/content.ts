@@ -51,6 +51,8 @@ export interface BlogPostSummary {
   publishedAt: string | null;
   updatedAt: string;
   tags: string[] | null;
+  /** Pinned to the top of the list. */
+  featured?: boolean;
   category: { name: string; slug: string } | null;
   author: { name: string } | null;
 }
@@ -58,6 +60,8 @@ export interface BlogPost extends BlogPostSummary {
   content: string | null;
   seoTitle: string | null;
   metaDesc: string | null;
+  /** "Shop this post" products, in order. */
+  productIds?: string[];
 }
 
 export interface Faq {
