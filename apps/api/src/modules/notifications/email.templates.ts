@@ -199,6 +199,16 @@ export const EMAIL_TEMPLATES = {
       "festival.admin_url",
     ],
   },
+  report_scheduled_admin: {
+    label: "Scheduled report",
+    audience: "staff",
+    description: "The reports set up in Reports > Scheduled emails, sent with a PDF to the people chosen there.",
+    subject: "{{report.name}}: {{report.period}}",
+    message: "# {{report.name}}\n\n{{report.period}}{{report.filters}}\n\n{{report.summary}}\n\nThe attached PDF has the full figures: {{report.list}}.",
+    blocks: [],
+    button: { label: "Open reports", url: "report.admin_url" },
+    variables: [...STORE, "report.name", "report.period", "report.filters", "report.summary", "report.list", "report.admin_url"],
+  },
   staff_alert: {
     label: "Team alert",
     audience: "staff",

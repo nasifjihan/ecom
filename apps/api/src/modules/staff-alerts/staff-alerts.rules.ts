@@ -3,7 +3,7 @@
  * shop sends, with their built-in defaults. No database here, so it can be tested on its own.
  */
 
-export const STAFF_EVENTS = ["new_order", "payment_to_verify", "return_requested", "quote_request", "low_stock", "lead_assigned"] as const
+export const STAFF_EVENTS = ["new_order", "payment_to_verify", "return_requested", "quote_request", "low_stock", "lead_assigned", "report_failed"] as const
 export type StaffEvent = (typeof STAFF_EVENTS)[number]
 export const isStaffEvent = (v: string): v is StaffEvent => (STAFF_EVENTS as readonly string[]).includes(v)
 
@@ -26,6 +26,7 @@ export const STAFF_EVENT_INFO: Record<StaffEvent, StaffEventInfo> = {
   quote_request: { label: "Quote request or answer", description: "A business customer asks for a quote, or accepts or declines one.", inApp: true, email: true, sms: false, emailTemplate: "quote_update_admin" },
   low_stock: { label: "Low stock", description: "An order takes a product down to its low-stock level (once a day per product).", inApp: true, email: false, sms: false },
   lead_assigned: { label: "Lead given to you", description: "Someone gives you a lead to follow up.", inApp: true, email: false, sms: false, toAssignee: true },
+  report_failed: { label: "Scheduled report stopped", description: "A scheduled report email failed 3 times in a row and was switched off (Reports > Scheduled emails).", inApp: true, email: true, sms: false },
 }
 
 export interface StaffSetting {

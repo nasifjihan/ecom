@@ -153,6 +153,7 @@ export const REPORT_TABS = [
   { href: "/reports/returns", label: "Returns & refunds" },
   { href: "/reports/tax", label: "Tax" },
   { href: "/reports/stock", label: "Stock value" },
+  { href: "/reports/schedules", label: "Scheduled emails" },
 ];
 
 export function ReportTabs() {
@@ -161,7 +162,7 @@ export function ReportTabs() {
   return (
     <nav className="flex gap-1 overflow-x-auto border-b" aria-label="Reports">
       {REPORT_TABS.map((t) => {
-        const on = pathname === t.href;
+        const on = t.href === "/reports/schedules" ? pathname.startsWith(t.href) : pathname === t.href;
         return (
           <Link
             key={t.href}

@@ -9,13 +9,19 @@
  *   GET /returns     refunds and returns
  *   GET /tax         tax collected per day or month
  *   GET /stock       stock value at cost and at selling price, today
+ *   GET /:report/pdf one report (or ?reports=a,b) as a PDF, with the same filters
+ *   /schedules       scheduled report emails (report-schedules.routes.ts; changes need reports.edit)
  */
 import { Router, type Request, type Response } from "express"
 import type { z } from "zod"
-import { ctrl, envelope, type RequestContext } from "../../core"
+import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core"
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware"
 import { ReportsService } from "./reports.service"
-import { ProductsQuery, RangeQuery } from "./reports.dto"
+import { PdfQuery, ProductsQuery, RangeQuery } from "./reports.dto"
+import { buildReportPdf } from "./report-schedules.service"
+import { reportSchedulesRouter } from "./report-schedules.routes"
+import { REPORT_KEYS, type ReportKey } from "./report-schedule.rules"
+import { sendPdf } from "./pdf.http"
 
 type Req = Request & { ctx: RequestContext }
 const svc = (req: Req) => new ReportsService(req.ctx)
@@ -23,6 +29,7 @@ const query = <S extends z.ZodTypeAny>(req: Req) => req.query as unknown as z.in
 
 export const adminReportsRouter = Router()
 adminReportsRouter.use(authMiddleware("adminOrSuper"), rbacMiddleware("reports.view"))
+adminReportsRouter.use("/schedules", reportSchedulesRouter)
 
 const ranged = (
   path: string,
@@ -54,5 +61,19 @@ adminReportsRouter.get(
   "/stock",
   ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).stock() })
+  }),
+)
+
+adminReportsRouter.get(
+  "/:report/pdf",
+  validate({ query: PdfQuery }),
+  ctrl(async (req: Req, res: Response) => {
+    const report = (req.params as { report: string }).report
+    const q = query<typeof PdfQuery>(req)
+    const asked = report === "all" ? (q.reports ?? []) : [report]
+    const reports = asked.filter((k): k is ReportKey => (REPORT_KEYS as readonly string[]).includes(k))
+    if (!reports.length || reports.length !== asked.length) throw new NotFoundError("Report")
+    const file = await buildReportPdf(req.ctx, { reports, from: q.from, to: q.to, basis: q.basis, storefrontId: q.storefrontId ?? null })
+    sendPdf(req, res, file)
   }),
 )

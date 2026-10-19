@@ -12,6 +12,7 @@ import { ensureBucket } from "./config/s3";
 import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/notifications";
 import { startCourierSync, stopCourierSync } from "./modules/couriers";
 import { startFestivalReminders, stopFestivalReminders } from "./modules/festivals";
+import { startReportSchedules, stopReportSchedules } from "./modules/reports";
 import { syncLocations } from "./modules/locations";
 
 async function bootstrap() {
@@ -39,6 +40,7 @@ async function bootstrap() {
     // Background jobs run in the same process as the email sender.
     void startCourierSync();
     void startFestivalReminders();
+    void startReportSchedules();
   }
 
   const server = app.listen(env.API_PORT, () => {
@@ -65,6 +67,7 @@ async function bootstrap() {
       stopEmailQueue(),
       stopCourierSync(),
       stopFestivalReminders(),
+      stopReportSchedules(),
       disconnectPrisma(),
       disconnectRedis(),
     ]);

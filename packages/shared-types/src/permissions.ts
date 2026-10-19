@@ -20,7 +20,7 @@ const ALL = ["view", "create", "edit", "delete"] as const;
 
 export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { key: "dashboard", group: "Overview", label: "Dashboard", help: "Sales figures and charts", actions: ["view"] },
-  { key: "reports", group: "Overview", label: "Reports", help: "Sales, profit, products, couriers, customers and tax. Shows cost prices and profit", actions: ["view"] },
+  { key: "reports", group: "Overview", label: "Reports", help: "Sales, profit, products, couriers, customers and tax. Shows cost prices and profit. Edit = scheduled report emails", actions: ["view", "edit"] },
 
   { key: "orders", group: "Orders", label: "Orders", help: "Create = enter orders by hand; Edit = status, refunds, invoices, emails", actions: ["view", "create", "edit"] },
   { key: "commissions", group: "Orders", label: "Sales team and commission", help: "View = everyone's sales and commission; Edit = rates, salespeople, targets and paying out commission", actions: ["view", "edit"] },

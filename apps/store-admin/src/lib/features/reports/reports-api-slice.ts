@@ -1,7 +1,7 @@
 "use client";
 
 /** Store reports: sales and profit, products, discounts, customers, couriers, returns, tax, stock value (API: modules/reports). */
-import { api } from "@ecom/api-client";
+import { api, fileResponse } from "@ecom/api-client";
 
 export type Basis = "placed" | "delivered";
 export interface RangeArgs {
@@ -167,6 +167,10 @@ export const reportsApi = api.injectEndpoints({
     returnsReport: b.query<ReturnsReport, RangeArgs>(report("returns")),
     taxReport: b.query<TaxReport, RangeArgs>(report("tax")),
     stockReport: b.query<StockReport, void>({ query: () => "/admin/reports/stock", providesTags: TAG, keepUnusedDataFor: 60 }),
+    /** One report as a PDF (an object URL for openFile), with the same filters as the page. */
+    reportPdf: b.mutation<string, RangeArgs & { report: string }>({
+      query: ({ report: key, ...args }) => ({ url: `/admin/reports/${key}/pdf`, params: clean(args), responseHandler: fileResponse }),
+    }),
   }),
 });
 
@@ -179,4 +183,5 @@ export const {
   useReturnsReportQuery,
   useTaxReportQuery,
   useStockReportQuery,
+  useReportPdfMutation,
 } = reportsApi;

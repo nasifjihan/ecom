@@ -18,3 +18,14 @@ export const RangeQuery = z.object({
 export const ProductsQuery = RangeQuery.extend({
   sort: z.enum(["revenue", "units", "profit"]).optional(),
 })
+
+/** A report PDF: the same filters, plus ?reports=sales,products for /all/pdf. */
+export const PdfQuery = RangeQuery.extend({
+  reports: z
+    .string()
+    .max(200)
+    .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean))
+    .optional(),
+  /** 1: save as a file rather than open in the browser. */
+  download: z.string().max(5).optional(),
+})

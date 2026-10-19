@@ -132,6 +132,8 @@ model Store {
   redirects            Redirect[]
   landingPages         LandingPage[]
   festivals            Festival[]
+  reportSchedules      ReportSchedule[]
+  reportRuns           ReportRun[]
   giftBoxes            GiftBox[]
   notFoundHits         NotFoundHit[]
   businessAccounts     BusinessAccount[]
@@ -780,7 +782,7 @@ model StaffAlertSetting {
   id        BigInt   @id @default(autoincrement())
   storeId   BigInt
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /// new_order | payment_to_verify | return_requested | quote_request | low_stock | lead_assigned
+  /// new_order | payment_to_verify | return_requested | quote_request | low_stock | lead_assigned | report_failed
   event     String
   inApp     Boolean  @default(true)
   email     Boolean  @default(false)
@@ -3509,6 +3511,74 @@ model Festival {
   updatedAt      DateTime  @updatedAt
 
   @@index([storeId, startsOn])
+}
+
+/// A report email sent on a schedule (Reports > Scheduled emails): the reports chosen, as a PDF,
+/// to staff and other addresses. The scheduler sends schedules whose nextRunAt has passed.
+model ReportSchedule {
+  id           BigInt      @id @default(autoincrement())
+  storeId      BigInt
+  store        Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  /// sales | products | discounts | customers | couriers | returns | tax | stock
+  reports      String[]
+  /// daily | weekly | monthly
+  frequency    String
+  /// Weekly: 1 = Monday … 7 = Sunday.
+  weekday      Int?
+  /// Monthly: 1–28, so every month has the day.
+  monthDay     Int?
+  /// Hour of the day it's sent, shop time (0–23).
+  sendHour     Int         @default(8)
+  /// yesterday | last_7_days | last_week | last_month | month_to_date
+  period       String
+  /// placed | delivered
+  basis        String      @default("placed")
+  /// One storefront only; null for the whole store.
+  storefrontId BigInt?
+  staffIds     BigInt[]    @default([])
+  /// Addresses outside the staff list.
+  emails       String[]    @default([])
+  enabled      Boolean     @default(true)
+  nextRunAt    DateTime?
+  lastRunAt    DateTime?
+  /// sent | failed
+  lastStatus   String?
+  lastError    String?
+  /// Failures in a row; the schedule switches itself off at 3.
+  failures     Int         @default(0)
+  createdById  BigInt?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  runs         ReportRun[]
+
+  @@index([storeId])
+  @@index([enabled, nextRunAt])
+}
+
+/// One sending of a scheduled report, with the PDF that went out (attached again on resends).
+model ReportRun {
+  id         BigInt          @id @default(autoincrement())
+  storeId    BigInt
+  store      Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  scheduleId BigInt?
+  schedule   ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  /// YYYY-MM-DD, shop time, both included.
+  fromDay    String
+  toDay      String
+  /// schedule | send_now
+  trigger    String          @default("schedule")
+  /// sent | failed
+  status     String
+  error      String?
+  filename   String?
+  pdf        Bytes?
+  /// The email's Notification row.
+  emailLogId BigInt?
+  recipients String[]        @default([])
+  createdAt  DateTime        @default(now())
+
+  @@index([scheduleId, createdAt])
 }
 
 /// A gift box shoppers fill themselves (Catalog > Gift boxes, /gift-boxes/{slug}). The box is a

@@ -36,6 +36,8 @@ export interface EmailLogData {
   /** Set when the mail driver is "log": the email was recorded but not handed to a mail server. */
   logOnly?: boolean
   orderId?: string
+  /** Attach the PDF of this scheduled report sending (ReportRun). */
+  reportRunId?: string
 }
 
 let queue: Queue<EmailJob> | null = null
@@ -127,8 +129,10 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
   const data = readData(row)
   if (data.status === "sent") return
   try {
-    const attachments =
-      data.attachInvoice && data.orderId ? await invoiceAttachment(row.storeId, data.orderId) : []
+    const attachments = [
+      ...(data.attachInvoice && data.orderId ? await invoiceAttachment(row.storeId, data.orderId) : []),
+      ...(data.reportRunId ? await reportAttachment(row.storeId, data.reportRunId) : []),
+    ]
     const info = (await getMailer().sendMail({
       from: { name: data.fromName, address: env.MAIL_FROM_ADDRESS },
       to: data.to,
@@ -185,6 +189,13 @@ async function invoiceAttachment(storeId: bigint, orderId: string) {
     logger.warn({ err: (err as Error).message, orderId }, "Invoice not attached")
     return []
   }
+}
+
+/** A scheduled report's PDF, as made when it was sent. The email can't go without it. */
+async function reportAttachment(storeId: bigint, runId: string) {
+  const run = await prisma.reportRun.findFirst({ where: { id: BigInt(runId), storeId }, select: { filename: true, pdf: true } })
+  if (!run?.pdf) throw new Error("The report PDF is no longer kept")
+  return [{ filename: run.filename ?? "report.pdf", content: Buffer.from(run.pdf), contentType: "application/pdf" }]
 }
 
 /** Starts sending queued emails in this process. Safe to call more than once. */

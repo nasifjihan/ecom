@@ -152,7 +152,7 @@ These are our advantages. Keep them.
 | Inventory valuation (at cost and at selling price) | ✅ Batch 28 |
 | Tax collected by day / month | ✅ Batch 28; Batch 35: sales shown before VAT for VAT-inclusive orders |
 | CSV export of every table | ✅ Batch 28 |
-| By storefront, scheduled e-mailed reports, PDF export | 🟡 | Batch 32: every report filters by storefront and sales has a by-storefront table; no scheduled e-mails or PDF |
+| By storefront, scheduled e-mailed reports, PDF export | ✅ | Batch 32: every report filters by storefront and sales has a by-storefront table; Batch 37: "Download PDF" on every report, and Reports → Scheduled emails sends chosen reports as a PDF daily / weekly / monthly to staff and other addresses |
 
 ### Operations (reference 20)
 | Feature | Status | Note |
@@ -167,7 +167,7 @@ These are our advantages. Keep them.
 | 10 default roles | ✅ | |
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
 | Staff on some sites only | ✅ | Batch 32: staff can be limited to some storefronts (their orders, parcels, returns, payments, reports and storefront content) |
-| Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Batch 37: Settings → Notifications: customer messages × email/SMS, team alerts (new order, payment to check, return, quote, low stock, lead given to you) × bell/email/SMS and who gets them; real bell in the admin. No WhatsApp |
+| Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Batch 37: Settings → Notifications: customer messages × email/SMS, team alerts (new order, payment to check, return, quote, low stock, lead given to you, scheduled report stopped) × bell/email/SMS and who gets them; real bell in the admin. No WhatsApp |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
 | Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
 | Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | ❌ | |
@@ -237,7 +237,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 34 ✅ | **Catalog tools**: product CSV/XLSX import + export (preview, error report), variant generator, soft delete + restore, per-option storefront prices, sourcing badge | New shops don't type 500 products; deletes are final today | L |
 | 35 ✅ | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
 | 36 ✅ | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
-| 37 | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
+| 37 ✅ | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
 | 39 | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |
 

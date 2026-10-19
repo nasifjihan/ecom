@@ -4471,3 +4471,105 @@ Customer emails and SMS could already be switched on and off, but on two separat
 - **More alert types:** reviews and questions waiting, and courier problems, aren't alerts yet.
 - **Running the dev servers:** background tasks in this environment were stopped as soon as they started this time, so the servers were started detached instead.
 - **Next:** part 4, scheduled report emails with a PDF.
+
+---
+
+## ✅ BATCH #37 (part 4) — Report PDFs and scheduled report emails (2026-10-19)
+Reports could only be read on screen or exported table by table as CSV. Now every report page has "Download PDF", and Reports → Scheduled emails sends chosen reports as a PDF on a schedule: to staff, and to other addresses such as an accountant. This finishes Batch 37.
+
+### 37.20 Data (migration `report_schedules`)
+- **ReportSchedule:**
+  - name and the reports chosen;
+  - how often (daily, weekly on a weekday, monthly on day 1–28) and the hour, in shop time;
+  - which days a sending covers, the basis (placed or delivered) and the storefront (or the whole store);
+  - staff chosen and other addresses (up to 10);
+  - on/off, next and last sending, last result and error, and failures in a row.
+- **ReportRun:** each sending with its dates, recipients, result, the email log row, and the PDF itself, so a resent email carries the same file. The 30 most recent per schedule are kept.
+- **Team alert:** a new "Scheduled report stopped" alert (bell and email on by default) in Settings → Notifications.
+
+### 37.21 Rules (`reports/report-schedule.rules.ts`)
+- **Next sending:** the first matching day and hour after now, in the store's time zone. Day 29–31 aren't offered, so every month has the day.
+- **Days covered, counted back from the day it's sent (that day is never included):**
+
+  | Choice | Sent Mon 19 Oct covers |
+  |---|---|
+  | Yesterday | 18 Oct |
+  | The 7 days before | 12–18 Oct |
+  | Last week (Mon–Sun) | 12–18 Oct |
+  | Last month | 1–30 Sep |
+  | This month so far | 1–18 Oct (sent on the 1st: the month just ended) |
+
+- **Recipients:** active staff and the other addresses. Staff limited to some storefronts only get reports for one of theirs. This is checked when the schedule is saved, and again when it's sent: someone limited later is left out rather than sent the whole store's figures.
+- **Failures:** after 3 failures in a row the schedule switches itself off and the "Scheduled report stopped" alert goes out. Switching it back on clears the count.
+- **PDF tables** show at most 50 rows, with "Showing the top 50 of N" and a pointer to the CSV in the admin.
+
+### 37.22 PDF (`reports/report.sections.ts`, `reports/report.pdf.ts`)
+- **Sections:** `report.sections.ts` turns each report's figures into the same headline numbers, tables and wording as its admin page. There's no database in it, so it's tested on its own.
+- **Layout (A4):**
+  - a heading with the store, title, dates, basis, storefront and when it was made;
+  - per report: headline figures with the change vs the period before, a bar chart for sales (negative days in red), then the tables;
+  - tables carry over pages with their header repeated;
+  - page numbers in the footer.
+- **Font:** the invoice font with HarfBuzz shaping, so Bangla names and ৳ print properly. Long names are cut to one line with "…".
+- **Money:** as in the admin (lakh grouping, no paisa: ৳1,84,250).
+
+### 37.23 API
+- `GET /api/admin/reports/:report/pdf` gives one report as a PDF with the page's filters (`from`, `to`, `basis`, `storefrontId`, `download=1`). `GET /api/admin/reports/all/pdf?reports=sales,products` puts several in one file. Needs `reports.view`, and respects the staff member's storefronts.
+- `/api/admin/reports/schedules`:
+  - `GET /`, `GET /options` (staff who can be chosen), `GET /:id` (with the latest sendings);
+  - `POST /`, `PUT /:id`, `DELETE /:id`, `POST /:id/enabled`;
+  - `POST /:id/send-now`: sends now, for the days it would cover today, without moving the next sending;
+  - `GET /:id/preview` (the PDF it would send) and `GET /:id/runs/:runId/pdf` (a PDF that went out).
+  - Seeing needs `reports.view`; changing needs the new **`reports.edit`** permission (in the role editor under Reports; owners have it).
+- **Scheduler** (`report-schedules.scheduler.ts`): a BullMQ job every 15 minutes sends the schedules that are due. Each one is claimed by moving its next sending first, so overlapping runs or several workers send it once. It runs in the API process (with `EMAIL_WORKER=on`) and in `pnpm worker`.
+  - Also fixed: `pnpm worker` now runs festival reminders too. Before, they only ran inside the API process.
+- **Email:** a new "Scheduled report" template, editable on Settings → Emails. Its body has a short sales summary (net sales, orders, gross profit, with the change vs the period before) and the PDF attached. If the store switches this template off, a sending fails with that reason instead of silently doing nothing.
+  - The email queue now takes a report attachment (`reportRunId`) next to the invoice one. The email log shows "report attached".
+
+### 37.24 Admin
+- **Reports pages:** "Download PDF" in the header, using the current dates, basis and storefront (Stock value: today).
+- **Reports → Scheduled emails tab:**
+  - **List:** name, reports, when, days covered, how many people, next sending, last result (failures show their reason), and an on/off switch.
+  - **Form:**
+    - reports, name, days covered (with a plain explanation), which orders, storefront;
+    - how often, day and hour;
+    - team members (people limited to other storefronts are greyed out with the reason) and other addresses.
+  - **Schedule page:** a summary line ("Every Monday at 08:00, covering the 7 days before. Next: Mon 26 Oct, 08:00."), the last failure if any, Preview PDF, Send now, Delete, and the latest sendings, each with its PDF.
+  - Staff limited to some storefronts only see schedules for theirs, and must pick one of theirs.
+
+### 37.25 Checked
+- **Tests:** API 774 passing (61 files), 20 of them new.
+  - new `tests/unit/report-schedules.test.ts` (15):
+    - next sending (daily, weekly, monthly, across the year end, and a summer-time zone);
+    - days covered;
+    - checks, addresses, storefront limits and failure counting;
+    - PDF sections, the 50-row cap, money format and the email summary;
+    - a multi-page PDF with Bangla names.
+  - new `tests/integration/report-schedules.db.test.ts` (5):
+    - a PDF for a storefront, and refusal for someone else's storefront;
+    - recipient rules on save;
+    - two overlapping scheduler runs send once, with the PDF attached to the email and read back on send;
+    - a staff member limited later is left out, and the schedule stops after 3 failures with the alert;
+    - Send now, and the email switched off.
+  - The migration matches the schema: `prisma migrate diff` is empty.
+  - The 2 "unhandled errors" are still the older `smoke-batch9` ones.
+- **Lint and types:** no new lint errors in the changed files. API and admin typecheck. The admin wasn't production-built this time (the dev server was using `.next`).
+- **In the browser and API (local Docker: Postgres, Redis, Mailpit):**
+  - all 8 report PDFs and a combined one come back as PDFs; an unknown report gives 404;
+  - created "Weekly owner pack" in the admin (Sales, Products, Coupons; the 7 days before; Mondays 08:00; the owner plus accountant@example.com), and it showed "Next: Mon 26 Oct, 08:00";
+  - Send now put the email in Mailpit with `weekly-owner-pack-2026-10-12_2026-10-18.pdf` attached, and its summary (৳76,270, 7 orders, ৳28,228 profit) matched the Sales page;
+  - made it due by hand: the 15-minute scheduler sent it on its own and moved the next sending on;
+  - fixed during the check: long product names wrapped into the next row in PDF tables; they're now cut to one line.
+- **Dev data (local):**
+  - 7 manual orders (20261019000001–07) backdated over 12–18 Oct;
+  - cost prices set to 60% of the price on products and options that had none;
+  - schedule "Weekly owner pack".
+
+### 37.26 Not done
+- **Excel:** PDF only; CSV stays a manual export on each table.
+- **Language:** no per-recipient language. The PDF is in English, with Bangla names as entered.
+- **Dashboard:** no PDF of the dashboard.
+- **Delivery:** no WhatsApp delivery.
+- **Run history:** the 30 most recent sendings per schedule are kept with their PDFs; older ones go.
+- **Test hazard found:** many DB tests clean up with `deleteMany({ where: { storeId } })`. If their setup fails, `storeId` is undefined and that deletes every row in the table. A setup timeout during a full run against the dev database wiped the local seed products, admin users and one order. The seed restored the rest; the order was lost. DB tests now run against a separate `ecom_test` database, and the new test guards its cleanup. The older tests still need the same guard.
+- **Next:** Batch 38, storefront and content polish.

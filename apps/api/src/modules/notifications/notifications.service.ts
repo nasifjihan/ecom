@@ -34,6 +34,8 @@ interface SendOptions {
   recipientType: "customer" | "staff" | "test"
   recipientId?: bigint | null
   orderId?: bigint | null
+  /** Attach the PDF of this scheduled report sending. */
+  reportRunId?: bigint | null
   /** Send even when the store has switched this email off (manual resends and tests). */
   force?: boolean
   /** Unsaved wording from the editor, for previews and test sends. */
@@ -221,6 +223,7 @@ export class EmailService {
       attempts: 0,
       ...(opts.orderId ? { orderId: String(opts.orderId) } : {}),
       ...(opts.orderId && templateDef(key).attachInvoice ? { attachInvoice: true } : {}),
+      ...(opts.reportRunId ? { reportRunId: String(opts.reportRunId) } : {}),
     }
     const row = await prisma.notification.create({
       data: {
@@ -511,6 +514,11 @@ export class EmailService {
     })
   }
 
+  /** A scheduled report with its PDF (Reports > Scheduled emails). Returns the log id. */
+  async scheduledReport(to: string[], vars: Record<string, string>, reportRunId: bigint) {
+    return this.send("report_scheduled_admin", { to, vars, reportRunId, recipientType: "staff" })
+  }
+
   /** A team alert by email (Settings > Notifications) to the given addresses. */
   async teamAlert(to: string[], alert: { title: string; body: string; url: string }) {
     return this.send("staff_alert", {
@@ -649,6 +657,12 @@ export class EmailService {
         "alert.title": "Payment to check on order 20261001000012",
         "alert.body": "Karim Mia sent bKash ৳2,450, transaction 9F3K2L7QWE.",
         "alert.url": `${urls.admin}/orders/payments`,
+        "report.name": "Weekly sales",
+        "report.period": "Last week: 5 Oct 2026 – 11 Oct 2026",
+        "report.filters": ", all placed orders",
+        "report.summary": "Net sales: ৳1,84,250 (+12% vs the period before)\nOrders: 96 (+8% vs the period before)\nGross profit: ৳61,400 (+15% vs the period before)",
+        "report.list": "Sales & profit, Products",
+        "report.admin_url": `${urls.admin}/reports`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },
@@ -700,6 +714,7 @@ export class EmailService {
       attempts: d.attempts ?? 0,
       logOnly: !!d.logOnly,
       invoiceAttached: !!d.attachInvoice,
+      reportAttached: !!d.reportRunId,
       orderId: d.orderId ?? null,
       createdAt: r.createdAt,
       sentAt: r.sentAt,
