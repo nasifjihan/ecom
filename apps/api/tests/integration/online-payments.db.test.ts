@@ -179,7 +179,7 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
 
   afterAll(async () => {
     setFetch?.(null)
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.adminUser.deleteMany({ where: { storeId } })
     await prisma.store.delete({ where: { id: storeId } })
@@ -411,7 +411,8 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     expect(both.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"])
     expect(gw.bkashRefundCalls).toBe(1)
     const lost = both.find((r): r is PromiseRejectedResult => r.status === "rejected")
-    expect(String(lost?.reason)).toMatch(/Another refund on this payment/)
+    // Overlapping, it's refused as in progress; if the first already finished, only ৳400 is left.
+    expect(String(lost?.reason)).toMatch(/Another refund on this payment|At most ৳400\.00 can/)
     const rest = await refund(order.id, 400)
     expect(rest).toMatchObject({ gatewayRefunded: true, fullyRefunded: true })
     const rows = await prisma.refund.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } })

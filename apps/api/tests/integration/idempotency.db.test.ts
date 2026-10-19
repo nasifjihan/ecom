@@ -46,7 +46,7 @@ describe.skipIf(!runDb)("Idempotency-Key (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.store.delete({ where: { id: storeId } })
     await prisma.$disconnect()
   })

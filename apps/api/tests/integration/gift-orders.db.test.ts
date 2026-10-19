@@ -52,7 +52,7 @@ describe.skipIf(!runDb)("gift orders (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await new Promise((r) => setTimeout(r, 500)) // background emails
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.product.deleteMany({ where: { storeId } })

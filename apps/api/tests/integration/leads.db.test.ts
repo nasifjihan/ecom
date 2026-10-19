@@ -35,7 +35,7 @@ describe.skipIf(!runDb)("CRM leads (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await new Promise((r) => setTimeout(r, 300))
     await prisma.lead.deleteMany({ where: { storeId } })
     await prisma.order.deleteMany({ where: { storeId } })

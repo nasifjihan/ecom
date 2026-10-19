@@ -74,7 +74,7 @@ describe.skipIf(!runDb)("sales commission (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await new Promise((r) => setTimeout(r, 300))
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.adminUser.deleteMany({ where: { storeId } })

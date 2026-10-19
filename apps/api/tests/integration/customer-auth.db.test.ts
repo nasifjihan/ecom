@@ -30,9 +30,10 @@ describe.skipIf(!runDb)("customer auth (Postgres)", () => {
   });
 
   afterAll(async () => {
-    if (!prisma) return;
-    await prisma.customer.deleteMany({ where: { storeId: { in: [storeId, otherStoreId] } } });
-    await prisma.store.deleteMany({ where: { id: { in: [storeId, otherStoreId] } } });
+    const ids = [storeId, otherStoreId].filter(Boolean); // an undefined id would match every row
+    if (!prisma || !ids.length) return;
+    await prisma.customer.deleteMany({ where: { storeId: { in: ids } } });
+    await prisma.store.deleteMany({ where: { id: { in: ids } } });
     await prisma.$disconnect();
   });
 

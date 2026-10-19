@@ -123,6 +123,8 @@ vi.mock("../src/config/prisma", () => {
 
   return {
     prisma: {
+      // The activity-log middleware writes one row after each admin change.
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
       shippingZone: {
         findMany: vi.fn().mockResolvedValue([fakeZone1, fakeZone2]),
         findFirst: vi.fn().mockImplementation((q: any) => {

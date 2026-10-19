@@ -106,7 +106,7 @@ describe.skipIf(!runDb)("loyalty (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.affiliate.deleteMany({ where: { storeId } })
     await prisma.customer.deleteMany({ where: { storeId } })

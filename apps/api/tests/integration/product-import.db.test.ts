@@ -43,7 +43,7 @@ describe.skipIf(!runDb)("product import (Postgres)", () => {
   })
 
   afterAll(async () => {
-    if (!prisma) return
+    if (!prisma || !storeId) return // setup failed: an undefined id would match every row
     await prisma.product.deleteMany({ where: { storeId } })
     await prisma.category.deleteMany({ where: { storeId, parentId: { not: null } } })
     await prisma.category.deleteMany({ where: { storeId } })
