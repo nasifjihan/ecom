@@ -13,27 +13,37 @@ import {
   GripVertical,
   HelpCircle,
   ImageIcon,
+  Images,
   LayoutGrid,
+  LayoutPanelTop,
   Megaphone,
+  MousePointerClick,
   Plus,
+  Quote,
+  Rows3,
   Sparkles,
   Star,
   Trash2,
+  Video,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { markdownToText } from "@ecom/ui";
+import { videoEmbed } from "@ecom/utils";
 import { Button, Card, CardContent, Input, Textarea, cn } from "@/components/ui";
 import { Field, MarkdownField, Toggle } from "./shared";
 import { ImageField } from "./media-picker";
 import {
   FEATURE_ICONS,
   HERO_GRADIENTS,
+  RAIL_SORTS,
   type HeadingConfig,
   type HeroSlide,
   type HomepageSection,
   type HomepageSectionType,
+  type ProductRailConfig,
 } from "@/lib/features/content/content-api-slice";
+import { useGetCategoryTreeQuery, useGetProductsQuery, type Category } from "@/lib/features/catalog/catalog-api-slice";
 
 export type Section = HomepageSection & { id: string };
 
@@ -48,14 +58,28 @@ export const SECTION_INFO: Record<HomepageSectionType, { label: string; text: st
   image: { label: "Image", text: "A single picture, optionally linked.", icon: ImageIcon },
   image_text: { label: "Image with text", text: "A picture beside a heading and text.", icon: Columns2 },
   faq: { label: "FAQ", text: "Questions from Content > FAQs.", icon: HelpCircle },
+  video: { label: "Video", text: "A YouTube, Vimeo or Facebook video.", icon: Video },
+  gallery: { label: "Gallery", text: "A grid of pictures.", icon: Images },
+  columns: { label: "Columns", text: "Two to four columns of text.", icon: LayoutPanelTop },
+  button: { label: "Button", text: "A single button with a link.", icon: MousePointerClick },
+  quote: { label: "Quote", text: "A customer's words or a testimonial.", icon: Quote },
+  product_rail: { label: "Product row", text: "Products you pick, or from a category or tag.", icon: Rows3 },
+  category_tiles: { label: "Category tiles", text: "Categories you pick, with their pictures.", icon: LayoutGrid },
 };
 const PALETTE_ORDER: HomepageSectionType[] = [
   "rich_text",
   "image",
   "image_text",
+  "gallery",
+  "video",
+  "columns",
+  "quote",
+  "button",
   "hero",
   "promo_banner",
   "features",
+  "product_rail",
+  "category_tiles",
   "categories",
   "featured_products",
   "new_arrivals",
@@ -125,6 +149,34 @@ export function newSection(type: HomepageSectionType): Section {
       };
     case "faq":
       return { ...base, type, config: { heading: "Frequently asked questions", limit: 10 } };
+    case "video":
+      return { ...base, type, config: { heading: "", url: "", caption: "" } };
+    case "gallery":
+      return { ...base, type, config: { heading: "", columns: 3, images: [] } };
+    case "columns":
+      return {
+        ...base,
+        type,
+        config: {
+          heading: "",
+          columns: [
+            { imageUrl: null, heading: "Quality you can feel", text: "Say what makes you different." },
+            { imageUrl: null, heading: "Delivered to your door", text: "Inside Dhaka in 1–2 days." },
+          ],
+        },
+      };
+    case "button":
+      return { ...base, type, config: { text: "Shop now", href: "/products", style: "solid", align: "center" } };
+    case "quote":
+      return { ...base, type, config: { text: "", author: "", role: "" } };
+    case "product_rail":
+      return {
+        ...base,
+        type,
+        config: { heading: "Picked for you", subheading: "", source: "products", products: [], categoryId: null, tag: "", sort: "popular", limit: 8 },
+      };
+    case "category_tiles":
+      return { ...base, type, config: { heading: "Shop by category", categoryIds: [] } };
   }
 }
 
@@ -153,6 +205,26 @@ export function sectionProblem(s: HomepageSection): string | null {
       return isLink(s.config.imageUrl) && isLink(s.config.link) ? null : "Check the image link";
     case "image_text":
       return isLink(s.config.imageUrl) && isLink(s.config.ctaHref) ? null : "Check the links";
+    case "video":
+      if (!s.config.url.trim()) return "Add the video link";
+      return videoEmbed(s.config.url) ? null : "Use a YouTube, Vimeo or Facebook link, or an .mp4 file";
+    case "gallery":
+      if (!s.config.images.length) return "Add at least one picture";
+      return s.config.images.every((x) => x.url && isLink(x.url) && isLink(x.link)) ? null : "Check the picture links";
+    case "button":
+      if (!s.config.text.trim()) return "Add the button text";
+      return s.config.href.trim() && isLink(s.config.href) ? null : "Add the button link";
+    case "quote":
+      return s.config.text.trim() ? null : "Add the quote";
+    case "product_rail": {
+      const c = s.config;
+      if (c.source === "products" && !c.products.length) return "Pick some products";
+      if (c.source === "category" && !c.categoryId) return "Choose a category";
+      if (c.source === "tag" && !c.tag.trim()) return "Enter a tag";
+      return null;
+    }
+    case "category_tiles":
+      return s.config.categoryIds.length ? null : "Choose at least one category";
     default:
       return null;
   }
@@ -174,6 +246,20 @@ function summary(s: HomepageSection): string {
     case "image_text":
     case "faq":
       return s.config.heading;
+    case "video":
+      return s.config.heading || s.config.url;
+    case "gallery":
+      return `${s.config.images.length} picture${s.config.images.length === 1 ? "" : "s"}${s.config.heading ? `: ${s.config.heading}` : ""}`;
+    case "columns":
+      return s.config.columns.map((c) => c.heading).filter(Boolean).join(" · ");
+    case "button":
+      return `${s.config.text} → ${s.config.href}`;
+    case "quote":
+      return s.config.text.slice(0, 90);
+    case "product_rail":
+      return s.config.heading;
+    case "category_tiles":
+      return `${s.config.categoryIds.length} categor${s.config.categoryIds.length === 1 ? "y" : "ies"}`;
     default:
       return s.config.heading;
   }
@@ -578,6 +664,91 @@ function SectionForm({ uid, section, onChange }: { uid: string; section: Homepag
         </div>
       );
     }
+    case "video": {
+      const c = section.config;
+      const set = (p: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...p } });
+      const bad = c.url.trim() !== "" && !videoEmbed(c.url);
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Video link"
+            htmlFor={id("url")}
+            className="sm:col-span-2"
+            error={bad ? "Use a YouTube, Vimeo or Facebook link, or a link to an .mp4 file" : null}
+            hint="Paste the link from the video page, e.g. https://www.youtube.com/watch?v=…"
+          >
+            <Input id={id("url")} value={c.url} placeholder="https://www.youtube.com/watch?v=…" onChange={(e) => set({ url: e.target.value })} />
+          </Field>
+          <Field label="Heading (optional)" htmlFor={id("heading")}>
+            <Input id={id("heading")} maxLength={160} value={c.heading} onChange={(e) => set({ heading: e.target.value })} />
+          </Field>
+          <Field label="Caption (optional)" htmlFor={id("caption")}>
+            <Input id={id("caption")} maxLength={300} value={c.caption} onChange={(e) => set({ caption: e.target.value })} />
+          </Field>
+        </div>
+      );
+    }
+    case "gallery":
+      return <GalleryForm uid={uid} config={section.config} onChange={(config) => onChange({ ...section, config })} />;
+    case "columns":
+      return <ColumnsForm uid={uid} config={section.config} onChange={(config) => onChange({ ...section, config })} />;
+    case "button": {
+      const c = section.config;
+      const set = (p: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...p } });
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Button text" htmlFor={id("text")}>
+            <Input id={id("text")} maxLength={40} value={c.text} onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+          <Field label="Link" htmlFor={id("href")} error={isLink(c.href) ? null : "Use a path like /products"}>
+            <Input id={id("href")} value={c.href} placeholder="/products" onChange={(e) => set({ href: e.target.value })} />
+          </Field>
+          <Field label="Look" htmlFor={id("style")}>
+            <select id={id("style")} value={c.style} onChange={(e) => set({ style: e.target.value as typeof c.style })} className={SELECT}>
+              <option value="solid">Filled</option>
+              <option value="outline">Outline</option>
+            </select>
+          </Field>
+          <Field label="Position" htmlFor={id("align")}>
+            <select id={id("align")} value={c.align} onChange={(e) => set({ align: e.target.value as typeof c.align })} className={SELECT}>
+              <option value="left">Left</option>
+              <option value="center">Centre</option>
+              <option value="right">Right</option>
+            </select>
+          </Field>
+        </div>
+      );
+    }
+    case "quote": {
+      const c = section.config;
+      const set = (p: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...p } });
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Quote" htmlFor={id("text")} className="sm:col-span-2">
+            <Textarea id={id("text")} rows={3} maxLength={1000} value={c.text} onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+          <Field label="Who said it (optional)" htmlFor={id("author")}>
+            <Input id={id("author")} maxLength={80} value={c.author} placeholder="Nusrat J." onChange={(e) => set({ author: e.target.value })} />
+          </Field>
+          <Field label="About them (optional)" htmlFor={id("role")}>
+            <Input id={id("role")} maxLength={120} value={c.role} placeholder="Customer from Chattogram" onChange={(e) => set({ role: e.target.value })} />
+          </Field>
+        </div>
+      );
+    }
+    case "product_rail":
+      return <ProductRailForm uid={uid} config={section.config} onChange={(config) => onChange({ ...section, config })} />;
+    case "category_tiles": {
+      const c = section.config;
+      return (
+        <div className="space-y-4">
+          <Field label="Heading (optional)" htmlFor={id("heading")}>
+            <Input id={id("heading")} maxLength={120} value={c.heading} onChange={(e) => onChange({ ...section, config: { ...c, heading: e.target.value } })} />
+          </Field>
+          <CategoryChecklist chosen={c.categoryIds} max={12} onChange={(categoryIds) => onChange({ ...section, config: { ...c, categoryIds } })} />
+        </div>
+      );
+    }
     default: {
       const c = section.config;
       const set = (p: Partial<HeadingConfig>) => onChange({ ...section, config: { ...c, ...p } });
@@ -689,6 +860,243 @@ function HeroForm({ uid, slides, onChange }: { uid: string; slides: HeroSlide[];
         >
           <Plus className="mr-1 h-4 w-4" /> Add slide
         </Button>
+      )}
+    </div>
+  );
+}
+
+const SELECT = "border-input bg-background h-10 w-full rounded-md border px-3 text-sm";
+
+type GalleryConfig = Extract<HomepageSection, { type: "gallery" }>["config"];
+type ColumnsConfig = Extract<HomepageSection, { type: "columns" }>["config"];
+
+function GalleryForm({ uid, config: c, onChange }: { uid: string; config: GalleryConfig; onChange: (c: GalleryConfig) => void }) {
+  const setImage = (i: number, p: Partial<GalleryConfig["images"][number]>) => onChange({ ...c, images: c.images.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const id = (name: string) => `${uid}-${name}`;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+        <Field label="Heading (optional)" htmlFor={id("heading")}>
+          <Input id={id("heading")} maxLength={160} value={c.heading} onChange={(e) => onChange({ ...c, heading: e.target.value })} />
+        </Field>
+        <Field label="Pictures per row" htmlFor={id("cols")}>
+          <select id={id("cols")} value={c.columns} onChange={(e) => onChange({ ...c, columns: Number(e.target.value) as 2 | 3 | 4 })} className={SELECT}>
+            <option value={2}>2</option>
+            <option value={3}>3</option>
+            <option value={4}>4</option>
+          </select>
+        </Field>
+      </div>
+      {c.images.map((im, i) => (
+        <div key={i} className="grid items-start gap-3 rounded-lg border p-3 sm:grid-cols-[200px_1fr_auto]">
+          <ImageField id={id(`img-${i}`)} value={im.url || null} onChange={(url) => setImage(i, { url: url ?? "" })} />
+          <div className="space-y-3">
+            <Field label="Description for screen readers" htmlFor={id(`alt-${i}`)}>
+              <Input id={id(`alt-${i}`)} maxLength={200} value={im.alt} onChange={(e) => setImage(i, { alt: e.target.value })} />
+            </Field>
+            <Field label="Link (optional)" htmlFor={id(`link-${i}`)} error={isLink(im.link) ? null : "Use a path like /products"}>
+              <Input id={id(`link-${i}`)} value={im.link ?? ""} placeholder="/products" onChange={(e) => setImage(i, { link: e.target.value || null })} />
+            </Field>
+          </div>
+          <Button type="button" variant="ghost" size="icon" onClick={() => onChange({ ...c, images: c.images.filter((_, j) => j !== i) })} aria-label={`Remove picture ${i + 1}`}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      {c.images.length < 24 && (
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...c, images: [...c.images, { url: "", alt: "", link: null }] })}>
+          <Plus className="mr-1 h-4 w-4" /> Add picture
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ColumnsForm({ uid, config: c, onChange }: { uid: string; config: ColumnsConfig; onChange: (c: ColumnsConfig) => void }) {
+  const setCol = (i: number, p: Partial<ColumnsConfig["columns"][number]>) => onChange({ ...c, columns: c.columns.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const id = (name: string) => `${uid}-${name}`;
+  return (
+    <div className="space-y-4">
+      <Field label="Heading (optional)" htmlFor={id("heading")}>
+        <Input id={id("heading")} maxLength={160} value={c.heading} onChange={(e) => onChange({ ...c, heading: e.target.value })} />
+      </Field>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {c.columns.map((col, i) => (
+          <div key={i} className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Column {i + 1}</p>
+              <Button type="button" variant="ghost" size="sm" disabled={c.columns.length <= 2} onClick={() => onChange({ ...c, columns: c.columns.filter((_, j) => j !== i) })}>
+                <X className="mr-1 h-4 w-4" /> Remove
+              </Button>
+            </div>
+            <ImageField id={id(`img-${i}`)} value={col.imageUrl} onChange={(url) => setCol(i, { imageUrl: url })} />
+            <Field label="Heading" htmlFor={id(`h-${i}`)}>
+              <Input id={id(`h-${i}`)} maxLength={120} value={col.heading} onChange={(e) => setCol(i, { heading: e.target.value })} />
+            </Field>
+            <MarkdownField id={id(`t-${i}`)} label="Text" value={col.text} onChange={(text) => setCol(i, { text })} rows={4} />
+          </div>
+        ))}
+      </div>
+      {c.columns.length < 4 && (
+        <Button type="button" variant="outline" size="sm" onClick={() => onChange({ ...c, columns: [...c.columns, { imageUrl: null, heading: "", text: "" }] })}>
+          <Plus className="mr-1 h-4 w-4" /> Add column
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function flattenCategories(nodes: Category[], depth = 0): { id: string; name: string; depth: number }[] {
+  return nodes.flatMap((c) => [{ id: String(c.id), name: c.name, depth }, ...flattenCategories(c.children ?? [], depth + 1)]);
+}
+
+/** Tick categories; the order they were ticked in is the order they show. */
+function CategoryChecklist({ chosen, max, onChange }: { chosen: string[]; max: number; onChange: (ids: string[]) => void }) {
+  const { data: tree = [] } = useGetCategoryTreeQuery();
+  const all = React.useMemo(() => flattenCategories(tree), [tree]);
+  return (
+    <fieldset>
+      <legend className="mb-1 text-sm font-medium">Categories</legend>
+      <p className="mb-2 text-xs text-slate-500">They show in the order you tick them. Up to {max}.</p>
+      <div className="max-h-64 overflow-y-auto rounded-md border p-1">
+        {all.length === 0 ? (
+          <p className="p-2 text-sm text-slate-500">No categories yet.</p>
+        ) : (
+          all.map((c) => {
+            const on = chosen.includes(c.id);
+            return (
+              <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800" style={{ paddingLeft: 8 + c.depth * 16 }}>
+                <input type="checkbox" checked={on} disabled={!on && chosen.length >= max} onChange={() => onChange(on ? chosen.filter((x) => x !== c.id) : [...chosen, c.id])} />
+                <span className="flex-1">{c.name}</span>
+                {on && <span className="text-xs text-slate-500">{chosen.indexOf(c.id) + 1}</span>}
+              </label>
+            );
+          })
+        )}
+      </div>
+    </fieldset>
+  );
+}
+
+function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: ProductRailConfig; onChange: (c: ProductRailConfig) => void }) {
+  const set = (p: Partial<ProductRailConfig>) => onChange({ ...c, ...p });
+  const id = (name: string) => `${uid}-${name}`;
+  const { data: tree = [] } = useGetCategoryTreeQuery();
+  const categories = React.useMemo(() => flattenCategories(tree), [tree]);
+  const [q, setQ] = React.useState("");
+  const [search, setSearch] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setSearch(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+  const { data: found, isFetching } = useGetProductsQuery({ search, perPage: 8, status: "published" }, { skip: c.source !== "products" || search.length < 2 });
+  const move = (i: number, by: number) => {
+    const next = [...c.products];
+    const [item] = next.splice(i, 1);
+    next.splice(i + by, 0, item!);
+    set({ products: next });
+  };
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Heading" htmlFor={id("heading")}>
+          <Input id={id("heading")} maxLength={120} value={c.heading} onChange={(e) => set({ heading: e.target.value })} />
+        </Field>
+        <Field label="Subheading (optional)" htmlFor={id("sub")}>
+          <Input id={id("sub")} maxLength={240} value={c.subheading} onChange={(e) => set({ subheading: e.target.value })} />
+        </Field>
+        <Field label="Which products" htmlFor={id("source")}>
+          <select id={id("source")} value={c.source} onChange={(e) => set({ source: e.target.value as ProductRailConfig["source"] })} className={SELECT}>
+            <option value="products">Ones I pick</option>
+            <option value="category">From a category</option>
+            <option value="tag">With a tag</option>
+          </select>
+        </Field>
+        {c.source !== "products" && (
+          <Field label="Order" htmlFor={id("sort")}>
+            <select id={id("sort")} value={c.sort} onChange={(e) => set({ sort: e.target.value as ProductRailConfig["sort"] })} className={SELECT}>
+              {RAIL_SORTS.map((s) => (
+                <option key={s} value={s}>
+                  {{ popular: "Best selling", newest: "Newest", price_asc: "Price: low to high", price_desc: "Price: high to low", rating: "Best rated" }[s]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {c.source === "category" && (
+          <Field label="Category" htmlFor={id("cat")} hint="Includes its sub-categories.">
+            <select id={id("cat")} value={c.categoryId ?? ""} onChange={(e) => set({ categoryId: e.target.value || null })} className={SELECT}>
+              <option value="">Choose…</option>
+              {categories.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {"— ".repeat(x.depth)}
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {c.source === "tag" && (
+          <Field label="Tag" htmlFor={id("tag")} hint="Products with this tag (set on the product page).">
+            <Input id={id("tag")} maxLength={40} value={c.tag} placeholder="eid" onChange={(e) => set({ tag: e.target.value.toLowerCase() })} />
+          </Field>
+        )}
+        {c.source !== "products" && (
+          <Field label="How many" htmlFor={id("limit")}>
+            <Input id={id("limit")} type="number" min={2} max={24} value={c.limit} onChange={(e) => set({ limit: Math.min(24, Math.max(2, Number(e.target.value) || 2)) })} />
+          </Field>
+        )}
+      </div>
+      {c.source === "products" && (
+        <div className="space-y-3">
+          <Field label="Add products" htmlFor={id("q")} hint="Type at least 2 letters of a name or SKU. Up to 24.">
+            <Input id={id("q")} value={q} placeholder="Search products…" disabled={c.products.length >= 24} onChange={(e) => setQ(e.target.value)} />
+          </Field>
+          {search.length >= 2 && (
+            <div className="rounded-md border">
+              {isFetching && !found ? (
+                <p className="p-2 text-sm text-slate-500">Searching…</p>
+              ) : !found?.items.length ? (
+                <p className="p-2 text-sm text-slate-500">No published products match.</p>
+              ) : (
+                found.items.map((p) => {
+                  const added = c.products.some((x) => x.id === String(p.id));
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={added || c.products.length >= 24}
+                      onClick={() => set({ products: [...c.products, { id: String(p.id), name: p.name }] })}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="shrink-0 text-xs text-slate-500">{added ? "Added" : (p.sku ?? "")}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+          {c.products.length > 0 && (
+            <ol className="divide-y rounded-md border">
+              {c.products.map((p, i) => (
+                <li key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                  <span className="w-5 text-xs text-slate-500">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p.name} up`}>
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === c.products.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p.name} down`}>
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => set({ products: c.products.filter((x) => x.id !== p.id) })} aria-label={`Remove ${p.name}`}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
     </div>
   );

@@ -82,6 +82,22 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
       config: { imageUrl: string | null; heading: string; text: string; ctaText: string; ctaHref: string; imagePosition: "left" | "right" };
     }
   | { type: "faq"; config: { heading: string; limit: number } }
+  | { type: "video"; config: { heading: string; url: string; caption: string } }
+  | { type: "gallery"; config: { heading: string; columns: 2 | 3 | 4; images: { url: string; alt: string; link: string | null }[] } }
+  | { type: "columns"; config: { heading: string; columns: { imageUrl: string | null; heading: string; text: string }[] } }
+  | { type: "button"; config: { text: string; href: string; style: "solid" | "outline"; align: "left" | "center" | "right" } }
+  | { type: "quote"; config: { text: string; author: string; role: string } }
+  | {
+      type: "product_rail";
+      config: HeadingConfig & {
+        source: "products" | "category" | "tag";
+        products: { id: string; name: string }[];
+        categoryId: string | null;
+        tag: string;
+        sort: "popular" | "newest" | "price_asc" | "price_desc" | "rating";
+      };
+    }
+  | { type: "category_tiles"; config: { heading: string; categoryIds: string[] } }
 );
 
 export interface HeadingConfig {

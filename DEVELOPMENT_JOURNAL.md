@@ -4573,3 +4573,59 @@ Reports could only be read on screen or exported table by table as CSV. Now ever
 - **Run history:** the 30 most recent sendings per schedule are kept with their PDFs; older ones go.
 - **Test hazard found:** many DB tests clean up with `deleteMany({ where: { storeId } })`. If their setup fails, `storeId` is undefined and that deletes every row in the table. A setup timeout during a full run against the dev database wiped the local seed products, admin users and one order. The seed restored the rest; the order was lost. DB tests now run against a separate `ecom_test` database, and the new test guards its cleanup. The older tests still need the same guard.
 - **Next:** Batch 38, storefront and content polish.
+
+---
+
+## ✅ BATCH #38 (part 1) — Seven new page blocks (2026-10-19)
+The homepage and block-built pages had ten blocks. Shops asked for video, picture galleries, testimonials and rows of hand-picked products. Now there are seven more. They work everywhere blocks do: the homepage, pages built from blocks, and landing pages.
+
+### 38.1 Blocks
+| Block | What it shows | Settings |
+|---|---|---|
+| Video | an embedded player | a YouTube, Vimeo or Facebook link, or a direct .mp4 / .webm file; heading and caption |
+| Gallery | a grid of pictures | 1–24 pictures, each with a description for screen readers and an optional link; 2, 3 or 4 per row |
+| Columns | 2–4 columns side by side | each with an optional picture, heading and text (with bold, links and lists) |
+| Button | a single button | text, link, filled or outline, left / centre / right |
+| Quote | a testimonial | the words, who said it, and a line about them |
+| Product row | a row of products | the products you pick (in that order), or the best of a category or a tag (best selling, newest, price, rating), how many |
+| Category tiles | categories with their pictures | 1–12 categories, shown in the order they were ticked |
+
+- **No data change:** blocks are stored as JSON on the homepage, page or landing page, as before.
+
+### 38.2 Rules
+- **Video links:** `videoEmbed()` in `@ecom/utils` is the one parser for both the API (which refuses other links) and the storefront (which embeds them).
+  - It understands the usual shapes: `watch?v=`, `youtu.be`, `shorts/`, `embed/`, `m.` links.
+  - YouTube plays from `youtube-nocookie.com`, so no tracking cookies are set until the shopper presses play.
+  - Only `https` is accepted.
+- **Product row:** picked products keep the picked order. The storefront asks for live products by id, so a product that's unpublished or deleted simply drops out. The names saved with the block are only for the editor's list.
+- **"View all":** a category row links to `/products?category={slug}`, a tag row to `/products?tag=…`. A picked row has no link.
+- **Category tiles:** show only the heading the shop wrote, not the component's built-in "Shop by Category" text.
+
+### 38.3 Admin (Online Store → Homepage, Content → Pages, Landing pages)
+- **Palette:** the 7 blocks, with short descriptions.
+- **Editors:**
+  - gallery pictures can be added and removed with the media picker;
+  - columns can be added and removed (2–4);
+  - the product row has a search (2+ letters of a name or SKU; published products only), plus up / down / remove for each picked product;
+  - category tiles have a tick list of the category tree, numbered in the order ticked.
+- **Checks:** the editor flags a block before saving: no video link or one it can't play, no pictures, no button link, an empty quote, nothing picked, no category.
+
+### 38.4 Checked
+- **Tests:**
+  - new `tests/unit/page-blocks.test.ts`: every new block in its default shape is accepted, and bad ones are refused with the message the admin shows (including `javascript:` links and a bad product id);
+  - new `packages/utils/src/video.test.ts`: YouTube, Vimeo, Facebook and file links, and refusals.
+  - **Full API suite against `ecom_test`:** 776 tests. In the full run `online-payments.db.test.ts` timed out in its setup under load (as it did once before); alone it passes (8). The new cleanup guard meant it deleted nothing.
+- **Types and lint:** API, admin and storefront typecheck. No new lint errors in the changed files.
+- **In the browser:**
+  - added all the new blocks except the gallery to the dev homepage (the gallery has no pictures uploaded locally yet; it's covered by the tests and the editor);
+  - the storefront showed: tiles in the ticked order (Men, Dresses, Sarees, Accessories), the picked row in the picked order, a Men row with "View all", the YouTube video, three columns, the quote and an outline button;
+  - at 375px wide there's no sideways scrolling, and the video fits;
+  - in the admin: all 13 blocks load with clear summaries; searched "panjabi", added the white panjabi, moved it to the top and saved; the storefront showed it first after its one-minute cache.
+  - Fixed during the check: category tiles showed a built-in subtitle the shop hadn't written.
+- **Dev data:** the dev homepage keeps the new blocks: Shop the edit, Shirt picks, From Men, Our Eid collection, Why Fashion BD, a quote, See every product.
+
+### 38.5 Not done
+- **Sliders:** not reusable items yet; the hero slides still live inside the hero block.
+- **Video:** no autoplay or loop options.
+- **Product row:** "on sale only" isn't a source.
+- **Next:** part 2, the blog: scheduled posts, featured posts and "shop this" products.

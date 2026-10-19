@@ -5,12 +5,14 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown, CreditCard, Gift, Phone, Shield, ShoppingBag, Truck } from "lucide-react";
 import { Markdown } from "@ecom/ui";
+import { videoEmbed } from "@ecom/utils";
 import {
   HeroSlider,
   FeaturedCategories,
   ProductGrid,
   Button,
   ProductCardData,
+  type CategoryNode,
   useGetProductsQuery,
   useGetCategoriesTreeQuery,
   msg,
@@ -134,6 +136,20 @@ export function PageSections({
             return <ImageText key={key} section={s} />;
           case "faq":
             return <FaqBlock key={key} section={s} faqs={faqs} />;
+          case "video":
+            return <VideoBlock key={key} section={s} />;
+          case "gallery":
+            return <Gallery key={key} section={s} />;
+          case "columns":
+            return <ColumnsBlock key={key} section={s} />;
+          case "button":
+            return <ButtonBlock key={key} section={s} />;
+          case "quote":
+            return <QuoteBlock key={key} section={s} />;
+          case "product_rail":
+            return <ProductRail key={key} section={s} {...productProps} />;
+          case "category_tiles":
+            return <CategoryTiles key={key} section={s} />;
           default:
             return null;
         }
@@ -401,6 +417,204 @@ function FaqBlock({ section, faqs }: { section: SectionOf<"faq">; faqs: Faq[] })
           See all questions <ArrowRight className="h-4 w-4 ml-1" />
         </Link>
       )}
+    </section>
+  );
+}
+
+const sectionHeading = (text: string) => (text ? <h2 className="mb-6 text-2xl md:text-3xl font-bold tracking-tight">{text}</h2> : null);
+
+function VideoBlock({ section }: { section: SectionOf<"video"> }) {
+  const c = section.config;
+  const t = useT();
+  const v = videoEmbed(c.url);
+  if (!v) return null;
+  return (
+    <section className="container max-w-4xl">
+      {sectionHeading(c.heading ? t(c.heading) : "")}
+      <div className="aspect-video w-full overflow-hidden rounded-2xl bg-black">
+        {v.kind === "iframe" ? (
+          <iframe
+            src={v.src}
+            title={c.heading || c.caption || "Video"}
+            loading="lazy"
+            allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allowFullScreen
+            className="h-full w-full border-0"
+          />
+        ) : (
+          <video src={v.src} controls preload="metadata" playsInline className="h-full w-full" />
+        )}
+      </div>
+      {c.caption && <p className="mt-3 text-center text-sm text-muted-foreground">{t(c.caption)}</p>}
+    </section>
+  );
+}
+
+const GALLERY_COLS: Record<number, string> = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "grid-cols-2 lg:grid-cols-4" };
+
+function Gallery({ section }: { section: SectionOf<"gallery"> }) {
+  const c = section.config;
+  const t = useT();
+  return (
+    <section className="container">
+      {sectionHeading(c.heading ? t(c.heading) : "")}
+      <div className={`grid gap-3 md:gap-4 ${GALLERY_COLS[c.columns] ?? GALLERY_COLS[3]}`}>
+        {c.images.map((im, i) => {
+          const img = <img src={im.url} alt={im.alt} loading="lazy" className="aspect-square w-full rounded-xl object-cover transition-transform duration-300 hover:scale-[1.02]" />;
+          return im.link ? (
+            <SmartLink key={i} href={im.link} className="block overflow-hidden rounded-xl">
+              {img}
+            </SmartLink>
+          ) : (
+            <div key={i} className="overflow-hidden rounded-xl">
+              {img}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Spelled out so Tailwind keeps the classes. */
+const COLUMN_GRID: Record<number, string> = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" };
+
+function ColumnsBlock({ section }: { section: SectionOf<"columns"> }) {
+  const c = section.config;
+  const t = useT();
+  return (
+    <section className="container">
+      {sectionHeading(c.heading ? t(c.heading) : "")}
+      <div className={`grid gap-6 md:gap-8 ${COLUMN_GRID[c.columns.length] ?? COLUMN_GRID[2]}`}>
+        {c.columns.map((col, i) => (
+          <div key={i}>
+            {col.imageUrl && (
+              <img src={col.imageUrl} alt="" loading="lazy" className="mb-4 aspect-[4/3] w-full rounded-xl object-cover" />
+            )}
+            {col.heading && <h3 className="text-lg font-semibold">{t(col.heading)}</h3>}
+            {col.text && <Markdown source={col.text} className="mt-2 text-sm text-muted-foreground" />}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const ALIGN: Record<string, string> = { left: "justify-start", center: "justify-center", right: "justify-end" };
+
+function ButtonBlock({ section }: { section: SectionOf<"button"> }) {
+  const c = section.config;
+  const t = useT();
+  return (
+    <section className={`container flex ${ALIGN[c.align] ?? ALIGN.center}`}>
+      <Button size="lg" variant={c.style === "outline" ? "outline" : "default"} asChild>
+        <SmartLink href={c.href}>{t(c.text)}</SmartLink>
+      </Button>
+    </section>
+  );
+}
+
+function QuoteBlock({ section }: { section: SectionOf<"quote"> }) {
+  const c = section.config;
+  const t = useT();
+  return (
+    <section className="container max-w-3xl">
+      <figure className="border-l-4 border-primary pl-6">
+        <blockquote className="text-xl md:text-2xl font-medium leading-relaxed">“{t(c.text)}”</blockquote>
+        {(c.author || c.role) && (
+          <figcaption className="mt-4 text-sm text-muted-foreground">
+            {c.author && <span className="font-semibold text-foreground">{c.author}</span>}
+            {c.author && c.role && " · "}
+            {c.role && t(c.role)}
+          </figcaption>
+        )}
+      </figure>
+    </section>
+  );
+}
+
+function ProductRail({
+  section,
+  onAddToCart,
+  onToggleWishlist,
+  wishlistedIds,
+}: {
+  section: SectionOf<"product_rail">;
+  onAddToCart: (p: ProductCardData) => void;
+  onToggleWishlist: (p: ProductCardData) => void;
+  wishlistedIds: Set<string>;
+}) {
+  const c = section.config;
+  const t = useT();
+  const picked = c.source === "products" ? c.products.map((p) => p.id) : [];
+  const skip = (c.source === "products" && !picked.length) || (c.source === "category" && !c.categoryId) || (c.source === "tag" && !c.tag);
+  const { data, isLoading } = useGetProductsQuery(
+    {
+      perPage: c.source === "products" ? picked.length : c.limit,
+      sort: c.sort,
+      ...(c.source === "products" ? { ids: picked.join(",") } : c.source === "category" ? { categoryId: c.categoryId ?? undefined } : { tag: c.tag }),
+    },
+    { skip },
+  );
+  const order = picked.join(",");
+  // Picked products keep the order they were picked in.
+  const items = React.useMemo(() => {
+    const list = data?.items ?? [];
+    const ids = order.split(",");
+    return c.source === "products" ? [...list].sort((a, b) => ids.indexOf(String(a.id)) - ids.indexOf(String(b.id))) : list;
+  }, [data, c.source, order]);
+  const { data: tree = [] } = useGetCategoriesTreeQuery(undefined, { skip: c.source !== "category" });
+  if (skip || (!isLoading && !items.length)) return null;
+  const slug = c.source === "category" ? findCategory(tree, c.categoryId)?.slug : undefined;
+  const more = slug ? `/products?category=${encodeURIComponent(slug)}` : c.source === "tag" ? `/products?tag=${encodeURIComponent(c.tag)}` : null;
+  return (
+    <section className="container">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          {c.heading && <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{t(c.heading)}</h2>}
+          {c.subheading && <p className="text-muted-foreground mt-1">{t(c.subheading)}</p>}
+        </div>
+        {more && (
+          <Button variant="outline" asChild>
+            <Link href={more}>
+              {t(msg("View All Products"))}
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Link>
+          </Button>
+        )}
+      </div>
+      <ProductGrid products={items} loading={isLoading} cols={4} onAddToCart={onAddToCart} onToggleWishlist={onToggleWishlist} wishlistedIds={wishlistedIds} />
+    </section>
+  );
+}
+
+/** A category anywhere in the tree, by id. */
+function findCategory(nodes: CategoryNode[], id: string | null): CategoryNode | undefined {
+  for (const n of nodes) {
+    if (String(n.id) === id) return n;
+    const hit = findCategory(n.children ?? [], id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function CategoryTiles({ section }: { section: SectionOf<"category_tiles"> }) {
+  const { data: tree = [] } = useGetCategoriesTreeQuery();
+  const t = useT();
+  const ids = section.config.categoryIds;
+  const cats = React.useMemo(
+    () =>
+      ids.flatMap((id, i) => {
+        const c = findCategory(tree, id);
+        return c ? [{ id: c.id, slug: c.slug, name: c.name, image: c.image, productCount: c.productCount, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }] : [];
+      }),
+    [tree, ids],
+  );
+  if (!cats.length) return null;
+  return (
+    <section className="container">
+      {/* Empty strings, not undefined: the component would fill in its own default heading. */}
+      <FeaturedCategories categories={cats} variant="cards" cols={cats.length >= 6 ? 6 : 4} heading={section.config.heading ? t(section.config.heading) : ""} subheading="" />
     </section>
   );
 }

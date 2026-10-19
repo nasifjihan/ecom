@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { videoEmbed } from "@ecom/utils"
 
 const slug = z
   .string()
@@ -231,6 +232,73 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
     type: z.literal("faq"),
     enabled: z.boolean(),
     config: z.object({ heading: text(120), limit: z.coerce.number().int().min(1).max(50) }),
+  }),
+  z.object({
+    type: z.literal("video"),
+    enabled: z.boolean(),
+    config: z.object({
+      heading: text(160),
+      url: link.refine((v) => videoEmbed(v) !== null, "Use a YouTube, Vimeo or Facebook video link, or a link to an .mp4 file"),
+      caption: text(300),
+    }),
+  }),
+  z.object({
+    type: z.literal("gallery"),
+    enabled: z.boolean(),
+    config: z.object({
+      heading: text(160),
+      columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+      images: z
+        .array(z.object({ url: link.refine((v) => v !== "", "Choose an image"), alt: text(200), link: optLink }))
+        .min(1, "Add at least one image")
+        .max(24),
+    }),
+  }),
+  z.object({
+    type: z.literal("columns"),
+    enabled: z.boolean(),
+    config: z.object({
+      heading: text(160),
+      columns: z.array(z.object({ imageUrl: optLink, heading: text(120), text: text(3_000) })).min(2).max(4),
+    }),
+  }),
+  z.object({
+    type: z.literal("button"),
+    enabled: z.boolean(),
+    config: z.object({
+      text: text(40).min(1, "Add the button text"),
+      href: link.refine((v) => v !== "", "Add the button link"),
+      style: z.enum(["solid", "outline"]),
+      align: z.enum(["left", "center", "right"]),
+    }),
+  }),
+  z.object({
+    type: z.literal("quote"),
+    enabled: z.boolean(),
+    config: z.object({ text: text(1_000).min(1, "Add the quote"), author: text(80), role: text(120) }),
+  }),
+  z.object({
+    type: z.literal("product_rail"),
+    enabled: z.boolean(),
+    config: z.object({
+      ...Heading,
+      /** products: the ones picked, in that order; category / tag: the best of those by `sort`. */
+      source: z.enum(["products", "category", "tag"]),
+      /** Names are kept only so the editor can show what was picked; the storefront loads live products. */
+      products: z.array(z.object({ id: z.string().regex(/^\d+$/), name: text(200) })).max(24),
+      categoryId: z.string().regex(/^\d+$/).nullable(),
+      tag: text(40),
+      sort: z.enum(["popular", "newest", "price_asc", "price_desc", "rating"]),
+      limit: Count,
+    }),
+  }),
+  z.object({
+    type: z.literal("category_tiles"),
+    enabled: z.boolean(),
+    config: z.object({
+      heading: text(120),
+      categoryIds: z.array(z.string().regex(/^\d+$/)).min(1, "Choose at least one category").max(12),
+    }),
   }),
 ])
 /** Sections carry an optional client id so the editors can track them while reordering. */

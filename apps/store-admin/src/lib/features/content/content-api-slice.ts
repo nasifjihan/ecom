@@ -115,6 +115,26 @@ export interface HeroSlide {
   gradient: (typeof HERO_GRADIENTS)[number];
   alignment: "left" | "center" | "right";
 }
+export interface GalleryImage {
+  url: string;
+  alt: string;
+  link: string | null;
+}
+export interface TextColumn {
+  imageUrl: string | null;
+  heading: string;
+  text: string;
+}
+export const RAIL_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating"] as const;
+export interface ProductRailConfig extends HeadingConfig {
+  source: "products" | "category" | "tag";
+  /** Names are only for showing what was picked; the storefront loads the live products. */
+  products: { id: string; name: string }[];
+  categoryId: string | null;
+  tag: string;
+  sort: (typeof RAIL_SORTS)[number];
+}
+
 export interface HeadingConfig {
   heading: string;
   subheading: string;
@@ -147,6 +167,13 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
   | { type: "image"; config: ImageConfig }
   | { type: "image_text"; config: ImageTextConfig }
   | { type: "faq"; config: { heading: string; limit: number } }
+  | { type: "video"; config: { heading: string; url: string; caption: string } }
+  | { type: "gallery"; config: { heading: string; columns: 2 | 3 | 4; images: GalleryImage[] } }
+  | { type: "columns"; config: { heading: string; columns: TextColumn[] } }
+  | { type: "button"; config: { text: string; href: string; style: "solid" | "outline"; align: "left" | "center" | "right" } }
+  | { type: "quote"; config: { text: string; author: string; role: string } }
+  | { type: "product_rail"; config: ProductRailConfig }
+  | { type: "category_tiles"; config: { heading: string; categoryIds: string[] } }
 );
 export type HomepageSectionType = HomepageSection["type"];
 

@@ -84,7 +84,7 @@ These are our advantages. Keep them.
 | Sliders as a separate reusable item | 🟡 | Hero slides live inside the homepage section |
 | Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | 🟡 | `scheduledAt` column exists; no linked products or view count |
 | Redirects (301/302) | ✅ | Batch 33: Online Store → Redirects; automatic 301 when an address changes; broken-link log |
-| Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | 🟡 | We have 4 + homepage blocks |
+| Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | ✅ | Batch 38: all seven, on the homepage, pages and landing pages; product row from picked products (in order), a category or a tag; video from YouTube (no-cookie), Vimeo, Facebook or an .mp4 |
 
 ### CRM (reference 14)
 | Feature | Status | Note |
