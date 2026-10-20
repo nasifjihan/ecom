@@ -60,6 +60,7 @@ const PAYMENT_GATEWAY_LABELS: Record<string, string> = {
   [PaymentMethod.NAGAD]: "Nagad",
   [PaymentMethod.ROCKET]: "Rocket",
   [PaymentMethod.SSLCOMMERZ]: "SSLCommerz",
+  [PaymentMethod.AAMARPAY]: "aamarPay",
   [PaymentMethod.COD]: msg("Cash On Delivery"),
   [PaymentMethod.BANK_TRANSFER]: msg("Bank Transfer"),
 };

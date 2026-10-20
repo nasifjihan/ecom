@@ -91,6 +91,7 @@ const envSchema = z.object({
    */
   BKASH_API_URL: z.string().optional(),
   SSLCOMMERZ_API_URL: z.string().optional(),
+  AAMARPAY_API_URL: z.string().optional(),
 
   PATHAO_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
   PATHAO_API_URL: z.string().optional(),

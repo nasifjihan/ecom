@@ -28,6 +28,7 @@ const PAYMENT_GATEWAYS = [
   "nagad",
   "rocket",
   "sslcommerz",
+  "aamarpay",
   "bank_transfer",
 ] as const;
 

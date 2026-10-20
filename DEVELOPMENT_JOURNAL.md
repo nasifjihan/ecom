@@ -5222,3 +5222,48 @@ The coupon maths and the shipping options list now live in rule files with no da
 ### 43.13 Not done
 - **Other pricing:** tax and delivery-slot pricing were already pure and tested; promotions and flash pricing too.
 - **Next:** Batch 41 (Nagad, aamarPay, PayPal), then 42 (WhatsApp, more team alerts).
+
+---
+
+## ✅ BATCH #41 (part 1) — aamarPay (2026-10-21)
+Customers can now pay with aamarPay (cards, mobile banking and internet banking) through the shop's own aamarPay account. It works like SSLCommerz: the customer pays on aamarPay's page, and the order is marked paid only when aamarPay's own API confirms it.
+
+### 41.1 Gateway (`payments/gateways/gateway.adapters.ts`, `AamarpayGateway`)
+- **Start:** `POST jsonpost.php` (JSON) with the store ID and signature key, our try code as `tran_id`, taka, the customer's details, and success, fail and cancel links back to our API. The customer goes to `payment_url`.
+- **Confirm:** the transaction check `GET api/v1/trxcheck/request.php?request_id=<tran_id>`.
+  - `pay_status` Successful counts as paid; Failed is failed; Cancelled is cancelled; Pending, Unattempted or Initiated is still pending; anything else is failed.
+  - With amount, `currency_merchant`, `mer_txnid` and `pg_txnid`, the usual check applies: our code, taka, the amount due.
+  - No transaction yet is "pending". Refused keys are an error, never "paid".
+- **Test connection:** the same check with a test id. Refused store ID or signature key fails it.
+- **Hosts:** sandbox `sandbox.aamarpay.com`, live `secure.aamarpay.com`, overridable with `AAMARPAY_API_URL` (a local mock).
+- **Refunds:** aamarPay has no refund API.
+  - `API_REFUNDS` (bKash, SSLCommerz) decides which payments refund through their gateway.
+  - An aamarPay refund "to the original method" is recorded for staff to pay back from the aamarPay panel, and the refund dialog says so.
+- **Return pages:** a cancel or fail on the gateway page with nothing paid now names the right gateway ("Cancelled on aamarPay"); before, it always said SSLCommerz.
+
+### 41.2 Data and setup
+- **Migration `20261021150000_aamarpay`:** adds an aamarPay method (off) to every store that has payment methods; the seed has it too.
+- **Lists:** `aamarpay` joins the order payment codes, `ONLINE_GATEWAYS` and `ONLINE_ONLY`.
+- **Keys:** a store ID and a signature key (encrypted, masked like the others).
+- **Mock:** `scripts/mock-payments.mjs` gains `/aamarpay` (payment page with Pay, Fail and Cancel; form-post back; the transaction check; "wrong" fails).
+
+### 41.3 Admin and storefront
+- **Settings → Payments:** aamarPay gets the merchant keys box (Save keys, Test connection) and can't be turned on until its test passes.
+- **Checkout:** offers "aamarPay — Card, mobile banking or internet banking", with a redirect note.
+- **Thank-you page:** an unpaid aamarPay order shows "Pay ৳X with aamarPay". The new texts have Bangla.
+
+### 41.4 Checked
+- **Tests:**
+  - 10 more unit tests in `online-payments.test.ts`: the session request (code, taka, the three links), refusal; each `pay_status`; no transaction yet; refused keys; test connection; no refund call; offered only with keys;
+  - 1 more DB test in `online-payments.db.test.ts`: keys saved and tested, turned on, a cancel then a paid try, two returns at once give one payment record, and a refund is not sent to aamarPay.
+- **Types and lint:** no lint errors in the changed payment files; API, admin and storefront typecheck; the Bangla test passes.
+- **In the browser, against the local mock:**
+  - saved made-up keys (stored encrypted), "aamarPay sandbox store works", turned it on;
+  - the storefront checkout offered aamarPay; placing order 20261020000001 (৳3,335) opened the aamarPay page;
+  - Cancel brought back "The payment was cancelled" with "Pay BDT 3,335.00 with aamarPay";
+  - paying moved the order to Processing / Paid (tries: cancelled, paid; one payment record).
+- **Dev data:** that test order stays; aamarPay is off again with the mock keys saved; `.env` is back as it was.
+
+### 41.5 Not done
+- **Real sandbox:** not yet run against aamarPay's own sandbox. That's part 2, with sandbox keys.
+- **Refunds:** aamarPay refunds are paid back by hand (no API).

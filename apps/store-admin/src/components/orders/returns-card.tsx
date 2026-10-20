@@ -449,6 +449,11 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
           {method === "store_credit" && (
             <p className="text-xs text-slate-500">The amount is added to the customer's store credit.</p>
           )}
+          {method === "original" && order.paymentMethod.toUpperCase() === "AAMARPAY" && (
+            <p className="text-xs text-slate-500">
+              aamarPay has no refund API: the refund is recorded here, and you send the money back yourself (from the aamarPay panel or another way).
+            </p>
+          )}
           {method === "original" && ["BKASH", "SSLCOMMERZ"].includes(order.paymentMethod.toUpperCase()) && (
             <p className="text-xs text-slate-500">
               If the order was paid online, the money goes back through {order.paymentMethod.toUpperCase() === "BKASH" ? "bKash" : "SSLCommerz"} straight

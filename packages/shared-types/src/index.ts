@@ -68,6 +68,7 @@ export enum PaymentMethod {
   NAGAD = "nagad",
   ROCKET = "rocket",
   SSLCOMMERZ = "sslcommerz",
+  AAMARPAY = "aamarpay",
   COD = "cod",
   BANK_TRANSFER = "bank_transfer",
 }

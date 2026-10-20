@@ -1,5 +1,5 @@
 /**
- * MOCK PAYMENTS — a local stand-in for bKash Tokenized Checkout and SSLCommerz, for trying online
+ * MOCK PAYMENTS — a local stand-in for bKash Tokenized Checkout, SSLCommerz and aamarPay, for trying online
  * payments end to end without merchant accounts or network access. Not for production.
  *
  *   pnpm --filter @ecom/api payments:mock        (listens on :4020, or MOCK_PAYMENTS_PORT)
@@ -21,6 +21,7 @@ const PORT = Number(process.env.MOCK_PAYMENTS_PORT ?? 4020);
 const bkash = new Map(); // paymentID -> { amount, invoice, callbackURL, status, trxID }
 const ssl = new Map(); // tran_id -> { amount, success_url, fail_url, cancel_url, ipn_url, status, val_id, bank_tran_id }
 const refunds = new Map(); // refund_ref_id -> { asked }
+const aamar = new Map(); // tran_id -> { amount, success_url, fail_url, cancel_url, status, pg_txnid }
 const id = (p) => `${p}${randomBytes(5).toString("hex").toUpperCase()}`;
 
 const readBody = (req) =>
@@ -146,6 +147,37 @@ http
       return json(res, { APIConnect: "DONE", no_of_trans_found: element.length, element });
     }
 
+    // ------------------------------------------------------------ aamarPay
+    if (p.endsWith("/jsonpost.php")) {
+      const b = JSON.parse(raw || "{}");
+      if (b.signature_key === "wrong") return json(res, "Invalid Store ID or Signature Key");
+      aamar.set(b.tran_id, { amount: b.amount, success_url: b.success_url, fail_url: b.fail_url, cancel_url: b.cancel_url, status: "Unattempted" });
+      return json(res, { result: "true", payment_url: `http://localhost:${PORT}/aamarpay/pay/${encodeURIComponent(b.tran_id)}` });
+    }
+    if (p.startsWith("/aamarpay/pay/")) {
+      const tran = decodeURIComponent(p.split("/").pop());
+      const a = aamar.get(tran);
+      if (!a) return page(res, "aamarPay", "<p>Unknown payment</p>");
+      const d = url.searchParams.get("do");
+      if (d) {
+        a.status = d === "success" ? "Successful" : d === "cancel" ? "Cancelled" : "Failed";
+        a.pg_txnid = id("AAM");
+        const target = d === "success" ? a.success_url : d === "cancel" ? a.cancel_url : a.fail_url;
+        const fields = { mer_txnid: tran, pg_txnid: a.pg_txnid, amount: a.amount, pay_status: a.status, currency: "BDT" };
+        const inputs = Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${k}" value="${v}">`).join("");
+        return page(res, "aamarPay", `<form id="f" method="post" action="${target}">${inputs}</form><script>document.getElementById("f").submit()</script>`);
+      }
+      return page(res, "aamarPay", `<h2>aamarPay</h2><p>Pay <b>৳${a.amount}</b> (${tran})</p>
+<p><a href="?do=success">Pay</a> · <a href="?do=fail">Fail</a> · <a href="?do=cancel">Cancel</a></p>`);
+    }
+    if (p.endsWith("/api/v1/trxcheck/request.php")) {
+      if (url.searchParams.get("signature_key") === "wrong") return json(res, { errors: "Invalid Store ID or Signature Key" });
+      const tran = url.searchParams.get("request_id");
+      const a = aamar.get(tran);
+      if (!a) return json(res, { errors: "Invalid Request ID" });
+      return json(res, { mer_txnid: tran, pg_txnid: a.pg_txnid ?? "", amount: a.amount, currency_merchant: "BDT", pay_status: a.status, status_code: a.status === "Successful" ? "2" : "7", risk_level: "0" });
+    }
+
     json(res, { message: "not found" }, 404);
   })
-  .listen(PORT, () => console.log(`Mock payments on http://localhost:${PORT} (bKash /bkash, SSLCommerz /sslcommerz)`));
+  .listen(PORT, () => console.log(`Mock payments on http://localhost:${PORT} (bKash /bkash, SSLCommerz /sslcommerz, aamarPay /aamarpay)`));

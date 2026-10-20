@@ -26,6 +26,7 @@ import {
   type OnlineGatewayCode,
 } from "./gateway.adapters"
 import {
+  API_REFUNDS,
   attemptCode,
   isFinal,
   isOnlineGateway,
@@ -38,7 +39,7 @@ import {
 
 type T = Prisma.TransactionClient
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
-const NAMES: Record<OnlineGatewayCode, string> = { bkash: "bKash", sslcommerz: "SSLCommerz" }
+const NAMES: Record<OnlineGatewayCode, string> = { bkash: "bKash", sslcommerz: "SSLCommerz", aamarpay: "aamarPay" }
 /** Tries per order before we stop opening new ones (a stuck customer should call the shop). */
 const MAX_ATTEMPTS = 10
 
@@ -374,13 +375,13 @@ export class OnlinePaymentsService {
       await log("error", (e as Error).message)
       return { outcome: "pending", redirect: back("pending") }
     }
-    // SSLCommerz's fail/cancel pages: nothing was paid when its API has nothing paid either.
+    // The gateway's fail/cancel pages: nothing was paid when its API has nothing paid either.
     if (result.state === "pending" && (params.result === "fail" || params.result === "cancel")) {
       result = {
         ...result,
         state: params.result === "cancel" ? "cancelled" : "failed",
         message:
-          params.result === "cancel" ? "Cancelled on SSLCommerz" : "Payment failed on SSLCommerz",
+          params.result === "cancel" ? `Cancelled on ${NAMES[gateway]}` : `Payment failed on ${NAMES[gateway]}`,
       }
     }
     const verdict = judge({ code: attempt.code, amount: num(attempt.amount) }, result)
@@ -494,7 +495,8 @@ export class OnlinePaymentsService {
    * (a timeout) keeps it, since the gateway may have sent the money: staff check its panel.
    */
   async refundOnline(orderId: bigint, amount: number, reason: string) {
-    const tries = await prisma.paymentAttempt.findMany({ where: { orderId, storeId: this.storeId, status: "paid" }, orderBy: { paidAt: "asc" } })
+    // Only gateways with a refund API; aamarPay payments are paid back by hand (recorded by the caller).
+    const tries = await prisma.paymentAttempt.findMany({ where: { orderId, storeId: this.storeId, status: "paid", gateway: { in: [...API_REFUNDS] } }, orderBy: { paidAt: "asc" } })
     if (!tries.length) return null
     const left = (t: (typeof tries)[number]) => Math.round((num(t.amount) - num(t.refundedAmount)) * 100) / 100
     const a = tries.find((t) => left(t) >= amount - 0.009)

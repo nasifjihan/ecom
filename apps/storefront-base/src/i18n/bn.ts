@@ -984,4 +984,6 @@ export const BN: Record<string, string> = {
   "Used": "ব্যবহৃত",
   "You haven't used a coupon yet.": "আপনি এখনো কোনো কুপন ব্যবহার করেননি।",
   "on order": "অর্ডারে",
+  "Card, mobile banking or internet banking — redirect to aamarPay": "কার্ড, মোবাইল ব্যাংকিং বা ইন্টারনেট ব্যাংকিং — aamarPay-এ নিয়ে যাবে",
+  "You will be redirected to aamarPay to pay by card, mobile banking or internet banking.": "কার্ড, মোবাইল ব্যাংকিং বা ইন্টারনেট ব্যাংকিংয়ে পেমেন্ট করতে আপনাকে aamarPay-এ নিয়ে যাওয়া হবে।",
 };

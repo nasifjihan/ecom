@@ -96,6 +96,15 @@ export const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewayOption[] = [
     hasExtraFields: false,
   },
   {
+    id: PaymentMethod.AAMARPAY,
+    name: "aamarpay",
+    brandName: "aamarPay",
+    description: msg("Card, mobile banking or internet banking — redirect to aamarPay"),
+    icon: <CreditCard className="h-5 w-5" />,
+    color: "text-sky-600",
+    hasExtraFields: false,
+  },
+  {
     id: PaymentMethod.COD,
     name: "cod",
     brandName: msg("Cash On Delivery"),
@@ -503,6 +512,11 @@ export function PaymentMethodList({
               {isSelected && gw.id === PaymentMethod.BANK_TRANSFER && renderBankTransferFields(gw)}
               {isSelected && gw.id === PaymentMethod.COD && renderCODFields()}
               {isSelected && gw.id === PaymentMethod.SSLCOMMERZ && renderSSLCommerzFields()}
+              {isSelected && gw.id === PaymentMethod.AAMARPAY && (
+                <p className="mt-3 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  {t("You will be redirected to aamarPay to pay by card, mobile banking or internet banking.")}
+                </p>
+              )}
             </CardContent>
           </Card>
         );

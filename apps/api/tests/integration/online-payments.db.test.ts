@@ -31,6 +31,8 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     /** SSLCommerz: the refund's first answer, then what its status query says. */
     sslRefund: "processing" as "success" | "processing" | "failed",
     sslRefundStatus: "processing" as "refunded" | "processing" | "cancelled",
+    /** aamarPay: what its transaction check says for each tran_id. */
+    aamar: new Map<string, { amount: string; pay_status: string }>(),
   }
   const fake: Fetch = (input, init) => {
     const u = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
@@ -128,6 +130,15 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
           : [],
       })
     }
+    if (url.pathname.endsWith("/jsonpost.php")) {
+      const b = JSON.parse(body) as { tran_id: string }
+      return json({ result: "true", payment_url: `https://aamar.test/${b.tran_id}` })
+    }
+    if (url.pathname.endsWith("/api/v1/trxcheck/request.php")) {
+      const code = url.searchParams.get("request_id")!
+      const p = gw.aamar.get(code)
+      return json(p ? { mer_txnid: code, pg_txnid: `AAM-${code.slice(-6)}`, amount: p.amount, currency_merchant: "BDT", pay_status: p.pay_status } : { errors: "Invalid Request ID" })
+    }
     return json({ message: "not found" }, 404)
   }
 
@@ -169,6 +180,7 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
       ["bkash", "bKash", "online", false],
       ["sslcommerz", "SSLCommerz", "online", false],
       ["nagad", "Nagad", "online", false],
+      ["aamarpay", "aamarPay", "online", false],
     ] as const) {
       await prisma.paymentGatewayConfig.create({ data: { storeId, code, name, mode, enabled } })
     }
@@ -468,4 +480,29 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     await expect(refund(o2.id, 200)).rejects.toThrow(/greater than the transaction amount/)
     expect(await prisma.refund.count({ where: { orderId: o2.id } })).toBe(0)
   })
+  it("aamarPay: paid only by its transaction check, settled once; refunds are paid back by hand", async () => {
+    const online = new Online(admin)
+    await online.saveKeys("aamarpay", { mode: "sandbox", credentials: { storeId: "aamarpaytest", signatureKey: "sig-key-1234" } })
+    expect(await online.testKeys("aamarpay")).toEqual({ ok: true, note: "aamarPay sandbox store works" })
+    await new Payments(admin).updateMethod("aamarpay", { enabled: true, mode: "online" } as never)
+    const order = await makeOrder("aamarpay", 1250)
+    const shopper = new Online({ storeId, requestId: "t", locale: "en", currency: "BDT" })
+    const first = await shopper.start(order.id)
+    expect(first.payUrl).toBe(`https://aamar.test/${first.attempt}`)
+    // Cancelled on the aamarPay page: its check has nothing paid.
+    expect((await Online.finish("aamarpay", first.attempt, { result: "cancel" })).outcome).toBe("cancelled")
+    const second = await shopper.start(order.id)
+    gw.aamar.set(second.attempt, { amount: "1250.00", pay_status: "Successful" })
+    const [a, b] = await Promise.all([
+      Online.finish("aamarpay", second.attempt, { result: "success" }),
+      Online.finish("aamarpay", second.attempt, { result: "success" }),
+    ])
+    expect([a.outcome, b.outcome]).toEqual(["paid", "paid"])
+    const o = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { paymentRecords: true } })
+    expect(o.paymentStatus).toBe("paid")
+    expect(o.paymentRecords).toHaveLength(1)
+    // No refund API: nothing goes to aamarPay; the caller records it for staff to pay out.
+    expect(await online.refundOnline(order.id, 250, "Size swap")).toBeNull()
+  })
+
 })

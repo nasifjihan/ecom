@@ -14,6 +14,7 @@ export const METHOD_LABELS: Record<string, string> = {
   cod: "Cash on delivery",
   cash: "Cash",
   sslcommerz: "SSLCommerz",
+  aamarpay: "aamarPay",
   stripe: "Card (Stripe)",
 };
 export const methodLabel = (m?: string | null) => (m ? METHOD_LABELS[m] ?? m : "—");
@@ -213,7 +214,7 @@ export interface PaymentMethodSetting {
   feeFixed: number;
   feePercent: number;
   manualCapable: boolean;
-  /** bKash / SSLCommerz: can take payments online with the store's own merchant keys. */
+  /** bKash / SSLCommerz / aamarPay: can take payments online with the store's own merchant keys. */
   onlineCapable: boolean;
   keysSet: boolean;
   keysTestOk: boolean | null;
@@ -221,7 +222,7 @@ export interface PaymentMethodSetting {
 }
 
 export interface GatewayKeys {
-  code: "bkash" | "sslcommerz";
+  code: "bkash" | "sslcommerz" | "aamarpay";
   mode: "sandbox" | "live";
   set: boolean;
   /** Saved values come back masked (secrets as dots), never in full. */

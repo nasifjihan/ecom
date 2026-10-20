@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from "vitest"
 import {
+  AamarpayGateway,
   BkashGateway,
   SslcommerzGateway,
   type Fetch,
@@ -408,32 +409,201 @@ describe("refunds", () => {
   it("bKash: sends paymentID, trxID and the amount; a refusal is an error", async () => {
     const { f, calls } = fakeFetch({
       "/token/grant": () => ({ body: { id_token: "T", expires_in: 3600 } }),
-      "/payment/refund": () => ({ body: { transactionStatus: "Completed", refundTrxID: "RF123", originalTrxID: "BK1", amount: "250.00" } }),
+      "/payment/refund": () => ({
+        body: {
+          transactionStatus: "Completed",
+          refundTrxID: "RF123",
+          originalTrxID: "BK1",
+          amount: "250.00",
+        },
+      }),
     })
-    const g = new BkashGateway({ gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf" } }, f)
-    expect(await g.refund({ reference: "PAY1", txnId: "BK1", amount: 250, reason: "Size too small" })).toMatchObject({ state: "done", ref: "RF123" })
-    const sent = JSON.parse(calls.find((c) => c.url.endsWith("/payment/refund"))!.body) as Record<string, string>
-    expect(sent).toMatchObject({ paymentID: "PAY1", trxID: "BK1", amount: "250.00", reason: "Size too small" })
+    const g = new BkashGateway(
+      { gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf" } },
+      f,
+    )
+    expect(
+      await g.refund({ reference: "PAY1", txnId: "BK1", amount: 250, reason: "Size too small" }),
+    ).toMatchObject({ state: "done", ref: "RF123" })
+    const sent = JSON.parse(calls.find((c) => c.url.endsWith("/payment/refund"))!.body) as Record<
+      string,
+      string
+    >
+    expect(sent).toMatchObject({
+      paymentID: "PAY1",
+      trxID: "BK1",
+      amount: "250.00",
+      reason: "Size too small",
+    })
 
     const no = fakeFetch({
       "/token/grant": () => ({ body: { id_token: "T", expires_in: 3600 } }),
-      "/payment/refund": () => ({ body: { statusCode: "2071", statusMessage: "Refund amount exceeds" } }),
+      "/payment/refund": () => ({
+        body: { statusCode: "2071", statusMessage: "Refund amount exceeds" },
+      }),
     })
-    await expect(new BkashGateway({ gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf2" } }, no.f).refund({ reference: "P", txnId: "T", amount: 1, reason: "" })).rejects.toThrow("Refund amount exceeds")
+    await expect(
+      new BkashGateway(
+        { gateway: "bkash", mode: "sandbox", credentials: { ...bkashKeys, appKey: "k-rf2" } },
+        no.f,
+      ).refund({ reference: "P", txnId: "T", amount: 1, reason: "" }),
+    ).rejects.toThrow("Refund amount exceeds")
   })
 
   it("SSLCommerz: success, still processing, refused, and asking later", async () => {
     const keys = { storeId: "s", storePassword: "p" }
     const answer = (status: string, extra: object = {}) =>
-      fakeFetch({ "/merchantTransIDvalidationAPI.php": () => ({ body: { APIConnect: "DONE", status, refund_ref_id: "R1", ...extra } }) })
-    const g = (f: Fetch) => new SslcommerzGateway({ gateway: "sslcommerz", mode: "sandbox", credentials: keys }, f)
+      fakeFetch({
+        "/merchantTransIDvalidationAPI.php": () => ({
+          body: { APIConnect: "DONE", status, refund_ref_id: "R1", ...extra },
+        }),
+      })
+    const g = (f: Fetch) =>
+      new SslcommerzGateway({ gateway: "sslcommerz", mode: "sandbox", credentials: keys }, f)
     const ok = answer("success")
-    expect(await g(ok.f).refund({ reference: null, txnId: "BANK1", amount: 99.5, reason: "Damaged" })).toMatchObject({ state: "done", ref: "R1" })
-    expect(Object.fromEntries(new URL(ok.calls[0]!.url).searchParams)).toMatchObject({ bank_tran_id: "BANK1", refund_amount: "99.50", refund_remarks: "Damaged" })
-    expect((await g(answer("processing").f).refund({ reference: null, txnId: "B", amount: 1, reason: "x" })).state).toBe("processing")
-    await expect(g(answer("failed", { errorReason: "Already refunded" }).f).refund({ reference: null, txnId: "B", amount: 1, reason: "x" })).rejects.toThrow("Already refunded")
+    expect(
+      await g(ok.f).refund({ reference: null, txnId: "BANK1", amount: 99.5, reason: "Damaged" }),
+    ).toMatchObject({ state: "done", ref: "R1" })
+    expect(Object.fromEntries(new URL(ok.calls[0]!.url).searchParams)).toMatchObject({
+      bank_tran_id: "BANK1",
+      refund_amount: "99.50",
+      refund_remarks: "Damaged",
+    })
+    expect(
+      (
+        await g(answer("processing").f).refund({
+          reference: null,
+          txnId: "B",
+          amount: 1,
+          reason: "x",
+        })
+      ).state,
+    ).toBe("processing")
+    await expect(
+      g(answer("failed", { errorReason: "Already refunded" }).f).refund({
+        reference: null,
+        txnId: "B",
+        amount: 1,
+        reason: "x",
+      }),
+    ).rejects.toThrow("Already refunded")
     expect((await g(answer("refunded").f).refundStatus("R1")).state).toBe("done")
     expect((await g(answer("processing").f).refundStatus("R1")).state).toBe("processing")
     expect((await g(answer("cancelled").f).refundStatus("R1")).state).toBe("failed")
+  })
+})
+
+describe("aamarPay", () => {
+  const keys = { storeId: "teststore", signatureKey: "sig-123" }
+  const gw = (f: Fetch) =>
+    new AamarpayGateway({ gateway: "aamarpay", mode: "sandbox", credentials: keys }, f)
+  const start = {
+    code: "FBD-1001-ABC123",
+    amount: 1500,
+    returnUrl: "https://api.example.com/api/payments/return/aamarpay?attempt=FBD-1001-ABC123",
+    ipnUrl: "",
+    customer: {
+      name: "Rahim",
+      phone: "01711000000",
+      email: null,
+      address: "House 1",
+      city: "Dhaka",
+    },
+    productName: "Shirt",
+    itemCount: 1,
+  }
+
+  it("opens a payment with our tran_id, taka and the three return links", async () => {
+    const { f, calls } = fakeFetch({
+      "/jsonpost.php": () => ({
+        body: { result: "true", payment_url: "https://sandbox.aamarpay.com/paynow.php?track=X1" },
+      }),
+    })
+    const r = await gw(f).start(start)
+    expect(r).toEqual({
+      reference: "FBD-1001-ABC123",
+      payUrl: "https://sandbox.aamarpay.com/paynow.php?track=X1",
+    })
+    const sent = JSON.parse(calls[0]!.body) as Record<string, string>
+    expect(calls[0]!.url).toBe("https://sandbox.aamarpay.com/jsonpost.php")
+    expect(sent).toMatchObject({
+      store_id: "teststore",
+      signature_key: "sig-123",
+      tran_id: "FBD-1001-ABC123",
+      amount: "1500.00",
+      currency: "BDT",
+      type: "json",
+    })
+    expect(sent.success_url).toContain("attempt=FBD-1001-ABC123&result=success")
+    expect(sent.cancel_url).toContain("result=cancel")
+  })
+
+  it("says why when aamarPay won't open it", async () => {
+    const { f } = fakeFetch({
+      "/jsonpost.php": () => ({ body: "Invalid Store ID or Signature Key" }),
+    })
+    await expect(gw(f).start(start)).rejects.toThrow(/aamarPay didn't open the payment/)
+  })
+
+  it.each([
+    ["Successful", "paid"],
+    ["Failed", "failed"],
+    ["Cancelled", "cancelled"],
+    ["Unattempted", "pending"],
+    ["Something new", "failed"],
+  ])(
+    "reads pay_status %s as %s, with the amount, currency and its transaction id",
+    async (pay_status, state) => {
+      const { f, calls } = fakeFetch({
+        "/api/v1/trxcheck/request.php": () => ({
+          body: {
+            mer_txnid: "FBD-1001-ABC123",
+            pg_txnid: "AAM1",
+            amount: "1500.00",
+            currency_merchant: "BDT",
+            pay_status,
+          },
+        }),
+      })
+      const r = await gw(f).confirm({ reference: "FBD-1001-ABC123", code: "FBD-1001-ABC123" })
+      expect(r).toMatchObject({
+        state,
+        code: "FBD-1001-ABC123",
+        amount: 1500,
+        currency: "BDT",
+        txnId: "AAM1",
+      })
+      expect(new URL(calls[0]!.url).searchParams.get("request_id")).toBe("FBD-1001-ABC123")
+      if (state === "paid")
+        expect(judge({ code: "FBD-1001-ABC123", amount: 1500 }, r).status).toBe("paid")
+    },
+  )
+
+  it("no transaction yet is pending; refused keys are an error", async () => {
+    const none = fakeFetch({
+      "/api/v1/trxcheck/request.php": () => ({ body: { errors: "Invalid Request ID" } }),
+    })
+    expect((await gw(none.f).confirm({ reference: null, code: "X" })).state).toBe("pending")
+    const bad = fakeFetch({
+      "/api/v1/trxcheck/request.php": () => ({
+        body: { errors: "Invalid Store ID or Signature Key" },
+      }),
+    })
+    await expect(gw(bad.f).confirm({ reference: null, code: "X" })).rejects.toThrow(
+      /couldn't check/,
+    )
+    await expect(gw(bad.f).test()).rejects.toThrow(/refused the store ID or signature key/)
+    expect(await gw(none.f).test()).toBe("aamarPay sandbox store works")
+  })
+
+  it("has no refund API: those are paid back by hand", async () => {
+    const { f, calls } = fakeFetch({})
+    await expect(gw(f).refund()).rejects.toThrow(/by hand/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it("is offered once its keys are saved", () => {
+    expect(methodUsable({ code: "aamarpay", mode: "online", secrets: "x" }, false)).toBe(true)
+    expect(methodUsable({ code: "aamarpay", mode: "online", secrets: null }, false)).toBe(false)
   })
 })

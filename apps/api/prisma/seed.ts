@@ -261,6 +261,7 @@ async function seedFashionBDStore() {
     { code: "nagad", name: "Nagad", sortOrder: 3 },
     { code: "rocket", name: "Rocket", sortOrder: 4 },
     { code: "sslcommerz", name: "SSLCommerz", sortOrder: 5 },
+    { code: "aamarpay", name: "aamarPay", sortOrder: 6 },
     { code: "stripe", name: "Stripe", sortOrder: 10 },
     { code: "bank_transfer", name: "Bank Transfer", sortOrder: 20 },
   ] as const;

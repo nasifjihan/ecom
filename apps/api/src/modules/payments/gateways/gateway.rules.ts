@@ -4,14 +4,18 @@
 import { randomBytes } from "node:crypto"
 import type { GatewayResult, OnlineGatewayCode } from "./gateway.adapters"
 
-/** Gateways that take payments online here. Nagad, Rocket and cards aren't connected yet. */
-export const ONLINE_GATEWAYS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz"]
+/** Gateways that take payments online here. Nagad and Rocket are send-money only for now. */
+export const ONLINE_GATEWAYS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz", "aamarpay"]
+/** Gateways whose refunds go back through their API; others are paid back by hand. */
+export const API_REFUNDS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz"]
+/** Online only (no send-money mode). */
+export const ONLINE_ONLY: readonly OnlineGatewayCode[] = ["sslcommerz", "aamarpay"]
 export const isOnlineGateway = (code: string): code is OnlineGatewayCode =>
   (ONLINE_GATEWAYS as readonly string[]).includes(code)
 
 /**
  * Whether customers can pick a payment method: cash on delivery and hand-checked methods always;
- * an online one only when it's bKash / SSLCommerz with keys saved.
+ * an online one only when it's a connected gateway with keys saved.
  */
 export function methodUsable(
   g: { code: string; mode: string; secrets: string | null },

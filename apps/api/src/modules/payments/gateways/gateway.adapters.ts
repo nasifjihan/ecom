@@ -1,5 +1,5 @@
 /**
- * ONLINE GATEWAYS — bKash Tokenized Checkout and SSLCommerz behind one interface.
+ * ONLINE GATEWAYS — bKash Tokenized Checkout, SSLCommerz and aamarPay behind one interface.
  *
  * Request shapes follow each gateway's merchant documentation:
  *  - bKash Tokenized Checkout v1.2.0-beta: https://tokenized.pay.bka.sh/v1.2.0-beta (sandbox
@@ -9,14 +9,19 @@
  *  - SSLCommerz v4: https://securepay.sslcommerz.com (sandbox sandbox.sslcommerz.com). Open a
  *    session (the customer pays on GatewayPageURL); a payment counts only once the validation API
  *    says VALID / VALIDATED for its val_id.
+ *  - aamarPay (JSON integration): https://secure.aamarpay.com (sandbox sandbox.aamarpay.com). Open a
+ *    payment with jsonpost.php (the customer pays on payment_url); a payment counts only once the
+ *    transaction check (api/v1/trxcheck/request.php) says Successful for our tran_id. aamarPay has no
+ *    refund API, so refunds are paid back by hand (API_REFUNDS in gateway.rules.ts).
  * Nothing the browser sends is trusted: every "paid" comes from the gateway's own API.
- * Base URLs can be pointed elsewhere with BKASH_API_URL / SSLCOMMERZ_API_URL (a local mock).
+ * Base URLs can be pointed elsewhere with BKASH_API_URL / SSLCOMMERZ_API_URL / AAMARPAY_API_URL
+ * (a local mock).
  * `fetch` is injectable for unit tests.
  */
 import { env } from "../../../config"
 
 export type Fetch = typeof fetch
-export type OnlineGatewayCode = "bkash" | "sslcommerz"
+export type OnlineGatewayCode = "bkash" | "sslcommerz" | "aamarpay"
 
 /** Keys and mode of one store's gateway (decrypted). */
 export interface GatewayConfig {
@@ -108,6 +113,10 @@ export const GATEWAY_FIELDS: Record<
   sslcommerz: [
     { key: "storeId", label: "Store ID" },
     { key: "storePassword", label: "Store password", secret: true },
+  ],
+  aamarpay: [
+    { key: "storeId", label: "Store ID" },
+    { key: "signatureKey", label: "Signature key", secret: true },
   ],
 }
 
@@ -499,5 +508,131 @@ export class SslcommerzGateway implements OnlineGateway {
 }
 
 export function gatewayFor(cfg: GatewayConfig, f: Fetch = fetch): OnlineGateway {
-  return cfg.gateway === "bkash" ? new BkashGateway(cfg, f) : new SslcommerzGateway(cfg, f)
+  if (cfg.gateway === "bkash") return new BkashGateway(cfg, f)
+  if (cfg.gateway === "aamarpay") return new AamarpayGateway(cfg, f)
+  return new SslcommerzGateway(cfg, f)
+}
+
+// ================================================================ aamarPay
+
+/** aamarPay's pay_status values, as its transaction check reports them. */
+const AAMARPAY_STATES: Record<string, GatewayResult["state"]> = {
+  successful: "paid",
+  failed: "failed",
+  cancelled: "cancelled",
+  canceled: "cancelled",
+  pending: "pending",
+  unattempted: "pending",
+  initiated: "pending",
+}
+
+export class AamarpayGateway implements OnlineGateway {
+  private readonly base: string
+  constructor(
+    private readonly cfg: GatewayConfig,
+    private readonly f: Fetch = fetch,
+  ) {
+    need(cfg.credentials, ["storeId", "signatureKey"], "aamarPay")
+    this.base = baseUrl(
+      env.AAMARPAY_API_URL,
+      cfg.mode === "live" ? "https://secure.aamarpay.com" : "https://sandbox.aamarpay.com",
+    )
+  }
+
+  private check(tranId: string) {
+    const q = new URLSearchParams({
+      request_id: tranId,
+      store_id: this.cfg.credentials.storeId!,
+      signature_key: this.cfg.credentials.signatureKey!,
+      type: "json",
+    })
+    return call(this.f, `${this.base}/api/v1/trxcheck/request.php?${q.toString()}`, {})
+  }
+
+  /** aamarPay answers bad keys with an error message instead of a transaction. */
+  private static refused(json: Record<string, unknown>) {
+    const msg = `${str(json.errors)} ${str(json.error)} ${str(json.message)} ${str(json.msg)}`.toLowerCase()
+    return /store|signature|authenticat|unauthori[sz]ed|invalid credential/.test(msg)
+  }
+
+  async test() {
+    const { status, json } = await this.check("CONNECTION-TEST")
+    if (status >= 500) throw new GatewayError("aamarPay didn't answer the check", status)
+    if (status === 401 || status === 403 || AamarpayGateway.refused(json))
+      throw new GatewayError("aamarPay refused the store ID or signature key", status)
+    return `aamarPay ${this.cfg.mode === "live" ? "live" : "sandbox"} store works`
+  }
+
+  async start(i: StartInput): Promise<Started> {
+    const back = (result: string) =>
+      `${i.returnUrl}${i.returnUrl.includes("?") ? "&" : "?"}result=${result}`
+    const { status, json } = await call(this.f, `${this.base}/jsonpost.php`, {
+      method: "POST",
+      json: {
+        store_id: this.cfg.credentials.storeId,
+        signature_key: this.cfg.credentials.signatureKey,
+        tran_id: i.code,
+        amount: i.amount.toFixed(2),
+        currency: "BDT",
+        desc: i.productName.slice(0, 250) || "Order",
+        cus_name: i.customer.name.slice(0, 50) || "Customer",
+        cus_email: i.customer.email?.trim() ? i.customer.email.trim() : "customer@example.com",
+        cus_phone: i.customer.phone,
+        cus_add1: i.customer.address.slice(0, 50) || "Bangladesh",
+        cus_city: i.customer.city.slice(0, 50) || "Dhaka",
+        cus_country: "Bangladesh",
+        success_url: back("success"),
+        fail_url: back("fail"),
+        cancel_url: back("cancel"),
+        opt_a: i.code,
+        type: "json",
+      },
+    })
+    const url = str(json.payment_url)
+    if (status !== 200 || !url || str(json.result) === "false")
+      throw new GatewayError(
+        str(json.errors) || str(json.message) || "aamarPay didn't open the payment",
+        status,
+      )
+    return { reference: i.code, payUrl: url }
+  }
+
+  async confirm(i: { reference: string | null; code: string }): Promise<GatewayResult> {
+    const { status, json } = await this.check(i.code)
+    if (status !== 200 || AamarpayGateway.refused(json))
+      throw new GatewayError("aamarPay couldn't check the payment", status)
+    const payStatus = str(json.pay_status)
+    if (!payStatus)
+      return {
+        state: "pending",
+        code: i.code,
+        amount: null,
+        currency: null,
+        txnId: null,
+        message: "aamarPay has no payment for it yet",
+        raw: json,
+      }
+    const state = AAMARPAY_STATES[payStatus.toLowerCase()] ?? "failed"
+    // amount is what the customer was asked in currency_merchant; amount_original in the shopper's currency.
+    const currency = str(json.currency_merchant) || str(json.currency) || null
+    return {
+      state,
+      code: str(json.mer_txnid) || null,
+      amount: numOrNull(json.amount),
+      currency,
+      txnId: str(json.pg_txnid) || str(json.bank_trxid) || null,
+      risky: str(json.risk_level) === "1",
+      message: state === "paid" ? "Paid" : payStatus,
+      raw: json,
+    }
+  }
+
+  /** aamarPay has no refund API: refunds are paid back by hand (never called; see API_REFUNDS). */
+  refund(): Promise<RefundResult> {
+    return Promise.reject(new GatewayError("aamarPay refunds are paid back by hand"))
+  }
+
+  refundStatus(): Promise<RefundResult> {
+    return Promise.reject(new GatewayError("aamarPay refunds are paid back by hand"))
+  }
 }

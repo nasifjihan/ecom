@@ -36,6 +36,9 @@ import {
 } from "@/lib/features/operations/payments-api-slice";
 import { useCan } from "@/lib/permissions";
 
+/** Gateways that only take payments online (no send-money mode). */
+const ONLINE_ONLY = ["sslcommerz", "aamarpay"];
+
 const ACCOUNT_TYPES = [
   { value: "personal", label: "Personal (customers use Send Money)" },
   { value: "agent", label: "Agent (customers use Cash Out)" },
@@ -78,8 +81,8 @@ function MethodCard({ method: m, canEdit }: { method: PaymentMethodSetting; canE
 
   const manual = form.mode === "manual" || m.code === "bank_transfer";
   const wallet = m.manualCapable && m.code !== "bank_transfer";
-  // Online through our own gateway connection (bKash in online mode, SSLCommerz).
-  const onlineGateway = m.onlineCapable && (m.code === "sslcommerz" || form.mode === "online");
+  // Online through our own gateway connection (bKash in online mode, SSLCommerz, aamarPay).
+  const onlineGateway = m.onlineCapable && (ONLINE_ONLY.includes(m.code) || form.mode === "online");
   const unavailable = !m.manualCapable && !m.onlineCapable && m.code !== "cod";
 
   async function submit(patch?: Partial<PaymentMethodSetting>) {
@@ -118,7 +121,7 @@ function MethodCard({ method: m, canEdit }: { method: PaymentMethodSetting; canE
           <p className="text-xs text-slate-500 mt-0.5">
             {m.code === "cod" && "Customers pay the courier or your rider on delivery."}
             {wallet && m.mode === "manual" && (m.accountNumber ? `Customers send money to ${m.accountNumber}${m.accountType ? ` (${m.accountType})` : ""}.` : "Add your number to turn it on.")}
-            {m.onlineCapable && (m.code === "sslcommerz" || m.mode === "online") &&
+            {m.onlineCapable && (ONLINE_ONLY.includes(m.code) || m.mode === "online") &&
               (!m.keysSet
                 ? `Add your ${m.name} merchant keys to take payments online.`
                 : m.keysTestOk
