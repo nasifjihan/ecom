@@ -132,6 +132,7 @@ model Store {
   redirects            Redirect[]
   landingPages         LandingPage[]
   festivals            Festival[]
+  dataJobs             DataJob[]
   reportSchedules      ReportSchedule[]
   reportRuns           ReportRun[]
   giftBoxes            GiftBox[]
@@ -3612,4 +3613,38 @@ model GiftBox {
   updatedAt    DateTime @updatedAt
 
   @@unique([storeId, slug])
+}
+
+/// A background import or export (Settings > Import & export jobs). Export files and uploaded
+/// import sheets are kept in the row, not in public storage: they hold customers' details.
+/// Finished jobs are removed after 7 days.
+model DataJob {
+  id          BigInt    @id @default(autoincrement())
+  storeId     BigInt
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// export_orders | export_customers | export_products | export_newsletter | import_products
+  kind        String
+  /// queued | running | done | failed
+  status      String    @default("queued")
+  /// Format and filters (exports).
+  params      Json      @default("{}")
+  /// Who asked, as they were then: permissions and storefronts the job runs with.
+  actor       Json
+  createdById BigInt?
+  input       Bytes?
+  inputName   String?
+  /// 0–100
+  progress    Int       @default(0)
+  rows        Int?
+  /// Import summary (created, updated, failed rows).
+  result      Json?
+  error       String?
+  filename    String?
+  contentType String?
+  file        Bytes?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([storeId, createdAt])
 }

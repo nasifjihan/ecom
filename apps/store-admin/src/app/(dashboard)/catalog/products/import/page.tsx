@@ -4,14 +4,14 @@
  * Product import: pick a CSV or Excel sheet, check it (nothing is saved), then import.
  * Products are matched by product_sku: new SKUs are created, known ones updated (only filled cells change).
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Download, FileSpreadsheet, Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { openFile } from "@ecom/api-client";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
+import { useDataJobQuery, useStartProductImportMutation } from "@/lib/features/jobs/jobs-api-slice";
 import {
-  useImportProductsMutation,
   usePreviewProductImportMutation,
   useProductImportTemplateMutation,
   type ImportPreview,
@@ -29,8 +29,25 @@ export default function ProductImportPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [check, { isLoading: checking }] = usePreviewProductImportMutation();
-  const [runImport, { isLoading: importing }] = useImportProductsMutation();
+  const [startImport, { isLoading: starting }] = useStartProductImportMutation();
+  const [jobId, setJobId] = useState<string | null>(null);
   const [loadTemplate] = useProductImportTemplateMutation();
+  // The import runs as a background job; its progress is checked every second and a half.
+  const { data: job } = useDataJobQuery(jobId ?? "", { skip: !jobId, pollingInterval: 1500 });
+  const importing = starting || (!!jobId && (job?.status ?? "queued") !== "done" && job?.status !== "failed");
+
+  useEffect(() => {
+    if (!job || !jobId) return;
+    if (job.status === "done" && job.result) {
+      setResult({ created: job.result.created, updated: job.result.updated, done: [], failed: job.result.failed });
+      setPreview(null);
+      setJobId(null);
+      toast.success(`${job.result.created} created, ${job.result.updated} updated`);
+    } else if (job.status === "failed") {
+      setJobId(null);
+      toast.error(job.error ?? "Import failed");
+    }
+  }, [job, jobId]);
 
   const form = (f: File) => {
     const body = new FormData();
@@ -56,10 +73,7 @@ export default function ProductImportPage() {
   const doImport = async () => {
     if (!file) return;
     try {
-      const res = await runImport(form(file)).unwrap();
-      setResult(res);
-      setPreview(null);
-      toast.success(`${res.created} created, ${res.updated} updated`);
+      setJobId((await startImport(file).unwrap()).id);
     } catch (err) {
       toast.error(errorText(err, "Import failed"));
     }
@@ -200,7 +214,8 @@ export default function ProductImportPage() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button className="gap-2" onClick={() => void doImport()} disabled={importing || ready === 0}>
-                  <Upload className="h-4 w-4" /> {importing ? "Importing…" : `Import ${ready} product${ready === 1 ? "" : "s"}`}
+                  <Upload className="h-4 w-4" />{" "}
+                  {importing ? `Importing… ${job?.progress ?? 0}%` : `Import ${ready} product${ready === 1 ? "" : "s"}`}
                 </Button>
                 {preview.summary.withErrors > 0 && (
                   <span className="text-sm text-muted-foreground">Products with problems are skipped. Fix them in the sheet and import it again.</span>

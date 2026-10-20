@@ -165,6 +165,7 @@ export const api = createApi({
     "Blog",
     "Report",
     "ReportSchedule",
+    "DataJob",
     "Media",
     "Plan",
     "Subscription",

@@ -164,7 +164,7 @@ export class ProductImportService {
   }
 
   /** Imports the products that have no problems; the rest are listed with their reasons. */
-  async run(file: ImportFile) {
+  async run(file: ImportFile, onProgress?: (done: number, total: number) => Promise<void> | void) {
     const { rows, missingColumns } = toRows(await readTable(file))
     if (missingColumns.length || !rows.length)
       throw new BadRequestError(
@@ -193,6 +193,7 @@ export class ProductImportService {
       } catch (e) {
         failed.push({ sku: p.sku, rows: p.rows, message: messageOf(e) })
       }
+      await onProgress?.(done.length + failed.length, plan.products.length)
     }
     return {
       created: done.filter((d) => d.action === "create").length,

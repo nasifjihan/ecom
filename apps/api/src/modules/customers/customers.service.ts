@@ -22,17 +22,7 @@ import type {
 import { CustomerStatus, ExportFormat } from "@ecom/shared-types";
 import { addressWithLocation } from "../locations/locations.service";
 import { bdMobile, phoneVariants } from "../sms/sms.rules";
-
-function formatDateForFilename(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-}
-
-function contentDispositionForExport(format: ExportFormat | string, basename: string): string {
-  const ext = format === ExportFormat.EXCEL ? "xlsx" : format === ExportFormat.PDF ? "pdf" : "csv";
-  const filename = `${basename}_${formatDateForFilename(new Date())}.${ext}`;
-  return `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
-}
+import { CUSTOMER_COLUMNS, customerRows, toFile } from "../jobs/export-sheets";
 
 export class CustomersService extends BaseService {
   private customers: CustomerRepository;
@@ -251,21 +241,13 @@ export class CustomersService extends BaseService {
     dto: ExportCustomersDto,
   ): Promise<{ buffer: Uint8Array; contentType: string; contentDisposition: string }> {
     const { format } = dto;
-    const basename = "customers";
-    const contentDisposition = contentDispositionForExport(format, basename);
-    let contentType = "text/csv; charset=utf-8";
-    if (format === ExportFormat.EXCEL) {
-      contentType =
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    } else if (format === ExportFormat.PDF) {
-      contentType = "application/pdf";
-    }
-    const stub = new TextEncoder().encode(`${format} export stub — implement with csv-writer / exceljs / pdfkit`);
-    return {
-      buffer: stub,
-      contentType,
-      contentDisposition,
-    };
+    // The PDF writer's fonts can't draw Bangla names or ৳, so customers export as sheets only.
+    if (format === ExportFormat.PDF) throw new BadRequestError("Customers export as CSV or Excel", "VALIDATION_FAILED");
+    const storeId = this.ctx.storeId;
+    if (storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED");
+    const rows = await customerRows(storeId, dto);
+    const file = await toFile(format === ExportFormat.EXCEL ? "xlsx" : "csv", "customers", "Customers", CUSTOMER_COLUMNS, rows);
+    return { buffer: file.buffer, contentType: file.contentType, contentDisposition: `attachment; filename="${file.filename}"` };
   }
 
   async getCustomerLtv(id: bigint | number): Promise<{ customerId: bigint; lifetimeValue: number; orderCount: number; avgOrderValue: number }> {

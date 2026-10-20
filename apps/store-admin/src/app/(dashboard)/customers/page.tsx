@@ -76,6 +76,7 @@ import {
 } from "@/components/ui";
 import {
   useGetCustomersQuery,
+  useLazyExportCustomersQuery,
   useGetCustomerGroupsQuery,
   useCreateCustomerMutation,
   CUSTOMER_SOURCE_LABELS,
@@ -83,6 +84,8 @@ import {
   type Customer,
   type CustomerGroup,
 } from "@/lib/features/operations/operations-api-slice";
+import { INSTANT_EXPORT_LIMIT } from "@/lib/features/jobs/jobs-api-slice";
+import { useExportJob } from "@/components/jobs/use-export-job";
 import { cn } from "@/components/ui";
 
 // Groups are store-defined; known names get a colour, anything else the neutral style.
@@ -147,6 +150,24 @@ export default function CustomersPage() {
 
   const customers = data?.items ?? [];
   const totalPages = data?.totalPages ?? 1;
+
+  const [loadExport] = useLazyExportCustomersQuery();
+  const exportJob = useExportJob();
+  /** Up to INSTANT_EXPORT_LIMIT people download straight away; more run as a job. */
+  async function exportCustomers(format: "csv" | "xlsx") {
+    if ((data?.total ?? 0) > INSTANT_EXPORT_LIMIT) return exportJob.run("export_customers", format, group ? { groupId: group } : {});
+    try {
+      const blob = await loadExport({ format: format === "xlsx" ? "XLSX" : "CSV", filters: { groupId: group || undefined } }).unwrap();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `customers-${new Date().toISOString().slice(0, 10)}.${format}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error("Couldn't export the customers. Please try again.");
+    }
+  }
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
@@ -426,14 +447,11 @@ export default function CustomersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={() => toast.info("Exporting CSV...")}>
+                  <DropdownMenuItem onClick={() => void exportCustomers("csv")}>
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" /> Export CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Exporting XLSX...")}>
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Export XLSX
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Exporting PDF...")}>
-                    <File className="h-4 w-4 mr-2 text-red-600" /> Export PDF
+                  <DropdownMenuItem onClick={() => void exportCustomers("xlsx")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Export Excel
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

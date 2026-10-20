@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { envelope, ctrl, BaseController, type RequestContext, NotFoundError, ConflictError, BadRequestError } from "../../core";
 import { OrdersService } from "./orders.service";
+import { DataJobsService } from "../jobs/jobs.service";
 import type {
   TransitionStatusDto as TransitionStatusDtoType,
   OrderSearchQueryDto as OrderSearchQueryDtoType,
@@ -121,14 +122,17 @@ class OrdersController extends BaseController {
   });
 
   exportOrders = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
+    // Orders always export in the background; the answer is the job (GET /api/admin/jobs/:id).
     const dto = req.body as ExportOrdersDtoType;
-    const result = await svc.exportOrders(dto.format, dto);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${result.filename}"`,
-    );
-    envelope(res, { status: 200, data: result, message: "Export generated" });
+    const day = (d?: Date) => (d ? d.toISOString().slice(0, 10) : undefined);
+    const job = await new DataJobsService(req.ctx).createExport("export_orders", {
+      format: dto.format === "xlsx" ? "xlsx" : "csv",
+      status: dto.status,
+      dateFrom: day(dto.dateFrom),
+      dateTo: day(dto.dateTo),
+      search: dto.search,
+    });
+    envelope(res, { status: 202, data: job, message: "Export started" });
   });
 
   listShippingMethods = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

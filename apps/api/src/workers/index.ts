@@ -8,11 +8,13 @@ import { startEmailWorker, stopEmailQueue } from "../modules/notifications"
 import { startCourierSync, stopCourierSync } from "../modules/couriers"
 import { startFestivalReminders, stopFestivalReminders } from "../modules/festivals"
 import { startReportSchedules, stopReportSchedules } from "../modules/reports"
+import { startDataJobs, stopDataJobs } from "../modules/jobs"
 
 startEmailWorker()
 void startCourierSync()
 void startFestivalReminders()
 void startReportSchedules()
+startDataJobs()
 logger.info("Worker running. Press Ctrl+C to stop.")
 
 const stop = async () => {
@@ -20,6 +22,7 @@ const stop = async () => {
   await stopCourierSync()
   await stopFestivalReminders()
   await stopReportSchedules()
+  await stopDataJobs()
   await Promise.allSettled([disconnectPrisma(), disconnectRedis()])
   process.exit(0)
 }

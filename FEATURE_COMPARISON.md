@@ -207,7 +207,7 @@ These are our advantages. Keep them.
 | Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
 | OpenAPI docs at `/api/docs` | ✅ Batch 39: generated from the running routes (545 operations): who may call each, its permissions, and params / query / body from the zod schemas; Swagger UI at `/api/docs`, JSON at `/api/docs/openapi.json`; off in production unless `API_DOCS=on` |
 | Audit row on every admin change | ✅ |
-| Background jobs: courier sync, COD, exports, imports | 🟡 (email, courier sync) |
+| Background jobs: courier sync, COD, exports, imports | ✅ email, courier sync, festival reminders, scheduled reports; Batch 39: import & export jobs (orders, customers, products, newsletter exports; product import) with progress, bell alert and a jobs page |
 | Product CSV/XLSX import | ✅ Batch 34 (preview with errors per row, create/update by SKU, export in the same columns) |
 
 ---

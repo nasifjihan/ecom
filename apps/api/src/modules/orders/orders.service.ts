@@ -199,15 +199,6 @@ export class OrdersService extends BaseService {
     return this.carts.upsertItem(cid, pid, vid, qty, price, price * qty, 0);
   }
 
-  async exportOrders(_format: "csv" | "xlsx" | "pdf", _filters: ExportOrdersDto) {
-    const format = _format ?? "csv";
-    return {
-      url: `/tmp-exports/order-${Date.now()}.${format}`,
-      filename: `orders-${new Date().toISOString().slice(0, 10)}.${format}`,
-      rows: 10,
-    };
-  }
-
   async aggregateStats(filters?: {
     status?: string[];
     paymentStatus?: string[];

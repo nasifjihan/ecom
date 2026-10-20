@@ -1012,7 +1012,7 @@ export const operationsApiSlice = api.injectEndpoints({
     >({
       query: ({ format, filters }) => {
         const params = new URLSearchParams();
-        params.set("format", format);
+        params.set("format", format.toLowerCase()); // the API takes csv / xlsx
         if (filters?.search) params.set("search", filters.search);
         if (filters?.groupId && filters.groupId !== "GUEST") params.set("groupId", filters.groupId);
         return {

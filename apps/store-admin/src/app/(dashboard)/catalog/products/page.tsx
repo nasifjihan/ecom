@@ -83,6 +83,8 @@ import {
 } from "@/lib/features/catalog/catalog-api-slice";
 import { cn } from "@/components/ui";
 import { openFile } from "@ecom/api-client";
+import { INSTANT_EXPORT_LIMIT } from "@/lib/features/jobs/jobs-api-slice";
+import { useExportJob } from "@/components/jobs/use-export-job";
 import { errorText } from "@/lib/features/content/content-api-slice";
 
 const STATUS_OPTIONS = [
@@ -430,11 +432,17 @@ export default function ProductsPage() {
   const [bulkDelete] = useBulkDeleteProductsMutation();
   const [bulkUpdate] = useBulkUpdateProductsMutation();
   const [loadExport] = useExportProductsMutation();
-  /** Downloads the catalog (or just `ids`) in the import's columns, so it can be edited and imported back. */
-  const exportSheet = (format: "csv" | "xlsx", ids?: (string | number)[]) =>
-    openFile(() => loadExport({ format, ids }).unwrap(), { filename: `products.${format}`, mode: "download" }).catch((err: unknown) =>
+  const exportJob = useExportJob();
+  /**
+   * Downloads the catalog (or just `ids`) in the import's columns, so it can be edited and imported back.
+   * A whole catalog above INSTANT_EXPORT_LIMIT products is made in the background instead.
+   */
+  const exportSheet = (format: "csv" | "xlsx", ids?: (string | number)[]) => {
+    if (!ids?.length && total > INSTANT_EXPORT_LIMIT) return exportJob.run("export_products", format);
+    return openFile(() => loadExport({ format, ids }).unwrap(), { filename: `products.${format}`, mode: "download" }).catch((err: unknown) =>
       toast.error(errorText(err, "Export failed")),
     );
+  };
 
   const products = data?.items ?? [];
   const total = data?.total ?? 0;

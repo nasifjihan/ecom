@@ -98,6 +98,7 @@ import {
 import { FULFILLMENT_LABELS, RETURN_LABELS, type ReturnStatus } from "@/lib/features/operations/fulfilment-api-slice";
 import { BulkBookDialog } from "@/components/orders/bulk-book-dialog";
 import { useCan } from "@/lib/permissions";
+import { useExportJob } from "@/components/jobs/use-export-job";
 import { cn } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
 import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
@@ -207,6 +208,7 @@ export default function OrdersPage() {
   const [showBulkStatus, setShowBulkStatus] = useState(false);
   const [bulkBooking, setBulkBooking] = useState(false);
   const { can } = useCan();
+  const exportJob = useExportJob();
 
   const { data, isLoading } = useGetOrderListQuery({
     status: activeTab === "ALL" ? undefined : activeTab,
@@ -477,8 +479,9 @@ export default function OrdersPage() {
     setRowSelection({});
   }
 
-  async function handleBulkExport(format: "CSV" | "XLSX" | "PDF") {
-    toast.info(`Exporting ${selectedCount || "all"} orders as ${format}...`);
+  /** Orders export in the background, with the tab and search shown here (and the staff member's storefronts). */
+  function handleBulkExport(format: "csv" | "xlsx") {
+    void exportJob.run("export_orders", format, { ...(activeTab === "ALL" ? {} : { status: activeTab }), ...(search ? { search } : {}) });
   }
 
   /** One PDF with the invoices of every selected order, one after another. */
@@ -835,17 +838,13 @@ export default function OrdersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => handleBulkExport("CSV")}>
+                  <DropdownMenuItem onClick={() => handleBulkExport("csv")}>
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
                     Export CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkExport("XLSX")}>
+                  <DropdownMenuItem onClick={() => handleBulkExport("xlsx")}>
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-                    Export XLSX
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkExport("PDF")}>
-                    <File className="h-4 w-4 mr-2 text-red-600" />
-                    Export PDF
+                    Export Excel
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

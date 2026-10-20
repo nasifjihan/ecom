@@ -34,6 +34,9 @@ export const COLUMNS = [
   "option3_value",
 ] as const
 export type Column = (typeof COLUMNS)[number]
+
+/** The columns as the export writes them. */
+export const SHEET_COLUMNS = COLUMNS.map((c) => ({ key: c, label: c, width: c.includes("description") || c === "image_urls" ? 40 : 16 }))
 export type Row = Partial<Record<Column, string>> & { _row: number }
 
 /** Other names people give these columns (lowercase, words joined by "_"). */

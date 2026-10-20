@@ -13,6 +13,7 @@ import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/noti
 import { startCourierSync, stopCourierSync } from "./modules/couriers";
 import { startFestivalReminders, stopFestivalReminders } from "./modules/festivals";
 import { startReportSchedules, stopReportSchedules } from "./modules/reports";
+import { startDataJobs, stopDataJobs } from "./modules/jobs";
 import { syncLocations } from "./modules/locations";
 
 async function bootstrap() {
@@ -41,6 +42,7 @@ async function bootstrap() {
     void startCourierSync();
     void startFestivalReminders();
     void startReportSchedules();
+    startDataJobs();
   }
 
   const server = app.listen(env.API_PORT, () => {
@@ -68,6 +70,7 @@ async function bootstrap() {
       stopCourierSync(),
       stopFestivalReminders(),
       stopReportSchedules(),
+      stopDataJobs(),
       disconnectPrisma(),
       disconnectRedis(),
     ]);

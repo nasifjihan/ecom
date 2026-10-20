@@ -4,6 +4,7 @@
  */
 import {
   Activity,
+  ArrowDownUp,
   ArrowLeftRight,
   Award,
   Banknote,
@@ -198,6 +199,8 @@ export const SETTINGS_SECTIONS: NavSection[] = [
       { href: "/settings/tax", label: "VAT & invoices", icon: Receipt, perm: "settings.view" },
       { href: "/settings/emails", label: "Emails", icon: Mail, perm: "emails.view" },
       { href: "/settings/notifications", label: "Notifications", icon: BellRing, perm: "emails.view" },
+      // No single permission: the page lists only the kinds of job each person may run.
+      { href: "/settings/jobs", label: "Import & export jobs", icon: ArrowDownUp },
     ],
   },
   {

@@ -4810,3 +4810,76 @@ The API had about 500 endpoints and no description of any of them. Now `/api/doc
 - **Responses:** they're documented as the shared envelope, not each route's own `data` shape. There are no response schemas in the code to read.
 - **Examples:** no examples beyond the schemas' defaults.
 - **Next:** part 2, import and export jobs.
+
+---
+
+## ✅ BATCH #39 (part 2) — Import & export jobs (2026-10-20)
+Big exports and product imports now run in the background, with progress, a bell alert and a jobs page. Building this showed that two exports had never worked:
+- the **orders** export answered with a made-up file address;
+- the **customers** export sent a placeholder text file.
+
+Both now produce real files. The admin's export buttons on the orders and customers pages were fake too (they only showed a toast); they now work.
+
+### 39.6 Data (migration `data_jobs`)
+- **DataJob:**
+  - kind, status (queued / running / done / failed) and progress (0–100);
+  - the filters, and who asked (their permissions and storefronts at that moment);
+  - the uploaded sheet (imports), row count, import summary, error;
+  - the finished file.
+- **Why files sit in the row:** files in `/uploads` are public, and these hold customers' details. They're downloaded only through a signed-in route that checks permissions.
+- **Clean-up:** finished jobs are deleted after 7 days. The uploaded sheet is dropped as soon as the import has run.
+
+### 39.7 Jobs (`modules/jobs`)
+- **Kinds:**
+
+  | Job | Needs | What it makes |
+  |---|---|---|
+  | Orders export | orders.view | CSV or Excel: order, date, status, payment, delivery, customer, phone, email, area, items, money columns, payment method, source |
+  | Customers export | customers.view | name, phone, email, status, orders, total spent, came from, joined |
+  | Products export | products.view | the import sheet's columns, so it can be edited and imported back |
+  | Newsletter export | customers.view | the existing newsletter CSV |
+  | Products import | products.create + products.edit | the existing import, with progress; the summary lists up to 500 skipped products |
+
+- **Access:** a job runs with its creator's permissions and storefronts. A storefront-limited person's orders export holds only their storefronts' orders.
+- **Reading:** orders and customers are read in batches of 1,000.
+- **Spreadsheet safety:** text typed by shoppers that starts with `=`, `+`, `-` or `@` is made safe, so it can't run as a formula.
+- **Running:**
+  - jobs go through the BullMQ "data-jobs" queue, one at a time per process, run by the API (with `EMAIL_WORKER=on`) and by `pnpm worker`;
+  - without Redis a job runs straight away;
+  - each job is claimed first, so it never runs twice;
+  - progress is saved every 5%.
+- **Bell:** the creator gets "Orders export is ready: 7 rows" (or the import summary, or the error), linking to the jobs page.
+- **API:** `GET /api/admin/jobs`, `GET /:id`, `GET /:id/file`, `POST /exports { kind, format, filters }`, `POST /imports/products` (file upload). `POST /api/admin/orders/export` now starts a job instead of returning the made-up address.
+
+### 39.8 Admin
+- **Settings → Import & export jobs:**
+  - each job with who started it, when, a progress bar, the result (rows, or created / updated / skipped with reasons), and a download button;
+  - it refreshes every 2 seconds while something runs;
+  - it lists only the kinds the person may run.
+- **Orders → Export:** CSV or Excel, as a job, using the tab and search shown on the page.
+- **Customers → Export:** CSV or Excel, downloaded straight away for up to 2,000 people, a job above that. The PDF option is gone: the PDF writer can't draw Bangla or ৳.
+  - Also fixed: the old query sent `format=CSV` in capitals, which the API refused.
+- **Products → Export:** a whole catalog above 2,000 products becomes a job; smaller ones and selected rows download straight away, as before.
+- **Products → Import:** the check is still instant. Importing now runs as a job, the button shows "Importing… 40%", and the same result appears when it's done.
+
+### 39.9 Checked
+- **Tests:** API 796 passing (68 files).
+  - new `tests/integration/data-jobs.db.test.ts`:
+    - an orders export makes a real CSV with a formula-style name made safe, and tells the creator;
+    - a storefront-limited export holds only its storefront and comes out as a real .xlsx;
+    - someone without the permission can't start, see or download a job;
+    - customers export, by job and instantly, and PDF is refused;
+    - a product import reports created / skipped, drops the sheet, and doesn't run twice;
+    - week-old jobs are removed.
+- **Types and lint:** API and admin typecheck; no new lint errors. The migration matches the schema and is applied to the dev and `ecom_test` databases.
+- **In the browser and API (dev store):**
+  - Orders → Export → CSV showed "Orders export started"; Settings → Import & export jobs then listed "Orders export · by Fashion BD Owner · Done · 7 rows · CSV". It ran through the real Redis queue.
+  - The file downloaded through the API was a real CSV (`orders_20261020_093320.csv`) with the 7 demo orders, and the bell had "Orders export is ready: 7 rows".
+  - A one-product import sheet sent as a job finished with "1 created". The test product was then moved to the Trash.
+  - The instant customers export now returns real rows (it used to return a placeholder).
+
+### 39.10 Not done
+- **Other exports:** no export jobs for payments, parcels or purchases yet.
+- **Cancelling:** a running job can't be cancelled.
+- **Orders page dates:** its date picker still doesn't filter the list (a separate older gap), so the export follows the tab and search only.
+- **Next:** part 3, admin search (Ctrl+K).

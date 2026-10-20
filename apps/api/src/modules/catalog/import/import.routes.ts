@@ -6,11 +6,10 @@ import {
   formatTimestampFilename,
   generateCsv,
   generateXlsx,
-  type ExportColumn,
 } from "@ecom/export-utils"
 import { BadRequestError, ctrl, envelope, TooLargeError, type RequestContext } from "../../../core"
 import { authMiddleware, rbacMiddleware, validate } from "../../../middleware"
-import { COLUMNS } from "./import.rules"
+import { SHEET_COLUMNS } from "./import.rules"
 import {
   MAX_IMPORT_BYTES,
   ProductImportService,
@@ -39,18 +38,14 @@ const ExportQuery = FormatQuery.extend({
     )
     .optional(),
 })
-const columns: ExportColumn<Partial<Record<string, string>>>[] = COLUMNS.map((c) => ({
-  key: c,
-  label: c,
-  width: c.includes("description") || c === "image_urls" ? 40 : 16,
-}))
+const columns = SHEET_COLUMNS
 
 const uploadSheet = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_IMPORT_BYTES, files: 1 },
 }).single("file")
 
-function parseSheetUpload(req: Request, res: Response, next: NextFunction): void {
+export function parseSheetUpload(req: Request, res: Response, next: NextFunction): void {
   uploadSheet(
     req as unknown as Parameters<typeof uploadSheet>[0],
     res as unknown as Parameters<typeof uploadSheet>[1],
@@ -63,7 +58,7 @@ function parseSheetUpload(req: Request, res: Response, next: NextFunction): void
   )
 }
 
-function fileOf(req: Request): ImportFile {
+export function fileOf(req: Request): ImportFile {
   const file = (req as Request & { file?: ImportFile }).file
   if (!file) throw new BadRequestError("Choose a .csv or .xlsx file to import", "VALIDATION_FAILED")
   return file
