@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { CHECKOUT_STYLES } from "./storefronts.context"
 
 const noXss = (v: string) => !/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i.test(v)
 const text = (max: number) => z.string().trim().max(max).refine(noXss, "No HTML please")
@@ -24,6 +25,9 @@ export const StorefrontDto = z.object({
   checkoutCourierIds: z.array(id).max(10).optional(),
   /** Show the Google / Facebook sign-in buttons here. */
   socialLogin: z.boolean().optional(),
+  checkoutStyle: z.enum(CHECKOUT_STYLES).optional(),
+  /** Off: customers sign in or sign up before ordering. */
+  guestCheckout: z.boolean().optional(),
 })
 export const UpdateStorefrontDto = StorefrontDto.partial()
 

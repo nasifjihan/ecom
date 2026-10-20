@@ -246,6 +246,9 @@ export default function CheckoutPage() {
   const [slotPick, setSlotPick] = React.useState<SlotPick | null>(null);
   const [gift, setGift] = React.useState<GiftState>(NO_GIFT);
   const giftsOffered = deliveryChoices?.giftOrders ?? false;
+  // Steps: one part at a time (details, delivery, payment); single: every part on one page.
+  const stepped = deliveryChoices?.checkoutStyle === "steps";
+  const show = (step: string) => !stepped || currentStepId === step;
   const [courierPick, setCourierPick] = React.useState<string | null>(null);
   const slotDays = React.useMemo(() => deliveryChoices?.days ?? [], [deliveryChoices]);
   const couriers = React.useMemo(() => deliveryChoices?.couriers ?? [], [deliveryChoices]);
@@ -439,6 +442,13 @@ export default function CheckoutPage() {
           toast.error(t("Choose a stronger password"), { description: t(passwordProblem(accountPassword)!) });
           return false;
         }
+        // The address is on this step (with contact details), so it is checked here.
+        if (!shippingAddress.firstName || !shippingAddress.lastName ||
+            !shippingAddress.addressLine1 || !shippingAddress.phone ||
+            !shippingAddress.district) {
+          toast.error(t("Fill shipping address"), { description: t("All required fields in shipping address are required") });
+          return false;
+        }
         return true;
       case "shipping":
         if (!selectedShippingRateId) {
@@ -451,12 +461,6 @@ export default function CheckoutPage() {
         }
         if (selectedRate?.useSlots && !pickedSlot) {
           toast.error(t("Pick a delivery time"), { description: t("Choose the day and time you'd like your order.") });
-          return false;
-        }
-        if (!shippingAddress.firstName || !shippingAddress.lastName ||
-            !shippingAddress.addressLine1 || !shippingAddress.phone ||
-            !shippingAddress.district) {
-          toast.error(t("Fill shipping address"), { description: t("All required fields in shipping address are required") });
           return false;
         }
         return true;
@@ -478,8 +482,16 @@ export default function CheckoutPage() {
     if (idx >= 0 && idx < DEFAULT_CHECKOUT_STEPS.length - 1) {
       const next = DEFAULT_CHECKOUT_STEPS[idx + 1]!;
       setCurrentStepId(next.id);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  const goToStep = (id: string) => {
+    if (id === "cart") return router.push("/cart");
+    setCurrentStepId(id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const stepBack = () => goToStep(DEFAULT_CHECKOUT_STEPS[DEFAULT_CHECKOUT_STEPS.findIndex((s) => s.id === currentStepId) - 1]?.id ?? "cart");
 
   const handlePlaceOrder = async () => {
     if (itemCount === 0) {
@@ -490,7 +502,12 @@ export default function CheckoutPage() {
       toast.error(t("Some items can't be ordered"), { description: Object.values(cartProblems)[0] });
       return;
     }
-    if (!validateStep("information") || !validateStep("shipping") || !validateStep("payment")) return;
+    for (const step of ["information", "shipping", "payment"]) {
+      if (!validateStep(step)) {
+        if (stepped) setCurrentStepId(step); // show the part that needs fixing
+        return;
+      }
+    }
     if (!termsChecked) {
       toast.error(t("Accept terms first"), { description: t("Please read and agree to Terms & Conditions") });
       return;
@@ -676,18 +693,41 @@ export default function CheckoutPage() {
     );
   }
 
+  // This storefront takes orders from account holders only (the API refuses guests too).
+  if (deliveryChoices?.guestCheckout === false && !isAuthenticated) {
+    return (
+      <div className="container py-16 max-w-md mx-auto text-center space-y-4">
+        <div className="h-20 w-20 mx-auto rounded-full bg-muted flex items-center justify-center">
+          <Lock className="h-9 w-9 text-muted-foreground" />
+        </div>
+        <h1 className="text-2xl font-bold">{t("Log in to order")}</h1>
+        <p className="text-muted-foreground">{t("This shop takes orders from customers with an account. Log in, or create one in a minute. Your cart is saved.")}</p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Button size="lg" asChild>
+            <Link href="/account/login?next=/checkout">{t("Log in")}</Link>
+          </Button>
+          <Button size="lg" variant="outline" asChild>
+            <Link href="/account/register?next=/checkout">{t("Create an account")}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container py-6 md:py-10">
       <div className="mb-8 space-y-5">
-        <CheckoutStepper
-          currentStepId={currentStepId}
-          completedStepIds={completedStepIds}
-          onStepClick={(id) => {
-            const idx = DEFAULT_CHECKOUT_STEPS.findIndex((s) => s.id === id);
-            const curIdx = DEFAULT_CHECKOUT_STEPS.findIndex((s) => s.id === currentStepId);
-            if (idx <= curIdx) setCurrentStepId(id);
-          }}
-        />
+        {stepped && (
+          <CheckoutStepper
+            currentStepId={currentStepId}
+            completedStepIds={completedStepIds}
+            onStepClick={(id) => {
+              const idx = DEFAULT_CHECKOUT_STEPS.findIndex((s) => s.id === id);
+              const curIdx = DEFAULT_CHECKOUT_STEPS.findIndex((s) => s.id === currentStepId);
+              if (idx <= curIdx) goToStep(id);
+            }}
+          />
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
           {TRUST_BADGES.map((b) => (
             <div
@@ -719,6 +759,8 @@ export default function CheckoutPage() {
               transition={{ duration: 0.25 }}
               className="space-y-6"
             >
+              {show("information") && (
+              <>
               <Card>
                 <CardHeader className="pb-4 flex flex-row items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -999,7 +1041,10 @@ export default function CheckoutPage() {
                   )}
                 </CardContent>
               </Card>
+              </>
+              )}
 
+              {show("shipping") && (
               <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -1158,7 +1203,9 @@ export default function CheckoutPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
+              {show("payment") && (
               <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -1199,7 +1246,22 @@ export default function CheckoutPage() {
                   />
                 </CardContent>
               </Card>
+              )}
 
+              {stepped && (
+                <div className="flex justify-between gap-3">
+                  <Button variant="outline" size="lg" onClick={stepBack}>
+                    ← {currentStepId === "information" ? t("Back to Cart") : t("Back")}
+                  </Button>
+                  {currentStepId !== "payment" && (
+                    <Button size="lg" onClick={advanceStep}>
+                      {t("Continue")} →
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {!stepped && (
               <div className="flex flex-col sm:flex-row justify-between gap-3 lg:hidden">
                 <Button variant="outline" size="lg" asChild>
                   <Link href="/cart">← {t("Back to Cart")}</Link>
@@ -1208,6 +1270,12 @@ export default function CheckoutPage() {
                   {placingOrder ? t("Placing Order...") : `${t("Place Order")} • ${formatBDT(grandTotal)}`}
                 </Button>
               </div>
+              )}
+              {stepped && currentStepId === "payment" && (
+                <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12 w-full lg:hidden">
+                  {placingOrder ? t("Placing Order...") : `${t("Place Order")} • ${formatBDT(grandTotal)}`}
+                </Button>
+              )}
             </motion.div>
           </AnimatePresence>
         </section>

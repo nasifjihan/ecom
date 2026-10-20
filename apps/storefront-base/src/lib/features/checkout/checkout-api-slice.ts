@@ -32,6 +32,10 @@ export interface DeliverySlotChoice {
 export interface DeliveryChoices {
   /** Checkout offers "This order is a gift". */
   giftOrders: boolean;
+  /** single: every part on one page; steps: details → delivery → payment, one at a time. */
+  checkoutStyle: "single" | "steps";
+  /** false: customers sign in or sign up before ordering. */
+  guestCheckout: boolean;
   days: { date: string; weekday: number; slots: DeliverySlotChoice[] }[];
   /** Couriers to choose from (empty: the shop picks). */
   couriers: { id: string; name: string; courier: string }[];

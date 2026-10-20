@@ -178,7 +178,7 @@ These are our advantages. Keep them.
 | Identity, logo, favicon, colours, footer, homepage, menus | ✅ per storefront (Batch 32: each storefront can have its own, else uses the default storefront's) |
 | Colour scheme presets (10) + custom schemes | ✅ Batch 38: 10 two-colour schemes plus your own main and second colour, per storefront; button text turns dark on light colours (WCAG contrast) |
 | Product display toggles (show rating, show sales count, low-stock threshold) | ✅ Batch 38: star ratings, "sold" count, low-stock warning and a store-wide threshold, per storefront |
-| Checkout style (single page vs steps), guest checkout | 🟡 |
+| Checkout style (single page vs steps), guest checkout | ✅ | Batch 40: per storefront (One page / Step by step, Guests can order); the API also refuses guests where they are off |
 | Payment gateway credentials per store, sandbox/live, **encrypted**, test button | ✅ | Batch 35: bKash and SSLCommerz merchant keys, masked in the admin, "Test connection" required before going online |
 | Login methods: **phone OTP**, email OTP, Google, Facebook | ✅ | Batch 24: phone OTP; Batch 40: email code, Google and Facebook (Settings → Customer sign-in; encrypted keys, test mode, buttons per storefront). Google/Facebook not yet tried with real apps |
 | SMS provider settings | ✅ | Batch 24: BulkSMSBD, Alpha SMS, SSL Wireless; encrypted keys, test send, log |

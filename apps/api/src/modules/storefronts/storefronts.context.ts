@@ -20,7 +20,13 @@ export interface StorefrontInfo {
   checkoutCourierIds: bigint[]
   /** Show the Google / Facebook sign-in buttons (when the store has them on). */
   socialLogin: boolean
+  checkoutStyle: CheckoutStyle
+  /** Customers may order without an account. */
+  guestCheckout: boolean
 }
+
+export const CHECKOUT_STYLES = ["steps", "single"] as const
+export type CheckoutStyle = (typeof CHECKOUT_STYLES)[number]
 
 const TTL = 60_000
 const byId = new Map<string, { sf: StorefrontInfo | null; until: number }>()
@@ -37,6 +43,8 @@ const info = (r: {
   courierAccountId: bigint | null
   checkoutCourierIds: bigint[]
   socialLogin: boolean
+  checkoutStyle: string
+  guestCheckout: boolean
 }): StorefrontInfo => ({
   id: r.id,
   code: r.code,
@@ -48,6 +56,8 @@ const info = (r: {
   courierAccountId: r.courierAccountId,
   checkoutCourierIds: r.checkoutCourierIds,
   socialLogin: r.socialLogin,
+  checkoutStyle: r.checkoutStyle === "steps" ? "steps" : "single",
+  guestCheckout: r.guestCheckout,
 })
 
 /** Settings changed: drop what's kept for this store. */

@@ -5024,3 +5024,45 @@ Customers can now tap "Continue with Google" or "Continue with Facebook". The sh
 - **Real apps:** not yet tried against real Google or Facebook apps (they need the shop's own apps and a public HTTPS address). Test mode and the fake-fetch tests cover the flow up to the provider calls.
 - **Account page:** no list of linked accounts and no "unlink" there yet.
 - **Next:** part 3, checkout style and guest checkout per storefront.
+
+---
+
+## ✅ BATCH #40 (part 3) — Checkout style and guest checkout per storefront (2026-10-20)
+Each storefront now chooses how its checkout looks (**one page** or **step by step**) and whether **guests** can order.
+
+### 40.10 What was there
+- **Checkout page:** it already showed all four sections on one page. The stepper above it never moved: `advanceStep` was never called.
+- **Default:** so "one page" is the default (`checkoutStyle = "single"`), and current shops see the same checkout except that the stepper is gone. Step by step is the new option.
+
+### 40.11 API
+- **Storefront fields** (migration `20261020180000_checkout_style`): `checkoutStyle` (`single` | `steps`, default `single`) and `guestCheckout` (default on), in the storefront DTO and edit form.
+- **Checkout config:** `GET /api/storefront/checkout/delivery-choices` also returns them, so checkout makes no extra request.
+- **Guest refusal:** `placeOrder` refuses a guest with 401 "Please log in or create an account to order here" when the storefront has guests off. Hiding the form alone wouldn't stop a direct API call.
+
+### 40.12 Storefront checkout (`app/checkout/page.tsx`)
+- **Step by step:**
+  - the stepper shows, with one part at a time: details and address, then delivery, then payment;
+  - Back and Continue (Continue checks that part first); on the first part Back goes to the cart;
+  - "Place order" waits for the payment step.
+  - If Place order in the summary finds a problem, checkout jumps to the part that needs fixing.
+- **Address check:** the shipping address is now checked with the details step it sits on. Before, it was checked with delivery, so step by step went on with an empty address; the browser check caught this.
+- **Guests off:** a guest sees "Log in to order" with Log in and Create an account buttons, which come back to checkout. The cart is kept.
+- **Bangla:** the new texts have Bangla.
+
+### 40.13 Admin
+- **Storefront dialog:** a **Checkout** choice (One page / Step by step, with a line saying what each does) and **Guests can order** (for example off for a wholesale storefront).
+
+### 40.14 Checked
+- **Tests:** new `tests/integration/guest-checkout.db.test.ts`: by default guest orders go through and checkout reports `single`; with guests off and steps on, a guest is refused while a signed-in customer's order goes through. `storefronts.db.test.ts` still passes.
+- **Types and lint:** API, admin and storefront typecheck; no new lint errors (same counts as before).
+- **In the browser:**
+  - set the storefront to Step by step in the admin;
+  - on the storefront checkout, Continue with an empty address stayed and said "Fill shipping address";
+  - filled it → Shipping → picked eCourier → Payment, with Back and "Place Order • BDT 3,335.00", and Back returned to Shipping;
+  - with guests off, checkout showed "Log in to order";
+  - the dev storefront is back to one page with guests allowed.
+
+### 40.15 Not done
+- **Saved checkouts:** step by step doesn't remember the step after a reload.
+- **Other storefronts:** only the fashion storefront app has the new checkout.
+- **Next:** part 4, My coupons.

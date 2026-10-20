@@ -967,4 +967,8 @@ export const BN: Record<string, string> = {
   "Couldn't sign you in": "লগইন করা যায়নি",
   "Back to log in": "লগইন পেজে ফিরে যান",
   "Signing you in...": "লগইন করা হচ্ছে...",
+  "Log in to order": "অর্ডার করতে লগইন করুন",
+  "This shop takes orders from customers with an account. Log in, or create one in a minute. Your cart is saved.": "এই দোকানে অ্যাকাউন্ট থাকা কাস্টমাররাই অর্ডার করতে পারেন। লগইন করুন, অথবা এক মিনিটে অ্যাকাউন্ট খুলুন। আপনার কার্ট সংরক্ষিত আছে।",
+  "Back": "পেছনে",
+  "Continue": "এগিয়ে যান",
 };

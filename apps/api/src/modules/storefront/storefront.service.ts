@@ -11,7 +11,7 @@
  */
 import { Prisma, type Coupon } from "@prisma/client";
 import { logger, prisma, tx } from "../../config";
-import { BadRequestError, ConflictError, NotFoundError, type ErrorCode, type RequestContext, tr } from "../../core";
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError, type ErrorCode, type RequestContext, tr } from "../../core";
 import { OrdersService } from "../orders/orders.service";
 import { ShippingService } from "../shipping";
 import { OnlinePaymentsService } from "../payments/gateways/online.service";
@@ -1482,6 +1482,8 @@ export class StorefrontService {
 
   /** `origin`: the storefront address the checkout came from (where the gateway sends the customer back). */
   async placeOrder(dto: PlaceOrderDto, origin?: string | null) {
+    if (!this.ctx.customer && !(await this.storefront()).guestCheckout)
+      throw new UnauthorizedError("Please log in or create an account to order here", "AUTH_MISSING_TOKEN");
     // Banned customers can't order, signed in or as a guest with their phone or email.
     await assertCanOrder(this.storeId, {
       customerId: this.ctx.customer?.id ?? null,
@@ -1586,6 +1588,10 @@ export class StorefrontService {
     return {
       /** Checkout offers "This order is a gift". */
       giftOrders: g?.giftOrders ?? true,
+      /** single | steps: how this storefront lays out checkout. */
+      checkoutStyle: sf.checkoutStyle,
+      /** false: customers must sign in or sign up before ordering. */
+      guestCheckout: sf.guestCheckout,
       days,
       couriers: couriers
         .map((c) => ({ id: String(c.id), name: COURIER_NAMES[c.courier as Courier] ?? c.courier, courier: c.courier }))

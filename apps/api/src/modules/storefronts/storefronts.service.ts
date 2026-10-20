@@ -91,6 +91,8 @@ export class StorefrontsService {
       courierAccountId: r.courierAccountId === null ? null : String(r.courierAccountId),
       checkoutCourierIds: r.checkoutCourierIds.map(String),
       socialLogin: r.socialLogin,
+      checkoutStyle: r.checkoutStyle,
+      guestCheckout: r.guestCheckout,
       // Addresses not linked to a storefront open the default one.
       domains: domains
         .filter((d) => (d.storefrontId ?? def?.id) === r.id)
@@ -160,6 +162,8 @@ export class StorefrontsService {
           courierAccountId: d.courierAccountId ?? null,
           checkoutCourierIds: [...new Set(d.checkoutCourierIds ?? [])],
           socialLogin: d.socialLogin ?? true,
+          checkoutStyle: d.checkoutStyle ?? "single",
+          guestCheckout: d.guestCheckout ?? true,
         },
       }),
     )
@@ -186,6 +190,8 @@ export class StorefrontsService {
           ...(d.courierAccountId !== undefined ? { courierAccountId: d.courierAccountId } : {}),
           ...(d.checkoutCourierIds !== undefined ? { checkoutCourierIds: [...new Set(d.checkoutCourierIds)] } : {}),
           ...(d.socialLogin !== undefined ? { socialLogin: d.socialLogin } : {}),
+          ...(d.checkoutStyle !== undefined ? { checkoutStyle: d.checkoutStyle } : {}),
+          ...(d.guestCheckout !== undefined ? { guestCheckout: d.guestCheckout } : {}),
         },
       })
     })

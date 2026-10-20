@@ -35,6 +35,10 @@ export interface Storefront {
   checkoutCourierIds: string[];
   /** Show the Google / Facebook sign-in buttons (when they are on in Customer sign-in). */
   socialLogin: boolean;
+  /** single: everything on one page; steps: details, delivery, payment one at a time. */
+  checkoutStyle: "single" | "steps";
+  /** Customers may order without an account. */
+  guestCheckout: boolean;
 }
 
 /** A storefront's name for filters and pickers (readable by any staff member). */
@@ -57,6 +61,8 @@ export type StorefrontInput = Partial<{
   courierAccountId: string | null;
   checkoutCourierIds: string[];
   socialLogin: boolean;
+  checkoutStyle: "single" | "steps";
+  guestCheckout: boolean;
 }>;
 
 export interface ProductStorefront {

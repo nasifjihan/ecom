@@ -210,6 +210,10 @@ model Storefront {
   checkoutCourierIds BigInt[]            @default([])
   /// Show the Google / Facebook sign-in buttons here (when the store has them on).
   socialLogin        Boolean             @default(true)
+  /// single (everything on one page) | steps (details → delivery → payment, one at a time)
+  checkoutStyle      String              @default("single")
+  /// Customers may order without an account (off: they sign in or sign up first).
+  guestCheckout      Boolean             @default(true)
   sortOrder          Int                 @default(0)
   domains            Domain[]
   menus              Menu[]

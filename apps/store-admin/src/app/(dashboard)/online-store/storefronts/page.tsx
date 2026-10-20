@@ -47,6 +47,8 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
   const [courier, setCourier] = useState("");
   const [choice, setChoice] = useState<string[]>([]);
   const [social, setSocial] = useState(true);
+  const [checkoutStyle, setCheckoutStyle] = useState<"single" | "steps">("single");
+  const [guests, setGuests] = useState(true);
   const { data: methods = [] } = usePaymentMethodsQuery();
   const { data: couriers = [] } = useCourierAccountsQuery();
   const [create, c] = useCreateStorefrontMutation();
@@ -60,6 +62,8 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
     setCourier(storefront?.courierAccountId ?? "");
     setChoice(storefront?.checkoutCourierIds ?? []);
     setSocial(storefront?.socialLogin ?? true);
+    setCheckoutStyle(storefront?.checkoutStyle ?? "single");
+    setGuests(storefront?.guestCheckout ?? true);
   }, [open, storefront]);
   const pct = Number(f.priceAdjustPercent);
   const pctOk = f.priceAdjustPercent.trim() !== "" && Number.isFinite(pct) && pct >= -90 && pct <= 500;
@@ -73,6 +77,8 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
       courierAccountId: courier || null,
       checkoutCourierIds: choice,
       socialLogin: social,
+      checkoutStyle,
+      guestCheckout: guests,
     };
     try {
       if (storefront) await update({ id: storefront.id, ...body, ...(storefront.isDefault ? {} : { isActive: active }) }).unwrap();
@@ -193,6 +199,23 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
               </p>
             </fieldset>
           )}
+          <Field label="Checkout" htmlFor="sf-checkout" hint={checkoutStyle === "steps" ? "Details, delivery and payment one after another, with Back and Continue." : "Everything on one page with one Place order button."}>
+            <select
+              id="sf-checkout"
+              value={checkoutStyle}
+              onChange={(e) => setCheckoutStyle(e.target.value === "steps" ? "steps" : "single")}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="single">One page</option>
+              <option value="steps">Step by step</option>
+            </select>
+          </Field>
+          <Toggle
+            checked={guests}
+            onChange={setGuests}
+            label="Guests can order"
+            hint="Off: customers log in or create an account before checkout, e.g. for a wholesale storefront."
+          />
           <Toggle
             checked={social}
             onChange={setSocial}
