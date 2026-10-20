@@ -12,6 +12,7 @@ import type { TokenAudience } from "../config/jwt";
 import { COOKIE_NAMES } from "../config";
 import { adminPermissions, adminStorefronts } from "../config/admin-permissions";
 import type { UserType } from "@ecom/shared-types";
+import { tagRoute } from "../core/route-meta";
 
 type AuthGuardType = "super" | "admin" | "customer" | "adminOrSuper" | "any" | "optional";
 
@@ -60,7 +61,7 @@ async function attachToCtx(
 }
 
 export default function authMiddleware(guard: AuthGuardType = "any") {
-  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+  return tagRoute(async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
       const candidates: TokenAudience[] =
         guard === "super" ? ["super"] :
@@ -92,5 +93,5 @@ export default function authMiddleware(guard: AuthGuardType = "any") {
       if (err instanceof UnauthorizedError || err instanceof ForbiddenError) next(err);
       else next(new UnauthorizedError("Authentication failed", "AUTH_INVALID_TOKEN"));
     }
-  };
+  }, { auth: guard });
 }

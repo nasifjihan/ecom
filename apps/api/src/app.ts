@@ -47,6 +47,7 @@ import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
+import { docsRouter } from "./modules/docs";
 import { adminWarehousesRouter } from "./modules/stock";
 import { adminStorefrontsRouter } from "./modules/storefronts";
 import { adminSalesRouter } from "./modules/sales";
@@ -136,6 +137,7 @@ export function buildApp(): Express {
   registerSmsListeners();
 
   // =============== MODULE ROUTES (Batch #5 wired) ===============
+  app.use("/api/docs", docsRouter);                                  // OpenAPI from the routes below (off in production unless API_DOCS=on)
   app.use("/api/auth", authRoutes);
   app.use("/api/super", superPlatformRouter);                      // overview, plans, subscriptions, reports, audit logs
   app.use("/api/super/stores", superStoresRouter);

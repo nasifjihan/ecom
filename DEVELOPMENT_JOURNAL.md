@@ -4765,3 +4765,48 @@ Uploaded photos were stored exactly as they came: often 3–5 MB phone pictures,
 - **Other pictures:** only product pictures use thumbnails. Banner, block, blog and category pictures load in full (they're shrunk to WebP only if uploaded through the media upload).
 - **Size guidance:** no per-slot size warnings beyond the hints already in the editors.
 - **Next:** Batch 39, platform: OpenAPI docs, import/export jobs and admin menu search.
+
+---
+
+## ✅ BATCH #39 (part 1) — API docs generated from the routes (2026-10-20)
+The API had about 500 endpoints and no description of any of them. Now `/api/docs` lists every one, generated from the code: who may call it, the permissions it needs, and the shape of what it accepts. A new route shows up with nothing else to write.
+
+### 39.1 How it works
+- **Tags:** `core/route-meta.ts` lets middleware describe the routes it guards. `authMiddleware` tags who may call (store staff, super admin, customer, optional), `rbacMiddleware` the permission codes, and `validate` the zod schemas for params, query and body. The 500 route files didn't change.
+- **Route walk:** `modules/docs/openapi.ts` walks Express's route table and reads the tags.
+  - Middleware on a whole router (`router.use(auth, rbac)`) applies to every route under it.
+  - Middleware on a path (`router.use("/loyalty", auth)`) applies only below that path.
+  - Mount paths are read back from Express's regexps, path parameters included (`/:orderId/parcels`).
+- **OpenAPI 3.0.3:**
+  - zod schemas become JSON Schema (`zod-to-json-schema`, the one new package, pinned at 3.24.6). Query and path schemas become parameters, and a path part without a schema is still listed;
+  - signed-in routes carry bearer security, and permissions go in the description and as `x-permissions`;
+  - 401 / 403 / 422 answers are listed when they can happen, and every route returns the `{ success, message, data, meta? }` envelope.
+- **Groups:** by area: "admin · orders", "storefront · products", "auth" and so on (73 groups).
+
+### 39.2 Serving
+- **Pages:** `GET /api/docs` is Swagger UI (from cdnjs, with its own content security policy for that one page). `GET /api/docs/openapi.json` is the file. It's built once per process.
+- **On or off:** it's on in development and off in production, unless `API_DOCS=on` (now in `.env.example`).
+
+### 39.3 Found and fixed
+- **Reorder route:** `POST /api/admin/products/:productId/images/reorder` checked for a path value called `id`, so every call failed with "id: Required". The path is now `/:id/images/reorder`, like the other product routes. Nothing in the admin called it, so no screen was broken.
+- **Whole-API test:** it now fails if any route's path and params schema disagree; this route was the only one.
+
+### 39.4 Checked
+- **Tests:** API 791 passing (67 files).
+  - new `tests/unit/openapi.test.ts`, on a small app built for the test:
+    - router-level and path-level middleware;
+    - nested routers with path parameters;
+    - query parameters, request bodies and security;
+    - mount paths and group names.
+  - The same file also checks the real API: more than 500 operations, every path part listed, every operation id unique.
+- **Types and lint:** the API typechecks. No new lint errors (the middleware files keep their 8 older ones).
+- **Real numbers:** 545 operations on 413 paths in 73 groups; 223 with a request body, 410 with a permission, 489 needing a login.
+- **In the browser:**
+  - `/api/docs` loaded Swagger UI with the title, description, Authorize button and group filter;
+  - filtered to "admin · reports" and opened `POST …/schedules/{id}/send-now`: it showed "Store staff or platform super admin", the permissions `reports.view, reports.edit`, and `id` as an integer path parameter.
+- **Reorder route:** the fixed route got past the path check (it then asked for a non-empty `mediaIds`, as it should).
+
+### 39.5 Not done
+- **Responses:** they're documented as the shared envelope, not each route's own `data` shape. There are no response schemas in the code to read.
+- **Examples:** no examples beyond the schemas' defaults.
+- **Next:** part 2, import and export jobs.

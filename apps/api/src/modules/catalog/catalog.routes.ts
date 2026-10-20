@@ -183,7 +183,7 @@ adminProductsRouter.delete(
 );
 
 adminProductsRouter.post(
-  "/:productId/images/reorder",
+  "/:id/images/reorder",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("products.edit"),
   validate({ params: ProductIdParamDto, body: ReorderGalleryDto }),

@@ -75,6 +75,8 @@ const envSchema = z.object({
   EMAIL_QUEUE: z.enum(["bullmq", "inline"]).default("bullmq"),
   /** Set to "off" when a separate `pnpm worker` process sends the queued emails. */
   EMAIL_WORKER: z.enum(["on", "off"]).default("on"),
+  /** API docs at /api/docs. Unset: on, except in production. */
+  API_DOCS: z.enum(["on", "off"]).optional(),
 
   SMS_DRIVER: z.enum(["none", "twilio", "sslwireless"]).default("none"),
   TWILIO_ACCOUNT_SID: z.string().optional(),

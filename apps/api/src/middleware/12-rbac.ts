@@ -10,10 +10,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { hasPermission } from "@ecom/shared-types";
 import { ForbiddenError } from "../core";
+import { tagRoute } from "../core/route-meta";
 
 export default function rbacMiddleware(required: string | string[]) {
   const needed: string[] = Array.isArray(required) ? required : [required];
-  return (req: Request, _res: Response, next: NextFunction): void => {
+  return tagRoute((req: Request, _res: Response, next: NextFunction): void => {
     // Super admin = all permissions
     if (req.ctx.super) return next();
     const perms = req.ctx.admin?.permissions ?? [];
@@ -28,5 +29,5 @@ export default function rbacMiddleware(required: string | string[]) {
       );
     }
     next();
-  };
+  }, { permissions: needed });
 }

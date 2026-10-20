@@ -9,6 +9,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { z } from "zod";
 import { ValidationError } from "../core";
+import { tagRoute } from "../core/route-meta";
 
 type Targets = {
   params?: z.ZodTypeAny;
@@ -17,7 +18,7 @@ type Targets = {
 };
 
 export default function validate(schemas: Targets) {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+  return tagRoute((req: Request, _res: Response, next: NextFunction): void => {
     const errors: Record<string, string[]> = {};
 
     for (const target of ["params", "query", "body"] as const) {
@@ -39,5 +40,5 @@ export default function validate(schemas: Targets) {
       return next(new ValidationError(errors));
     }
     next();
-  };
+  }, { schemas });
 }
