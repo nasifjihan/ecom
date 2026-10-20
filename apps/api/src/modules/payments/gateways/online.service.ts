@@ -39,7 +39,7 @@ import {
 
 type T = Prisma.TransactionClient
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
-const NAMES: Record<OnlineGatewayCode, string> = { bkash: "bKash", sslcommerz: "SSLCommerz", aamarpay: "aamarPay" }
+const NAMES: Record<OnlineGatewayCode, string> = { bkash: "bKash", sslcommerz: "SSLCommerz", aamarpay: "aamarPay", nagad: "Nagad" }
 /** Tries per order before we stop opening new ones (a stuck customer should call the shop). */
 const MAX_ATTEMPTS = 10
 
@@ -120,7 +120,7 @@ export class OnlinePaymentsService {
   private async method(code: string) {
     if (!isOnlineGateway(code))
       throw new BadRequestError(
-        "Only bKash and SSLCommerz take payments online",
+        "This method doesn't take payments online",
         "VALIDATION_FAILED",
       )
     const g = await prisma.paymentGatewayConfig.findFirst({
@@ -298,6 +298,7 @@ export class OnlinePaymentsService {
         },
         productName: order.items.map((i) => i.productName).join(", "),
         itemCount: order.items.reduce((s, i) => s + i.quantity, 0),
+        clientIp: this.ctx.ip ?? null,
       })
       await prisma.paymentAttempt.update({
         where: { id: attempt.id },

@@ -13,15 +13,20 @@
  *    payment with jsonpost.php (the customer pays on payment_url); a payment counts only once the
  *    transaction check (api/v1/trxcheck/request.php) says Successful for our tran_id. aamarPay has no
  *    refund API, so refunds are paid back by hand (API_REFUNDS in gateway.rules.ts).
+ *  - Nagad Online Payment API v-0.2.0 (sandbox sandbox-ssl.mynagad.com:10061, live api.mynagad.com):
+ *    initialize (our data RSA-encrypted with Nagad's public key and signed with the merchant's
+ *    private key), complete (gives the payment page), and after the callback, verify/payment says
+ *    how it ended. No refund API: refunds are paid back by hand.
  * Nothing the browser sends is trusted: every "paid" comes from the gateway's own API.
  * Base URLs can be pointed elsewhere with BKASH_API_URL / SSLCOMMERZ_API_URL / AAMARPAY_API_URL
  * (a local mock).
  * `fetch` is injectable for unit tests.
  */
+import { constants, createPrivateKey, createPublicKey, privateDecrypt, publicEncrypt, randomBytes, sign as rsaSign } from "node:crypto"
 import { env } from "../../../config"
 
 export type Fetch = typeof fetch
-export type OnlineGatewayCode = "bkash" | "sslcommerz" | "aamarpay"
+export type OnlineGatewayCode = "bkash" | "sslcommerz" | "aamarpay" | "nagad"
 
 /** Keys and mode of one store's gateway (decrypted). */
 export interface GatewayConfig {
@@ -41,6 +46,8 @@ export interface StartInput {
   customer: { name: string; phone: string; email?: string | null; address: string; city: string }
   productName: string
   itemCount: number
+  /** The customer's IP (Nagad asks for it). */
+  clientIp?: string | null
 }
 
 export interface Started {
@@ -102,7 +109,7 @@ export interface OnlineGateway {
 /** The keys each gateway needs, with labels for the admin form. */
 export const GATEWAY_FIELDS: Record<
   OnlineGatewayCode,
-  { key: string; label: string; secret?: boolean }[]
+  { key: string; label: string; secret?: boolean; multiline?: boolean }[]
 > = {
   bkash: [
     { key: "username", label: "Username" },
@@ -117,6 +124,11 @@ export const GATEWAY_FIELDS: Record<
   aamarpay: [
     { key: "storeId", label: "Store ID" },
     { key: "signatureKey", label: "Signature key", secret: true },
+  ],
+  nagad: [
+    { key: "merchantId", label: "Merchant ID" },
+    { key: "merchantPrivateKey", label: "Merchant private key", secret: true, multiline: true },
+    { key: "nagadPublicKey", label: "Nagad public key", multiline: true },
   ],
 }
 
@@ -510,6 +522,7 @@ export class SslcommerzGateway implements OnlineGateway {
 export function gatewayFor(cfg: GatewayConfig, f: Fetch = fetch): OnlineGateway {
   if (cfg.gateway === "bkash") return new BkashGateway(cfg, f)
   if (cfg.gateway === "aamarpay") return new AamarpayGateway(cfg, f)
+  if (cfg.gateway === "nagad") return new NagadGateway(cfg, f)
   return new SslcommerzGateway(cfg, f)
 }
 
