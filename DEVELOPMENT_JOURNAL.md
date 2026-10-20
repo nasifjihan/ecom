@@ -4680,3 +4680,47 @@ Posts could only be published by hand, all looked alike on the blog, and none co
 - **Old URLs:** no notice when a scheduled post's address is visited early (it's a plain 404, the same as a draft).
 - **Featured order:** no "featured first" ordering inside a category filter beyond the normal pinning.
 - **Next:** part 3, colour presets, product display switches and an editable robots.txt.
+
+---
+
+## ✅ BATCH #38 (part 3) — Colour schemes, product display switches and robots.txt (2026-10-20)
+A shop could pick one brand colour and nothing else about how products show. It also couldn't touch robots.txt. All three now live on Online Store → Theme. Like the rest of the theme, they're per storefront.
+
+### 38.12 Data
+- **No migration.** They're new groups in the theme JSON (`colors.secondary`, `display`, `robots`). Themes saved before get the defaults when read (`mergeTheme`), and saves without them still pass.
+
+### 38.13 Colours
+- **10 ready-made two-colour schemes:** Violet & amber (the old default), Royal blue & orange, Teal & coral, Emerald & gold, Crimson & navy, Rose & plum, Ocean & sand, Charcoal & lime, Mustard & black, Maroon & cream. Plus your own main and second colour.
+- **Readable text:** the storefront sets `--primary` / `--secondary` and their text colours. `prefersDarkText()` in `@ecom/utils` picks near-black or white by WCAG contrast, so mustard, lime or cream get dark button text. The admin preview uses the same check.
+
+### 38.14 Product display
+- **Star ratings:** off hides the stars on product cards and the rating line at the top of product pages (the Reviews tab stays).
+- **How many sold:** off hides "50+ sold" on product pages.
+- **Low stock warning:** off hides "Hurry, only 3 left". Its new store-wide "warn at or below" level is used for products without their own.
+- **How it's wired:** a small `DisplayProvider` / `useDisplay()` in `@ecom/storefront-base`, filled from the theme in the storefront layout.
+
+### 38.15 robots.txt
+- **`robots.ts` → `app/robots.txt/route.ts`:** the same standard rules as before (checkout, account, API and so on kept out), then the shop's own lines under "# Added by the shop", then the sitemap.
+- **Extra rules:** checked line by line in the admin and the API. Only `User-agent`, `Allow`, `Disallow`, `Crawl-delay`, `Sitemap`, `#` comments and blank lines are accepted, up to 2,000 characters.
+- **Hide from search engines:** replaces everything with `User-agent: * / Disallow: /` and adds a `noindex, nofollow` tag to every page, for a test or unfinished storefront.
+
+### 38.16 Checked
+- **Tests:** API 784 passing (65 files).
+  - new `tests/unit/theme-settings.test.ts`: old themes get the new defaults; robots rules are accepted or refused; the low-stock level and colours are kept in range;
+  - new `packages/utils/src/color.test.ts`.
+- **Types and lint:** API, admin and storefront typecheck. No new lint errors.
+- **In the browser:**
+  - picked Mustard & black, turned ratings off, and typed "not a rule" in the extra rules. The admin showed `Line "not a rule" isn't a robots.txt rule` and Save was disabled;
+  - replaced it with `User-agent: GPTBot / Disallow: /` and saved;
+  - `/robots.txt` showed the rule under "# Added by the shop". The first request after the restart gave the older copy until the one-minute cache refreshed;
+  - the storefront had `--primary: 41 96% 40%` with dark text and `--secondary` near-black with white text;
+  - product cards had no stars (the 20 on the page were the rating filter);
+  - the product page's rating line was gone, while "66+ sold" stayed.
+- **Dev data:** the dev theme was set back to violet & amber, ratings on, no extra rules.
+- **Environment:** Docker and the dev servers had stopped overnight; they were started again.
+
+### 38.17 Not done
+- **Contrast check:** no automatic warning when the two colours clash with each other; only the text colour is made readable.
+- **Dark mode:** no colour presets for dark mode (the storefront is light-only).
+- **Noindex tag:** "Hide from search engines" was checked through robots.txt; the noindex tag wasn't looked at in the browser.
+- **Next:** part 4, WebP images and thumbnails on upload, and a data-saver mode.

@@ -5,10 +5,13 @@
 import { cookieLocale, serverApi, storeOrigin, withLang } from "@/lib/server-api";
 import type { SlotPromotion } from "@/lib/promotions";
 import { DATE_LOCALES, translatorFor, type Locale, type Translator } from "@ecom/storefront-base";
+import { prefersDarkText } from "@ecom/utils";
 
 export interface ThemeSettings {
   brand: { storeName: string; tagline: string; logoUrl: string | null };
-  colors: { primary: string };
+  colors: { primary: string; secondary?: string };
+  display?: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number };
+  robots?: { blockAll: boolean; extra: string };
   announcement: { enabled: boolean; text: string; link: string | null };
   footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
@@ -174,6 +177,12 @@ export function hexToHslVar(hex: string): string | null {
     h *= 60;
   }
   return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
+/** Text colour for a background, as an HSL variable, so a yellow or pastel brand colour still has readable buttons. */
+export function readableOn(hex: string): string | null {
+  const dark = prefersDarkText(hex);
+  return dark === null ? null : dark ? "240 10% 3.9%" : "0 0% 100%";
 }
 
 export const formatDate = (iso: string | null | undefined, locale: Locale = "en") =>

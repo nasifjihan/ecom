@@ -4,7 +4,7 @@ import * as React from "react";
 import { Provider as ReduxProvider } from "react-redux";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
-import { CartProvider as StorefrontCartProvider, LocaleProvider, type Locale } from "@ecom/storefront-base";
+import { CartProvider as StorefrontCartProvider, DisplayProvider, LocaleProvider, type DisplaySettings, type Locale } from "@ecom/storefront-base";
 import { getOrCreateStore, type AppStore } from "@/lib/store";
 import { configureApiClient } from "@ecom/api-client";
 import { restoreSession, storeRefreshedToken } from "@/lib/account";
@@ -42,10 +42,13 @@ export function Providers({
   children,
   locale = "en",
   languages = ["en"],
+  display,
 }: {
   children: React.ReactNode;
   locale?: Locale;
   languages?: Locale[];
+  /** Product display switches from the theme. */
+  display?: Partial<DisplaySettings>;
 }) {
   const [mounted, setMounted] = React.useState(false);
 
@@ -60,7 +63,9 @@ export function Providers({
     <ReduxProvider store={store}>
       <LocaleProvider locale={locale} languages={languages}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-        <CartProvider storeId="fashion_bd">{children}</CartProvider>
+        <DisplayProvider value={display}>
+          <CartProvider storeId="fashion_bd">{children}</CartProvider>
+        </DisplayProvider>
         <Toaster
           position="bottom-right"
           toastOptions={{

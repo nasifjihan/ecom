@@ -12,12 +12,33 @@ import {
   useGetThemeQuery,
   useResetThemeMutation,
   useSaveThemeMutation,
+  COLOR_PRESETS,
   type ThemeSettings,
 } from "@/lib/features/content/content-api-slice";
+import { prefersDarkText } from "@ecom/utils";
 
-const SWATCHES = ["#7c3aed", "#2563eb", "#0891b2", "#059669", "#ca8a04", "#ea580c", "#e11d48", "#db2777", "#0f172a"];
 const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
 const isLink = (v: string) => v === "" || v.startsWith("/") || /^https?:\/\//i.test(v);
+const textOn = (hex: string) => (prefersDarkText(hex) ? "#0a0a0b" : "#ffffff");
+/** The same lines the API accepts in robots.txt. */
+const ROBOTS_LINE = /^\s*(#.*|(user-agent|allow|disallow|crawl-delay|sitemap)\s*:.*)?\s*$/i;
+
+function ColorField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label={label} htmlFor={id} error={isHex(value) ? null : "Use a colour like #7c3aed"}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`Pick the ${label.toLowerCase()}`}
+          value={isHex(value) ? value : "#7c3aed"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-12 cursor-pointer rounded border bg-transparent"
+        />
+        <Input id={id} className="w-32 font-mono" value={value} onChange={(e) => onChange(e.target.value.trim())} />
+      </div>
+    </Field>
+  );
+}
 
 export default function ThemePage() {
   const sf = useStorefrontChoice();
@@ -37,7 +58,10 @@ export default function ThemePage() {
     setT((cur) => (cur ? { ...cur, [group]: { ...cur[group], ...patch } } : cur));
 
   const socialOk = Object.values(t.social).every(isLink);
-  const valid = t.brand.storeName.trim() && isHex(t.colors.primary) && socialOk && isLink(t.brand.logoUrl ?? "") && isLink(t.announcement.link ?? "");
+  const badRobotsLine = t.robots.extra.split(/\r?\n/).find((l) => !ROBOTS_LINE.test(l));
+  const robotsOk = badRobotsLine === undefined;
+  const valid =
+    t.brand.storeName.trim() && isHex(t.colors.primary) && isHex(t.colors.secondary) && socialOk && robotsOk && isLink(t.brand.logoUrl ?? "") && isLink(t.announcement.link ?? "");
   const dirty = JSON.stringify(t) !== JSON.stringify(data);
 
   const onSave = async (e: React.FormEvent) => {
@@ -62,7 +86,7 @@ export default function ThemePage() {
       <PageTitle
         icon={Palette}
         title="Theme"
-        description="Your store's name, colour, announcement bar and footer details."
+        description="Your store's name, colours, product display, search engine rules, announcement bar and footer."
         actions={
           <>
             <Button type="button" variant="outline" asChild>
@@ -128,45 +152,104 @@ export default function ThemePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Colour</CardTitle>
-            <CardDescription>Used for buttons, links and highlights.</CardDescription>
+            <CardTitle className="text-base">Colours</CardTitle>
+            <CardDescription>The main colour is for buttons and links; the second for badges and highlights.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {SWATCHES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={`Use ${c}`}
-                  onClick={() => set("colors", { primary: c })}
-                  className={cn("h-9 w-9 rounded-full border-2 transition-transform hover:scale-110", t.colors.primary.toLowerCase() === c ? "border-slate-900 dark:border-white" : "border-transparent")}
-                  style={{ background: c }}
-                />
-              ))}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Colour schemes">
+              {COLOR_PRESETS.map((p) => {
+                const on = t.colors.primary.toLowerCase() === p.primary && t.colors.secondary.toLowerCase() === p.secondary;
+                return (
+                  <button
+                    key={p.name}
+                    type="button"
+                    aria-pressed={on}
+                    title={p.name}
+                    onClick={() => set("colors", { primary: p.primary, secondary: p.secondary })}
+                    className={cn("rounded-lg border-2 p-1.5 text-left transition-colors", on ? "border-slate-900 dark:border-white" : "border-transparent hover:border-slate-300")}
+                  >
+                    <span className="flex h-7 overflow-hidden rounded">
+                      <span className="flex-[2]" style={{ background: p.primary }} />
+                      <span className="flex-1" style={{ background: p.secondary }} />
+                    </span>
+                    <span className="mt-1 block truncate text-[11px] text-slate-600 dark:text-slate-400">{p.name}</span>
+                  </button>
+                );
+              })}
             </div>
-            <Field label="Custom colour" htmlFor="primary" error={isHex(t.colors.primary) ? null : "Use a colour like #7c3aed"}>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  aria-label="Pick a colour"
-                  value={isHex(t.colors.primary) ? t.colors.primary : "#7c3aed"}
-                  onChange={(e) => set("colors", { primary: e.target.value })}
-                  className="h-10 w-12 cursor-pointer rounded border bg-transparent"
-                />
-                <Input id="primary" className="w-32 font-mono" value={t.colors.primary} onChange={(e) => set("colors", { primary: e.target.value.trim() })} />
-              </div>
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ColorField id="primary" label="Main colour" value={t.colors.primary} onChange={(primary) => set("colors", { primary })} />
+              <ColorField id="secondary" label="Second colour" value={t.colors.secondary} onChange={(secondary) => set("colors", { secondary })} />
+            </div>
             <div className="rounded-lg border p-4">
               <p className="mb-2 text-xs text-slate-500">Preview</p>
-              <div className="flex items-center gap-3">
-                <span className="rounded-md px-4 py-2 text-sm font-medium text-white" style={{ background: t.colors.primary }}>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-md px-4 py-2 text-sm font-medium" style={{ background: t.colors.primary, color: textOn(t.colors.primary) }}>
                   Add to cart
+                </span>
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: t.colors.secondary, color: textOn(t.colors.secondary) }}>
+                  -20%
                 </span>
                 <span className="text-sm font-medium underline" style={{ color: t.colors.primary }}>
                   View details
                 </span>
               </div>
+              <p className="mt-2 text-xs text-slate-500">Button text turns dark on light colours so it stays readable.</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Product display</CardTitle>
+            <CardDescription>What product cards and product pages show.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle id="showRating" checked={t.display.showRating} onChange={(v) => set("display", { showRating: v })} label="Star ratings" hint="On product cards and at the top of product pages. Reviews stay on the product page." />
+            <Toggle id="showSoldCount" checked={t.display.showSoldCount} onChange={(v) => set("display", { showSoldCount: v })} label="How many sold" hint={`"50+ sold" on product pages, from 10 sold.`} />
+            <Toggle id="showLowStock" checked={t.display.showLowStock} onChange={(v) => set("display", { showLowStock: v })} label="Low stock warning" hint={`"Hurry, only 3 left" on product pages.`} />
+            {t.display.showLowStock && (
+              <Field label="Warn at or below" htmlFor="lowStock" hint="For products without their own low-stock level.">
+                <Input
+                  id="lowStock"
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="w-28"
+                  value={t.display.lowStockThreshold}
+                  onChange={(e) => set("display", { lowStockThreshold: Math.min(100, Math.max(1, Number(e.target.value) || 1)) })}
+                />
+              </Field>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Search engines</CardTitle>
+            <CardDescription>Your store&apos;s robots.txt.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle
+              id="blockAll"
+              checked={t.robots.blockAll}
+              onChange={(v) => set("robots", { blockAll: v })}
+              label="Hide from search engines"
+              hint="For a test or unfinished storefront. Google and others are asked not to list any page."
+            />
+            {!t.robots.blockAll && (
+              <Field
+                label="Extra rules (optional)"
+                htmlFor="robotsExtra"
+                hint="Added to the standard rules. One per line, e.g. Disallow: /lp/old-offer"
+                error={robotsOk ? null : `Line "${badRobotsLine}" isn't a robots.txt rule`}
+              >
+                <Textarea id="robotsExtra" rows={4} maxLength={2000} className="font-mono text-xs" value={t.robots.extra} onChange={(e) => set("robots", { extra: e.target.value })} />
+              </Field>
+            )}
+            <a href={`${sf.viewUrl.replace(/\/$/, "")}/robots.txt`} target="_blank" rel="noreferrer" className="inline-flex items-center text-sm text-blue-600 hover:underline">
+              See robots.txt <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            </a>
           </CardContent>
         </Card>
 
@@ -184,7 +267,7 @@ export default function ThemePage() {
               <Input id="ann-link" value={t.announcement.link ?? ""} onChange={(e) => set("announcement", { link: e.target.value })} placeholder="/products" />
             </Field>
             {t.announcement.enabled && t.announcement.text && (
-              <div className="rounded-md px-3 py-2 text-center text-xs font-medium text-white" style={{ background: t.colors.primary }}>
+              <div className="rounded-md px-3 py-2 text-center text-xs font-medium" style={{ background: t.colors.primary, color: textOn(t.colors.primary) }}>
                 {t.announcement.text}
               </div>
             )}

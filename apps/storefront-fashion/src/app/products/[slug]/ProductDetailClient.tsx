@@ -42,6 +42,7 @@ import {
   Skeleton,
   useCart,
   useT,
+  useDisplay,
   msg,
   useGetProductBySlugQuery,
   useGetProductsQuery,
@@ -241,6 +242,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   }, [product.reviews, reviewSort]);
 
   const averageRating = product.rating ?? 0;
+  const display = useDisplay();
   const ratingCounts = React.useMemo(() => {
     const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
     product.reviews.forEach((r) => {
@@ -374,16 +376,20 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
           <h1 className="text-2xl md:text-3xl font-bold leading-tight tracking-tight mb-3">{product.title}</h1>
 
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <div className="flex">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className={cn("h-4 w-4", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
-                ))}
-              </div>
-              <span className="text-sm font-semibold">{averageRating.toFixed(1)}</span>
-              <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({t("{n} reviews", { n: product.reviewCount })})</a>
-            </div>
-            <span className="text-slate-300">|</span>
+            {display.showRating && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star key={i} className={cn("h-4 w-4", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-semibold">{averageRating.toFixed(1)}</span>
+                  <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({t("{n} reviews", { n: product.reviewCount })})</a>
+                </div>
+                <span className="text-slate-300">|</span>
+              </>
+            )}
             <span className="text-sm text-muted-foreground">{t("SKU:")} <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
           </div>
 
@@ -475,10 +481,10 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <div className="text-sm text-muted-foreground">
                 {!inStock ? (
                   <span className="text-destructive font-medium">{t("Currently out of stock")}</span>
-                ) : stockLeft !== null && stockLeft <= (product.lowStockThreshold ?? 5) ? (
+                ) : display.showLowStock && stockLeft !== null && stockLeft <= (product.lowStockThreshold ?? display.lowStockThreshold) ? (
                   <span className="font-medium text-amber-600">{t("Hurry, only {n} left", { n: stockLeft })}</span>
                 ) : null}
-                {(product.saleCount ?? 0) >= 10 && (
+                {display.showSoldCount && (product.saleCount ?? 0) >= 10 && (
                   <span className="ml-2 before:mr-2 before:content-['·'] first:ml-0 first:before:content-none">{t("{n}+ sold", { n: product.saleCount ?? 0 })}</span>
                 )}
               </div>

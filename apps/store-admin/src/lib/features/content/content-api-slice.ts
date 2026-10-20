@@ -106,11 +106,28 @@ export interface Menu {
 
 export interface ThemeSettings {
   brand: { storeName: string; tagline: string; logoUrl: string | null };
-  colors: { primary: string };
+  colors: { primary: string; secondary: string };
   announcement: { enabled: boolean; text: string; link: string | null };
   footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
+  display: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number };
+  /** blockAll: hide from search engines; extra: lines added to robots.txt. */
+  robots: { blockAll: boolean; extra: string };
 }
+
+/** Ready-made colour schemes: the main colour (buttons, links) and a second one (badges, highlights). */
+export const COLOR_PRESETS = [
+  { name: "Violet & amber", primary: "#7c3aed", secondary: "#f59e0b" },
+  { name: "Royal blue & orange", primary: "#2563eb", secondary: "#f97316" },
+  { name: "Teal & coral", primary: "#0f766e", secondary: "#fb7185" },
+  { name: "Emerald & gold", primary: "#047857", secondary: "#eab308" },
+  { name: "Crimson & navy", primary: "#be123c", secondary: "#1e3a8a" },
+  { name: "Rose & plum", primary: "#e11d48", secondary: "#7e22ce" },
+  { name: "Ocean & sand", primary: "#0369a1", secondary: "#d6b98c" },
+  { name: "Charcoal & lime", primary: "#1f2937", secondary: "#84cc16" },
+  { name: "Mustard & black", primary: "#ca8a04", secondary: "#111827" },
+  { name: "Maroon & cream", primary: "#7f1d1d", secondary: "#f5e6c8" },
+] as const;
 
 export const HERO_GRADIENTS = ["violet", "sunset", "midnight", "emerald", "rose", "ocean"] as const;
 export const FEATURE_ICONS = ["truck", "shield", "card", "bag", "gift", "phone"] as const;

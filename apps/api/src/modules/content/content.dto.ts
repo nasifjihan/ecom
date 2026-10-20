@@ -130,9 +130,33 @@ const hex = z
   .trim()
   .regex(/^#[0-9a-f]{6}$/i, "Use a colour like #7c3aed")
 
+/** Lines a robots.txt may hold: rules, sitemaps, comments and blank lines. */
+const ROBOTS_LINE = /^\s*(#.*|(user-agent|allow|disallow|crawl-delay|sitemap)\s*:.*)?\s*$/i
+
 export const ThemeDto = z.object({
   brand: z.object({ storeName: text(80).min(1), tagline: text(160), logoUrl: optLink }),
-  colors: z.object({ primary: hex }),
+  colors: z.object({ primary: hex, secondary: hex.default("#f59e0b") }),
+  /** What product cards and pages show. */
+  display: z
+    .object({
+      showRating: z.boolean(),
+      showSoldCount: z.boolean(),
+      showLowStock: z.boolean(),
+      /** "Only a few left" below this many, for products without their own level. */
+      lowStockThreshold: z.coerce.number().int().min(1).max(100),
+    })
+    .default({ showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5 }),
+  robots: z
+    .object({
+      /** Ask every search engine to stay away (a test or unfinished storefront). */
+      blockAll: z.boolean(),
+      /** Extra lines added to robots.txt. */
+      extra: text(2_000).refine(
+        (v) => v.split(/\r?\n/).every((l) => ROBOTS_LINE.test(l)),
+        "Each line must be a rule like \"Disallow: /private\", \"User-agent: Googlebot\", a Sitemap: line or a # comment",
+      ),
+    })
+    .default({ blockAll: false, extra: "" }),
   announcement: z.object({ enabled: z.boolean(), text: text(200), link: optLink }),
   footer: z.object({
     about: text(500),

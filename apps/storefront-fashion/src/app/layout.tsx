@@ -4,7 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Footer, translatorFor } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
-import { getSite, getSlotPromotions, hexToHslVar, pageLocale } from "@/lib/content";
+import { getSite, getSlotPromotions, hexToHslVar, pageLocale, readableOn } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
@@ -111,6 +111,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: tagline ? `${name} — ${tagline}` : name, template: `%s | ${name}` },
     applicationName: name,
     openGraph: { ...baseMetadata.openGraph, siteName: name },
+    // "Hide from search engines": robots.txt blocks crawling, this keeps already-known pages out of results.
+    ...(site.theme.robots?.blockAll ? { robots: { index: false, follow: false } } : {}),
   };
 }
 
@@ -131,6 +133,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const theme = site?.theme;
   const storeName = theme?.brand.storeName ?? "Fashion BD";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
+  const secondary = theme?.colors.secondary ? hexToHslVar(theme.colors.secondary) : null;
+  // Only digits, spaces and % come out of these helpers, so they're safe inside <style>.
+  const colorVars = [
+    primary && `--primary:${primary};--ring:${primary};--primary-foreground:${readableOn(theme!.colors.primary)}`,
+    secondary && `--secondary:${secondary};--secondary-foreground:${readableOn(theme!.colors.secondary!)}`,
+  ]
+    .filter(Boolean)
+    .join(";");
   const announcement = theme?.announcement.enabled && theme.announcement.text ? theme.announcement : null;
   // Shop pages every store has, next to the store's own footer menus.
   const quickLinks = {
@@ -157,11 +167,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale} suppressHydrationWarning>
       <head>
         <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-        {/* The store's brand colour, from the admin theme settings; hexToHslVar only ever returns digits and %. */}
-        {primary && <style>{`:root{--primary:${primary};--ring:${primary}}`}</style>}
+        {/* The store's colours, from the admin theme settings. */}
+        {colorVars && <style>{`:root{${colorVars}}`}</style>}
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
-        <Providers locale={locale} languages={languages}>
+        <Providers locale={locale} languages={languages} display={theme?.display}>
           {announcement && (
             <div className="bg-primary text-primary-foreground text-center text-xs sm:text-sm font-medium px-4 py-2">
               {announcement.link ? (

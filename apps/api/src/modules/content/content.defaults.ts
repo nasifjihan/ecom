@@ -13,7 +13,7 @@ export function defaultTheme(store: {
 }): ThemeSettings {
   return {
     brand: { storeName: store.name, tagline: store.tagline ?? "", logoUrl: null },
-    colors: { primary: "#7c3aed" },
+    colors: { primary: "#7c3aed", secondary: "#f59e0b" },
     announcement: {
       enabled: false,
       text: "Free delivery on orders above ৳1000",
@@ -29,6 +29,8 @@ export function defaultTheme(store: {
       showNewsletter: true,
     },
     social: { facebook: "", instagram: "", youtube: "", twitter: "" },
+    display: { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5 },
+    robots: { blockAll: false, extra: "" },
   }
 }
 
@@ -116,5 +118,7 @@ export function mergeTheme(base: ThemeSettings, saved: unknown): ThemeSettings {
     announcement: { ...base.announcement, ...(s.announcement ?? {}) },
     footer: { ...base.footer, ...(s.footer ?? {}) },
     social: { ...base.social, ...(s.social ?? {}) },
+    display: { ...base.display, ...(s.display ?? {}) },
+    robots: { ...base.robots, ...(s.robots ?? {}) },
   }
 }

@@ -13,6 +13,7 @@ import {
 } from "../ui";
 import { cn, formatMoney } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
+import { useDisplay } from "../../lib/display";
 
 export type ProductCardData = {
   id: string;
@@ -86,6 +87,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
+  const display = useDisplay();
 
   return (
     <motion.div
@@ -196,7 +198,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {product.title}
             </h3>
 
-            {(rating > 0 || reviewCount > 0) && (
+            {display.showRating && (rating > 0 || reviewCount > 0) && (
               <div className="flex items-center gap-1.5">
                 <div className="flex items-center">
                   {[1, 2, 3, 4, 5].map((i) => (

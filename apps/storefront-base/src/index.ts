@@ -133,3 +133,4 @@ export type { ClassValue } from "clsx";
 export { toast, Toaster } from "sonner";
 
 export * from "./i18n";
+export * from "./lib/display";
