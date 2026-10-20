@@ -33,6 +33,8 @@ export interface Storefront {
   courierAccountId: string | null;
   /** Courier accounts customers choose from at checkout (empty: they don't choose). */
   checkoutCourierIds: string[];
+  /** Show the Google / Facebook sign-in buttons (when they are on in Customer sign-in). */
+  socialLogin: boolean;
 }
 
 /** A storefront's name for filters and pickers (readable by any staff member). */
@@ -54,6 +56,7 @@ export type StorefrontInput = Partial<{
   paymentGateways: string[];
   courierAccountId: string | null;
   checkoutCourierIds: string[];
+  socialLogin: boolean;
 }>;
 
 export interface ProductStorefront {

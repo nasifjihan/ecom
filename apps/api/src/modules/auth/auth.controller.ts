@@ -25,6 +25,7 @@ import { emitCustomerRegistered } from "../notifications";
 import { SmsService } from "../sms/sms.service";
 import type { OtpVerifyDto } from "../sms/sms.dto";
 import { CustomerLoginService, type EmailCodeVerifyDto } from "./customer-login";
+import { isOAuthProvider } from "./oauth.providers";
 import type {
   SuperLoginDto,
   AdminLoginDto,
@@ -166,7 +167,36 @@ export class AuthController extends BaseController {
   getCustomerLoginMethods = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const storeId = req.ctx.storeId;
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
-    envelope(res, { data: await new CustomerLoginService(BigInt(storeId)).methods() });
+    envelope(res, { data: await new CustomerLoginService(BigInt(storeId)).methods(req.ctx.storefrontId) });
+  });
+
+  /** The Google / Facebook address to send the customer to. */
+  postCustomerOAuthStart = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const storeId = req.ctx.storeId;
+    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const provider = String(req.params.provider);
+    if (!isOAuthProvider(provider)) throw new NotFoundError("Sign-in provider");
+    envelope(res, {
+      data: await new CustomerLoginService(BigInt(storeId)).startOAuth(
+        provider,
+        req.get("origin"),
+        (req.body as { next?: string }).next,
+        req.ctx.storefrontId,
+      ),
+    });
+  });
+
+  /** Finishes Google / Facebook sign-in with the code the provider sent back. */
+  postCustomerOAuthFinish = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const storeId = req.ctx.storeId;
+    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const b = req.body as { code: string; state: string };
+    const { customer, created, next } = await new CustomerLoginService(BigInt(storeId)).finishOAuth(
+      b.code,
+      b.state,
+      req.get("origin"),
+    );
+    await this.signInCustomer(req, res, customer, created, { next });
   });
 
   /** Emails a 6-digit sign-in code. */
@@ -196,6 +226,7 @@ export class AuthController extends BaseController {
     res: Response,
     customer: Awaited<ReturnType<SmsService["verifyOtp"]>>["customer"],
     created: boolean,
+    extra: Record<string, unknown> = {},
   ) {
     if (created) emitCustomerRegistered({ storeId: String(req.ctx.storeId), customerId: String(customer.id) });
     const tokens = await this.service(req.ctx).issueTokens(customer, "customer");
@@ -207,6 +238,7 @@ export class AuthController extends BaseController {
         user: omitPasswordHash(customer),
         expiresInMin: tokens.expiresInMin,
         created,
+        ...extra,
       },
     });
   }

@@ -46,6 +46,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
   const [gateways, setGateways] = useState<string[]>([]);
   const [courier, setCourier] = useState("");
   const [choice, setChoice] = useState<string[]>([]);
+  const [social, setSocial] = useState(true);
   const { data: methods = [] } = usePaymentMethodsQuery();
   const { data: couriers = [] } = useCourierAccountsQuery();
   const [create, c] = useCreateStorefrontMutation();
@@ -58,6 +59,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
     setGateways(storefront?.paymentGateways ?? []);
     setCourier(storefront?.courierAccountId ?? "");
     setChoice(storefront?.checkoutCourierIds ?? []);
+    setSocial(storefront?.socialLogin ?? true);
   }, [open, storefront]);
   const pct = Number(f.priceAdjustPercent);
   const pctOk = f.priceAdjustPercent.trim() !== "" && Number.isFinite(pct) && pct >= -90 && pct <= 500;
@@ -70,6 +72,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
       paymentGateways: gateways,
       courierAccountId: courier || null,
       checkoutCourierIds: choice,
+      socialLogin: social,
     };
     try {
       if (storefront) await update({ id: storefront.id, ...body, ...(storefront.isDefault ? {} : { isActive: active }) }).unwrap();
@@ -190,6 +193,12 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
               </p>
             </fieldset>
           )}
+          <Toggle
+            checked={social}
+            onChange={setSocial}
+            label="Google and Facebook sign-in buttons"
+            hint="Shown when they are switched on in Settings → Customer sign-in. Off: customers here sign in with email or phone only."
+          />
           {storefront && !storefront.isDefault && (
             <Toggle checked={active} onChange={setActive} label="Open" hint="A closed storefront's web addresses open the default storefront." />
           )}

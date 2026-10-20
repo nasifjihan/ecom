@@ -14,7 +14,7 @@ import {
 } from "./auth.dto";
 import { PasswordResetService } from "./password-reset";
 import { OtpRequestDto, OtpVerifyDto } from "../sms/sms.dto";
-import { EmailCodeRequestDto, EmailCodeVerifyDto } from "./customer-login";
+import { EmailCodeRequestDto, EmailCodeVerifyDto, OAuthFinishDto, OAuthStartDto } from "./customer-login";
 import { UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core";
 import type { Request, Response } from "express";
 
@@ -52,6 +52,10 @@ router.post("/customer/otp/verify", validate({ body: OtpVerifyDto }), authContro
 // ---- sign in with a code sent by email (Settings → Customer sign-in)
 router.post("/customer/email-code/request", validate({ body: EmailCodeRequestDto }), authController.postCustomerEmailCodeRequest);
 router.post("/customer/email-code/verify", validate({ body: EmailCodeVerifyDto }), authController.postCustomerEmailCodeVerify);
+
+// ---- Google / Facebook (the provider sends the customer back to the storefront, which finishes)
+router.post("/customer/oauth/finish", validate({ body: OAuthFinishDto }), authController.postCustomerOAuthFinish);
+router.post("/customer/oauth/:provider/start", validate({ body: OAuthStartDto }), authController.postCustomerOAuthStart);
 
 // ---- forgot / reset password (store comes from the request Origin)
 

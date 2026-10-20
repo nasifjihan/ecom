@@ -252,8 +252,11 @@ export const accountApi = api.injectEndpoints({
     customerLogin: builder.mutation<AuthResult, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/customer/login", method: "POST", body }),
     }),
-    /** How customers can sign in here (phone codes are turned on in the admin's Settings → SMS). */
-    loginMethods: builder.query<{ email: boolean; phoneOtp: boolean; emailCode: boolean }, void>({
+    /** How customers can sign in here (Settings → Customer sign-in; phone codes in Settings → SMS). */
+    loginMethods: builder.query<
+      { email: boolean; phoneOtp: boolean; emailCode: boolean; google: boolean; facebook: boolean; socialTestMode: boolean },
+      void
+    >({
       query: () => "/auth/customer/login-methods",
     }),
     requestPhoneCode: builder.mutation<{ sent: boolean; expiresInMinutes: number }, { phone: string }>({
@@ -267,6 +270,13 @@ export const accountApi = api.injectEndpoints({
     }),
     verifyEmailCode: builder.mutation<AuthResult & { created: boolean }, { email: string; code: string; firstName?: string; lastName?: string }>({
       query: (body) => ({ url: "/auth/customer/email-code/verify", method: "POST", body: clean(body) }),
+    }),
+    /** The Google / Facebook address to send the customer to. */
+    startSocialLogin: builder.mutation<{ url: string; state: string }, { provider: "google" | "facebook"; next: string }>({
+      query: ({ provider, next }) => ({ url: `/auth/customer/oauth/${provider}/start`, method: "POST", body: { next } }),
+    }),
+    finishSocialLogin: builder.mutation<AuthResult & { created: boolean; next: string }, { code: string; state: string }>({
+      query: (body) => ({ url: "/auth/customer/oauth/finish", method: "POST", body }),
     }),
     customerRegister: builder.mutation<AuthResult, RegisterInput>({
       query: (body) => ({ url: "/auth/customer/register", method: "POST", body: clean(body) }),
@@ -358,6 +368,8 @@ export const {
   useVerifyPhoneCodeMutation,
   useRequestEmailCodeMutation,
   useVerifyEmailCodeMutation,
+  useStartSocialLoginMutation,
+  useFinishSocialLoginMutation,
   useCustomerRegisterMutation,
   useCustomerLogoutMutation,
   useForgotPasswordMutation,

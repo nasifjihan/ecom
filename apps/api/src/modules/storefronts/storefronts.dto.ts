@@ -22,6 +22,8 @@ export const StorefrontDto = z.object({
   courierAccountId: id.nullish(),
   /** Courier accounts customers may choose from at checkout; empty: they don't choose. */
   checkoutCourierIds: z.array(id).max(10).optional(),
+  /** Show the Google / Facebook sign-in buttons here. */
+  socialLogin: z.boolean().optional(),
 })
 export const UpdateStorefrontDto = StorefrontDto.partial()
 

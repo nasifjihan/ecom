@@ -4974,3 +4974,53 @@ Customers can now sign in with a 6-digit code sent to their email instead of a p
 
 ### 40.5 Not done
 - **Next:** part 2, Google and Facebook sign-in.
+
+---
+
+## ✅ BATCH #40 (part 2) — Google and Facebook sign-in (2026-10-20)
+Customers can now tap "Continue with Google" or "Continue with Facebook". The shop adds each app's keys in **Settings → Customer sign-in**. Until those apps exist, **test mode** lets the buttons be tried without calling Google or Facebook.
+
+### 40.6 How it works (`modules/auth/customer-login.ts`, `oauth.providers.ts`)
+- **Flow:**
+  1. `POST /api/auth/customer/oauth/:provider/start { next }` returns the provider's sign-in address and a signed `state`.
+  2. The provider sends the customer back to `<storefront>/account/oauth/callback?code=&state=`.
+  3. That page posts the code to `POST /api/auth/customer/oauth/finish`, which signs the customer in like the other methods (token plus refresh cookie) and returns where to go next.
+- **State:** an HS256 token that lasts 10 minutes and names the store, provider, return address and next page. The return address must be the request's own storefront origin, and it must be one of the store's non-admin domains (or localhost outside production). The storefront also keeps the state in `sessionStorage` and refuses a callback whose state it didn't start, so a link of someone else's can't sign a customer in to the wrong account.
+- **Providers:** Google uses its token endpoint plus `userinfo`; an email counts only when `email_verified`. Facebook uses Graph v19 `oauth/access_token` plus `/me` (`id`, names, `email`).
+- **Accounts:** the new `CustomerIdentity` table (provider, subject → customer) links an account, so later sign-ins find it even without an email. The first time:
+  - the account with the same confirmed email is used, and a guest record becomes a full account;
+  - with no email, a new account is made;
+  - banned customers are refused.
+- **Settings** (migration `20261020150000_social_login`):
+  - `StoreLoginSetting` gains on/off, ID and encrypted secret for each provider, plus `socialTestMode`. The admin only sees the last 4 characters of a secret; a blank secret keeps the stored one.
+  - A provider can't be switched on without its keys unless test mode is on.
+  - Test mode is refused when `NODE_ENV=production`.
+  - The storefront gains `socialLogin` (default on) to hide the buttons on one storefront.
+- **Test mode:** start goes straight back to the callback with code `test-mode`, and finish signs in `google.tester@example.com` / `facebook.tester@example.com`.
+
+### 40.7 Admin and storefront
+- **Customer sign-in page:**
+  - a Google card and a Facebook card, each with a switch, ID and secret, and the return addresses to paste into Google Cloud Console or Meta for Developers (with copy buttons);
+  - a test mode card, shown only outside production.
+- **Storefront dialog:** a new "Google and Facebook sign-in buttons" switch.
+- **Storefront:** an "or" divider with the provider buttons, marked "(test)" in test mode, plus the new `/account/oauth/callback` page. The new texts have Bangla.
+
+### 40.8 Checked
+- **Tests:**
+  - new `tests/unit/oauth-providers.test.ts` (8): the sign-in addresses, Google and Facebook code swaps with a fake fetch, an unconfirmed Google email dropped, a refusal, test-mode code only;
+  - new `tests/integration/social-login.db.test.ts` (5):
+    - keys required before switching on, and the secret stored encrypted with a hint;
+    - Google makes and links an account, and finds it again;
+    - Facebook links to an existing account with the same email;
+    - a tampered state, a wrong code, another origin, and a storefront with the buttons off are all refused.
+- **Types and lint:** API, admin and storefront typecheck; no lint errors in the new files.
+- **In the browser:**
+  - switched Google and test mode on in the admin;
+  - the storefront login showed "Continue with Google (test)", and clicking it ended on `/account` signed in as Google Tester, with one `CustomerIdentity` row;
+  - a hand-made callback link with a forged state showed "That sign-in link has expired" and signed nobody in;
+  - the return addresses first included the admin's own domain; admin domains are now left out.
+
+### 40.9 Not done
+- **Real apps:** not yet tried against real Google or Facebook apps (they need the shop's own apps and a public HTTPS address). Test mode and the fake-fetch tests cover the flow up to the provider calls.
+- **Account page:** no list of linked accounts and no "unlink" there yet.
+- **Next:** part 3, checkout style and guest checkout per storefront.

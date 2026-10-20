@@ -17,6 +17,7 @@ import {
   useVerifyPhoneCodeMutation,
 } from "@/lib/account";
 import { Field, safeNext } from "../_components";
+import { SocialButtons } from "./social-buttons";
 
 type Method = "phone" | "email";
 
@@ -74,6 +75,7 @@ export default function LoginPage() {
               </button>
             </p>
           )}
+          <SocialButtons google={!!methods?.google} facebook={!!methods?.facebook} testMode={!!methods?.socialTestMode} next={next} />
           <p className="text-center text-sm text-muted-foreground">
             {t("New here?")}{" "}
             {shown === "phone" || byCode ? (

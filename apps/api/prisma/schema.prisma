@@ -102,6 +102,7 @@ model Store {
   smsMessages          SmsMessage[]
   loginCodes           LoginCode[]
   loginSetting         StoreLoginSetting?
+  customerIdentities   CustomerIdentity[]
   searchTerms          SearchTerm[]
   productQuestions     ProductQuestion[]
   flashSales           FlashSale[]
@@ -207,6 +208,8 @@ model Storefront {
   courierAccount     CourierAccount?     @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
   /// Courier accounts customers may choose from at checkout (empty: they don't choose).
   checkoutCourierIds BigInt[]            @default([])
+  /// Show the Google / Facebook sign-in buttons here (when the store has them on).
+  socialLogin        Boolean             @default(true)
   sortOrder          Int                 @default(0)
   domains            Domain[]
   menus              Menu[]
@@ -567,13 +570,44 @@ model LoginCode {
 
 /// How customers may sign in besides email and password (phone codes are in StoreSmsSetting).
 model StoreLoginSetting {
-  id        BigInt   @id @default(autoincrement())
-  storeId   BigInt   @unique
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id                 BigInt   @id @default(autoincrement())
+  storeId            BigInt   @unique
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   /// Customers can sign in with a code sent to their email.
-  emailCode Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  emailCode          Boolean  @default(false)
+  googleEnabled      Boolean  @default(false)
+  googleClientId     String?
+  /// Encrypted.
+  googleClientSecret String?
+  facebookEnabled    Boolean  @default(false)
+  facebookAppId      String?
+  /// Encrypted.
+  facebookAppSecret  String?
+  /// Outside production only: the Google and Facebook buttons sign in a made-up test account
+  /// without calling them, so sign-in can be tried before the apps exist.
+  socialTestMode     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+/// A Google or Facebook account linked to a customer (found by the provider's user id, so it
+/// works even when the provider gives no email).
+model CustomerIdentity {
+  id         BigInt   @id @default(autoincrement())
+  storeId    BigInt
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId BigInt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// google | facebook
+  provider   String
+  /// The provider's id for the person.
+  subject    String
+  email      String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@unique([storeId, provider, subject])
+  @@index([customerId])
 }
 
 model StoreSeoSetting {
@@ -1341,6 +1375,7 @@ model Customer {
   lastLoginAt           DateTime?
   lastLoginIp           String?
   addresses             CustomerAddress[]
+  identities            CustomerIdentity[]
   leads                 Lead[]
   orders                Order[]
   reviews               Review[]

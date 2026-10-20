@@ -18,6 +18,8 @@ export interface StorefrontInfo {
   courierAccountId: bigint | null
   /** Courier accounts customers may choose from at checkout (empty: they don't choose). */
   checkoutCourierIds: bigint[]
+  /** Show the Google / Facebook sign-in buttons (when the store has them on). */
+  socialLogin: boolean
 }
 
 const TTL = 60_000
@@ -34,6 +36,7 @@ const info = (r: {
   paymentGateways: string[]
   courierAccountId: bigint | null
   checkoutCourierIds: bigint[]
+  socialLogin: boolean
 }): StorefrontInfo => ({
   id: r.id,
   code: r.code,
@@ -44,6 +47,7 @@ const info = (r: {
   paymentGateways: r.paymentGateways,
   courierAccountId: r.courierAccountId,
   checkoutCourierIds: r.checkoutCourierIds,
+  socialLogin: r.socialLogin,
 })
 
 /** Settings changed: drop what's kept for this store. */
