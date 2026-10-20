@@ -5,6 +5,7 @@
  *   POST /api/storefront/checkout, /checkout/coupons/apply, /checkout/cart/prices
  *   GET  /api/storefront/checkout/payment-methods    (enabled gateways)
  *   GET  /api/storefront/checkout/orders/:orderKey   (thank-you page)
+ *   GET  /api/storefront/account/coupons   my coupons: usable now (uses left) and used on past orders
  *   GET  /api/storefront/checkout/orders/:orderKey/invoice, /account/orders/:orderRef/invoice   (PDF)
  * No login required; the store comes from the request origin (10-tenant.ts).
  */
@@ -91,6 +92,7 @@ storefrontCheckoutRouter.get(
 export const storefrontAccountRouter = Router();
 storefrontAccountRouter.use(authMiddleware("customer"));
 
+storefrontAccountRouter.get("/coupons", storefrontController.myCoupons);
 storefrontAccountRouter.get("/orders", validate({ query: MyOrdersQueryDto }), storefrontController.listMyOrders);
 storefrontAccountRouter.get("/orders/:orderRef", validate({ params: OrderRefParamDto }), storefrontController.getMyOrder);
 storefrontAccountRouter.post("/orders/:orderRef/cancel", validate({ params: OrderRefParamDto }), storefrontController.cancelMyOrder);

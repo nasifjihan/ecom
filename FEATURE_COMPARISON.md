@@ -192,7 +192,7 @@ These are our advantages. Keep them.
 | `/search` page + suggestions | ✅ Batch 26 |
 | `/track` order by code + phone | ✅ Batch 26 |
 | `/flash-sale` listing page | ✅ Batch 26 |
-| Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; Batch 30: wallet + refer pages; my coupons not yet |
+| Wishlist page, wallet page, "my coupons" | ✅ Batch 26: wishlist; Batch 30: wallet + refer pages; Batch 40: My coupons (usable now with uses left, and used on orders) |
 | Bangla / Arabic language switch | 🟡 Batch 31: Bangla ⇄ English switch on the storefront, Bangla product/category/brand/menu names, Bangla invoices; no Arabic/RTL |
 | Low-stock label, sales count, Q&A on product page | ✅ Batch 26 |
 | Data-saver mode (lighter images) | ✅ Batch 38: footer switch, remembered per browser, on by default when the phone asks to save data; product pictures load as 480px thumbnails |

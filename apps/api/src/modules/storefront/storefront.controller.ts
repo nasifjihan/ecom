@@ -37,6 +37,10 @@ export const storefrontController = {
     envelope(res, { data: await svc(req).availableCoupons() });
   }),
 
+  myCoupons: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).myCoupons() });
+  }),
+
   applyCoupon: ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).applyCoupon(req.body) });
   }),

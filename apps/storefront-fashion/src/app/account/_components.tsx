@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, FileText, Gift, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
+import { Briefcase, FileText, Gift, LogOut, MapPin, Package, Ticket, User, Wallet } from "lucide-react";
 import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney, msg, orderStatusWord, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import { useWholesaleStatus } from "@/lib/wholesale";
@@ -55,6 +55,7 @@ const NAV = [
   { href: "/account/orders", label: msg("Orders"), icon: Package },
   { href: "/account/addresses", label: msg("Addresses"), icon: MapPin },
   { href: "/account/wallet", label: msg("Wallet"), icon: Wallet },
+  { href: "/account/coupons", label: msg("My coupons"), icon: Ticket },
   { href: "/account/refer", label: msg("Refer a friend"), icon: Gift },
   { href: "/account/business", label: msg("Business account"), icon: Briefcase },
   { href: "/account/quotes", label: msg("Quotes"), icon: FileText },

@@ -5066,3 +5066,38 @@ Each storefront now chooses how its checkout looks (**one page** or **step by st
 - **Saved checkouts:** step by step doesn't remember the step after a reload.
 - **Other storefronts:** only the fashion storefront app has the new checkout.
 - **Next:** part 4, My coupons.
+
+---
+
+## ✅ BATCH #40 (part 4) — My coupons (2026-10-20)
+Signed-in customers get a **My coupons** page in their account: the codes they can use now and the orders that used one. This finishes Batch 40.
+
+### 40.16 API
+- **Endpoint:** `GET /api/storefront/account/coupons` (customer sign-in needed) returns:
+  - **usable:** the same coupons checkout offers (public ones plus ones given to the customer's email, on this storefront, started, not expired, not used up), each with `usesLeft`. That is `perCustomerLimit` minus the customer's orders with that code, counted like checkout's check: on the account or the email, not cancelled. `null` means no limit, and coupons with 0 left are left out.
+  - **used:** the account's orders that used a coupon (code, order number, discount, date). Guest orders with the same email count towards the limit but aren't listed, the same as My orders.
+- **Available coupons:** `availableCoupons` now also returns `perCustomerLimit`.
+
+### 40.17 Storefront
+- **Page:** `/account/coupons` ("My coupons" in the account menu).
+  - Each usable coupon shows its code with a copy button, what it gives, its description, "For you" on given coupons, minimum spend, end date, uses left, and "not with other offers".
+  - The Used list links each order.
+- **Bangla:** the new texts have Bangla.
+
+### 40.18 Checked
+- **Tests:** new `tests/integration/my-coupons.db.test.ts`:
+  - usable lists the open coupon, mine, and the one with 1 of 2 uses left;
+  - it leaves out one used up, someone else's, a private one and an expired one;
+  - the cancelled order doesn't count and the guest order counts but isn't listed;
+  - sign-in is required.
+- **Full suite:** API 822 passing (74 files), DB tests on `ecom_test`.
+- **Types and lint:** storefront typechecks; no new lint errors.
+- **In the browser:**
+  - with a temporary public coupon BATCH40TEST (৳150 off over ৳1,000, 2 per customer), signed in with test-mode Google from `/account/login?next=/account/coupons`;
+  - the page showed it with "2 uses left" and "You haven't used a coupon yet";
+  - the temporary coupon was then deleted;
+  - without sign-in, the endpoint answers 401.
+
+### 40.19 Not done
+- **Coupon emails:** no email or SMS goes out when a coupon is given to a customer. They see it here and at checkout.
+- **Next:** Batch 43 (prices per option on each storefront, reusable sliders, admin bookmarks and text size, table tests for coupon and shipping pricing), then 41 (gateways) and 42 (WhatsApp, more alerts).

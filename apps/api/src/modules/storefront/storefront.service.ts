@@ -957,8 +957,49 @@ export class StorefrontService {
           expiresAt: c.expiresAt?.toISOString() ?? null,
           forYou: c.audience === "given",
           worksWithPromotions: c.worksWithPromotions,
+          perCustomerLimit: c.perCustomerLimit,
         };
       });
+  }
+
+  /**
+   * My coupons: the ones the signed-in customer can use now, with how many uses they have left
+   * (counted the way checkout counts them: orders on their account or email, not cancelled),
+   * and their past orders that used a coupon.
+   */
+  async myCoupons() {
+    const customerId = this.customerId;
+    const me = await prisma.customer.findFirst({ where: { id: customerId, storeId: this.storeId }, select: { email: true } });
+    const email = me?.email?.toLowerCase();
+    const [available, orders] = await Promise.all([
+      this.availableCoupons(),
+      prisma.order.findMany({
+        where: {
+          storeId: this.storeId,
+          couponUsed: { not: null },
+          status: { not: "CANCELLED" },
+          OR: [{ customerId }, ...(email ? [{ billingEmail: email }] : [])],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { number: true, couponUsed: true, discountTotal: true, createdAt: true, customerId: true },
+      }),
+    ]);
+    const used = new Map<string, number>();
+    for (const o of orders) used.set(o.couponUsed!.toUpperCase(), (used.get(o.couponUsed!.toUpperCase()) ?? 0) + 1);
+    return {
+      usable: available
+        .map(({ perCustomerLimit, ...c }) => ({
+          ...c,
+          /** null: no limit per customer. */
+          usesLeft: perCustomerLimit === null ? null : Math.max(0, perCustomerLimit - (used.get(c.code.toUpperCase()) ?? 0)),
+        }))
+        .filter((c) => c.usesLeft !== 0),
+      // Only orders on the account: guest orders with the same email aren't shown in My orders either.
+      used: orders
+        .filter((o) => o.customerId === customerId)
+        .map((o) => ({ code: o.couponUsed!, orderNumber: o.number, discount: num(o.discountTotal), date: o.createdAt.toISOString() })),
+    };
   }
 
   async applyCoupon(dto: ApplyCouponDto) {

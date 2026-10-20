@@ -52,6 +52,12 @@ export interface AvailableCoupon {
   worksWithPromotions: boolean;
 }
 
+/** My coupons: ones I can use now (usesLeft null: no limit for me), and past orders that used one. */
+export interface MyCoupons {
+  usable: (AvailableCoupon & { usesLeft: number | null })[];
+  used: { code: string; orderNumber: string; discount: number; date: string }[];
+}
+
 const promotionsApi = api.injectEndpoints({
   endpoints: (b) => ({
     slotPromotions: b.query<SlotPromotion[], { slot: PromoSlot; productId?: string; categorySlug?: string }>({
@@ -61,8 +67,9 @@ const promotionsApi = api.injectEndpoints({
     availableCoupons: b.query<AvailableCoupon[], void>({
       query: () => "/storefront/checkout/coupons/available",
     }),
+    myCoupons: b.query<MyCoupons, void>({ query: () => "/storefront/account/coupons" }),
   }),
   overrideExisting: false,
 });
 
-export const { useSlotPromotionsQuery, useAvailableCouponsQuery } = promotionsApi;
+export const { useSlotPromotionsQuery, useAvailableCouponsQuery, useMyCouponsQuery } = promotionsApi;
