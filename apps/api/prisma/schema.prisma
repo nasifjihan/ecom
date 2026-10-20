@@ -100,7 +100,8 @@ model Store {
   promotions           Promotion[]
   smsSetting           StoreSmsSetting?
   smsMessages          SmsMessage[]
-  phoneOtps            PhoneOtp[]
+  loginCodes           LoginCode[]
+  loginSetting         StoreLoginSetting?
   searchTerms          SearchTerm[]
   productQuestions     ProductQuestion[]
   flashSales           FlashSale[]
@@ -546,12 +547,13 @@ model SmsMessage {
   @@index([storeId, orderId])
 }
 
-/// One-time sign-in codes sent by SMS; only a hash of the code is kept.
-model PhoneOtp {
+/// One-time sign-in codes, sent by SMS or email; only a hash of the code is kept.
+model LoginCode {
   id         BigInt    @id @default(autoincrement())
   storeId    BigInt
   store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  phone      String
+  /// A Bangladeshi mobile number (01…) or a lower-case email address.
+  target     String
   codeHash   String
   purpose    String    @default("login")
   attempts   Int       @default(0)
@@ -560,7 +562,18 @@ model PhoneOtp {
   ip         String?
   createdAt  DateTime  @default(now())
 
-  @@index([storeId, phone, createdAt])
+  @@index([storeId, target, createdAt])
+}
+
+/// How customers may sign in besides email and password (phone codes are in StoreSmsSetting).
+model StoreLoginSetting {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt   @unique
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Customers can sign in with a code sent to their email.
+  emailCode Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model StoreSeoSetting {

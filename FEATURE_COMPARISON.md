@@ -180,7 +180,7 @@ These are our advantages. Keep them.
 | Product display toggles (show rating, show sales count, low-stock threshold) | ✅ Batch 38: star ratings, "sold" count, low-stock warning and a store-wide threshold, per storefront |
 | Checkout style (single page vs steps), guest checkout | 🟡 |
 | Payment gateway credentials per store, sandbox/live, **encrypted**, test button | ✅ | Batch 35: bKash and SSLCommerz merchant keys, masked in the admin, "Test connection" required before going online |
-| Login methods: **phone OTP**, email OTP, Google, Facebook | 🟡 | Batch 24: phone OTP; email OTP / Google / Facebook not yet |
+| Login methods: **phone OTP**, email OTP, Google, Facebook | 🟡 | Batch 24: phone OTP; Batch 40: email code (Settings → Customer sign-in); Google / Facebook not yet |
 | SMS provider settings | ✅ | Batch 24: BulkSMSBD, Alpha SMS, SSL Wireless; encrypted keys, test send, log |
 | Invoice name / note / order prefix | ✅ Batch 35 |
 | robots.txt editable | ✅ Batch 38: extra rules (checked line by line) and "Hide from search engines" (robots.txt block-all plus a noindex tag), per storefront |

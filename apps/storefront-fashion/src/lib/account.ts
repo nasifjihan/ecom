@@ -253,7 +253,7 @@ export const accountApi = api.injectEndpoints({
       query: (body) => ({ url: "/auth/customer/login", method: "POST", body }),
     }),
     /** How customers can sign in here (phone codes are turned on in the admin's Settings → SMS). */
-    loginMethods: builder.query<{ email: boolean; phoneOtp: boolean }, void>({
+    loginMethods: builder.query<{ email: boolean; phoneOtp: boolean; emailCode: boolean }, void>({
       query: () => "/auth/customer/login-methods",
     }),
     requestPhoneCode: builder.mutation<{ sent: boolean; expiresInMinutes: number }, { phone: string }>({
@@ -261,6 +261,12 @@ export const accountApi = api.injectEndpoints({
     }),
     verifyPhoneCode: builder.mutation<AuthResult & { created: boolean }, { phone: string; code: string; firstName?: string; lastName?: string }>({
       query: (body) => ({ url: "/auth/customer/otp/verify", method: "POST", body: clean(body) }),
+    }),
+    requestEmailCode: builder.mutation<{ sent: boolean; expiresInMinutes: number }, { email: string }>({
+      query: (body) => ({ url: "/auth/customer/email-code/request", method: "POST", body }),
+    }),
+    verifyEmailCode: builder.mutation<AuthResult & { created: boolean }, { email: string; code: string; firstName?: string; lastName?: string }>({
+      query: (body) => ({ url: "/auth/customer/email-code/verify", method: "POST", body: clean(body) }),
     }),
     customerRegister: builder.mutation<AuthResult, RegisterInput>({
       query: (body) => ({ url: "/auth/customer/register", method: "POST", body: clean(body) }),
@@ -350,6 +356,8 @@ export const {
   useLoginMethodsQuery,
   useRequestPhoneCodeMutation,
   useVerifyPhoneCodeMutation,
+  useRequestEmailCodeMutation,
+  useVerifyEmailCodeMutation,
   useCustomerRegisterMutation,
   useCustomerLogoutMutation,
   useForgotPasswordMutation,

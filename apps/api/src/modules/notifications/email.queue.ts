@@ -113,10 +113,19 @@ export async function dispatchEmail(logId: bigint): Promise<void> {
 
 const readData = (row: { data: Prisma.JsonValue }) => (row.data ?? {}) as unknown as EmailLogData
 
-async function update(id: bigint, data: EmailLogData, sentAt?: Date) {
+/** Emails carrying a sign-in code: once sent or given up, the log keeps them with the code hidden. */
+const SECRET_TEMPLATES = new Set(["customer_login_code"])
+export const maskCodes = (s: string) => s.replace(/(?<![#\w])\d{6}(?!\w)/g, "••••••") // not CSS colours like #333333
+
+async function update(id: bigint, data: EmailLogData, sentAt?: Date, body?: string | null) {
+  const hide = SECRET_TEMPLATES.has(data.template) && (data.status === "sent" || data.status === "failed")
   await prisma.notification.update({
     where: { id },
-    data: { data: data as unknown as Prisma.InputJsonValue, ...(sentAt ? { sentAt } : {}) },
+    data: {
+      data: (hide ? { ...data, text: maskCodes(data.text) } : data) as unknown as Prisma.InputJsonValue,
+      ...(sentAt ? { sentAt } : {}),
+      ...(hide && body ? { body: maskCodes(body) } : {}),
+    },
   })
 }
 
@@ -153,6 +162,7 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
         logOnly: env.MAIL_DRIVER === "log",
       },
       new Date(),
+      row.body,
     )
     logger.info(
       {
@@ -171,7 +181,7 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
       status: last ? "failed" : "retrying",
       attempts: attempt,
       error: message,
-    })
+    }, undefined, row.body)
     logger.warn(
       { to: data.to, template: data.template, attempt, err: message },
       last ? "Email failed" : "Email failed, will retry",

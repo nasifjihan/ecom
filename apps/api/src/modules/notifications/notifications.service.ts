@@ -414,6 +414,22 @@ export class EmailService {
     })
   }
 
+  /** Sent even if the store switched the template off: signing in depends on it. */
+  async customerLoginCode(email: string, firstName: string, code: string, minutes: number) {
+    return this.send("customer_login_code", {
+      to: [email],
+      vars: {
+        "customer.name": firstName,
+        "customer.first_name": firstName,
+        "customer.email": email,
+        "login.code": code,
+        "login.expires_minutes": String(minutes),
+      },
+      recipientType: "customer",
+      force: true,
+    })
+  }
+
   async staffPasswordReset(
     a: { id: bigint; email: string; name: string },
     token: string,
@@ -578,6 +594,11 @@ export class EmailService {
     const subject = (input.subject ?? current.subject).trim()
     const message = (input.message ?? current.message).trim()
     const useDefault = subject === def.subject && message === def.message
+    if (key === "customer_login_code" && !message.includes("{{login.code}}"))
+      throw new BadRequestError(
+        "The message must keep {{login.code}}, or customers won't get their code",
+        "VALIDATION_FAILED",
+      )
     const recipients = def.audience === "staff" ? (input.recipients ?? current.recipients) : []
     const data = {
       enabled: input.enabled ?? current.enabled,
@@ -637,6 +658,8 @@ export class EmailService {
         "update.note": "",
         "reset.url": `${urls.storefront}/account/reset-password?token=sample`,
         "reset.expires_minutes": "60",
+        "login.code": "482916",
+        "login.expires_minutes": "5",
         "staff.name": "Rahim",
         "staff.email": "rahim@example.com",
         "quote.number": "Q-000012",

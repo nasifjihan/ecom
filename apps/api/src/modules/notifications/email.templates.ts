@@ -147,6 +147,17 @@ export const EMAIL_TEMPLATES = {
     button: { label: "Choose a new password", url: "reset.url" },
     variables: [...STORE, ...CUSTOMER, "reset.url", "reset.expires_minutes"],
   },
+  customer_login_code: {
+    label: "Sign-in code",
+    audience: "customer",
+    description:
+      "Sent when a customer asks to sign in with a code by email. Keep {{login.code}} in the message.",
+    subject: "Your {{store.name}} sign-in code",
+    message:
+      "# {{login.code}}\n\nHi {{customer.first_name}},\n\nUse this code to sign in to {{store.name}}. It works for {{login.expires_minutes}} minutes.\n\nIf you didn't ask for it, you can ignore this email. Never share the code with anyone.",
+    blocks: [],
+    variables: [...STORE, ...CUSTOMER, "login.code", "login.expires_minutes"],
+  },
   staff_password_reset: {
     label: "Staff password reset",
     audience: "staff",

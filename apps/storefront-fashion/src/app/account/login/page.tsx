@@ -11,7 +11,9 @@ import {
   signIn,
   useCustomerLoginMutation,
   useLoginMethodsQuery,
+  useRequestEmailCodeMutation,
   useRequestPhoneCodeMutation,
+  useVerifyEmailCodeMutation,
   useVerifyPhoneCodeMutation,
 } from "@/lib/account";
 import { Field, safeNext } from "../_components";
@@ -24,6 +26,7 @@ export default function LoginPage() {
   const next = safeNext(params.get("next"));
   const { data: methods } = useLoginMethodsQuery();
   const [method, setMethod] = React.useState<Method | null>(null);
+  const [byCode, setByCode] = React.useState(false);
   const t = useT();
 
   React.useEffect(() => {
@@ -57,11 +60,24 @@ export default function LoginPage() {
               ))}
             </div>
           )}
-          {shown === "phone" ? <PhoneLogin next={next} /> : <EmailLogin next={next} />}
+          {shown === "phone" ? (
+            <CodeLogin channel="phone" next={next} />
+          ) : byCode && methods?.emailCode ? (
+            <CodeLogin channel="email" next={next} />
+          ) : (
+            <EmailLogin next={next} />
+          )}
+          {shown === "email" && methods?.emailCode && (
+            <p className="text-center text-sm">
+              <button type="button" className="font-medium text-primary hover:underline" onClick={() => setByCode((v) => !v)}>
+                {byCode ? t("Use my password instead") : t("Email me a sign-in code instead")}
+              </button>
+            </p>
+          )}
           <p className="text-center text-sm text-muted-foreground">
             {t("New here?")}{" "}
-            {shown === "phone" ? (
-              t("Enter your number: we'll make your account when you confirm the code.")
+            {shown === "phone" || byCode ? (
+              shown === "email" ? t("Enter your email: we'll make your account when you confirm the code.") : t("Enter your number: we'll make your account when you confirm the code.")
             ) : (
               <Link href={`/account/register${next !== "/account" ? `?next=${encodeURIComponent(next)}` : ""}`} className="font-semibold text-primary hover:underline">
                 {t("Create an account")}
@@ -122,12 +138,17 @@ function EmailLogin({ next }: { next: string }) {
 
 const RESEND_SECONDS = 60;
 
-/** Number -> 6-digit code by SMS -> signed in (a new number gets an account). */
-function PhoneLogin({ next }: { next: string }) {
+/** Number or email -> 6-digit code by SMS or email -> signed in (a new one gets an account). */
+function CodeLogin({ channel, next }: { channel: "phone" | "email"; next: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const [requestCode, { isLoading: sending }] = useRequestPhoneCodeMutation();
-  const [verify, { isLoading: verifying }] = useVerifyPhoneCodeMutation();
+  const [requestSms, sms] = useRequestPhoneCodeMutation();
+  const [verifySms, smsCheck] = useVerifyPhoneCodeMutation();
+  const [requestEmail, mail] = useRequestEmailCodeMutation();
+  const [verifyEmail, mailCheck] = useVerifyEmailCodeMutation();
+  const byEmail = channel === "email";
+  const sending = byEmail ? mail.isLoading : sms.isLoading;
+  const verifying = byEmail ? mailCheck.isLoading : smsCheck.isLoading;
   const [phone, setPhone] = React.useState("");
   const [sentTo, setSentTo] = React.useState<string | null>(null);
   const [code, setCode] = React.useState("");
@@ -146,7 +167,7 @@ function PhoneLogin({ next }: { next: string }) {
     e?.preventDefault();
     setError(null);
     try {
-      await requestCode({ phone: phone.trim() }).unwrap();
+      await (byEmail ? requestEmail({ email: phone.trim() }) : requestSms({ phone: phone.trim() })).unwrap();
       setSentTo(phone.trim());
       setCode("");
       setWait(RESEND_SECONDS);
@@ -162,7 +183,8 @@ function PhoneLogin({ next }: { next: string }) {
     setError(null);
     const [firstName, ...rest] = name.trim().split(/\s+/);
     try {
-      const result = await verify({ phone: sentTo, code: code.trim(), ...(firstName ? { firstName } : {}), ...(rest.length ? { lastName: rest.join(" ") } : {}) }).unwrap();
+      const name = { ...(firstName ? { firstName } : {}), ...(rest.length ? { lastName: rest.join(" ") } : {}) };
+      const result = await (byEmail ? verifyEmail({ email: sentTo, code: code.trim(), ...name }) : verifySms({ phone: sentTo, code: code.trim(), ...name })).unwrap();
       signIn(dispatch, result);
       toast.success(result.created ? t("Welcome, {name}! Your account is ready.", { name: fullName(result.user) }) : t("Welcome back, {name}", { name: fullName(result.user) }));
       router.replace(next);
@@ -174,24 +196,28 @@ function PhoneLogin({ next }: { next: string }) {
   if (!sentTo) {
     return (
       <form onSubmit={send} className="space-y-4">
-        <Field
-          id="phone"
-          label={msg("Mobile number")}
-          type="tel"
-          inputMode="tel"
-          required
-          autoComplete="tel"
-          placeholder="01XXXXXXXXX"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
+        {byEmail ? (
+          <Field id="code-email" label={msg("Email")} type="email" required autoComplete="email" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        ) : (
+          <Field
+            id="phone"
+            label={msg("Mobile number")}
+            type="tel"
+            inputMode="tel"
+            required
+            autoComplete="tel"
+            placeholder="01XXXXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
-        <Button type="submit" className="w-full" disabled={sending || phone.trim().length < 10}>
-          {sending ? t("Sending code...") : t("Send code by SMS")}
+        <Button type="submit" className="w-full" disabled={sending || phone.trim().length < (byEmail ? 5 : 10)}>
+          {sending ? t("Sending code...") : byEmail ? t("Send code by email") : t("Send code by SMS")}
         </Button>
       </form>
     );
@@ -202,7 +228,7 @@ function PhoneLogin({ next }: { next: string }) {
       <p className="text-sm text-muted-foreground">
         {t("Enter the 6-digit code we sent to {phone}.", { phone: sentTo })}{" "}
         <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setSentTo(null); setError(null); }}>
-          {t("Change number")}
+          {byEmail ? t("Change email") : t("Change number")}
         </button>
       </p>
       <Field

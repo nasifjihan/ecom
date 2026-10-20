@@ -14,6 +14,7 @@ import {
 } from "./auth.dto";
 import { PasswordResetService } from "./password-reset";
 import { OtpRequestDto, OtpVerifyDto } from "../sms/sms.dto";
+import { EmailCodeRequestDto, EmailCodeVerifyDto } from "./customer-login";
 import { UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core";
 import type { Request, Response } from "express";
 
@@ -47,6 +48,10 @@ router.post(
 router.get("/customer/login-methods", authController.getCustomerLoginMethods);
 router.post("/customer/otp/request", validate({ body: OtpRequestDto }), authController.postCustomerOtpRequest);
 router.post("/customer/otp/verify", validate({ body: OtpVerifyDto }), authController.postCustomerOtpVerify);
+
+// ---- sign in with a code sent by email (Settings → Customer sign-in)
+router.post("/customer/email-code/request", validate({ body: EmailCodeRequestDto }), authController.postCustomerEmailCodeRequest);
+router.post("/customer/email-code/verify", validate({ body: EmailCodeVerifyDto }), authController.postCustomerEmailCodeVerify);
 
 // ---- forgot / reset password (store comes from the request Origin)
 

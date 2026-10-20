@@ -24,6 +24,7 @@ import { AuthService } from "./auth.service";
 import { emitCustomerRegistered } from "../notifications";
 import { SmsService } from "../sms/sms.service";
 import type { OtpVerifyDto } from "../sms/sms.dto";
+import { CustomerLoginService, type EmailCodeVerifyDto } from "./customer-login";
 import type {
   SuperLoginDto,
   AdminLoginDto,
@@ -165,8 +166,50 @@ export class AuthController extends BaseController {
   getCustomerLoginMethods = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const storeId = req.ctx.storeId;
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
-    envelope(res, { data: { email: true, phoneOtp: await new SmsService(BigInt(storeId)).phoneLoginEnabled() } });
+    envelope(res, { data: await new CustomerLoginService(BigInt(storeId)).methods() });
   });
+
+  /** Emails a 6-digit sign-in code. */
+  postCustomerEmailCodeRequest = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const storeId = req.ctx.storeId;
+    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const r = await new CustomerLoginService(BigInt(storeId)).requestEmailCode(
+      (req.body as { email: string }).email,
+      req.ctx.ip ?? null,
+    );
+    envelope(res, { status: 200, message: "Code sent", data: { sent: true, expiresInMinutes: r.expiresInMinutes } });
+  });
+
+  /** Checks the emailed code and signs the customer in, creating an account for a new email. */
+  postCustomerEmailCodeVerify = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const storeId = req.ctx.storeId;
+    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const { customer, created } = await new CustomerLoginService(BigInt(storeId)).verifyEmailCode(
+      req.body as EmailCodeVerifyDto,
+    );
+    await this.signInCustomer(req, res, customer, created);
+  });
+
+  /** Issues tokens for a customer who proved who they are, and sets the refresh cookie. */
+  private async signInCustomer(
+    req: Request & { ctx: RequestContext },
+    res: Response,
+    customer: Awaited<ReturnType<SmsService["verifyOtp"]>>["customer"],
+    created: boolean,
+  ) {
+    if (created) emitCustomerRegistered({ storeId: String(req.ctx.storeId), customerId: String(customer.id) });
+    const tokens = await this.service(req.ctx).issueTokens(customer, "customer");
+    this.setCookie(res, "customer", tokens.refreshToken);
+    envelope(res, {
+      status: 200,
+      data: {
+        accessToken: tokens.accessToken,
+        user: omitPasswordHash(customer),
+        expiresInMin: tokens.expiresInMin,
+        created,
+      },
+    });
+  }
 
   /** Sends a 6-digit sign-in code by SMS. */
   postCustomerOtpRequest = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
@@ -182,18 +225,7 @@ export class AuthController extends BaseController {
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
     const dto = req.body as OtpVerifyDto;
     const { customer, created } = await new SmsService(BigInt(storeId)).verifyOtp(dto.phone, dto.code, dto);
-    if (created) emitCustomerRegistered({ storeId: String(storeId), customerId: String(customer.id) });
-    const tokens = await this.service(req.ctx).issueTokens(customer, "customer");
-    this.setCookie(res, "customer", tokens.refreshToken);
-    envelope(res, {
-      status: 200,
-      data: {
-        accessToken: tokens.accessToken,
-        user: omitPasswordHash(customer),
-        expiresInMin: tokens.expiresInMin,
-        created,
-      },
-    });
+    await this.signInCustomer(req, res, customer, created);
   });
 
   postRegisterOwnerFirst = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

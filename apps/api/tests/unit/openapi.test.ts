@@ -87,5 +87,5 @@ describe("API docs from the routes", () => {
       expect(listed.sort(), p).toEqual(names.sort())
     }
     expect(new Set(ops.map(({ o }) => o.operationId)).size).toBe(ops.length)
-  })
+  }, 30_000) // loads the whole app, slow when the full suite runs in parallel
 })

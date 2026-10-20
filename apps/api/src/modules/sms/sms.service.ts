@@ -6,17 +6,13 @@ import type { Prisma, StoreSmsSetting } from "@prisma/client"
 import { decrypt, encrypt, env, logger, prisma } from "../../config"
 import { BadRequestError, NotFoundError, RateLimitError, UnauthorizedError } from "../../core"
 import { storeBrand } from "../content/store-details"
+import { issueLoginCode, useLoginCode } from "../auth/login-codes"
 import {
   bdMobile,
   eventSettings,
-  hashOtp,
   maskOtp,
-  newOtp,
-  OTP_MAX_ATTEMPTS,
   OTP_TTL_MINUTES,
-  otpMatches,
   otpMessage,
-  otpWait,
   phoneVariants,
   renderSms,
   smsMoney,
@@ -377,30 +373,7 @@ export class SmsService {
         "Enter a Bangladeshi mobile number, e.g. 01712345678",
         "VALIDATION_FAILED",
       )
-    const recent = await prisma.phoneOtp.findMany({
-      where: { storeId: this.storeId, phone, createdAt: { gt: new Date(Date.now() - 3600_000) } },
-      select: { createdAt: true },
-    })
-    const wait = otpWait(recent.map((r) => r.createdAt))
-    if (wait > 0)
-      throw new RateLimitError(
-        `Please wait ${wait < 120 ? `${wait} seconds` : `${Math.ceil(wait / 60)} minutes`} before asking for another code`,
-      )
-    // One code at a time: older ones stop working.
-    await prisma.phoneOtp.updateMany({
-      where: { storeId: this.storeId, phone, consumedAt: null },
-      data: { consumedAt: new Date() },
-    })
-    const code = newOtp()
-    await prisma.phoneOtp.create({
-      data: {
-        storeId: this.storeId,
-        phone,
-        codeHash: hashOtp(env.APP_ENCRYPTION_KEY, this.storeId, phone, code),
-        expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
-        ip,
-      },
-    })
+    const code = await issueLoginCode(this.storeId, phone, ip)
     const { brand } = await storeBrand(this.storeId)
     const text = otpMessage(code, brand.storeName)
     const msg = await this.send({ to: phone, text, kind: "otp", logText: maskOtp(text, code) })
@@ -422,36 +395,12 @@ export class SmsService {
     name?: { firstName?: string; lastName?: string },
   ) {
     const phone = bdMobile(rawPhone)
-    const bad = () =>
-      new UnauthorizedError(
+    if (!phone)
+      throw new UnauthorizedError(
         "That code is wrong or has expired. Ask for a new one.",
         "AUTH_CREDENTIALS_INVALID",
       )
-    if (!phone || !/^\d{6}$/.test(code)) throw bad()
-    const otp = await prisma.phoneOtp.findFirst({
-      where: { storeId: this.storeId, phone, consumedAt: null, expiresAt: { gt: new Date() } },
-      orderBy: { id: "desc" },
-    })
-    if (!otp || otp.attempts >= OTP_MAX_ATTEMPTS) throw bad()
-    if (!otpMatches(env.APP_ENCRYPTION_KEY, this.storeId, phone, code, otp.codeHash)) {
-      const attempts = otp.attempts + 1
-      await prisma.phoneOtp.update({
-        where: { id: otp.id },
-        data: { attempts, ...(attempts >= OTP_MAX_ATTEMPTS ? { consumedAt: new Date() } : {}) },
-      })
-      throw attempts >= OTP_MAX_ATTEMPTS
-        ? new UnauthorizedError(
-            "Too many wrong codes. Ask for a new one.",
-            "AUTH_CREDENTIALS_INVALID",
-          )
-        : bad()
-    }
-    // Used once, even if two requests race: only the one that flips it goes on.
-    const used = await prisma.phoneOtp.updateMany({
-      where: { id: otp.id, consumedAt: null },
-      data: { consumedAt: new Date() },
-    })
-    if (used.count === 0) throw bad()
+    await useLoginCode(this.storeId, phone, code)
     return this.customerForPhone(phone, name)
   }
 

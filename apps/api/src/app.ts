@@ -45,6 +45,7 @@ import {
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
+import { adminLoginSettingsRouter } from "./modules/auth/customer-login.routes";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { docsRouter } from "./modules/docs";
@@ -187,6 +188,7 @@ export function buildApp(): Express {
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
+  app.use("/api/admin/login-settings", adminLoginSettingsRouter);
   app.use("/api/admin/loyalty", adminLoyaltyRouter);                  // wallet, cashback, levels, referrals
   app.use("/api/admin/warehouses", adminWarehousesRouter);            // warehouses, stock per warehouse, transfers, order ship-from
   app.use("/api/admin/storefronts", adminStorefrontsRouter);          // storefronts, their web addresses, product range and prices

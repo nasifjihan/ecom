@@ -4922,3 +4922,55 @@ The "Search orders, customers, products…" box in the admin header looked real 
 - **Admin extras:** no bookmarks, text size setting or global scope switcher.
 - **Search reach:** no search inside settings pages' contents (only page names), and no search of leads, quotes or purchases yet.
 - **What's next:** all of the feature comparison's proposed batches (18–39) are done; what's left are the 🟡 rows (for example email OTP / Google login, Nagad and other gateways, WhatsApp, Arabic) to plan as the next batches.
+
+---
+
+## ✅ BATCH #40 (part 1) — Sign in with an email code (2026-10-20)
+Customers can now sign in with a 6-digit code sent to their email instead of a password. A new email gets an account, the same way a new phone number does with SMS codes. The shop turns it on in the new **Settings → Customer sign-in** page.
+
+### 40.1 Codes for phone or email (`modules/auth/login-codes.ts`)
+- **One table:** `PhoneOtp` is renamed to `LoginCode` and `phone` to `target` (migration `20261020120000_login_codes`), so existing rows are kept. A target is a mobile number or a lower-case email.
+- **Shared rules:** `issueLoginCode` / `useLoginCode` hold what phone sign-in already did:
+  - a keyed hash of the code, bound to the store and target;
+  - one live code at a time, a minute apart, at most 5 an hour;
+  - 5 wrong tries end a code, and a code works once even when two requests race.
+- **SMS:** `SmsService.requestOtp` and `verifyOtp` now call these helpers; their behaviour is unchanged.
+
+### 40.2 Email sign-in (`modules/auth/customer-login.ts`)
+- **Setting:** the new `StoreLoginSetting.emailCode` switch, off by default.
+- **Endpoints:**
+  - `POST /api/auth/customer/email-code/request { email }`;
+  - `POST /api/auth/customer/email-code/verify { email, code, firstName?, lastName? }`: signs in and sets the refresh cookie like phone sign-in (the two share `signInCustomer`).
+- **Accounts:** an existing account is signed in, and a guest record with that email becomes a full account (not a second one). A banned customer is refused.
+- **Login methods:** `login-methods` now also reports `emailCode`.
+- **Email:** the new template `customer_login_code` ("Sign-in code").
+  - It is sent even if the shop switched it off, since signing in depends on it.
+  - Saving a rewrite that drops `{{login.code}}` is refused.
+- **Email log:** once the email is sent or has failed, the log row keeps the message with the code replaced by ••••••, so staff can't read live codes.
+
+### 40.3 Admin and storefront
+- **Admin:** **Settings → Customer sign-in** (`/settings/sign-in`) shows that email and password is always on, has the email-code switch, and shows whether SMS codes are on, with a link to the SMS page. The API is `GET|PUT /api/admin/login-settings` (`settings.view` / `settings.edit`).
+- **Storefront:**
+  - On the Email tab, "Email me a sign-in code instead" swaps the password form for the code form.
+  - The phone form is now `CodeLogin`, used for both channels: send, resend timer, name for new accounts.
+  - The new texts have Bangla.
+
+### 40.4 Checked
+- **Tests:**
+  - new `tests/integration/email-code.db.test.ts`:
+    - refused while off;
+    - code sent and hidden in the email log and the code table;
+    - a wrong code is refused and the right one signs in once;
+    - asked to wait before a second code;
+    - a guest becomes a full account;
+    - banned is refused.
+  - `sms.test.ts` and `customer-auth.db.test.ts` still pass.
+- **Types and lint:** API, admin and storefront typecheck. The storefront Bangla test passes.
+- **In the browser:**
+  - turned the switch on in the admin;
+  - on the storefront, asked for a code for batch40.codetest@example.com;
+  - Mailpit got "Your Fashion Bangladesh sign-in code" while the admin's email log showed ••••••;
+  - entering the code with the name "Code Tester" signed in to a new account on `/account`.
+
+### 40.5 Not done
+- **Next:** part 2, Google and Facebook sign-in.
