@@ -46,7 +46,7 @@ These are our advantages. Keep them.
 | Soft delete + "Deleted only" filter, created/updated by | ✅ | Batch 34: Trash with Deleted view, restore to the old status, delete forever (refused while a gift box, landing page, purchase or transfer needs it), created/updated/deleted by |
 | Product landing page `/lp/{slug}` built from blocks | ✅ | Batch 33: offer price and countdown, blocks, reviews, order form with cash on delivery on the page, visits and conversion per page |
 | Gift box components + Gift Box Builder | ✅ | Batch 33: /gift-boxes builder (box styles, items from chosen categories/products, min–max, message card), boxes in cart and checkout, checked by the server, box and card on the order |
-| Media: auto WebP + thumbnail, size guidance per slot | 🟡 | Upload works and accepts WebP; no conversion or thumbnails |
+| Media: auto WebP + thumbnail, size guidance per slot | ✅ | Batch 38: photos saved as WebP (at most 2000px, turned upright) with a 480px thumbnail used on cards and the gallery strip; GIFs kept as they are. Size guidance per slot as hints in the editors |
 
 ### Orders & fulfilment (reference 11, 06, 07.10)
 | Feature | Status | Note |
@@ -195,7 +195,7 @@ These are our advantages. Keep them.
 | Wishlist page, wallet page, "my coupons" | 🟡 Batch 26: wishlist; Batch 30: wallet + refer pages; my coupons not yet |
 | Bangla / Arabic language switch | 🟡 Batch 31: Bangla ⇄ English switch on the storefront, Bangla product/category/brand/menu names, Bangla invoices; no Arabic/RTL |
 | Low-stock label, sales count, Q&A on product page | ✅ Batch 26 |
-| Data-saver mode (lighter images) | ❌ |
+| Data-saver mode (lighter images) | ✅ Batch 38: footer switch, remembered per browser, on by default when the phone asks to save data; product pictures load as 480px thumbnails |
 
 ### Engineering (reference 08, 23, 25)
 | Item | Status |
@@ -238,7 +238,7 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 35 ✅ | **Online payments, safely**: per-store encrypted gateway keys (sandbox/live, test), verified + idempotent webhooks, idempotent order create, VAT-inclusive prices, BIN/trade licence + order prefix on invoices | Before any shop takes bKash or cards | L |
 | 36 ✅ | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 ✅ | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
-| 38 | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
+| 38 ✅ | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
 | 39 | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

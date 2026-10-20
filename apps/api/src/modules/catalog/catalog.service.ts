@@ -36,6 +36,7 @@ import type {
 import type { Prisma } from "@prisma/client";
 import { slugify } from "@ecom/utils";
 import { resyncProductTotals, setStockTotal } from "../stock";
+import { optimizeImage } from "../../services/images/optimize";
 
 function randomAlphanum(length: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -984,20 +985,45 @@ export class CatalogService extends BaseService {
     const safeName = sanitizeFilename(file.originalName);
     const key = `${storeId}/media/products/${timestamp}-${rand}-${safeName}`;
 
-    const stored = await this.storageProvider.put(key, file.buffer, file.mimeType);
+    // Photos are saved as WebP (at most 2000px) with a 480px thumbnail; GIFs and odd files as they came.
+    const optimized = await optimizeImage(file.buffer, file.mimeType);
+    let saved: { key: string; url: string; mimeType: string; sizeBytes: number; thumbUrl: string | null; width: number | null; height: number | null };
+    if (optimized) {
+      const base = key.replace(/\.[a-z0-9]+$/i, "");
+      const [main, thumb] = await Promise.all([
+        this.storageProvider.put(`${base}.webp`, optimized.main.buffer, "image/webp"),
+        this.storageProvider.put(`${base}-thumb.webp`, optimized.thumb.buffer, "image/webp"),
+      ]);
+      saved = {
+        key: `${base}.webp`,
+        url: main.url,
+        mimeType: "image/webp",
+        sizeBytes: optimized.main.buffer.length,
+        thumbUrl: thumb.url,
+        width: optimized.main.width,
+        height: optimized.main.height,
+      };
+    } else {
+      const stored = await this.storageProvider.put(key, file.buffer, file.mimeType);
+      saved = { key, url: stored.url, mimeType: file.mimeType, sizeBytes: file.sizeBytes, thumbUrl: null, width: null, height: null };
+    }
 
     const mediaFile = await prisma.mediaFile.create({
       data: {
         storeId,
-        filename: key,
+        filename: saved.key,
         originalName: file.originalName,
-        mimeType: file.mimeType,
-        sizeBytes: BigInt(file.sizeBytes),
-        url: stored.url,
+        mimeType: saved.mimeType,
+        sizeBytes: BigInt(saved.sizeBytes),
+        url: saved.url,
+        thumbUrl: saved.thumbUrl,
+        width: saved.width,
+        height: saved.height,
         kind: "image",
         uploadedByType: "ADMIN",
         uploadedById: adminId,
         altText: uploadDto.altText ?? null,
+        ...(optimized ? { metadata: { originalMimeType: file.mimeType, originalBytes: file.sizeBytes } } : {}),
       } as any,
     });
 

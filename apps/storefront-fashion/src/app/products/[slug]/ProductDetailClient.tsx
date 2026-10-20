@@ -43,6 +43,7 @@ import {
   useCart,
   useT,
   useDisplay,
+  useDataSaver,
   msg,
   useGetProductBySlugQuery,
   useGetProductsQuery,
@@ -201,6 +202,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const stockLeft = hasVariants ? selectedVariant?.stockQty ?? null : product.stockQty;
   const inStock = hasVariants ? Boolean(selectedVariant?.inStock) : !product.isOutOfStock;
   const images = product.images.length ? product.images : [product.image].filter(Boolean);
+  const dataSaver = useDataSaver();
+  /** The 480px copy of image i (thumbs line up with product.images), or the image itself. */
+  const thumbOf = (i: number, img: string) => (product.images.length ? product.thumbs?.[i] : product.thumb) || img;
   const discountPct = compareAtPrice ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : 0;
   // A flash sale with a stock limit only sells that many at the sale price.
   // Bulk buyers may need more than the usual 99.
@@ -289,7 +293,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               {images.map((img: string, i: number) => (
                 <SwiperSlide key={i} className="!h-[80px] !w-[80px] !flex-shrink-0">
                   <div className="h-full w-full rounded-lg overflow-hidden border-2 cursor-pointer hover:border-primary transition-colors">
-                    <img src={img} alt={`${product.title} view ${i + 1}`} className="h-full w-full object-cover" />
+                    <img src={thumbOf(i, img)} alt={`${product.title} view ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
                   </div>
                 </SwiperSlide>
               ))}
@@ -299,7 +303,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-slate-50">
                 {images.map((img: string, i: number) => (
                   <SwiperSlide key={i}>
-                    <img src={img} alt={t("{title} — view {n}", { title: product.title, n: i + 1 })} className="h-full w-full object-cover" />
+                    <img src={dataSaver ? thumbOf(i, img) : img} alt={t("{title} — view {n}", { title: product.title, n: i + 1 })} className="h-full w-full object-cover" />
                   </SwiperSlide>
                 ))}
               </Swiper>

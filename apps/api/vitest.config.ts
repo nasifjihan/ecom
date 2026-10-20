@@ -18,6 +18,8 @@ export default defineConfig({
       exclude: ["**/routes.ts", "**/*.dto.ts", "src/server.ts"],
     },
     setupFiles: [path.resolve(__dirname, "tests/setup.ts")],
+    // DB tests build a store in beforeAll; under a full parallel run that can pass the 10s default.
+    hookTimeout: 30_000,
   },
   resolve: {
     alias: {

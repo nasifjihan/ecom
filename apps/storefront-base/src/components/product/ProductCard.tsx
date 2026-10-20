@@ -14,6 +14,7 @@ import {
 import { cn, formatMoney } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
 import { useDisplay } from "../../lib/display";
+import { useDataSaver } from "../../lib/data-saver";
 
 export type ProductCardData = {
   id: string;
@@ -21,6 +22,8 @@ export type ProductCardData = {
   title: string;
   image: string;
   images?: string[];
+  /** 480px copy of `image`, for cards and data-saver mode. */
+  thumb?: string;
   price: number;
   compareAtPrice?: number | null;
   rating?: number;
@@ -88,6 +91,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const rating = product.rating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const display = useDisplay();
+  const dataSaver = useDataSaver();
+  // Only a real smaller copy counts (older uploads and outside links have none).
+  const thumb = product.thumb && product.thumb !== product.image ? product.thumb : undefined;
 
   return (
     <motion.div
@@ -103,7 +109,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <Card className="h-full overflow-hidden group transition-shadow hover:shadow-hover">
           <div className="relative overflow-hidden bg-slate-100 aspect-[4/5]">
             <img
-              src={product.image}
+              src={dataSaver && thumb ? thumb : product.image}
+              srcSet={!dataSaver && thumb ? `${thumb} 480w, ${product.image} 2000w` : undefined}
+              sizes="(min-width: 1024px) 25vw, 50vw"
               alt={product.title}
               loading="lazy"
               className={cn(

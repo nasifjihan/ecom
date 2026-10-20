@@ -147,7 +147,7 @@ function inRange(sf: StorefrontInfo): Prisma.ProductWhereInput {
 const LIST_INCLUDE = {
   brand: { select: { id: true, name: true, slug: true, translations: true } },
   categories: { include: { category: { select: { id: true, name: true, slug: true, translations: true } } } },
-  images: { orderBy: { sortOrder: "asc" as const }, take: 2 },
+  images: { orderBy: { sortOrder: "asc" as const }, take: 2, include: { media: { select: { thumbUrl: true } } } },
   variants: { where: { status: "active" }, select: { stockQty: true, reservedStock: true, manageStock: true, allowBackorder: true } },
 };
 
@@ -270,6 +270,8 @@ export class StorefrontService {
       ? variants.reduce((s: number, v: any) => s + available(v), 0)
       : available(p);
     const images: string[] = (p.images ?? []).map((i: any) => i.imageUrl);
+    // 480px WebP copies made on upload; the full image where there's none (older uploads, outside links).
+    const thumbs: string[] = (p.images ?? []).map((i: any) => i.media?.thumbUrl ?? i.imageUrl);
     const createdAt = p.createdAt ? new Date(p.createdAt) : null;
     return {
       id: String(p.id),
@@ -277,6 +279,8 @@ export class StorefrontService {
       title: tr(p, L, "name"),
       image: images[0] ?? "",
       images,
+      thumb: thumbs[0] ?? "",
+      thumbs,
       price,
       compareAtPrice,
       isOnSale: compareAtPrice !== null,
@@ -462,7 +466,7 @@ export class StorefrontService {
         categories: {
           include: { category: { select: { id: true, name: true, slug: true, parentId: true, translations: true } } },
         },
-        images: { orderBy: { sortOrder: "asc" } },
+        images: { orderBy: { sortOrder: "asc" }, include: { media: { select: { thumbUrl: true } } } },
         variants: { where: { status: "active" }, orderBy: { id: "asc" } },
         attributes: { include: { attribute: true, terms: { include: { term: true } } } },
         reviews: {

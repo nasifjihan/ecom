@@ -14,6 +14,7 @@ import {
 import { Button, Input, Separator } from "../ui";
 import { cn } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
+import { setDataSaver, useDataSaver } from "../../lib/data-saver";
 import { apiErrorMessage, useSubscribeNewsletterMutation } from "../../lib/features/checkout/checkout-api-slice";
 
 export type FooterLink = { label: string; href: string; external?: boolean };
@@ -65,6 +66,7 @@ export const Footer: React.FC<FooterProps> = ({
   const [error, setError] = React.useState("");
   const [subscribe, { isLoading }] = useSubscribeNewsletterMutation();
   const t = useT();
+  const dataSaver = useDataSaver();
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,9 +259,15 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           ))}
         </div>
-        <p className="text-sm text-muted-foreground">
-          © {year} {storeName}. {t("All rights reserved.")}
-        </p>
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={dataSaver} onChange={(e) => setDataSaver(e.target.checked)} />
+            {t("Data saver (smaller pictures)")}
+          </label>
+          <p className="text-sm text-muted-foreground">
+            © {year} {storeName}. {t("All rights reserved.")}
+          </p>
+        </div>
       </div>
     </footer>
   );

@@ -4724,3 +4724,44 @@ A shop could pick one brand colour and nothing else about how products show. It 
 - **Dark mode:** no colour presets for dark mode (the storefront is light-only).
 - **Noindex tag:** "Hide from search engines" was checked through robots.txt; the noindex tag wasn't looked at in the browser.
 - **Next:** part 4, WebP images and thumbnails on upload, and a data-saver mode.
+
+---
+
+## ✅ BATCH #38 (part 4) — WebP pictures, thumbnails and data-saver mode (2026-10-20)
+Uploaded photos were stored exactly as they came: often 3–5 MB phone pictures, loaded in full even in a small product card. Now every upload is shrunk to a WebP with a small thumbnail. Shoppers on mobile data can also switch to thumbnails only. This finishes Batch 38.
+
+### 38.18 Uploads (`services/images/optimize.ts`, `catalog.service.ts uploadMedia`)
+- **What's made:** JPEG, PNG, WebP and AVIF photos become a WebP at most 2000px on the longest side (quality 82, turned upright from the camera's EXIF), plus a 480px WebP thumbnail (quality 75). Small pictures are never enlarged.
+- **What's left alone:** GIFs (they may be animated) and files sharp can't read upload as they came, so an odd file is never refused or lost.
+- **What's saved:** the media file records the WebP's URL, size and dimensions and the `thumbUrl`, with the original type and size in `metadata`. The original isn't kept.
+- **Example:** a 3000×2000 JPEG of 175 KB became a 2000×1333 WebP of 22 KB, and a 3 KB thumbnail.
+- **No migration:** `MediaFile.thumbUrl`, `width` and `height` were already there, unused.
+
+### 38.19 Storefront
+- **Product API:** products now carry `thumb` / `thumbs` next to `image` / `images`. An image without a thumbnail (older uploads, outside links) falls back to itself.
+- **Product cards:** offer both sizes (`srcset` 480w / 2000w), so the browser loads the thumbnail at card size.
+- **Product page:** the strip of small pictures always uses thumbnails.
+- **Data saver:**
+  - a "Data saver (smaller pictures)" (ডেটা সাশ্রয় (ছোট ছবি)) switch in the footer, remembered in the browser;
+  - until the shopper chooses, it follows the phone's own "save data" setting;
+  - when on, product cards and the product page's main picture load the 480px thumbnail only;
+  - `useDataSaver()` / `setDataSaver()` live in `@ecom/storefront-base`.
+
+### 38.20 Checked
+- **Tests:** API 787 passing (66 files).
+  - new `tests/unit/image-optimize.test.ts`: size and shape kept, WebP output, no enlarging, GIFs and broken files left alone.
+  - **Test setup timeout:** `vitest.config.ts` now gives setup hooks 30s. `online-payments` and `storefronts` DB tests had timed out at the 10s default in three full runs while dev servers were running. With 30s the full run passes in one go.
+- **Types and lint:** API and storefront typecheck. No new lint errors.
+- **Upload, through the real endpoint:**
+  - uploaded a generated 3000×2000 JPEG to the white panjabi: it came back as WebP 2000×1333 (22 KB) with a thumbnail (3 KB); both are served as `image/webp`;
+  - the product API listed the upload with its thumbnail, while the outside-link picture fell back to itself.
+- **In the browser:**
+  - **cards:** with data saver off, the card offered both sizes and the browser loaded the thumbnail; turning data saver on switched the card to the thumbnail only and remembered it (`dataSaver=1`);
+  - **product page:** with data saver on, both the side strip and the main picture used the thumbnail; turned off, the main picture loaded the full WebP.
+- **Dev data:** the test upload was taken off the panjabi again (it stays in the media library), and its pictures are back in their old order.
+
+### 38.21 Not done
+- **Older uploads:** they get no thumbnails. Re-uploading a picture makes them; there's no bulk re-processing job.
+- **Other pictures:** only product pictures use thumbnails. Banner, block, blog and category pictures load in full (they're shrunk to WebP only if uploaded through the media upload).
+- **Size guidance:** no per-slot size warnings beyond the hints already in the editors.
+- **Next:** Batch 39, platform: OpenAPI docs, import/export jobs and admin menu search.

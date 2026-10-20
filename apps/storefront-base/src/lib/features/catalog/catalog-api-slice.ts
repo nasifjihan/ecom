@@ -15,6 +15,9 @@ export type ProductSummary = {
   title: string;
   image: string;
   images?: string[];
+  /** 480px copies, in the same order as `images` (the full image where there's none). */
+  thumb?: string;
+  thumbs?: string[];
   price: number;
   compareAtPrice?: number | null;
   rating: number;

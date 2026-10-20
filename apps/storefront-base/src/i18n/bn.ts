@@ -205,6 +205,7 @@ export const BN: Record<string, string> = {
   "Customer Reviews ({n})": "গ্রাহকদের রিভিউ ({n})",
   "Customers also viewed": "অন্য গ্রাহকরা যা দেখেছেন",
   "Damaged or faulty": "ক্ষতিগ্রস্ত বা ত্রুটিপূর্ণ",
+  "Data saver (smaller pictures)": "ডেটা সাশ্রয় (ছোট ছবি)",
   "Decrease quantity": "পরিমাণ কমান",
   "Default": "ডিফল্ট",
   "Default address updated": "ডিফল্ট ঠিকানা আপডেট হয়েছে",
