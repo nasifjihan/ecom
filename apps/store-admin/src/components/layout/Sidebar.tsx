@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/components/ui";
-import { ChevronRight, ShoppingBag } from "lucide-react";
+import { ChevronRight, ShoppingBag, Star } from "lucide-react";
 import { ScrollArea } from "@/components/ui";
 import { useMeQuery } from "@/lib/features/auth/auth-api-slice";
 import { NAV_SECTIONS, type NavItem } from "@/lib/nav";
+import { usePreferencesQuery } from "@/lib/features/settings/preferences-api-slice";
 
 const NAV_HREFS = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
 import { useCan } from "@/lib/permissions";
@@ -72,10 +73,14 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const { data: meData } = useMeQuery();
   const storeName = meData?.store?.name ?? "Fashion BD Admin";
   const { can, ready } = useCan();
+  const { data: prefs } = usePreferencesQuery();
   // Only the pages this person may open (nothing until their permissions have loaded).
   const navSections = ready
     ? NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => can(i.perm) && (!i.salesOnly || !!meData?.user?.isSalesperson)) })).filter((s) => s.items.length > 0)
     : [];
+  // The person's bookmarks first (header ☆; managed in Settings → Profile).
+  const bookmarks: NavItem[] = (prefs?.bookmarks ?? []).map((b) => ({ href: b.href, label: b.label, icon: Star }));
+  const sections = bookmarks.length ? [{ title: "Bookmarks", items: bookmarks }, ...navSections] : navSections;
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -120,7 +125,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
 
       <ScrollArea className="flex-1 scrollbar-thin">
         <nav className="space-y-1 p-3">
-          {navSections.map((section, sectionIdx) => (
+          {sections.map((section, sectionIdx) => (
             <motion.div
               key={section.title}
               initial={{ opacity: 0, y: 10 }}
@@ -148,7 +153,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                     key={item.href}
                     item={item}
                     collapsed={collapsed}
-                    isActive={isActive(item.href)}
+                    isActive={section.title !== "Bookmarks" && isActive(item.href)} // the menu item lights up, not its bookmark
                   />
                 ))}
               </div>

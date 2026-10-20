@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPreferencesCard } from "@/components/settings/admin-preferences-card";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useForm, FormProvider, Controller } from "react-hook-form";
@@ -502,6 +503,8 @@ export default function ProfileSettingsPage() {
             </FormProvider>
           </CardContent>
         </Card>
+
+        <AdminPreferencesCard />
       </motion.div>
     </div>
   );

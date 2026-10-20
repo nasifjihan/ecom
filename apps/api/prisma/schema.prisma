@@ -319,6 +319,8 @@ model AdminUser {
   commissionExtraPct Decimal           @default(0) @db.Decimal(5, 2)
   /// For share links (?sp=CODE): online orders from the link are credited to them.
   salesCode          String?
+  /// The admin as this person likes it: { bookmarks: [{ href, label }], textSize: "sm" | "md" | "lg" }.
+  preferences        Json?
   ordersSold         Order[]           @relation("OrderSalesperson")
   commissions        SalesCommission[]
   salesTargets       SalesTarget[]

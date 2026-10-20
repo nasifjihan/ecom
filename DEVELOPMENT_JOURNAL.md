@@ -5143,3 +5143,38 @@ Hero slides can now be saved once as a **slider** and used by hero blocks on the
 ### 43.4 Not done
 - **Slider options:** no autoplay speed or slide-transition settings per slider.
 - **Next:** part 2, admin bookmarks and text size.
+
+---
+
+## ✅ BATCH #43 (part 2) — Admin bookmarks and text size (2026-10-21)
+Each staff member can bookmark admin pages and pick a text size. Both are saved on their account, so they follow them to any device.
+
+### 43.5 API (`modules/admin-users/preferences.ts`)
+- **Field** (migration `20261021120000_admin_preferences`): `AdminUser.preferences` = `{ bookmarks: [{ href, label }], textSize: "sm" | "md" | "lg" }`.
+- **Endpoints:** `GET|PUT /api/admin/me/preferences` (staff sign-in). A PUT replaces the parts it sends.
+- **Rules:**
+  - bookmarks must be admin paths: other sites and `//host` links are refused;
+  - up to 12 bookmarks, no duplicates;
+  - anything stored in an older shape reads as the defaults.
+
+### 43.6 Admin
+- **☆ in the header:** bookmarks the page you're on, query string included, e.g. a filtered list or one order. A menu page uses its menu name; any other page uses its heading (e.g. "Order 20261019000007"). Pressing it again removes the bookmark. It saves straight away and goes back if the save fails.
+- **Sidebar:** a **Bookmarks** section at the top. A bookmark doesn't light up as the active page; the menu item does.
+- **Search (Ctrl K):** a **Bookmarks** group, shown when the box opens and filtered as you type, next to recent searches.
+- **Settings → Profile, "Your admin" card:**
+  - **Text size** (Small 14px, Normal 16px, Large 18px) sets the page's base size, so the whole admin scales;
+  - the bookmark list, with move up, move down and remove.
+
+### 43.7 Checked
+- **Tests:** new `tests/unit/admin-preferences.test.ts`: admin paths and sizes are accepted; other sites, `//` links, duplicates, more than 12 and unknown sizes are refused; empty or old-shape data reads as the defaults.
+- **Types and lint:** API and admin typecheck; no new lint errors in the files touched.
+- **In the browser:**
+  - on order 20261019000007, ☆ added "Order 20261019000007" under Bookmarks in the sidebar, and Ctrl K listed it under Bookmarks;
+  - in Settings → Profile, Large set the base to 18px (the page heading went to 27px) and stayed after a reload;
+  - Normal put it back.
+- **Dev data:** that bookmark is left on the dev owner's account.
+
+### 43.8 Not done
+- **Scope switcher:** no global scope switcher. Staff are already limited to their storefronts.
+- **Bookmark names:** a bookmark can't be renamed; the name is set when it is added.
+- **Next:** part 3, coupon and shipping pricing as pure rules with table tests.

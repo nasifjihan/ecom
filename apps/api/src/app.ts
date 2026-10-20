@@ -46,6 +46,7 @@ import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
 import { adminLoginSettingsRouter } from "./modules/auth/customer-login.routes";
+import { adminPreferencesRouter } from "./modules/admin-users/preferences";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { docsRouter } from "./modules/docs";
@@ -153,6 +154,7 @@ export function buildApp(): Express {
   app.use("/api/admin/permissions", adminPermissionsRouter);
   app.use("/api/admin/roles", adminTeamRolesRouter);                // roles and their permissions
   app.use("/api/admin/staff", adminStaffRouter);                    // staff accounts
+  app.use("/api/admin/me/preferences", adminPreferencesRouter);       // bookmarks, text size
   app.use("/api/admin/audit-logs", adminAuditRouter);               // activity log
   app.use("/api/admin/products", adminProductsRouter);
   app.use("/api/admin/categories", adminCategoriesRouter);

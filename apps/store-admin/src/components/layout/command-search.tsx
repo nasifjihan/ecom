@@ -8,11 +8,12 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Box, Clock, Package, Search, ShoppingCart, User } from "lucide-react"
+import { Box, Clock, Package, Search, ShoppingCart, Star, User } from "lucide-react"
 import { api } from "@ecom/api-client"
 import { Dialog, DialogContent, cn } from "@/components/ui"
 import { NAV_SECTIONS, SETTINGS_SECTIONS } from "@/lib/nav"
 import { useCan } from "@/lib/permissions"
+import { usePreferencesQuery } from "@/lib/features/settings/preferences-api-slice"
 
 interface SearchResults {
   orders: {
@@ -82,6 +83,7 @@ export function CommandSearch() {
   const [active, setActive] = React.useState(0)
   const [recent, setRecent] = React.useState<string[]>([])
   const listId = React.useId()
+  const { data: prefs } = usePreferencesQuery()
 
   // Ctrl+K / ⌘K from anywhere in the admin.
   React.useEffect(() => {
@@ -128,7 +130,10 @@ export function CommandSearch() {
 
   const hits: Hit[] = React.useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return []
+    const marks: Hit[] = (prefs?.bookmarks ?? [])
+      .filter((b) => !needle || b.label.toLowerCase().includes(needle))
+      .map((b) => ({ key: `b:${b.href}`, href: b.href, title: b.label, detail: b.href, icon: Star, group: "Bookmarks" }))
+    if (!needle) return marks
     const matchedPages = pages
       .filter(
         (p) => p.title.toLowerCase().includes(needle) || p.detail.toLowerCase().includes(needle),
@@ -172,8 +177,8 @@ export function CommandSearch() {
             })),
           ]
         : []
-    return [...matchedPages, ...records]
-  }, [q, term, data, pages])
+    return [...marks, ...matchedPages, ...records]
+  }, [q, term, data, pages, prefs])
 
   React.useEffect(() => setActive(0), [q, data])
 
@@ -262,7 +267,7 @@ export function CommandSearch() {
                         </button>
                       ))}
                     </div>
-                  ) : (
+                  ) : hits.length ? null : (
                     <p className="px-2 py-6 text-center text-sm text-slate-500">
                       Type an order number, a phone number, a name, a SKU or a page.
                     </p>

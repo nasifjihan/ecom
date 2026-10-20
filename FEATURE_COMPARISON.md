@@ -170,7 +170,7 @@ These are our advantages. Keep them.
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Batch 37: Settings → Notifications: customer messages × email/SMS, team alerts (new order, payment to check, return, quote, low stock, lead given to you, scheduled report stopped) × bell/email/SMS and who gets them; real bell in the admin. No WhatsApp |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
 | Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
-| Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | 🟡 | Batch 39: search (Ctrl+K) across the pages you may open and orders, customers, products, with recent searches; dark mode was already there. No bookmarks, text size or scope switcher |
+| Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | 🟡 | Batch 39: search (Ctrl+K) across the pages you may open and orders, customers, products, with recent searches; dark mode was already there. Batch 43: bookmarks (header ☆, sidebar, search) and text size, saved per person. No scope switcher |
 
 ### Per-storefront settings (reference 22)
 | Feature | Status |

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -35,6 +35,7 @@ import { logout as logoutAction } from "@/lib/features/auth/auth-slice";
 import type { RootState } from "@/lib/store";
 import { NotificationBell } from "./notification-bell";
 import { CommandSearch } from "./command-search";
+import { BookmarkButton } from "./bookmark-button";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -94,6 +95,10 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
       <CommandSearch />
 
       <div className="ml-auto flex items-center gap-2">
+        {/* It reads the query string, which needs a Suspense boundary in Next. */}
+        <Suspense fallback={null}>
+          <BookmarkButton />
+        </Suspense>
         <NotificationBell />
 
         <Button

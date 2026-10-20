@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import { PageGuard } from "@/components/layout/page-guard";
+import { useTextSize } from "@/lib/features/settings/preferences-api-slice";
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useTextSize();
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
