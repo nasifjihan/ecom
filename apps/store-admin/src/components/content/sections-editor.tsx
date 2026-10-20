@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import {
   AlignLeft,
   ArrowDown,
@@ -45,6 +47,7 @@ import {
 } from "@/lib/features/content/content-api-slice";
 import { useGetCategoryTreeQuery, type Category } from "@/lib/features/catalog/catalog-api-slice";
 import { ProductPickList } from "./product-pick-list";
+import { useCreateSliderMutation, useSlidersQuery } from "@/lib/features/content/sliders-api-slice";
 
 export type Section = HomepageSection & { id: string };
 
@@ -193,6 +196,8 @@ const isLink = (v: string | null | undefined) => !v || v.startsWith("/") || /^ht
 export function sectionProblem(s: HomepageSection): string | null {
   switch (s.type) {
     case "hero":
+      if (s.config.sliderId) return null;
+      if (!s.config.slides.length) return "Add a slide or choose a saved slider";
       if (s.config.slides.some((x) => !x.title.trim())) return "Every slide needs a title";
       if (s.config.slides.some((x) => !isLink(x.ctaHref) || !isLink(x.imageUrl))) return "Check the slide links";
       return null;
@@ -235,6 +240,7 @@ export function sectionProblem(s: HomepageSection): string | null {
 function summary(s: HomepageSection): string {
   switch (s.type) {
     case "hero":
+      if (s.config.sliderId) return "Saved slider";
       return `${s.config.slides.length} slide${s.config.slides.length === 1 ? "" : "s"}: ${s.config.slides[0]?.title ?? ""}`;
     case "features":
       return s.config.items.map((x) => x.title).join(", ");
@@ -492,7 +498,7 @@ function SectionForm({ uid, section, onChange }: { uid: string; section: Homepag
   const id = (name: string) => `${uid}-${name}`;
   switch (section.type) {
     case "hero":
-      return <HeroForm uid={uid} slides={section.config.slides} onChange={(slides) => onChange({ ...section, config: { slides } })} />;
+      return <HeroBlockForm uid={uid} config={section.config} onChange={(config) => onChange({ ...section, config })} />;
     case "features": {
       const items = section.config.items;
       const setItem = (i: number, p: Partial<(typeof items)[number]>) =>
@@ -777,7 +783,87 @@ function SectionForm({ uid, section, onChange }: { uid: string; section: Homepag
   }
 }
 
-function HeroForm({ uid, slides, onChange }: { uid: string; slides: HeroSlide[]; onChange: (s: HeroSlide[]) => void }) {
+type HeroConfig = Extract<HomepageSection, { type: "hero" }>["config"];
+const NEW_SLIDE: HeroSlide = { badge: "", title: "Welcome to our store", subtitle: "", ctaText: "Shop Now", ctaHref: "/products", imageUrl: null, gradient: "violet", alignment: "left" };
+
+/** A hero block: its own slides, or a saved slider shared with other pages (Online Store → Sliders). */
+function HeroBlockForm({ uid, config, onChange }: { uid: string; config: HeroConfig; onChange: (c: HeroConfig) => void }) {
+  const { data: sliders = [] } = useSlidersQuery();
+  const [createSlider, { isLoading: saving }] = useCreateSliderMutation();
+  const saved = config.sliderId !== undefined;
+  const current = sliders.find((s) => s.id === config.sliderId);
+
+  const saveAsSlider = async () => {
+    try {
+      const first = config.slides[0]?.title.trim();
+      const name = first?.length ? first : "Slider"; // a blank title gets a plain name
+      const s = await createSlider({ name, slides: config.slides }).unwrap();
+      onChange({ slides: [], sliderId: s.id });
+      toast.success(`Saved as the slider "${s.name}"`, { description: "This block now uses it. Rename or edit it in Online Store → Sliders." });
+    } catch {
+      toast.error("Couldn't save the slider. Check every slide has a title and working links.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div role="radiogroup" aria-label="Slides" className="flex flex-wrap gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            name={`${uid}-hero-mode`}
+            checked={!saved}
+            onChange={() => onChange({ slides: current?.slides.length ? current.slides : config.slides.length ? config.slides : [NEW_SLIDE] })}
+          />
+          Own slides
+        </label>
+        <label className={cn("flex items-center gap-2", !sliders.length && "opacity-50")}>
+          <input
+            type="radio"
+            name={`${uid}-hero-mode`}
+            checked={saved}
+            disabled={!sliders.length}
+            onChange={() => onChange({ slides: [], sliderId: sliders[0]!.id })}
+          />
+          Saved slider{!sliders.length && " (none yet)"}
+        </label>
+      </div>
+      {saved ? (
+        <Field
+          label="Slider"
+          htmlFor={`${uid}-slider`}
+          hint={
+            <>
+              {current ? `${current.slides.length} slide${current.slides.length === 1 ? "" : "s"}: ${current.slides.map((x) => x.title).join(", ")}. ` : ""}
+              Changes to it show everywhere it&apos;s used.{" "}
+              <Link href="/online-store/sliders" className="text-blue-600 hover:underline">
+                Edit sliders
+              </Link>
+            </>
+          }
+        >
+          <select id={`${uid}-slider`} value={config.sliderId} onChange={(e) => onChange({ slides: [], sliderId: e.target.value })} className={SELECT}>
+            {!current && <option value={config.sliderId}>(deleted slider)</option>}
+            {sliders.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <>
+          <HeroForm uid={uid} slides={config.slides} onChange={(slides) => onChange({ slides })} />
+          <Button type="button" variant="ghost" size="sm" disabled={saving || !config.slides.length} onClick={() => void saveAsSlider()}>
+            <Copy className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save these slides as a slider"}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function HeroForm({ uid, slides, onChange }: { uid: string; slides: HeroSlide[]; onChange: (s: HeroSlide[]) => void }) {
   const set = (i: number, p: Partial<HeroSlide>) => onChange(slides.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const id = (name: string, i: number) => `${uid}-hs-${name}-${i}`;
   return (

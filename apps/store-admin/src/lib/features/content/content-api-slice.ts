@@ -183,7 +183,8 @@ export interface ImageTextConfig {
 }
 /** A block on the homepage or a built page. `id` is only used by the editor to track blocks while dragging. */
 export type HomepageSection = { id?: string; enabled: boolean } & (
-  | { type: "hero"; config: { slides: HeroSlide[] } }
+  /** Own slides, or a saved slider (`sliderId`, then `slides` is empty and filled in on the storefront). */
+  | { type: "hero"; config: { slides: HeroSlide[]; sliderId?: string } }
   | { type: "features"; config: { items: { icon: (typeof FEATURE_ICONS)[number]; title: string; desc: string }[] } }
   | { type: "categories"; config: HeadingConfig }
   | { type: "featured_products"; config: HeadingConfig }

@@ -14,6 +14,7 @@ import { emitOrderPlaced } from "../notifications"
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger"
 import { recordMove } from "../redirects"
 import { SectionDto } from "../content/content.dto"
+import { withSliders } from "../content/sliders"
 import { bdMobile, conversion, offerActive, pagePrice, splitName, LANDING_SLUG } from "./landing.rules"
 
 const WITH_PRODUCT = { product: { select: { id: true, name: true, slug: true, status: true, regularPrice: true } } } as const
@@ -233,7 +234,7 @@ export class LandingService {
       subheadline: r.subheadline,
       heroImageUrl: r.heroImageUrl ?? p.images[0] ?? null,
       offer: { running, endsAt: running && r.offerEndsAt ? r.offerEndsAt.toISOString() : null },
-      sections: r.sections as unknown[],
+      sections: Array.isArray(r.sections) ? await withSliders(this.storeId, r.sections as { type: string; config: unknown }[]) : [],
       ctaText: r.ctaText,
       formTitle: r.formTitle,
       maxQty: r.maxQty,

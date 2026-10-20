@@ -41,7 +41,7 @@ These are our advantages. Keep them.
 | Product tags (EN/BN) | ✅ | Batch 26: tags saved, searched and filterable (`/products?tag=`); one language |
 | Specifications table (group / label / value) | ✅ | Batch 26 |
 | Variant generator (pick option values → all combinations, SKU prefix, default price/cost/stock) | ✅ | Batch 34: up to 3 options and 100 combinations, only missing ones added, SKUs that don't clash; variant table with a column per option and "set for all" |
-| Per-storefront price override on a variant | 🟡 | Batch 32: a product's own price per storefront (the same for all its options) and a +/- % per storefront; not per option yet |
+| Per-storefront price override on a variant | ✅ | Batch 32: a product's own price per storefront and a +/- % per storefront; Batch 34: each option's own price and sale price per storefront |
 | Sourcing badge (Made in BD / Imported), weight | ✅ | Weight ✅, sourcing badge Batch 34 (with country of origin) |
 | Soft delete + "Deleted only" filter, created/updated by | ✅ | Batch 34: Trash with Deleted view, restore to the old status, delete forever (refused while a gift box, landing page, purchase or transfer needs it), created/updated/deleted by |
 | Product landing page `/lp/{slug}` built from blocks | ✅ | Batch 33: offer price and countdown, blocks, reviews, order form with cash on delivery on the page, visits and conversion per page |
@@ -81,7 +81,7 @@ These are our advantages. Keep them.
 | Feature | Status | Note |
 |---|---|---|
 | Pages, blog + categories, FAQs, header/footer menus, block builder | ✅ | |
-| Sliders as a separate reusable item | 🟡 | Hero slides live inside the homepage section |
+| Sliders as a separate reusable item | ✅ | Batch 43: Online Store → Sliders; hero blocks on the homepage, pages and landing pages use own slides or a saved slider |
 | Blog: scheduled publish, featured, linked products ("shop this"), views, SEO fields | ✅ | Batch 38: schedule a post (goes live by itself, no timer needed), featured posts pinned and shown large, up to 12 "shop this" products under a post, view count in the admin list; SEO title and description as before |
 | Redirects (301/302) | ✅ | Batch 33: Online Store → Redirects; automatic 301 when an address changes; broken-link log |
 | Extra blocks: video, gallery, columns, button, quote, product rail, category tiles | ✅ | Batch 38: all seven, on the homepage, pages and landing pages; product row from picked products (in order), a category or a tag; video from YouTube (no-cookie), Vimeo, Facebook or an .mp4 |

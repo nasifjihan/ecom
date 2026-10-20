@@ -1,10 +1,10 @@
 /**
  * CONTENT ROUTES
- *   /api/admin/content/*       store admin: pages, blog, FAQs, menus, theme, homepage
+ *   /api/admin/content/*       store admin: pages, blog, FAQs, menus, theme, homepage, sliders
  *   /api/storefront/content/*  public, published content only (store from the request Origin)
  */
 import { Router, type Request, type Response } from "express"
-import { ctrl, envelope, type RequestContext } from "../../core"
+import { BadRequestError, ctrl, envelope, type RequestContext } from "../../core"
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware"
 import { ContentService } from "./content.service"
 import {
@@ -28,6 +28,7 @@ import {
   type ThemeSettings,
 } from "./content.dto"
 import { StorefrontQuery } from "../storefronts/storefronts.dto"
+import { SliderDto, SliderService } from "./sliders"
 
 type Req = Request & { ctx: RequestContext }
 type Handler = (svc: ContentService, req: Req) => Promise<unknown>
@@ -245,6 +246,40 @@ adminContentRouter.delete(
   can("online_store.edit"),
   validate({ query: StorefrontQuery }),
   send((s, r) => s.resetHomepage(sf(r))),
+)
+
+// ---- sliders (saved hero slides that hero blocks can use)
+const sliders = (r: Req) => {
+  if (r.ctx.storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED")
+  return new SliderService(BigInt(r.ctx.storeId))
+}
+adminContentRouter.get("/sliders", can("online_store.view"), send((_, r) => sliders(r).list()))
+adminContentRouter.post(
+  "/sliders",
+  can("online_store.edit"),
+  validate({ body: SliderDto }),
+  send((_, r) => sliders(r).create(body<SliderDto>(r)), 201),
+)
+adminContentRouter.get(
+  "/sliders/:id",
+  can("online_store.view"),
+  validate({ params: IdParamDto }),
+  send((_, r) => sliders(r).get(id(r))),
+)
+adminContentRouter.put(
+  "/sliders/:id",
+  can("online_store.edit"),
+  validate({ params: IdParamDto, body: SliderDto }),
+  send((_, r) => sliders(r).update(id(r), body<SliderDto>(r))),
+)
+adminContentRouter.delete(
+  "/sliders/:id",
+  can("online_store.edit"),
+  validate({ params: IdParamDto }),
+  send(async (_, r) => {
+    await sliders(r).remove(id(r))
+    return { deleted: true }
+  }),
 )
 
 // ============================================================ storefront

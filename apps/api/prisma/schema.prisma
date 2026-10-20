@@ -116,6 +116,7 @@ model Store {
   mediaFiles           MediaFile[]
   themes               ThemeConfig[]
   homepageSections     HomepageSection[]
+  sliders              Slider[]
   pageBuilderLayouts   PageBuilderLayout[]
   roles                Role[]
   auditLogs            AuditLog[]
@@ -2647,6 +2648,21 @@ model ThemeConfig {
   updatedAt    DateTime @updatedAt
 
   @@unique([storeId, slug])
+}
+
+/// A saved set of hero slides that hero blocks on the homepage, pages and landing pages can use
+/// (config.sliderId), so one banner is edited in one place.
+model Slider {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  /// Hero slides, the same shape as a hero block's own slides (content.dto HeroSlideDto).
+  slides    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId])
 }
 
 model HomepageSection {

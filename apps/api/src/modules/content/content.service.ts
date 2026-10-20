@@ -20,6 +20,7 @@ import { storeLanguages } from "../settings/languages"
 import { recordMove } from "../redirects"
 import { assertStaffStorefront, defaultStorefrontId } from "../storefronts/storefronts.context"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
+import { withSliders } from "./sliders"
 import {
   HomepageSectionDto,
   SectionDto,
@@ -698,7 +699,7 @@ export class ContentService {
 
   async publicHomepage() {
     const { sections } = await this.getHomepage()
-    return sections.filter((s) => s.enabled)
+    return withSliders(this.storeId, sections.filter((s) => s.enabled))
   }
 
   listPublishedPages() {
@@ -727,7 +728,7 @@ export class ContentService {
     return {
       ...page,
       template: page.template === "sections" ? "sections" : "text",
-      sections: this.validSections(page.sections),
+      sections: await withSliders(this.storeId, this.validSections(page.sections)),
     }
   }
 

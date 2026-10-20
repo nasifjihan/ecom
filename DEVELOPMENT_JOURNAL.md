@@ -5101,3 +5101,45 @@ Signed-in customers get a **My coupons** page in their account: the codes they c
 ### 40.19 Not done
 - **Coupon emails:** no email or SMS goes out when a coupon is given to a customer. They see it here and at checkout.
 - **Next:** Batch 43 (prices per option on each storefront, reusable sliders, admin bookmarks and text size, table tests for coupon and shipping pricing), then 41 (gateways) and 42 (WhatsApp, more alerts).
+
+---
+
+## ✅ BATCH #43 (part 1) — Sliders you can reuse (2026-10-21)
+Hero slides can now be saved once as a **slider** and used by hero blocks on the homepage, pages and landing pages. Editing the slider changes every page that uses it.
+
+### 43.0 Per-option storefront prices
+- **Already built:** this item from the plan was done in Batch 34 part 4 (`ProductStorefront.variantPrices`, the product's Storefronts card). The feature table row was out of date and is now ✅.
+
+### 43.1 API (`modules/content/sliders.ts`)
+- **Table** (migration `20261021090000_sliders`): `Slider` holds a name and 1–8 slides, in the same shape as a hero block's slides.
+- **Hero block:** a hero now has its own `slides`, or a `sliderId` (then `slides` may be empty). One of the two is required.
+- **Serving:** `withSliders` fills in the slider's slides when the public homepage, a page (`/pages/:slug`) or a landing page is served, so the storefront renders as before. A hero whose slider is gone is left out rather than shown empty.
+- **Endpoints:** `GET|POST /api/admin/content/sliders` and `GET|PUT|DELETE /api/admin/content/sliders/:id` (`online_store.view` / `online_store.edit`). Each slider reports where it's used, e.g. "Homepage", "Homepage (KIDS)", "Page: Eid offers", "Landing page: …".
+- **Delete:** refused with 409 while a slider is used, naming those places.
+
+### 43.2 Admin
+- **Online Store → Sliders:**
+  - cards show the slide thumbnails, the titles and where each slider is used;
+  - Add and Edit open a dialog with the name and the usual slide form;
+  - Delete is disabled while a slider is used.
+- **Hero block in the sections editor:**
+  - **Own slides / Saved slider** choice, plus a slider picker that lists its slides and links to the Sliders page;
+  - **Save these slides as a slider** turns the block's slides into a slider and switches the block to it;
+  - going back to own slides starts from the slider's slides.
+
+### 43.3 Checked
+- **Tests:**
+  - new `tests/unit/sliders.test.ts`: own slides or a slider, but not neither; filling the slides; a missing slider drops the block;
+  - new `tests/integration/sliders.db.test.ts`: the homepage and a page serve the slider's slides next to a hero with its own; an edit shows everywhere; usage is listed; delete is refused while used; a deleted slider drops its hero;
+  - `page-blocks` and `landing` tests still pass.
+- **Types and lint:** API and admin typecheck; no new lint errors.
+- **In the browser:**
+  - added "Puja banner" on the Sliders page;
+  - set the homepage hero to it and saved;
+  - after the storefront's 60-second cache, the homepage showed "Puja collection is here";
+  - the Sliders page said "Used on Homepage", with Delete disabled.
+- **Dev data:** the homepage hero was restored to its own two slides; "Puja banner" is left as an unused slider.
+
+### 43.4 Not done
+- **Slider options:** no autoplay speed or slide-transition settings per slider.
+- **Next:** part 2, admin bookmarks and text size.

@@ -191,7 +191,13 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("hero"),
     enabled: z.boolean(),
-    config: z.object({ slides: z.array(HeroSlideDto).min(1).max(8) }),
+    /** Own slides, or a saved slider (sliderId; its slides are filled in when the page is served). */
+    config: z
+      .object({
+        slides: z.array(HeroSlideDto).max(8).default([]),
+        sliderId: z.string().regex(/^\d+$/).optional(),
+      })
+      .refine((c) => c.sliderId !== undefined || c.slides.length > 0, "Add a slide or choose a saved slider"),
   }),
   z.object({
     type: z.literal("features"),
