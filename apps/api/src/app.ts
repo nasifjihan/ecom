@@ -49,6 +49,7 @@ import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { docsRouter } from "./modules/docs";
 import { adminJobsRouter } from "./modules/jobs";
+import { adminSearchRouter } from "./modules/search";
 import { adminWarehousesRouter } from "./modules/stock";
 import { adminStorefrontsRouter } from "./modules/storefronts";
 import { adminSalesRouter } from "./modules/sales";
@@ -201,6 +202,7 @@ export function buildApp(): Express {
   app.use("/api/admin/wholesale", adminWholesaleRouter);              // business accounts, bulk prices, pricing by margin
   app.use("/api/storefront/wholesale", storefrontWholesaleRouter);    // apply for a business account, bulk prices on a product
   app.use("/api/admin/jobs", adminJobsRouter);                        // background imports and exports
+  app.use("/api/admin/search", adminSearchRouter);                    // the admin's Ctrl+K search
   app.use("/api/admin/reports", adminReportsRouter);                  // sales and profit, products, discounts, customers, couriers, returns, tax, stock value
   app.use("/api/admin/purchasing", adminPurchasingRouter);            // suppliers, purchases, supplier payments, money accounts
   app.use("/api/admin/marketing/coupons", marketingCouponsRouter);

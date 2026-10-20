@@ -170,7 +170,7 @@ These are our advantages. Keep them.
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | 🟡 | Batch 37: Settings → Notifications: customer messages × email/SMS, team alerts (new order, payment to check, return, quote, low stock, lead given to you, scheduled report stopped) × bell/email/SMS and who gets them; real bell in the admin. No WhatsApp |
 | VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
 | Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
-| Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | ❌ | |
+| Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | 🟡 | Batch 39: search (Ctrl+K) across the pages you may open and orders, customers, products, with recent searches; dark mode was already there. No bookmarks, text size or scope switcher |
 
 ### Per-storefront settings (reference 22)
 | Feature | Status |
@@ -239,6 +239,6 @@ Priority = what a Bangladeshi shop needs first to run day to day, then what make
 | 36 ✅ | **Delivery and orders**: time slots, courier choice at checkout, gift orders, purchase orders, returns to supplier | Fashion and gift shops ask | L |
 | 37 ✅ | **Customers and messaging**: newsletter list, staff-made customers + ban, CRM leads, notification matrix, scheduled report e-mails + PDF | Repeat buyers | L |
 | 38 ✅ | **Storefront and content polish**: more blocks, blog "shop this" + scheduling, colour presets, display toggles, robots.txt, WebP + thumbnails, data-saver | Looks and speed on mobile data | M |
-| 39 | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |
+| 39 ✅ | **Platform**: OpenAPI docs, import/export jobs, admin menu search | Upkeep, integrations | M |
 
 Each batch follows our usual process: plan → your approval → build → verify in Chromium → journal entry.

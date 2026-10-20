@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  Search,
   Sun,
   Moon,
   Menu,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import {
   Button,
-  Input,
   Avatar,
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +34,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { logout as logoutAction } from "@/lib/features/auth/auth-slice";
 import type { RootState } from "@/lib/store";
 import { NotificationBell } from "./notification-bell";
+import { CommandSearch } from "./command-search";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -92,14 +91,7 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="relative max-w-md flex-1">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input
-          type="search"
-          placeholder="Search orders, customers, products..."
-          className="h-9 w-full border-slate-200 bg-slate-50 pl-9 pr-4 text-sm dark:border-slate-700 dark:bg-slate-800"
-        />
-      </div>
+      <CommandSearch />
 
       <div className="ml-auto flex items-center gap-2">
         <NotificationBell />

@@ -4883,3 +4883,42 @@ Both now produce real files. The admin's export buttons on the orders and custom
 - **Cancelling:** a running job can't be cancelled.
 - **Orders page dates:** its date picker still doesn't filter the list (a separate older gap), so the export follows the tab and search only.
 - **Next:** part 3, admin search (Ctrl+K).
+
+---
+
+## ✅ BATCH #39 (part 3) — Admin search (Ctrl+K) (2026-10-20)
+The "Search orders, customers, products…" box in the admin header looked real but did nothing. Now it opens a search, from the box or with Ctrl+K / ⌘K anywhere in the admin. It covers the pages you're allowed to open and your orders, customers and products. This finishes Batch 39.
+
+### 39.11 API (`modules/search`)
+- **Endpoint:** `GET /api/admin/search?q=` (2+ letters) gives up to 5 of each:
+  - **orders** by number, customer name, email or phone, only from the staff member's storefronts;
+  - **customers** by name, email or phone;
+  - **products** by name or SKU (not in the Trash).
+- **Phone numbers:** matched on their digits, so "01711-223344" finds 01711223344.
+- **Permissions:** each group comes back only with its view permission (`orders.view`, `customers.view`, `products.view`); the others are empty.
+
+### 39.12 Admin (`components/layout/command-search.tsx`)
+- **What it shows:**
+  - **Pages:** every menu and settings page the person may open, matched on the page or its section;
+  - **Records:** orders (number, customer, phone, total, status), customers (phone, email, order count) and products (SKU, status, stock).
+- **Keyboard:** ↑ ↓ to move, Enter to open, Esc to close. It works as a listbox for screen readers (`aria-activedescendant`).
+- **Recent searches:** the last 5 are remembered in the browser and shown when the box opens empty.
+- **Layering:** the dialog renders on `<body>`. Inside the header (z-20) it sat under the sidebar (z-30); this showed up during the browser check and was fixed.
+
+### 39.13 Checked
+- **Tests:** API 799 passing (69 files).
+  - new `tests/integration/admin-search.db.test.ts`:
+    - by name across all three groups, with the Trash left out;
+    - phone with a dash, order number and SKU;
+    - a staff member with only `orders.view` and one storefront sees only that storefront's order, and no customers or products.
+- **Types and lint:** API and admin typecheck; no new lint errors.
+- **In the browser:**
+  - Ctrl+K on the dashboard opened the search;
+  - "01711000101" found order 20261019000002 (Shirin Akter, ৳11,811, processing) and the customer Shirin Akter (1 order);
+  - "panj" listed both panjabis with SKU, status and stock; Down + Enter opened the second one (`/catalog/products/83`) and saved "panj" as a recent search;
+  - "export" found the "Import & export jobs" page.
+
+### 39.14 Not done
+- **Admin extras:** no bookmarks, text size setting or global scope switcher.
+- **Search reach:** no search inside settings pages' contents (only page names), and no search of leads, quotes or purchases yet.
+- **What's next:** all of the feature comparison's proposed batches (18–39) are done; what's left are the 🟡 rows (for example email OTP / Google login, Nagad and other gateways, WhatsApp, Arabic) to plan as the next batches.
