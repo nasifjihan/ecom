@@ -58,14 +58,6 @@ class MarketingController extends BaseController {
     envelope(res, { status: 200, message: "Coupon deleted" });
   });
 
-  validateCoupon = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const svc = this.getService(req.ctx);
-    const code = String(req.query.code || "");
-    if (!code) throw new NotFoundError("Coupon code not provided");
-    const result = await svc.validateCoupon(code, req.body ?? {});
-    envelope(res, { status: 200, data: result });
-  });
-
   createFlashSale = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
     const dto = req.body as CreateFlashSaleDtoType;

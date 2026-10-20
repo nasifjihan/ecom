@@ -5178,3 +5178,47 @@ Each staff member can bookmark admin pages and pick a text size. Both are saved 
 - **Scope switcher:** no global scope switcher. Staff are already limited to their storefronts.
 - **Bookmark names:** a bookmark can't be renamed; the name is set when it is added.
 - **Next:** part 3, coupon and shipping pricing as pure rules with table tests.
+
+---
+
+## ✅ BATCH #43 (part 3) — Coupon and shipping pricing as pure rules, with table tests (2026-10-21)
+The coupon maths and the shipping options list now live in rule files with no database, each covered by table tests. Checkout behaves exactly as before. This finishes Batch 43.
+
+### 43.9 Coupons (`modules/marketing/coupon.rules.ts`)
+- **`checkCoupon(coupon, lines, { now, storefrontId, email, promoOff, usage })`:** the checks in the same order, with the same messages, as `StorefrontService.evaluateCoupon` had:
+  - switched off or another storefront → not started → expired → used up;
+  - below the minimum ("add ৳X more") → above the maximum;
+  - given to other emails → per-customer limit → first order only;
+  - which items count (products in or out, categories, no sale items, no flash items when it doesn't work with promotions, prices after promotions);
+  - then the amount for each type, capped at what counts and rounded to the paisa.
+- **`needsUsage`:** says when the customer's order counts are needed.
+- **The service:** `evaluateCoupon` now only loads the coupon and those counts, and maps the priced lines.
+
+### 43.10 Shipping (`modules/shipping/shipping.rules.ts`)
+- **Moved, unchanged:** `ShippingService.buildOptions` / `optionsWrap` are now `shippingOptions(methods, cart)` (usable methods, cheapest first, with free-delivery savings and the reason) and `optionsSummary(options, zone)` (cheapest, fastest, and why when there's nothing).
+
+### 43.11 Removed
+- **Old endpoint:** `GET /api/admin/marketing/coupons/validate` and its repository method. Nothing called it, and its rules differed from checkout's: for example it counted cancelled orders towards the per-customer limit and ignored dates in a different order.
+
+### 43.12 Checked
+- **Tests:**
+  - new `tests/unit/coupon-rules.test.ts` (30):
+    - each type: 10%, ৳300 off the cart, ৳250 off each item, ৳1,500 each capped at the item's price, a cap at the cart total, rounding of 33.333%, free delivery, money off plus free delivery;
+    - each refusal and its message, and the first failing check winning;
+    - the edges: exactly the minimum, the start time, its own storefront, email case, one use left;
+    - which items count: products in or out, a category, no sale items, after promotions, full prices without flash items;
+    - `needsUsage`.
+  - new `tests/unit/shipping-options.test.ts` (10):
+    - cheapest first, with switched-off methods left out;
+    - flat, extra kilos, per item, weight tiers, a minimum charge;
+    - free delivery from an amount, and just under it;
+    - a method needing a bigger order;
+    - cheapest vs fastest, ties, unknown days, the empty reason.
+  - Existing `shipping-rules`, checkout and storefront DB tests pass unchanged.
+- **Full suite:** API 872 passing (79 files), DB tests on `ecom_test`.
+- **Live:** with the dev API, WELCOME10 on a ৳2,790 cart answered "Add ৳210 more to use this coupon (minimum ৳3000)", and on ৳5,580 took ৳558 off.
+- **Lint:** no new errors; the files touched have fewer than before.
+
+### 43.13 Not done
+- **Other pricing:** tax and delivery-slot pricing were already pure and tested; promotions and flash pricing too.
+- **Next:** Batch 41 (Nagad, aamarPay, PayPal), then 42 (WhatsApp, more team alerts).

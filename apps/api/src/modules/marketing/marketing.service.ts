@@ -172,10 +172,6 @@ export class MarketingService extends BaseService {
     return this.coupons.delete(this.ctx, id);
   }
 
-  async validateCoupon(code: string, cart: any): Promise<{ ok: boolean; errors: string[] }> {
-    return this.coupons.validateCouponForCart(this.ctx, code, cart);
-  }
-
   async createFlashSale(dto: CreateFlashSaleDto): Promise<unknown> {
     const storeId = this.ctx.storeId;
     const existing = await this.flashSales.findBySlug(this.ctx, dto.slug);

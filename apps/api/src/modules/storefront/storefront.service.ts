@@ -38,6 +38,7 @@ import { categoryLineage, livePromotionRules } from "../marketing/promotions.ser
 import { evaluatePromotions, type PromoResult } from "../marketing/promotions.rules";
 import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.context";
 import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
+import { checkCoupon, needsUsage } from "../marketing/coupon.rules";
 import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
@@ -750,81 +751,28 @@ export class StorefrontService {
     | { ok: false; error: string }
   > {
     const coupon = await prisma.coupon.findFirst({ where: { storeId: this.storeId, code: code.trim().toUpperCase() } });
-    const subtotal = round2(lines.reduce((s, l) => s + l.lineSubtotal, 0));
-    if (!coupon || !coupon.isActive || !onStorefront(coupon.storefrontIds, (await this.storefront()).id)) {
-      return { ok: false, error: "This coupon code is not valid" };
-    }
-    const now = new Date();
-    if (coupon.startsAt && coupon.startsAt > now) return { ok: false, error: "This coupon is not active yet" };
-    if (coupon.expiresAt && coupon.expiresAt < now) return { ok: false, error: "This coupon has expired" };
-    if (coupon.totalUsageLimit !== null && coupon.usageCount >= coupon.totalUsageLimit) {
-      return { ok: false, error: "This coupon has reached its usage limit" };
-    }
-    if (coupon.minSubtotal !== null && subtotal < num(coupon.minSubtotal)) {
-      return { ok: false, error: `Add ৳${round2(num(coupon.minSubtotal) - subtotal)} more to use this coupon (minimum ৳${num(coupon.minSubtotal)})` };
-    }
-    if (coupon.maxSubtotal !== null && subtotal > num(coupon.maxSubtotal)) {
-      return { ok: false, error: `This coupon only applies to orders up to ৳${num(coupon.maxSubtotal)}` };
-    }
-
-    const allowedEmails = Array.isArray(coupon.customerEmails) ? (coupon.customerEmails as string[]).map((e) => e.toLowerCase()) : [];
-    if (allowedEmails.length) {
-      if (!email) return { ok: false, error: "Enter your email to use this coupon" };
-      if (!allowedEmails.includes(email)) return { ok: false, error: "This coupon is not available for your account" };
-    }
-    if (email && (coupon.perCustomerLimit !== null || coupon.newCustomersOnly)) {
-      const [usedCount, orderCount] = await Promise.all([
-        prisma.order.count({ where: { storeId: this.storeId, billingEmail: email, couponUsed: coupon.code, status: { not: "CANCELLED" } } }),
-        prisma.order.count({ where: { storeId: this.storeId, billingEmail: email, status: { not: "CANCELLED" } } }),
-      ]);
-      if (coupon.perCustomerLimit !== null && usedCount >= coupon.perCustomerLimit) {
-        return { ok: false, error: "You have already used this coupon" };
-      }
-      if (coupon.newCustomersOnly && orderCount > 0) return { ok: false, error: "This coupon is for first orders only" };
-    }
-
-    const ids = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
-    const include = ids(coupon.productIds);
-    const exclude = ids(coupon.excludeProductIds);
-    const cats = ids(coupon.categoryIds);
-    // A coupon that doesn't work with promotions doesn't count flash-sale items either, and is
-    // worked out on full prices (the promotions are dropped when it's used).
-    const off = coupon.worksWithPromotions ? promoOff : [];
-    const eligible = lines.map((l, i) => ({ ...l, lineSubtotal: round2(l.lineSubtotal - (off[i] ?? 0)) })).filter((l) => {
-      const pid = String(l.product.id);
-      if (exclude.includes(pid)) return false;
-      if (coupon.excludeSales && l.onSale) return false;
-      if (!coupon.worksWithPromotions && l.flash) return false;
-      if (include.length && !include.includes(pid)) return false;
-      if (cats.length && !l.product.categories.some((c) => cats.includes(String(c.categoryId)))) return false;
-      return true;
-    });
-    const eligibleSubtotal = eligible.reduce((s, l) => s + l.lineSubtotal, 0);
-    const amount = num(coupon.amount);
-
-    let discount = 0;
-    let freeShipping = coupon.freeShipping;
-    switch (coupon.type) {
-      case "PERCENTAGE":
-        discount = (eligibleSubtotal * amount) / 100;
-        break;
-      case "FIXED_CART":
-        discount = eligible.length ? amount : 0;
-        break;
-      case "FIXED_PRODUCT":
-        discount = eligible.reduce((s, l) => s + Math.min(l.lineSubtotal, Math.min(l.unitPrice, amount) * l.qty), 0);
-        break;
-      case "FREE_SHIPPING":
-        freeShipping = true;
-        break;
-      default:
-        return { ok: false, error: "This coupon type cannot be used at checkout yet" };
-    }
-    if (coupon.type !== "FREE_SHIPPING" && eligible.length === 0) {
-      return { ok: false, error: "This coupon does not apply to the items in your cart" };
-    }
-    discount = round2(Math.min(discount, eligibleSubtotal));
-    return { ok: true, coupon, discount, freeShipping, subtotal };
+    if (!coupon) return { ok: false, error: "This coupon code is not valid" };
+    // The rules are in marketing/coupon.rules.ts; here we only load what they need.
+    const usage = needsUsage(coupon, email)
+      ? await Promise.all([
+          prisma.order.count({ where: { storeId: this.storeId, billingEmail: email, couponUsed: coupon.code, status: { not: "CANCELLED" } } }),
+          prisma.order.count({ where: { storeId: this.storeId, billingEmail: email, status: { not: "CANCELLED" } } }),
+        ]).then(([withCoupon, orders]) => ({ withCoupon, orders }))
+      : undefined;
+    const r = checkCoupon(
+      coupon,
+      lines.map((l) => ({
+        productId: String(l.product.id),
+        categoryIds: l.product.categories.map((c) => String(c.categoryId)),
+        unitPrice: l.unitPrice,
+        qty: l.qty,
+        lineSubtotal: l.lineSubtotal,
+        onSale: l.onSale,
+        flash: !!l.flash,
+      })),
+      { now: new Date(), storefrontId: (await this.storefront()).id, email, promoOff, usage },
+    );
+    return r.ok ? { ...r, coupon } : r;
   }
 
   /**

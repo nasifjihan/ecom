@@ -204,7 +204,7 @@ These are our advantages. Keep them.
 | Idempotency key on order create and webhooks | ✅ | Batch 35: Idempotency-Key on checkout, landing-page orders and refunds (a repeat or double click gets the first answer); gateway notices settle each payment once |
 | Payment gateway webhooks verified + idempotent (bKash, Nagad, SSLCommerz, aamarPay, PayPal) | 🟡 | Batch 35: bKash Checkout and SSLCommerz, each payment confirmed with the gateway's own API (amount, order code, currency), settled once. Built to the gateways' published APIs and a local mock; not yet run against their sandboxes. Every return, notice, re-check and refund is logged on the order. Refunds go back through the gateway. Nagad, aamarPay, PayPal not connected |
 | Encrypted secrets for gateway/courier/SMS keys | ✅ | Batch 22: courier keys, webhook secrets and tokens; Batch 24: SMS keys (AES-256-GCM); Batch 35: payment gateway keys (per store, no longer in env) |
-| Pure pricing/promo/coupon/shipping services with table tests | 🟡 (flash pricing, promotions) |
+| Pure pricing/promo/coupon/shipping services with table tests | ✅ (flash pricing, promotions; Batch 43: coupons and shipping options) |
 | OpenAPI docs at `/api/docs` | ✅ Batch 39: generated from the running routes (545 operations): who may call each, its permissions, and params / query / body from the zod schemas; Swagger UI at `/api/docs`, JSON at `/api/docs/openapi.json`; off in production unless `API_DOCS=on` |
 | Audit row on every admin change | ✅ |
 | Background jobs: courier sync, COD, exports, imports | ✅ email, courier sync, festival reminders, scheduled reports; Batch 39: import & export jobs (orders, customers, products, newsletter exports; product import) with progress, bell alert and a jobs page |

@@ -35,13 +35,6 @@ marketingCouponsRouter.get(
 );
 
 marketingCouponsRouter.get(
-  "/validate",
-  authMiddleware("adminOrSuper"),
-  rbacMiddleware("coupons.view"),
-  marketingController.validateCoupon,
-);
-
-marketingCouponsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("coupons.view"),

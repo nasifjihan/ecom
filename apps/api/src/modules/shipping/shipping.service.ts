@@ -8,7 +8,7 @@ import type {
 } from "./shipping.dto";
 import { BadRequestError } from "../../core";
 import { locationDepth, offInChain, resolveAddressLocation, storeLocationsOff } from "../locations/locations.service";
-import { methodCost, parseRules, pickZone } from "./shipping.rules";
+import { optionsSummary, pickZone, shippingOptions } from "./shipping.rules";
 import { storefrontZones } from "../storefronts/storefronts.rules";
 import { prisma } from "../../config";
 import { splitTaxOnTop, taxInside } from "./tax.rules";
@@ -43,7 +43,7 @@ export class ShippingService {
     const cart = { subtotal: Number(q.subtotal || 0), weightKG: Number(q.weightKG || 0), qty: Number(q.qty || 0) };
     if (q.zoneId) {
       const zone = await this.zones.get(ctx, q.zoneId);
-      return this.optionsWrap(this.buildOptions((zone as any).methods || [], cart), null);
+      return optionsSummary(shippingOptions((zone as any).methods || [], cart), null);
     }
     if (!q.countryCode) throw new BadRequestError("Provide zoneId or countryCode", "SHIPPING_PARAM_MISSING");
 
@@ -54,7 +54,7 @@ export class ShippingService {
     if (place?.chain.length && ctx.storeId !== undefined) {
       const off = offInChain(place.chain, await storeLocationsOff(BigInt(ctx.storeId as any)));
       if (off) {
-        return { ...this.optionsWrap([], null), reason: `Sorry, we don't deliver to ${off.nameEn} yet.` };
+        return { ...optionsSummary([], null), reason: `Sorry, we don't deliver to ${off.nameEn} yet.` };
       }
     }
     // A storefront with its own zones for this address uses them instead of the shared ones.
@@ -70,40 +70,11 @@ export class ShippingService {
     }
     // Most specific zone wins; ties go to the zone with the cheaper option.
     const scored = zones.map((z) => {
-      const options = this.buildOptions(z.methods, cart);
+      const options = shippingOptions(z.methods, cart);
       return { zone: z, options, specificity: z.specificity, cheapest: options[0]?.finalRateBDT ?? Infinity };
     });
     const best = pickZone(scored);
-    return this.optionsWrap(best?.options ?? [], best ? { id: String(best.zone.id), name: best.zone.name } : null);
-  }
-
-  private buildOptions(methods: any[], cart: { subtotal: number; weightKG: number; qty: number }) {
-    const out = [];
-    for (const m of methods) {
-      const price = methodCost(m, cart);
-      if (!price.available) continue;
-      const rules = parseRules(m.costRules);
-      out.push({
-        id: m.id, zoneId: m.zoneId,
-        code: m.code, name: m.name,
-        description: m.description ?? null,
-        baseRate: Number(m.baseCost || 0), weightChargableKG: price.weightKg, perKgExtra: Number(rules.perKgExtra ?? 0),
-        finalRateBDT: price.cost,
-        savingsBDT: price.free ? price.beforeFree : 0,
-        freeReason: price.free ? `Free delivery on orders from ${Number(m.freeFromSubtotal).toFixed(2)}` : null,
-        transit: { minDays: m.deliveryEstimateMinDays ?? null, maxDays: m.deliveryEstimateMaxDays ?? null },
-        useSlots: Boolean((m as { useSlots?: boolean }).useSlots),
-      });
-    }
-    return out.sort((a, b) => a.finalRateBDT - b.finalRateBDT);
-  }
-
-  private optionsWrap(options: any[], zone: { id: string; name: string } | null) {
-    const cheapest = options[0] ?? null;
-    const fastest = [...options].sort((a, b) => {
-      const da = (a.transit.minDays ?? 9999); const db = (b.transit.minDays ?? 9999); return da - db;
-    })[0] ?? null;
-    return { zonesMatched: options.length, zone, options, cheapest, fastest, reason: options.length ? null : "No shipping options available for this address." };
+    return optionsSummary(best?.options ?? [], best ? { id: String(best.zone.id), name: best.zone.name } : null);
   }
 
   resolveTaxes(ctx: RequestContext, d: TaxesForAddressDto) { return this.taxes.resolveForAddress(ctx, d); }

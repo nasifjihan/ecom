@@ -145,3 +145,45 @@ export function pickZone<T extends { specificity: number; cheapest: number }>(ma
   }
   return best;
 }
+
+/** A shipping method as offered to a cart (GET /storefront/shipping/rates). */
+export type MethodForOptions = MethodForCost & {
+  id: unknown;
+  zoneId?: unknown;
+  code: string;
+  name: string;
+  description?: string | null;
+  deliveryEstimateMinDays?: number | null;
+  deliveryEstimateMaxDays?: number | null;
+  useSlots?: boolean;
+};
+
+/** What this cart can be sent with, cheapest first; methods it can't use are left out. */
+export function shippingOptions<M extends MethodForOptions>(methods: M[], cart: { subtotal: number; weightKG: number; qty: number }) {
+  const out = [];
+  for (const m of methods) {
+    const price = methodCost(m, cart);
+    if (!price.available) continue;
+    const rules = parseRules(m.costRules);
+    out.push({
+      id: m.id, zoneId: m.zoneId,
+      code: m.code, name: m.name,
+      description: m.description ?? null,
+      baseRate: Number(m.baseCost || 0), weightChargableKG: price.weightKg, perKgExtra: Number(rules.perKgExtra ?? 0),
+      finalRateBDT: price.cost,
+      savingsBDT: price.free ? price.beforeFree : 0,
+      freeReason: price.free ? `Free delivery on orders from ${Number(m.freeFromSubtotal).toFixed(2)}` : null,
+      transit: { minDays: m.deliveryEstimateMinDays ?? null, maxDays: m.deliveryEstimateMaxDays ?? null },
+      useSlots: Boolean(m.useSlots),
+    });
+  }
+  return out.sort((a, b) => a.finalRateBDT - b.finalRateBDT);
+}
+export type ShippingOption = ReturnType<typeof shippingOptions>[number];
+
+/** The options with the cheapest and the fastest (fewest days at best; ties keep the cheaper). */
+export function optionsSummary(options: ShippingOption[], zone: { id: string; name: string } | null) {
+  const cheapest = options[0] ?? null;
+  const fastest = [...options].sort((a, b) => (a.transit.minDays ?? 9999) - (b.transit.minDays ?? 9999))[0] ?? null;
+  return { zonesMatched: options.length, zone, options, cheapest, fastest, reason: options.length ? null : "No shipping options available for this address." };
+}
