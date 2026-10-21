@@ -45,6 +45,7 @@ import {
 import { adminCustomersRouter, customerSelfRouter } from "./modules/customers";
 import { adminInventoryRouter } from "./modules/inventory";
 import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./modules/sms";
+import { adminOrderWhatsappRouter, adminWhatsappRouter, registerWhatsappListeners, whatsappWebhookRouter } from "./modules/whatsapp";
 import { adminLoginSettingsRouter } from "./modules/auth/customer-login.routes";
 import { adminPreferencesRouter } from "./modules/admin-users/preferences";
 import { adminPurchasingRouter } from "./modules/purchasing";
@@ -139,6 +140,7 @@ export function buildApp(): Express {
   registerEmailListeners();
   registerStaffAlertListeners();
   registerSmsListeners();
+  registerWhatsappListeners();
 
   // =============== MODULE ROUTES (Batch #5 wired) ===============
   app.use("/api/docs", docsRouter);                                  // OpenAPI from the routes below (off in production unless API_DOCS=on)
@@ -161,6 +163,7 @@ export function buildApp(): Express {
   app.use("/api/admin/brands", adminBrandsRouter);
   app.use("/api/admin/attributes", adminAttributesRouter);
   app.use("/api/admin/media", productUploadRouter);
+  app.use("/api/admin/orders", adminOrderWhatsappRouter);           // WhatsApp messages of an order
   app.use("/api/admin/orders", adminOrderSmsRouter);                // SMS of an order, invoice by SMS
   app.use("/api/admin/orders", adminOrderCourierRouter);            // book many orders with a courier
   app.use("/api/admin/orders", adminOrderPaymentsRouter);           // payments of an order
@@ -178,6 +181,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/checkout", checkoutRouter);
   app.use("/api/payments/ipn", paymentIpnRouter);                  // SSLCommerz payment notices
   app.use("/api/payments/return", paymentReturnRouter);            // back from bKash / SSLCommerz
+  app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);       // Meta: delivery statuses
   app.use("/api/webhooks/couriers", courierWebhooksRouter);        // courier status webhooks
   app.use("/api/admin/customers", adminCustomersRouter);
   app.use("/api/storefront/account", storefrontAccountPaymentsRouter);
@@ -190,6 +194,7 @@ export function buildApp(): Express {
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
+  app.use("/api/admin/whatsapp", adminWhatsappRouter);
   app.use("/api/admin/login-settings", adminLoginSettingsRouter);
   app.use("/api/admin/loyalty", adminLoyaltyRouter);                  // wallet, cashback, levels, referrals
   app.use("/api/admin/warehouses", adminWarehousesRouter);            // warehouses, stock per warehouse, transfers, order ship-from

@@ -82,6 +82,8 @@ const Base = z.object({
   customerNote: text(2000).optional(),
   staffNote: text(2000).optional(),
   notifyCustomer: z.boolean().default(true),
+  /** The customer agreed (on the phone, in chat) to order updates on WhatsApp. */
+  whatsappOptIn: z.boolean().default(false),
   /** Take what the store allows from the customer's wallet (known customers only). */
   useWallet: z.boolean().default(false),
   /** Make the order from this quotation: its customer, lines, agreed prices and discount. */
@@ -382,6 +384,7 @@ export class ManualOrderService {
     }
     await this.credit(order.id, dto.salespersonId, lead?.ownerId ?? fromQuote?.createdById ?? adminId);
     if (lead) await winLead(storeId, lead.id, { id: order.id, number: order.number, customerId: customer.id }, { id: adminId, name: who });
+    if (dto.whatsappOptIn) await prisma.order.update({ where: { id: order.id }, data: { whatsappOptIn: true } });
     emitOrderPlaced({ storeId: String(storeId), orderId: String(order.id), notifyCustomer: dto.notifyCustomer, notifyStaff: false });
     return {
       id: String(order.id),

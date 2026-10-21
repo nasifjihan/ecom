@@ -99,6 +99,8 @@ export const PlaceOrderDto = z.object({
   phone: z.string().trim().min(7).max(20),
   isGuest: z.boolean().optional(),
   subscribeNewsletter: z.boolean().optional(),
+  /** "Send my order updates on WhatsApp" (not pre-ticked: Meta needs a clear opt-in). */
+  whatsappOptIn: z.boolean().optional(),
   shippingAddress: StorefrontAddressDto,
   billingAddress: StorefrontAddressDto.optional(),
   billingSameAsShipping: z.boolean().optional().default(true),

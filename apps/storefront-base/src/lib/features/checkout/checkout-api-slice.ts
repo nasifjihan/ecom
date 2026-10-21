@@ -30,6 +30,8 @@ export interface DeliverySlotChoice {
 }
 
 export interface DeliveryChoices {
+  /** Checkout offers "Send my order updates on WhatsApp". */
+  whatsappUpdates: boolean;
   /** Checkout offers "This order is a gift". */
   giftOrders: boolean;
   /** single: every part on one page; steps: details → delivery → payment, one at a time. */

@@ -93,7 +93,12 @@ export default function NotificationSettingsPage() {
   const onSave = async () => {
     try {
       await save({
-        customers: customers.map((c) => ({ key: c.key, email: c.email, ...(c.sms === null ? {} : { sms: c.sms }) })),
+        customers: customers.map((c) => ({
+          key: c.key,
+          email: c.email,
+          ...(c.sms === null ? {} : { sms: c.sms }),
+          ...(c.whatsapp === null ? {} : { whatsapp: c.whatsapp }),
+        })),
         staff: staff.map((s) => ({ event: s.event, inApp: s.inApp, email: s.email, sms: s.sms, ...(s.toAssignee ? {} : { staffIds: s.staffIds }) })),
       }).unwrap();
       toast.success("Saved");
@@ -140,13 +145,18 @@ export default function NotificationSettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Customers</CardTitle>
           <CardDescription>
-            Email only goes to customers who gave an email; SMS to Bangladeshi mobile numbers. Change the wording in{" "}
+            Email only goes to customers who gave an email; SMS to Bangladeshi mobile numbers; WhatsApp only to customers who ticked
+            &quot;Send my order updates on WhatsApp&quot;. Change the wording in{" "}
             <Link href="/settings/emails" className="underline">
               Emails
-            </Link>{" "}
-            and{" "}
+            </Link>
+            ,{" "}
             <Link href="/settings/sms" className="underline">
               SMS
+            </Link>{" "}
+            and{" "}
+            <Link href="/settings/whatsapp" className="underline">
+              WhatsApp
             </Link>
             .
           </CardDescription>
@@ -158,6 +168,7 @@ export default function NotificationSettingsPage() {
                 <TableHead>Message</TableHead>
                 <TableHead className="w-24">Email</TableHead>
                 <TableHead className="w-24">SMS</TableHead>
+                <TableHead className="w-24">WhatsApp</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -173,6 +184,17 @@ export default function NotificationSettingsPage() {
                     ) : edit ? (
                       <Toggle checked={c.sms} onChange={(v) => setC(c.key, { sms: v })} ariaLabel={`${c.label} by SMS`} />
                     ) : c.sms ? (
+                      "On"
+                    ) : (
+                      "Off"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {c.whatsapp === null ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : edit ? (
+                      <Toggle checked={c.whatsapp} onChange={(v) => setC(c.key, { whatsapp: v })} ariaLabel={`${c.label} by WhatsApp`} />
+                    ) : c.whatsapp ? (
                       "On"
                     ) : (
                       "Off"

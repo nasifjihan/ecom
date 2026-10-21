@@ -20,6 +20,8 @@ export interface CustomerMessageRow {
   emailTemplate: string;
   /** null: this message has no SMS. */
   sms: boolean | null;
+  /** null: this message has no WhatsApp version. */
+  whatsapp: boolean | null;
 }
 
 export interface StaffAlertRow {
@@ -36,13 +38,15 @@ export interface StaffAlertRow {
 
 export interface Matrix {
   smsReady: boolean;
+  /** WhatsApp sends through Meta (otherwise it's record only). */
+  whatsappReady: boolean;
   customers: CustomerMessageRow[];
   staff: StaffAlertRow[];
   people: { id: string; name: string; email: string; hasMobile: boolean; role: string; owner: boolean }[];
 }
 
 export interface MatrixInput {
-  customers?: { key: string; email?: boolean; sms?: boolean }[];
+  customers?: { key: string; email?: boolean; sms?: boolean; whatsapp?: boolean }[];
   staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; staffIds?: string[] }[];
 }
 

@@ -39,6 +39,7 @@ import { evaluatePromotions, type PromoResult } from "../marketing/promotions.ru
 import { storefrontInfo, type StorefrontInfo } from "../storefronts/storefronts.context";
 import { gatewayOffered, onStorefront, storefrontPriceRow, type OwnPrice } from "../storefronts/storefronts.rules";
 import { checkCoupon, needsUsage } from "../marketing/coupon.rules";
+import { waEventSettings } from "../whatsapp/whatsapp.rules";
 import { isBusinessBuyer, tiersByProduct } from "../wholesale/wholesale.context";
 import { tierFor, tierQty, withTier } from "../wholesale/wholesale.rules";
 import { creditOrder, salespersonByCode } from "../sales/commission.ledger";
@@ -1519,6 +1520,8 @@ export class StorefrontService {
         logger.warn({ err, orderId: String(order.id) }, "Could not credit the order to a salesperson");
       }
     }
+    // Before "order placed" goes out, so the WhatsApp update sees the customer's yes.
+    if (dto.whatsappOptIn) await prisma.order.update({ where: { id: order.id }, data: { whatsappOptIn: true } });
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
 
     // "Subscribe to our newsletter" ticked at checkout (never blocks the order).
@@ -1574,7 +1577,10 @@ export class StorefrontService {
     ]);
     const order = sf.checkoutCourierIds.map(String);
     const g = await prisma.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { giftOrders: true } });
+    const wa = await prisma.storeWhatsappSetting.findUnique({ where: { storeId: this.storeId }, select: { events: true } });
     return {
+      /** Checkout offers "Send my order updates on WhatsApp" (the shop sends at least one). */
+      whatsappUpdates: Object.values(waEventSettings(wa?.events)).some((e) => e.enabled),
       /** Checkout offers "This order is a gift". */
       giftOrders: g?.giftOrders ?? true,
       /** single | steps: how this storefront lays out checkout. */

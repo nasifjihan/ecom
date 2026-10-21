@@ -78,14 +78,14 @@ export function staffSmsText(store: string, title: string): string {
 
 // ------------------------------------------------------------------ customers
 
-/** The customer messages, by order step, and the email template / SMS event behind each. */
+/** The customer messages, by order step, and the email template / SMS / WhatsApp event behind each. */
 export const CUSTOMER_EVENTS = [
-  { key: "order_placed", label: "Order placed", email: "order_new_customer", sms: "order_placed" },
-  { key: "order_confirmed", label: "Order confirmed, on hold or out for delivery", email: "order_status_changed", sms: "order_confirmed" },
-  { key: "order_shipped", label: "Order shipped", email: "order_shipped_customer", sms: "order_shipped" },
-  { key: "order_delivered", label: "Order delivered", email: "order_delivered_customer", sms: "order_delivered" },
-  { key: "order_cancelled", label: "Order cancelled", email: "order_cancelled_customer", sms: "order_cancelled" },
-  { key: "order_refunded", label: "Order refunded", email: "order_refunded_customer", sms: null },
-  { key: "customer_welcome", label: "Account created", email: "customer_welcome", sms: null },
-  { key: "quote_sent", label: "Quote sent to them", email: "quote_sent_customer", sms: null },
+  { key: "order_placed", label: "Order placed", email: "order_new_customer", sms: "order_placed", whatsapp: "order_placed" },
+  { key: "order_confirmed", label: "Order confirmed, on hold or out for delivery", email: "order_status_changed", sms: "order_confirmed", whatsapp: "order_confirmed" },
+  { key: "order_shipped", label: "Order shipped", email: "order_shipped_customer", sms: "order_shipped", whatsapp: "order_shipped" },
+  { key: "order_delivered", label: "Order delivered", email: "order_delivered_customer", sms: "order_delivered", whatsapp: "order_delivered" },
+  { key: "order_cancelled", label: "Order cancelled", email: "order_cancelled_customer", sms: "order_cancelled", whatsapp: "order_cancelled" },
+  { key: "order_refunded", label: "Order refunded", email: "order_refunded_customer", sms: null, whatsapp: null },
+  { key: "customer_welcome", label: "Account created", email: "customer_welcome", sms: null, whatsapp: null },
+  { key: "quote_sent", label: "Quote sent to them", email: "quote_sent_customer", sms: null, whatsapp: null },
 ] as const

@@ -67,6 +67,7 @@ export default function NewOrderPage() {
   const [customerNote, setCustomerNote] = useState("");
   const [staffNote, setStaffNote] = useState("");
   const [notify, setNotify] = useState(true);
+  const [whatsapp, setWhatsapp] = useState(false);
   const { data: salespeople = [] } = useSalespeopleQuery();
   const [salesperson, setSalesperson] = useState("auto");
 
@@ -143,11 +144,12 @@ export default function NewOrderPage() {
       customerNote: customerNote.trim() || undefined,
       staffNote: staffNote.trim() || undefined,
       notifyCustomer: notify,
+      whatsappOptIn: whatsapp,
       ...(fromQuote ? { quotationId: fromQuote.id } : {}),
       ...(fromLead ? { leadId: fromLead.id } : {}),
       ...(salesperson === "auto" ? {} : { salespersonId: salesperson === "none" ? null : salesperson }),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, fromQuote, fromLead, salesperson],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, whatsapp, fromQuote, fromLead, salesperson],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -606,6 +608,12 @@ export default function NewOrderPage() {
                 onChange={setNotify}
                 label="Email the customer"
                 hint={(customer?.email || email.trim()) ? "Sends the order confirmation with the invoice." : "Add an email to send a confirmation."}
+              />
+              <Toggle
+                checked={whatsapp}
+                onChange={setWhatsapp}
+                label="Updates on WhatsApp"
+                hint="Only if the customer said yes. Order updates then go to their mobile on WhatsApp (Settings → WhatsApp)."
               />
               <Button className="w-full" disabled={!ready || creating || quoting} onClick={submit}>
                 {creating ? "Creating…" : `Create order${t ? ` · ${taka(t.grandTotal)}` : ""}`}

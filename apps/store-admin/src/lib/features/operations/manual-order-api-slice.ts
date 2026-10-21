@@ -41,6 +41,8 @@ export interface ManualOrderInput {
   customerNote?: string;
   staffNote?: string;
   notifyCustomer: boolean;
+  /** The customer said yes to order updates on WhatsApp. */
+  whatsappOptIn?: boolean;
   /** Make the order from this quotation (its customer, lines, agreed prices and discount). */
   quotationId?: string;
   /** Made from this CRM lead (the lead is won). */

@@ -5326,3 +5326,72 @@ Nagad can now take payments online through the shop's own Nagad merchant account
 - **Real sandbox:** not yet run against Nagad's own sandbox. That needs the sandbox merchant ID and keys Nagad gives when a merchant signs up.
 - **Refunds:** Nagad refunds are paid back by hand (no API).
 - **Next:** part 2: aamarPay, bKash and SSLCommerz in their real sandboxes, with sandbox keys from the shop.
+
+---
+
+## ✅ BATCH #42 (part 1) — WhatsApp order updates (2026-10-21)
+Customers who ask for it get their order updates on WhatsApp, through the shop's own WhatsApp Business number on Meta's **WhatsApp Cloud API**. Until that's set up, **Record only** writes every message to the log without sending it.
+
+### 42.1 Data (migration `20261022090000_whatsapp`)
+- **StoreWhatsappSetting:**
+  - provider (`log` / `cloud`) and Meta's phone number ID;
+  - encrypted keys (access token, app secret);
+  - our own webhook verify token, made on first use;
+  - per order event: on/off, template name, language;
+  - the last test and its error.
+- **WhatsappMessage:** to (8801…), kind, order, template, language, the {{n}} values, provider, a status (logged, sending, sent, delivered, read, failed), Meta's message id, and the error.
+- **Order.whatsappOptIn:** the customer agreed.
+
+### 42.2 Sending (`modules/whatsapp`)
+- **Templates only:** Meta lets a business start a chat only with an approved template. Each of the 5 order events (placed, confirmed, shipped, delivered, cancelled) names a template and language (en, en_US, bn), with fixed values in order:
+  - placed: name, order, total, shop;
+  - confirmed: name, order, shop;
+  - shipped: name, order, courier, tracking;
+  - delivered: name, order, shop;
+  - cancelled: name, order, shop phone.
+  - Empty values become "-", since Meta refuses blanks.
+- **Request:** `POST graph.facebook.com/v19.0/{phone-number-id}/messages` with a Bearer token (`whatsapp.provider.ts`, base overridable with `WHATSAPP_API_URL`). Meta's refusal reason and code go into the log.
+- **When it sends:** on the same order events as SMS, only when the event is on, the customer opted in and the number is a BD mobile. Once per event per order (a failed one can go again).
+- **Test send:** Meta's ready-made `hello_world` template.
+- **Webhook** `GET|POST /api/webhooks/whatsapp`:
+  - Meta's verify check echoes the challenge only for a store's own token.
+  - Statuses are accepted only with a valid `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with that store's app secret, found by its phone number ID). A bad signature gets 401 and changes nothing.
+  - A late status never undoes a later one (read stays read).
+  - The path sits under `/api/webhooks`, which keeps the raw body.
+- **Admin API:** `GET|PUT /api/admin/whatsapp/settings`, `POST …/test`, `GET …/log`, `POST …/log/:id/resend`, `GET /api/admin/orders/:id/whatsapp`.
+
+### 42.3 Opt-in
+- **Checkout:** "Send my order updates on WhatsApp" (not pre-ticked, as Meta asks for a clear yes), shown only when the shop sends at least one WhatsApp update (`delivery-choices.whatsappUpdates`). It's saved on the order before "order placed" goes out.
+- **Staff orders:** the manual order form has "Updates on WhatsApp", for when the customer said yes on the phone.
+- **Bangla:** the new texts have Bangla.
+
+### 42.4 Admin
+- **Settings → WhatsApp:**
+  - **Connection:** Record only or Cloud API; phone number ID, access token and app secret, with hints of the saved ones.
+  - **Webhook:** the callback URL and verify token to paste into Meta, with copy buttons.
+  - **Order updates:** each event's switch, template name, language, and its {{1}}, {{2}}… values to use in WhatsApp Manager.
+  - **Test message**, and a **log** with status badges, template values, Meta's error, and "Send again" for failures.
+- **Settings → Notifications:** a **WhatsApp** column for customer messages (the same switches as the WhatsApp page).
+
+### 42.5 Checked
+- **Tests:**
+  - new `tests/unit/whatsapp.test.ts` (9): BD numbers in WhatsApp form; event defaults and bad template names; values in order with "-"; signature check on exact bytes; status order; reading statuses from a payload (incoming chats ignored); the Graph request (template, language, values; none for `hello_world`); Meta's refusal reason;
+  - new `tests/integration/whatsapp.db.test.ts` (5):
+    - record only: logged once for an opted-in order, nothing for one that didn't opt in or for an event that's off, nothing sent to Meta;
+    - Cloud API refused without keys, and keys stored encrypted with hints;
+    - sent through a fake Meta, then signed webhooks through the real app took it to delivered and read; a forged signature (401) and a late "delivered" changed nothing;
+    - the verify check;
+    - a refused test logged as failed with Meta's reason.
+  - Found while writing the test: supertest JSON-encodes a Buffer body, so the webhook test sends the JSON text, as Meta does.
+- **Types and lint:** API, admin and storefront typecheck; no lint errors in the WhatsApp files.
+- **In the browser (record only):**
+  - on Settings → WhatsApp, turned on "Order placed" and saved; a test to 01712345678 showed "Recorded only" in the log;
+  - Notifications showed the WhatsApp column with "Order placed" on;
+  - the storefront checkout showed the WhatsApp box; with it ticked, cash-on-delivery order 20261021000002 logged `order_placed` with "Test · 20261021000002 · ৳3,335 · Fashion Bangladesh".
+- **Dev data:** WhatsApp stays on Record only with "Order placed" on (it only logs). That test order stays.
+- **Environment:** Docker Desktop had stopped again and was restarted.
+
+### 42.6 Not done
+- **Real sending:** needs a WhatsApp Business number in Meta, an access token, and approved templates. No real message has been sent yet.
+- **Out of scope:** no WhatsApp inbox or replies, no broadcasts.
+- **Next:** part 2, new team alerts (reviews, questions, courier problems, payments to check), and WhatsApp for team alerts.

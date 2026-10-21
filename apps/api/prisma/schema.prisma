@@ -99,6 +99,8 @@ model Store {
   coupons              Coupon[]
   promotions           Promotion[]
   smsSetting           StoreSmsSetting?
+  whatsappSetting      StoreWhatsappSetting?
+  whatsappMessages     WhatsappMessage[]
   smsMessages          SmsMessage[]
   loginCodes           LoginCode[]
   loginSetting         StoreLoginSetting?
@@ -536,6 +538,57 @@ model StoreSmsSetting {
 }
 
 /// Every SMS the store sent or tried to send. One-time codes are stored masked.
+/// WhatsApp (Meta WhatsApp Cloud API): provider, the business number, keys (encrypted JSON:
+/// accessToken, appSecret) and, per order event, the approved template to send.
+model StoreWhatsappSetting {
+  id            BigInt    @id @default(autoincrement())
+  storeId       BigInt    @unique
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// log (record only, nothing sent) | cloud (Meta WhatsApp Cloud API)
+  provider      String    @default("log")
+  /// The WhatsApp business phone number's id in Meta (not the number itself).
+  phoneNumberId String?
+  credentials   String?
+  /// What Meta must send back when the webhook is set up (made by us, shown in the admin).
+  verifyToken   String
+  /// Per event: { enabled, template, language }.
+  events        Json?
+  lastTestAt    DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([phoneNumberId])
+}
+
+/// Every WhatsApp message the store sent or tried to send, with Meta's later status.
+model WhatsappMessage {
+  id          BigInt   @id @default(autoincrement())
+  storeId     BigInt
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// International format without "+", e.g. 8801712345678.
+  to          String
+  /// order_placed | order_confirmed | order_shipped | order_delivered | order_cancelled | test | staff_alert
+  kind        String
+  orderId     BigInt?
+  template    String
+  language    String
+  /// The template's {{1}}, {{2}}… values, in order.
+  params      Json
+  provider    String
+  /// logged | sent | delivered | read | failed
+  status      String
+  /// Meta's message id (wamid…), which its webhook statuses refer to.
+  providerRef String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId, createdAt])
+  @@index([storeId, orderId])
+  @@index([providerRef])
+}
+
 model SmsMessage {
   id          BigInt   @id @default(autoincrement())
   storeId     BigInt
@@ -1674,6 +1727,8 @@ model Order {
   isGuest                Boolean              @default(false)
   orderKey               String               @unique
   couponUsed             String?
+  /// The customer agreed to order updates on WhatsApp (checkout box, or staff for phone orders).
+  whatsappOptIn          Boolean              @default(false)
   couponDiscountAmount   Decimal              @default(0) @db.Decimal(12, 2)
   /// Automatic promotions: their discount (part of discountTotal) and what applied, gifts included.
   promotionDiscount      Decimal              @default(0) @db.Decimal(12, 2)

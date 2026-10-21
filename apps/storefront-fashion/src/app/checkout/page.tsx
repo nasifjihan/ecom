@@ -120,6 +120,8 @@ export default function CheckoutPage() {
 
   const [contactEmail, setContactEmail] = React.useState(customerEmail ?? "");
   const [subscribeNewsletter, setSubscribeNewsletter] = React.useState(false);
+  // Not pre-ticked: WhatsApp (Meta) needs the customer's clear yes.
+  const [whatsappOptIn, setWhatsappOptIn] = React.useState(false);
   const [createAccount, setCreateAccount] = React.useState(false);
   const [accountPassword, setAccountPassword] = React.useState("");
 
@@ -594,6 +596,7 @@ export default function CheckoutPage() {
         phone: shippingPayload.phone,
         isGuest: !signedIn,
         subscribeNewsletter,
+        ...(deliveryChoices?.whatsappUpdates && whatsappOptIn ? { whatsappOptIn: true } : {}),
         shippingAddress: shippingPayload,
         billingAddress: billingPayload,
         billingSameAsShipping: billingSameAsShipping && !isGift,
@@ -1018,6 +1021,15 @@ export default function CheckoutPage() {
                   </div>
                   {giftsOffered && (
                     <GiftSection value={gift} onChange={setGift} cod={selectedPaymentMethod === PaymentMethod.COD} />
+                  )}
+                  {deliveryChoices?.whatsappUpdates && (
+                    <div className="flex items-start gap-3">
+                      <Checkbox checked={whatsappOptIn} onCheckedChange={setWhatsappOptIn} />
+                      <div>
+                        <Label className="font-semibold cursor-pointer">{t("Send my order updates on WhatsApp")}</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">{t("To the phone number above: when we confirm, ship and deliver your order.")}</p>
+                      </div>
+                    </div>
                   )}
                   {/* A gift's billing is the buyer's name and phone given above. */}
                   {!(giftsOffered && gift.on) && (

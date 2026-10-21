@@ -986,4 +986,6 @@ export const BN: Record<string, string> = {
   "on order": "অর্ডারে",
   "Card, mobile banking or internet banking — redirect to aamarPay": "কার্ড, মোবাইল ব্যাংকিং বা ইন্টারনেট ব্যাংকিং — aamarPay-এ নিয়ে যাবে",
   "You will be redirected to aamarPay to pay by card, mobile banking or internet banking.": "কার্ড, মোবাইল ব্যাংকিং বা ইন্টারনেট ব্যাংকিংয়ে পেমেন্ট করতে আপনাকে aamarPay-এ নিয়ে যাওয়া হবে।",
+  "Send my order updates on WhatsApp": "অর্ডারের আপডেট WhatsApp-এ পাঠান",
+  "To the phone number above: when we confirm, ship and deliver your order.": "উপরের ফোন নম্বরে: অর্ডার নিশ্চিত, পাঠানো এবং ডেলিভারি হলে জানাব।",
 };

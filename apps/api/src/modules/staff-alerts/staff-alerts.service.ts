@@ -9,6 +9,8 @@ import { BadRequestError, NotFoundError } from "../../core"
 import { EmailService } from "../notifications/notifications.service"
 import { SmsService } from "../sms/sms.service"
 import { bdMobile, eventSettings } from "../sms/sms.rules"
+import { WhatsappService } from "../whatsapp/whatsapp.service"
+import { waEventSettings } from "../whatsapp/whatsapp.rules"
 import { storeUrls } from "../content/store-details"
 import { isTemplateKey, type TemplateKey } from "../notifications/email.templates"
 import {
@@ -150,7 +152,7 @@ export class StaffInbox {
 // ------------------------------------------------------------------ Settings > Notifications
 
 export interface MatrixInput {
-  customers?: { key: string; email?: boolean; sms?: boolean }[]
+  customers?: { key: string; email?: boolean; sms?: boolean; whatsapp?: boolean }[]
   staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; staffIds?: bigint[] }[]
 }
 
@@ -165,6 +167,9 @@ export class NotificationMatrix {
     const sms = await prisma.storeSmsSetting.findUnique({ where: { storeId: this.storeId } })
     const smsEvents = eventSettings(sms?.events)
     const smsReady = !!sms && sms.provider !== "log"
+    const wa = await prisma.storeWhatsappSetting.findUnique({ where: { storeId: this.storeId } })
+    const waEvents = waEventSettings(wa?.events)
+    const whatsappReady = wa?.provider === "cloud"
     const customers = await Promise.all(
       CUSTOMER_EVENTS.map(async (c) => ({
         key: c.key,
@@ -172,6 +177,7 @@ export class NotificationMatrix {
         email: (await emails.templateConfig(c.email as TemplateKey)).enabled,
         emailTemplate: c.email,
         sms: c.sms ? smsEvents[c.sms].enabled : null,
+        whatsapp: c.whatsapp ? waEvents[c.whatsapp].enabled : null,
       })),
     )
     const rows = await prisma.staffAlertSetting.findMany({ where: { storeId: this.storeId } })
@@ -201,6 +207,7 @@ export class NotificationMatrix {
     })
     return {
       smsReady,
+      whatsappReady,
       customers,
       staff,
       people: people.map((p) => ({ id: String(p.id), name: p.name, email: p.email, hasMobile: !!bdMobile(p.phone), role: p.role.name, owner: p.role.slug === "owner" })),
@@ -210,13 +217,16 @@ export class NotificationMatrix {
   async save(input: MatrixInput) {
     const emails = new EmailService(this.storeId)
     const smsChanges: Record<string, { enabled: boolean }> = {}
+    const waChanges: Record<string, { enabled: boolean }> = {}
     for (const c of input.customers ?? []) {
       const def = CUSTOMER_EVENTS.find((x) => x.key === c.key)
       if (!def) throw new BadRequestError(`Unknown message "${c.key}"`, "VALIDATION_FAILED")
       if (typeof c.email === "boolean" && isTemplateKey(def.email)) await emails.saveTemplate(def.email, { enabled: c.email }, this.adminId)
       if (typeof c.sms === "boolean" && def.sms) smsChanges[def.sms] = { enabled: c.sms }
+      if (typeof c.whatsapp === "boolean" && def.whatsapp) waChanges[def.whatsapp] = { enabled: c.whatsapp }
     }
     if (Object.keys(smsChanges).length) await new SmsService(this.storeId).save({ events: smsChanges })
+    if (Object.keys(waChanges).length) await new WhatsappService(this.storeId).save({ events: waChanges })
 
     for (const s of input.staff ?? []) {
       if (!isStaffEvent(s.event)) throw new BadRequestError(`Unknown alert "${s.event}"`, "VALIDATION_FAILED")

@@ -25,7 +25,7 @@ const inbox = (req: Req) => {
 const ListQuery = z.object({ unread: z.enum(["0", "1"]).optional(), take: z.coerce.number().int().min(1).max(100).default(20) })
 const IdParam = z.object({ id: z.coerce.bigint().positive() })
 const MatrixBody = z.object({
-  customers: z.array(z.object({ key: z.string().max(40), email: z.boolean().optional(), sms: z.boolean().optional() })).max(30).optional(),
+  customers: z.array(z.object({ key: z.string().max(40), email: z.boolean().optional(), sms: z.boolean().optional(), whatsapp: z.boolean().optional() })).max(30).optional(),
   staff: z
     .array(
       z.object({
