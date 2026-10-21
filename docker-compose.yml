@@ -8,8 +8,8 @@
 #   docker compose --profile full up -d --build
 #   (add --profile extras for MinIO file storage and the Mailpit inbox)
 #   docker compose --profile full run --rm api pnpm prisma:seed   # first run only: demo data
-#   Storefront http://localhost:3000 · Store admin http://localhost:3001
-#   Super admin http://localhost:3002 · API http://localhost:4000
+#   Storefront http://localhost:3100 · Store admin http://localhost:3101
+#   Super admin http://localhost:3102 · API http://localhost:4000
 #
 # Secrets (JWT_*, COOKIE_SECRET, APP_ENCRYPTION_KEY, ...) come from the root .env.
 # Host names inside the network (postgres, redis, minio, mailpit) are set below.
@@ -158,7 +158,7 @@ services:
       args:
         APP: storefront-fashion
         NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api
-        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        NEXT_PUBLIC_SITE_URL: http://localhost:3100
     image: ecom/storefront-fashion:local
     container_name: ecom-storefront
     restart: unless-stopped
@@ -167,9 +167,9 @@ services:
       # Server-side fetches go straight to the API container but still name the
       # storefront's own origin, which the API uses to pick the store.
       API_INTERNAL_URL: http://api:4000/api
-      STOREFRONT_ORIGIN: http://localhost:3000
+      STOREFRONT_ORIGIN: http://localhost:3100
     ports:
-      - "3000:3000"
+      - "3100:3000"
     depends_on:
       api:
         condition: service_healthy
@@ -189,7 +189,7 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "3001:3000"
+      - "3101:3000"
     depends_on:
       api:
         condition: service_healthy
@@ -209,7 +209,7 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "3002:3000"
+      - "3102:3000"
     depends_on:
       api:
         condition: service_healthy

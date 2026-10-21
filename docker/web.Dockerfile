@@ -12,7 +12,7 @@ ARG NODE_IMAGE=node:22-alpine
 FROM ${NODE_IMAGE} AS builder
 ARG APP
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
-ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3100
 RUN test -n "$APP" || (echo "Pass --build-arg APP=<app folder>" && exit 1)
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app

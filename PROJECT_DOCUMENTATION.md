@@ -4876,7 +4876,7 @@ services:
       context: .
       dockerfile: apps/storefront-fashion/Dockerfile
     env_file: [.env.storefront]
-    ports: ["3000:3000"]
+    ports: ["3100:3000"]
     depends_on: [api]
 
   store-admin-fashion:
@@ -4885,14 +4885,14 @@ services:
       dockerfile: apps/store-admin/Dockerfile
     environment:
       NEXT_PUBLIC_API_URL: http://api:4000
-    ports: ["3001:3000"]
+    ports: ["3101:3000"]
     depends_on: [api]
 
   super-admin:
     build:
       context: .
       dockerfile: apps/super-admin/Dockerfile
-    ports: ["3002:3000"]
+    ports: ["3102:3000"]
     depends_on: [api]
 
 volumes:
@@ -5116,9 +5116,9 @@ pnpm turbo run worker --filter=api   # BullMQ jobs
 
 **Default URLs** after seeding:
 
-- Storefront: http://localhost:3000
-- Store Admin: http://localhost:3001 → login `admin@fashion.dev` / password `password`
-- Super Admin: http://localhost:3002 → login `super@platform.dev` / password `password`
+- Storefront: http://localhost:3100
+- Store Admin: http://localhost:3101 → login `admin@fashion.dev` / password `password`
+- Super Admin: http://localhost:3102 → login `super@platform.dev` / password `password`
 - API: http://localhost:4000/health
 - Mailpit (email inbox): http://localhost:8025
 - MinIO (S3 UI): http://localhost:9001 → minioadmin / minioadmin123

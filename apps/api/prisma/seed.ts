@@ -33,7 +33,7 @@ async function seedPlatformSuperAdmin() {
 
 /**
  * 2. Seed baseline pricing Plans (BASIC / PRO / ENTERPRISE) and create Fashion BD Store
- * Fashion BD: slug="fashion-bd", domains: localhost:3000 (storefront) + localhost:3001 (store admin)
+ * Fashion BD: slug="fashion-bd", domains: localhost:3100 (storefront) + localhost:3101 (store admin)
  */
 async function seedFashionBDStore() {
   console.log("🛒 Seeding Plans + Fashion BD Store...");
@@ -117,8 +117,8 @@ async function seedFashionBDStore() {
     console.log(`  ✅ Store already exists: ${store.name}`);
   }
 
-  const fashionDomain = "localhost:3000";
-  const adminDomain = "localhost:3001";
+  const fashionDomain = "localhost:3100";
+  const adminDomain = "localhost:3101";
   const existingStorefrontDomain = await prisma.domain.findUnique({
     where: { hostname: fashionDomain },
   });
@@ -1365,9 +1365,9 @@ async function main() {
     console.log("🔑 Platform Super Admin: super@admin.ecom.local / Super@dmin123!");
     console.log("🏪 Store: Fashion BD (slug=fashion-bd, id=" + store.id + ")");
     console.log("👤 Store Owner:     owner@fashionbd.local / Owner@123!");
-    console.log("🛍️  Storefront URL:  http://localhost:3000");
-    console.log("🎛️  Store Admin URL: http://localhost:3001");
-    console.log("🛡️  Super Admin URL: http://localhost:3002");
+    console.log("🛍️  Storefront URL:  http://localhost:3100");
+    console.log("🎛️  Store Admin URL: http://localhost:3101");
+    console.log("🛡️  Super Admin URL: http://localhost:3102");
     process.exit(0);
   } catch (err) {
     console.error("❌ SEED FAILED:", err);

@@ -421,7 +421,7 @@ export default function SuperAdminLoginPage() {
               >
                 Not a platform super admin?{" "}
                 <a
-                  href={process.env.NEXT_PUBLIC_STORE_ADMIN_URL ?? "http://localhost:3001/login"}
+                  href={process.env.NEXT_PUBLIC_STORE_ADMIN_URL ?? "http://localhost:3101/login"}
                   className="font-medium text-rose-400 hover:text-rose-300"
                 >
                   Go to Store Admin

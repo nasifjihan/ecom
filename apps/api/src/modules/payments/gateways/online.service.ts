@@ -228,7 +228,7 @@ export class OnlinePaymentsService {
       domains.find((d) => !d.storefrontId) ??
       domains[0]
     const scheme = (h: string) => (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(h) ? "http" : "https")
-    const fallback = own ? `${scheme(own.hostname)}://${own.hostname}` : "http://localhost:3000"
+    const fallback = own ? `${scheme(own.hostname)}://${own.hostname}` : "http://localhost:3100"
     return storefrontOrigin(origin, hosts, fallback)
   }
 

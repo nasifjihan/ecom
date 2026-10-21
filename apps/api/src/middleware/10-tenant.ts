@@ -15,7 +15,7 @@ declare global {
 }
 
 /**
- * Domain rows may be stored with a port ("localhost:3000" in local dev, see seed.ts)
+ * Domain rows may be stored with a port ("localhost:3100" in local dev, see seed.ts)
  * or without one (production hostnames), so try "host:port" first, then the bare host.
  */
 function hostCandidates(origin?: string): string[] {

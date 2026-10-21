@@ -45,7 +45,7 @@ import { EmptyRow } from "./shared";
 
 /**
  * Domains decide which store a request belongs to (the API resolves the tenant from the Origin host),
- * so hostnames include the port in local development, e.g. localhost:3000.
+ * so hostnames include the port in local development, e.g. localhost:3100.
  */
 export function DomainsTable({ storeId, openNew = false, onNewClosed }: { storeId?: string; openNew?: boolean; onNewClosed?: () => void }) {
   const { data: domains = [], isLoading } = useGetDomainsQuery(storeId ? { storeId } : undefined);

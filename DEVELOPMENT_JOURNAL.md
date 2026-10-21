@@ -5436,3 +5436,28 @@ Each has the usual bell, email, SMS and "who gets it" settings (owners when nobo
 - **Payment test:** the payment review alert has no DB test of its own. It is raised from the settle step that the online payment tests already cover.
 - **Real sending:** real WhatsApp sending still needs the shop's WhatsApp Business account and approved `staff_alert` and order templates.
 - **Next:** what's left from the feature list is the real gateway sandbox runs (waiting for keys) and Arabic/RTL (left out unless needed).
+
+---
+
+## ✅ Dev ports 3100–3102 (2026-10-21)
+Another project on this machine (mbw-erp) uses host ports 3000 and 3001 in Docker. The ecom web apps moved so both can run at once:
+
+| App | Before | Now |
+|---|---|---|
+| Storefront | 3000 | **3100** |
+| Store admin | 3001 | **3101** |
+| Super admin | 3002 | **3102** |
+
+- **Where it changed:**
+  - `package.json` dev/start scripts;
+  - `.claude/launch.json`;
+  - the seed's local domains (`localhost:3100` storefront, `localhost:3101` admin);
+  - the localhost fallbacks in the API (store links, payment return address), admin, storefront and super admin;
+  - `docker-compose.yml` host ports (inside Docker the apps still listen on 3000) and the Dockerfile's default site URL;
+  - PROJECT_DOCUMENTATION.md.
+- **Dev database:** the two `Domain` rows were moved to the new ports, and the cached domain lookups in Redis were cleared. The API still runs on 4000.
+- **An existing database:** run the same `Domain` update, or re-seed on a fresh database.
+- **Checked:**
+  - API unit tests: 715 passing;
+  - the store is found from both new addresses;
+  - in the browser, the admin orders page loaded on 3101 and the storefront homepage on 3100.

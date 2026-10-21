@@ -38,8 +38,8 @@ export async function storeUrls(storeId: bigint): Promise<StoreUrls> {
     return r ? originFor(r.hostname, r.sslEnabled) : fallback
   }
   return {
-    storefront: url("storefront", "http://localhost:3000"),
-    admin: url("admin", "http://localhost:3001"),
+    storefront: url("storefront", "http://localhost:3100"),
+    admin: url("admin", "http://localhost:3101"),
   }
 }
 

@@ -12,7 +12,7 @@ import { LOCALE_COOKIE, toLocale, type Locale } from "@ecom/storefront-base";
 const API_BASE =
   process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api";
 const STORE_ORIGIN =
-  process.env.STOREFRONT_ORIGIN ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  process.env.STOREFRONT_ORIGIN ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100";
 
 /**
  * The storefront address this page was opened on ("https://kids.example.com"), else the
