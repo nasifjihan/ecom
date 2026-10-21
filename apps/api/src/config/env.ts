@@ -37,7 +37,7 @@ const envSchema = z.object({
     .describe("PostgreSQL connection string — Prisma primary"),
   DIRECT_URL: z.string().optional().describe("Prisma direct URL for migrations"),
 
-  REDIS_URL: z.string().url().startsWith("redis://").default("redis://localhost:6379/0"),
+  REDIS_URL: z.string().url().startsWith("redis://").default("redis://localhost:6381/0"),
 
   STORAGE_DRIVER: z.enum(["s3", "local"]).default("s3"),
   STORAGE_LOCAL_PATH: z.string().default("./storage/files"),

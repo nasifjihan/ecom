@@ -4829,7 +4829,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes: [redisdata:/data]
-    ports: ["6379:6379"]
+    ports: ["6381:6379"] # host port 6381; other containers still use redis:6379
     healthcheck: { test: ["CMD", "redis-cli", "ping"] }
 
   minio:

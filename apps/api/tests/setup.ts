@@ -5,7 +5,7 @@
  */
 process.env.NODE_ENV ||= "test";
 process.env.DATABASE_URL ||= "postgresql://postgres:test@localhost:5432/ecom_test?schema=public";
-process.env.REDIS_URL ||= "redis://localhost:6379/15";
+process.env.REDIS_URL ||= "redis://localhost:6381/15";
 process.env.JWT_ADMIN_ACCESS_SECRET ||= "test_secret_admin_access_xxxxxxxxxxxxxxxxxxxxxxxx";
 process.env.JWT_ADMIN_REFRESH_SECRET ||= "test_secret_admin_refresh_xxxxxxxxxxxxxxxxxxxxxxx";
 process.env.JWT_CUSTOMER_ACCESS_SECRET ||= "test_secret_customer_access_xxxxxxxxxxxxxxxxxxxxx";
