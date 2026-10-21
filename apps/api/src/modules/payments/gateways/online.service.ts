@@ -143,6 +143,8 @@ export class OnlinePaymentsService {
         key: f.key,
         label: f.label,
         secret: f.secret === true,
+        /** A long value such as an RSA key (Nagad): a text box, not a line. */
+        multiline: f.multiline === true,
         // Secrets show as set / not set only; other fields masked.
         value: saved[f.key] ? (f.secret ? "••••••••" : maskKey(saved[f.key])) : null,
       })),

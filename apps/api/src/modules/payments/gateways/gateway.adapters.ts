@@ -649,3 +649,171 @@ export class AamarpayGateway implements OnlineGateway {
     return Promise.reject(new GatewayError("aamarPay refunds are paid back by hand"))
   }
 }
+
+// ================================================================ Nagad
+
+/** A key pasted with or without its PEM lines (inputs often lose the line breaks): as PEM. */
+export function pemOf(raw: string, kind: "PRIVATE KEY" | "PUBLIC KEY"): string {
+  const body = raw
+    .replace(/-----(BEGIN|END)[^-]*-----/g, "")
+    .replace(/\s+/g, "")
+  return `-----BEGIN ${kind}-----\n${body.match(/.{1,64}/g)?.join("\n") ?? ""}\n-----END ${kind}-----\n`
+}
+
+/** Nagad's order id: letters and digits only, at most 20 (our try code without its dash). */
+export const nagadOrderId = (code: string) => code.replace(/[^A-Za-z0-9]/g, "").slice(0, 20)
+
+/** Nagad's dateTime: yyyyMMddHHmmss in Bangladesh time. */
+export function nagadDateTime(d = new Date()): string {
+  const t = new Date(d.getTime() + 6 * 3600_000).toISOString() // UTC+6, no daylight saving
+  return t.slice(0, 19).replace(/[-T:]/g, "")
+}
+
+/** Nagad's payment statuses (verify/payment). */
+const NAGAD_STATES: Record<string, GatewayResult["state"]> = {
+  success: "paid",
+  aborted: "cancelled",
+  cancelled: "cancelled",
+  canceled: "cancelled",
+  failed: "failed",
+  rejected: "failed",
+  expired: "failed",
+  ready: "pending",
+  initiated: "pending",
+  pending: "pending",
+}
+
+export class NagadGateway implements OnlineGateway {
+  private readonly base: string
+  private readonly merchantKey: ReturnType<typeof createPrivateKey>
+  private readonly nagadKey: ReturnType<typeof createPublicKey>
+  constructor(
+    private readonly cfg: GatewayConfig,
+    private readonly f: Fetch = fetch,
+  ) {
+    need(cfg.credentials, ["merchantId", "merchantPrivateKey", "nagadPublicKey"], "Nagad")
+    this.base = baseUrl(
+      env.NAGAD_API_URL,
+      cfg.mode === "live"
+        ? "https://api.mynagad.com"
+        : "https://sandbox-ssl.mynagad.com:10061/remote-payment-gateway-1.0",
+    )
+    try {
+      this.merchantKey = createPrivateKey(pemOf(cfg.credentials.merchantPrivateKey!, "PRIVATE KEY"))
+      this.nagadKey = createPublicKey(pemOf(cfg.credentials.nagadPublicKey!, "PUBLIC KEY"))
+    } catch {
+      throw new GatewayError("The Nagad keys aren't valid RSA keys; paste them again as Nagad gave them")
+    }
+  }
+
+  private headers(ip?: string | null) {
+    return {
+      "X-KM-Api-Version": "v-0.2.0",
+      "X-KM-IP-V4": ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : "127.0.0.1",
+      "X-KM-Client-Type": "PC_WEB",
+    }
+  }
+
+  /** Our data for Nagad: encrypted with Nagad's public key, signed with the merchant's private key. */
+  private seal(data: Record<string, string>) {
+    const json = Buffer.from(JSON.stringify(data))
+    return {
+      sensitiveData: publicEncrypt({ key: this.nagadKey, padding: constants.RSA_PKCS1_PADDING }, json).toString("base64"),
+      signature: rsaSign("sha256", json, this.merchantKey).toString("base64"),
+    }
+  }
+
+  /** Nagad's answer, encrypted with the merchant's public key. */
+  private open(sensitiveData: string): Record<string, unknown> {
+    try {
+      const plain = privateDecrypt(
+        { key: this.merchantKey, padding: constants.RSA_PKCS1_PADDING },
+        Buffer.from(sensitiveData, "base64"),
+      )
+      return JSON.parse(plain.toString("utf8")) as Record<string, unknown>
+    } catch {
+      throw new GatewayError("Couldn't read Nagad's answer: the merchant private key doesn't match this account")
+    }
+  }
+
+  private async initialize(orderId: string, ip?: string | null) {
+    const merchantId = this.cfg.credentials.merchantId!
+    const dateTime = nagadDateTime()
+    const challenge = randomBytes(20).toString("hex")
+    const { status, json } = await call(
+      this.f,
+      `${this.base}/api/dfs/check-out/initialize/${encodeURIComponent(merchantId)}/${encodeURIComponent(orderId)}?locale=EN`,
+      {
+        method: "POST",
+        headers: this.headers(ip),
+        json: { dateTime, ...this.seal({ merchantId, datetime: dateTime, orderId, challenge }) },
+      },
+    )
+    if (status !== 200 || !str(json.sensitiveData))
+      throw new GatewayError(str(json.message) || str(json.reason) || "Nagad refused the merchant ID or keys", status)
+    const data = this.open(str(json.sensitiveData))
+    const ref = str(data.paymentReferenceId)
+    if (!ref) throw new GatewayError("Nagad gave no payment reference", status)
+    return { ref, challenge: str(data.challenge) }
+  }
+
+  async test() {
+    await this.initialize(`TEST${Date.now()}`.slice(0, 20))
+    return `Nagad ${this.cfg.mode === "live" ? "live" : "sandbox"} keys work`
+  }
+
+  async start(i: StartInput): Promise<Started> {
+    const orderId = nagadOrderId(i.code)
+    const { ref, challenge } = await this.initialize(orderId, i.clientIp)
+    const { status, json } = await call(this.f, `${this.base}/api/dfs/check-out/complete/${encodeURIComponent(ref)}`, {
+      method: "POST",
+      headers: this.headers(i.clientIp),
+      json: {
+        ...this.seal({
+          merchantId: this.cfg.credentials.merchantId!,
+          orderId,
+          currencyCode: "050", // taka
+          amount: i.amount.toFixed(2),
+          challenge,
+        }),
+        merchantCallbackURL: i.returnUrl,
+        additionalMerchantInfo: { order: i.code },
+      },
+    })
+    const url = str(json.callBackUrl)
+    if (status !== 200 || str(json.status).toLowerCase() !== "success" || !url)
+      throw new GatewayError(str(json.message) || "Nagad didn't open the payment", status)
+    return { reference: ref, payUrl: url }
+  }
+
+  async confirm(i: { reference: string | null; code: string }): Promise<GatewayResult> {
+    if (!i.reference)
+      return { state: "pending", code: i.code, amount: null, currency: null, txnId: null, message: "Nagad has no payment for it yet", raw: {} }
+    const { status, json } = await call(this.f, `${this.base}/api/dfs/verify/payment/${encodeURIComponent(i.reference)}`, {
+      headers: this.headers(),
+    })
+    if (status !== 200) throw new GatewayError(str(json.message) || "Nagad couldn't check the payment", status)
+    const st = str(json.status)
+    const state = NAGAD_STATES[st.toLowerCase()] ?? (st ? "failed" : "pending")
+    const theirs = str(json.orderId)
+    return {
+      state,
+      // Nagad has our code without its dash; give it back as ours when it is this try's.
+      code: theirs ? (theirs === nagadOrderId(i.code) ? i.code : theirs) : null,
+      amount: numOrNull(json.amount),
+      currency: "BDT", // Nagad takes taka only
+      txnId: str(json.issuerPaymentRefNo) || str(json.paymentRefId) || null,
+      message: state === "paid" ? "Paid" : st ? `${st} on Nagad` : "Not paid yet",
+      raw: json,
+    }
+  }
+
+  /** Nagad's merchant API has no refunds: they are paid back by hand (see API_REFUNDS). */
+  refund(): Promise<RefundResult> {
+    return Promise.reject(new GatewayError("Nagad refunds are paid back by hand"))
+  }
+
+  refundStatus(): Promise<RefundResult> {
+    return Promise.reject(new GatewayError("Nagad refunds are paid back by hand"))
+  }
+}

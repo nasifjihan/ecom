@@ -58,8 +58,8 @@ export default function PaymentMethodsPage() {
         </CardTitle>
         <CardDescription>
           What customers can pay with at checkout. For bKash, Nagad and Rocket sent to your number, customers type the transaction ID and you
-          verify it under Orders → Payments. bKash and SSLCommerz can also take payments online with your merchant keys: an order is marked paid
-          only when the gateway itself confirms the payment.
+          verify it under Orders → Payments. bKash, Nagad, SSLCommerz and aamarPay can take payments online with your merchant keys: an order
+          is marked paid only when the gateway itself confirms the payment.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -270,19 +270,33 @@ function GatewayKeys({ code, name }: { code: string; name: string }) {
           </Select>
         </div>
         {data.fields.map((f) => (
-          <div key={f.key}>
+          <div key={f.key} className={cn(f.multiline && "sm:col-span-2")}>
             <Label htmlFor={`${code}-${f.key}`} className="mb-1 block text-xs">
               {f.label}
             </Label>
-            <Input
-              id={`${code}-${f.key}`}
-              type={f.secret ? "password" : "text"}
-              autoComplete="off"
-              className="h-9"
-              placeholder={f.value ? `Saved: ${f.value}` : "Not set"}
-              value={values[f.key] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            />
+            {f.multiline ? (
+              // An RSA key: pasted whole, with or without its BEGIN / END lines.
+              <Textarea
+                id={`${code}-${f.key}`}
+                rows={4}
+                spellCheck={false}
+                autoComplete="off"
+                className="font-mono text-xs"
+                placeholder={f.value ? `Saved: ${f.value}` : "Paste the key here"}
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              />
+            ) : (
+              <Input
+                id={`${code}-${f.key}`}
+                type={f.secret ? "password" : "text"}
+                autoComplete="off"
+                className="h-9"
+                placeholder={f.value ? `Saved: ${f.value}` : "Not set"}
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              />
+            )}
           </div>
         ))}
       </div>

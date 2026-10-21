@@ -94,5 +94,6 @@ export type UpdatePaymentMethodDto = z.infer<typeof UpdatePaymentMethodDto>;
 /** bKash / SSLCommerz merchant keys; blank values keep what's saved. */
 export const GatewayKeysDto = z.object({
   mode: z.enum(["sandbox", "live"]),
-  credentials: z.record(z.string().max(40), z.string().trim().max(500)).default({}),
+  // Up to 5,000: an RSA private key (Nagad) is about 1,700 characters, 3,300 for 4096-bit.
+  credentials: z.record(z.string().max(40), z.string().trim().max(5000)).default({}),
 });

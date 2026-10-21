@@ -1,5 +1,5 @@
 /**
- * MOCK PAYMENTS — a local stand-in for bKash Tokenized Checkout, SSLCommerz and aamarPay, for trying online
+ * MOCK PAYMENTS — a local stand-in for bKash Tokenized Checkout, SSLCommerz, aamarPay and Nagad, for trying online
  * payments end to end without merchant accounts or network access. Not for production.
  *
  *   pnpm --filter @ecom/api payments:mock        (listens on :4020, or MOCK_PAYMENTS_PORT)
@@ -8,6 +8,8 @@
  * (a password of "wrong" fails "Test connection"):
  *   BKASH_API_URL=http://localhost:4020/bkash
  *   SSLCOMMERZ_API_URL=http://localhost:4020/sslcommerz
+ *   AAMARPAY_API_URL=http://localhost:4020/aamarpay   (a signature key of "wrong" fails the test)
+ *   NAGAD_API_URL=http://localhost:4020/nagad          (paste the keys from GET /nagad/keys; they change each run)
  *
  * Refunds: bKash answers at once; SSLCommerz says "processing" and "refunded" from the second check.
  * The payment pages have Pay / Fail / Cancel buttons and send the customer back like the real
@@ -15,13 +17,31 @@
  * the IPN).
  */
 import http from "node:http";
-import { randomBytes } from "node:crypto";
+import { constants, generateKeyPairSync, privateDecrypt, publicEncrypt, randomBytes, verify } from "node:crypto";
 
 const PORT = Number(process.env.MOCK_PAYMENTS_PORT ?? 4020);
 const bkash = new Map(); // paymentID -> { amount, invoice, callbackURL, status, trxID }
 const ssl = new Map(); // tran_id -> { amount, success_url, fail_url, cancel_url, ipn_url, status, val_id, bank_tran_id }
 const refunds = new Map(); // refund_ref_id -> { asked }
 const aamar = new Map(); // tran_id -> { amount, success_url, fail_url, cancel_url, status, pg_txnid }
+const nagad = new Map(); // paymentReferenceId -> { orderId, challenge, amount, callback, status, issuerPaymentRefNo }
+// Nagad signs and encrypts with RSA: made-up key pairs for this run (GET /nagad/keys shows what to paste).
+const rsa = () =>
+  generateKeyPairSync("rsa", { modulusLength: 2048, publicKeyEncoding: { type: "spki", format: "pem" }, privateKeyEncoding: { type: "pkcs8", format: "pem" } });
+const nagadKeys = { merchant: rsa(), nagad: rsa() };
+/** A request from the merchant: decrypted with "Nagad's" private key, its signature checked. */
+const nagadOpen = (b) => {
+  try {
+    const plain = privateDecrypt({ key: nagadKeys.nagad.privateKey, padding: constants.RSA_PKCS1_PADDING }, Buffer.from(b.sensitiveData, "base64"));
+    return verify("sha256", plain, nagadKeys.merchant.publicKey, Buffer.from(b.signature, "base64")) ? JSON.parse(plain.toString()) : null;
+  } catch {
+    return null;
+  }
+};
+const nagadSeal = (data) => ({
+  sensitiveData: publicEncrypt({ key: nagadKeys.merchant.publicKey, padding: constants.RSA_PKCS1_PADDING }, Buffer.from(JSON.stringify(data))).toString("base64"),
+  signature: "mock",
+});
 const id = (p) => `${p}${randomBytes(5).toString("hex").toUpperCase()}`;
 
 const readBody = (req) =>
@@ -178,6 +198,55 @@ http
       return json(res, { mer_txnid: tran, pg_txnid: a.pg_txnid ?? "", amount: a.amount, currency_merchant: "BDT", pay_status: a.status, status_code: a.status === "Successful" ? "2" : "7", risk_level: "0" });
     }
 
+    // ------------------------------------------------------------ Nagad (real RSA, made-up keys)
+    if (p.endsWith("/nagad/keys")) {
+      // The keys to paste into Settings → Payments → Nagad for this mock run.
+      // Readable from a local admin page, so a browser test can fill the form with them.
+      res.setHeader("access-control-allow-origin", "*");
+      return json(res, { merchantId: "683002007104225", merchantPrivateKey: nagadKeys.merchant.privateKey, nagadPublicKey: nagadKeys.nagad.publicKey });
+    }
+    if (p.includes("/api/dfs/check-out/initialize/")) {
+      const b = JSON.parse(raw || "{}");
+      const data = nagadOpen(b);
+      if (!data) return json(res, { reason: "Invalid signature", message: "Couldn't read the request: check the keys" }, 400);
+      const ref = id("NGREF");
+      nagad.set(ref, { orderId: data.orderId, challenge: id("CH"), status: "Ready" });
+      return json(res, nagadSeal({ paymentReferenceId: ref, challenge: nagad.get(ref).challenge, acceptDateTime: data.datetime }));
+    }
+    if (p.includes("/api/dfs/check-out/complete/")) {
+      const ref = decodeURIComponent(p.split("/").pop());
+      const n = nagad.get(ref);
+      const b = JSON.parse(raw || "{}");
+      const data = nagadOpen(b);
+      if (!n || !data || data.challenge !== n.challenge) return json(res, { status: "Failed", message: "Invalid challenge" }, 400);
+      Object.assign(n, { amount: data.amount, callback: b.merchantCallbackURL, status: "Initiated" });
+      return json(res, { status: "Success", callBackUrl: `http://localhost:${PORT}/nagad/pay/${ref}` });
+    }
+    if (p.startsWith("/nagad/pay/")) {
+      const ref = p.split("/").pop();
+      const n = nagad.get(ref);
+      if (!n) return page(res, "Nagad", "<p>Unknown payment</p>");
+      const d = url.searchParams.get("do");
+      if (d) {
+        n.status = d === "success" ? "Success" : d === "cancel" ? "Aborted" : "Failed";
+        n.issuerPaymentRefNo = id("NG");
+        const back = new URL(n.callback);
+        back.searchParams.set("payment_ref_id", ref);
+        back.searchParams.set("order_id", n.orderId);
+        back.searchParams.set("status", n.status);
+        res.writeHead(302, { location: back.toString() });
+        return res.end();
+      }
+      return page(res, "Nagad", `<h2>Nagad</h2><p>Pay <b>৳${n.amount}</b> (${n.orderId})</p>
+<p><a href="?do=success">Pay</a> · <a href="?do=fail">Fail</a> · <a href="?do=cancel">Cancel</a></p>`);
+    }
+    if (p.includes("/api/dfs/verify/payment/")) {
+      const ref = decodeURIComponent(p.split("/").pop());
+      const n = nagad.get(ref);
+      if (!n) return json(res, { reason: "Invalid payment reference", message: "Not found" }, 404);
+      return json(res, { merchantId: "683002007104225", orderId: n.orderId, paymentRefId: ref, amount: n.amount, status: n.status, issuerPaymentRefNo: n.issuerPaymentRefNo ?? "" });
+    }
+
     json(res, { message: "not found" }, 404);
   })
-  .listen(PORT, () => console.log(`Mock payments on http://localhost:${PORT} (bKash /bkash, SSLCommerz /sslcommerz, aamarPay /aamarpay)`));
+  .listen(PORT, () => console.log(`Mock payments on http://localhost:${PORT} (bKash /bkash, SSLCommerz /sslcommerz, aamarPay /aamarpay, Nagad /nagad)`));

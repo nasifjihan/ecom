@@ -4,9 +4,9 @@
 import { randomBytes } from "node:crypto"
 import type { GatewayResult, OnlineGatewayCode } from "./gateway.adapters"
 
-/** Gateways that take payments online here. Nagad and Rocket are send-money only for now. */
-export const ONLINE_GATEWAYS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz", "aamarpay"]
-/** Gateways whose refunds go back through their API; others are paid back by hand. */
+/** Gateways that take payments online here (Rocket is send-money only). */
+export const ONLINE_GATEWAYS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz", "aamarpay", "nagad"]
+/** Gateways whose refunds go back through their API; others (aamarPay, Nagad) are paid back by hand. */
 export const API_REFUNDS: readonly OnlineGatewayCode[] = ["bkash", "sslcommerz"]
 /** Online only (no send-money mode). */
 export const ONLINE_ONLY: readonly OnlineGatewayCode[] = ["sslcommerz", "aamarpay"]

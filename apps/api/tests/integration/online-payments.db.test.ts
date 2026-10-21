@@ -7,6 +7,17 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import type { RequestContext } from "../../src/core"
 import type { Fetch } from "../../src/modules/payments/gateways/gateway.adapters"
+import { constants, generateKeyPairSync, privateDecrypt, publicEncrypt } from "node:crypto"
+
+// Nagad does RSA both ways: made-up key pairs for the merchant and for the fake Nagad.
+const rsa = () =>
+  generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  })
+const nagadMerchant = rsa()
+const nagadOwn = rsa()
 
 const runDb = process.env.RUN_DB_TESTS === "1"
 
@@ -33,6 +44,8 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     sslRefundStatus: "processing" as "refunded" | "processing" | "cancelled",
     /** aamarPay: what its transaction check says for each tran_id. */
     aamar: new Map<string, { amount: string; pay_status: string }>(),
+    /** Nagad: by payment reference, the order id and amount it was opened for, and its status. */
+    nagad: new Map<string, { orderId: string; amount?: string; status: string }>(),
   }
   const fake: Fetch = (input, init) => {
     const u = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
@@ -129,6 +142,36 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
             ]
           : [],
       })
+    }
+    if (url.pathname.includes("/api/dfs/")) {
+      const sealed = body ? (JSON.parse(body) as { sensitiveData?: string }) : {}
+      const data = sealed.sensitiveData
+        ? (JSON.parse(
+            privateDecrypt(
+              { key: nagadOwn.privateKey, padding: constants.RSA_PKCS1_PADDING },
+              Buffer.from(sealed.sensitiveData, "base64"),
+            ).toString(),
+          ) as Record<string, string>)
+        : {}
+      const ref = decodeURIComponent(url.pathname.split("/").pop()!)
+      if (url.pathname.includes("/check-out/initialize/")) {
+        const r = `NG-${data.orderId}`
+        gw.nagad.set(r, { orderId: data.orderId!, status: "Ready" })
+        const answer = publicEncrypt(
+          { key: nagadMerchant.publicKey, padding: constants.RSA_PKCS1_PADDING },
+          Buffer.from(JSON.stringify({ paymentReferenceId: r, challenge: "c1" })),
+        ).toString("base64")
+        return json({ sensitiveData: answer, signature: "x" })
+      }
+      if (url.pathname.includes("/check-out/complete/")) {
+        const n = gw.nagad.get(ref)
+        if (n) n.amount = data.amount
+        return json({ status: "Success", callBackUrl: `https://nagad.test/pay/${ref}` })
+      }
+      if (url.pathname.includes("/verify/payment/")) {
+        const n = gw.nagad.get(ref)
+        return json(n ? { orderId: n.orderId, amount: n.amount, status: n.status, issuerPaymentRefNo: `NGTX-${ref.slice(-4)}` } : { message: "Not found" }, n ? 200 : 404)
+      }
     }
     if (url.pathname.endsWith("/jsonpost.php")) {
       const b = JSON.parse(body) as { tran_id: string }
@@ -234,10 +277,10 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     // Blank fields keep what's saved.
     await online.saveKeys("bkash", { mode: "sandbox", credentials: { username: "", password: "" } })
     expect((await online.keys("bkash")).set).toBe(true)
-    // Nagad can't go online; it's offered only once it's usable.
+    // Nagad online needs its keys first; it's offered only once it's usable.
     await expect(
       payments.updateMethod("nagad", { enabled: true, mode: "online" } as never),
-    ).rejects.toThrow(/can't take payments online yet/)
+    ).rejects.toThrow(/Add your Nagad keys/)
     const offered = (
       await new Shop({ storeId, requestId: "t", locale: "en", currency: "BDT" }).paymentMethods()
     ).map((m) => m.code)
@@ -503,6 +546,40 @@ describe.skipIf(!runDb)("online payments (Postgres)", () => {
     expect(o.paymentRecords).toHaveLength(1)
     // No refund API: nothing goes to aamarPay; the caller records it for staff to pay out.
     expect(await online.refundOnline(order.id, 250, "Size swap")).toBeNull()
+  })
+
+  it("Nagad: online with the store's RSA keys, paid only by Nagad's verify, refunds by hand", async () => {
+    const online = new Online(admin)
+    const payments = new Payments(admin)
+    // Keys pasted the way a single-line box keeps them: no BEGIN / END lines, no line breaks.
+    const bare = (pem: string) => pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")
+    await online.saveKeys("nagad", {
+      mode: "sandbox",
+      credentials: { merchantId: "683002007104225", merchantPrivateKey: bare(nagadMerchant.privateKey), nagadPublicKey: bare(nagadOwn.publicKey) },
+    })
+    const row = await prisma.paymentGatewayConfig.findFirstOrThrow({ where: { storeId, code: "nagad" } })
+    expect(row.secrets).not.toContain(bare(nagadMerchant.privateKey).slice(10, 40))
+    expect(await online.testKeys("nagad")).toEqual({ ok: true, note: "Nagad sandbox keys work" })
+    await payments.updateMethod("nagad", { enabled: true, mode: "online" } as never)
+    const order = await makeOrder("nagad", 2200)
+    const shopper = new Online({ storeId, requestId: "t", locale: "en", currency: "BDT", ip: "103.10.20.30" })
+    const first = await shopper.start(order.id)
+    expect(first.payUrl).toMatch(/^https:\/\/nagad\.test\/pay\/NG-/)
+    const firstRef = [...gw.nagad.keys()].at(-1)!
+    gw.nagad.get(firstRef)!.status = "Aborted"
+    expect((await Online.finish("nagad", first.attempt)).outcome).toBe("cancelled")
+    const second = await shopper.start(order.id)
+    const ref = [...gw.nagad.keys()].at(-1)!
+    expect(gw.nagad.get(ref)!.amount).toBe("2200.00")
+    gw.nagad.get(ref)!.status = "Success"
+    const [a, b] = await Promise.all([Online.finish("nagad", second.attempt), Online.finish("nagad", second.attempt)])
+    expect([a.outcome, b.outcome]).toEqual(["paid", "paid"])
+    const o = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { paymentRecords: true } })
+    expect(o.paymentStatus).toBe("paid")
+    expect(o.paymentRecords).toHaveLength(1)
+    expect(await online.refundOnline(order.id, 200, "Size swap")).toBeNull()
+    // Back to send-money mode works too (it needs the number, as before).
+    await expect(payments.updateMethod("nagad", { enabled: true, mode: "manual" } as never)).rejects.toThrow(/Add your Nagad number/)
   })
 
 })

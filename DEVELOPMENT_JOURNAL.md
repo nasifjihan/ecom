@@ -5267,3 +5267,62 @@ Customers can now pay with aamarPay (cards, mobile banking and internet banking)
 ### 41.5 Not done
 - **Real sandbox:** not yet run against aamarPay's own sandbox. That's part 2, with sandbox keys.
 - **Refunds:** aamarPay refunds are paid back by hand (no API).
+
+---
+
+## ✅ BATCH #41 (part 3) — Nagad online payments (2026-10-21)
+Nagad can now take payments online through the shop's own Nagad merchant account, as well as by "send money to our number". The order is marked paid only when Nagad's own API confirms it.
+
+### 41.6 Gateway (`gateway.adapters.ts`, `NagadGateway`; Nagad Online Payment API v-0.2.0)
+- **Initialize:** `POST /api/dfs/check-out/initialize/{merchantId}/{orderId}`. Our merchant ID, date-time, order id and a random challenge are encrypted with Nagad's public key (RSA PKCS#1 v1.5) and signed with the merchant's private key (SHA-256). Nagad's answer, encrypted with the merchant's public key, gives the payment reference and its challenge.
+- **Complete:** `POST /api/dfs/check-out/complete/{paymentReferenceId}`. The amount (in taka, currency 050), order id and challenge are sealed the same way, with our return link as `merchantCallbackURL`. Nagad answers with the payment page.
+- **Verify:** after Nagad sends the customer back, `GET /api/dfs/verify/payment/{paymentReferenceId}`.
+  - Success counts as paid; Aborted or Cancelled is cancelled; Failed, Rejected or Expired is failed; Ready or Initiated is still pending.
+  - The usual check applies: our code, the amount due.
+  - Nagad's `issuerPaymentRefNo` becomes the transaction id.
+- **Headers:** `X-KM-Api-Version v-0.2.0`, the customer's IP in `X-KM-IP-V4` (gateways now get `clientIp`), `X-KM-Client-Type PC_WEB`.
+- **Order id:** Nagad allows letters and digits only, up to 20. Our try code without its dash (20261021000004K7Q2XM) is mapped back to ours when Nagad answers.
+- **Time:** Nagad's date-time is in Bangladesh time.
+- **Keys:** merchant ID, merchant private key (secret) and Nagad public key, stored encrypted.
+  - Keys pasted with or without their BEGIN / END lines and line breaks are rebuilt as PEM.
+  - Keys that aren't RSA keys are refused with a clear message.
+  - A private key that doesn't match the account can't read Nagad's answers, and says so.
+- **Test connection:** an initialize with a test id. It proves Nagad accepts the merchant and that our private key reads its answer.
+- **Refunds:** Nagad's merchant API has no refund call, so a refund is recorded for staff to pay back.
+- **Hosts:** sandbox `sandbox-ssl.mynagad.com:10061/remote-payment-gateway-1.0`, live `api.mynagad.com`, overridable with `NAGAD_API_URL` (the mock).
+- **Crypto:** Node's own crypto, no new library. PKCS#1 decryption works on this Node (v26), checked before building.
+
+### 41.7 Admin and storefront
+- **Settings → Payments, Nagad:** "How customers pay" can now be "Online payment page (Nagad merchant)", which shows the merchant keys box.
+  - The two keys are multi-line text boxes (`multiline` on the field).
+  - Saving keys accepts values up to 5,000 characters; it was 500, which refused an RSA key with a 422. The browser check found this, since the DB test calls the service directly.
+  - The page text now names all four online gateways.
+- **Checkout:** in online mode, Nagad says "After you place the order you'll be taken to Nagad to pay", and an unpaid order offers "Pay ৳X with Nagad". Both were already generic.
+- **Mock:** `scripts/mock-payments.mjs` gains a Nagad that does the real RSA work with key pairs made up at start. `GET /nagad/keys` shows the ones to paste and can be read from the local admin.
+  - Its page has Pay, Fail and Cancel and sends the customer back like Nagad.
+  - Fixed along the way: the aamarPay line was missing from the mock's header notes.
+
+### 41.8 Checked
+- **Tests:**
+  - new `tests/unit/nagad-gateway.test.ts` (12), against a fake Nagad that really decrypts our data, checks our signature and answers encrypted:
+    - rebuilding PEM keys; the order id and Bangladesh time; non-RSA keys refused;
+    - the initialize and complete requests (URL, headers, sealed fields, amount, challenge, callback);
+    - test connection good and refused; a mismatched private key;
+    - each verify status; a payment for another order or amount going to review; no refund call.
+  - one more DB test in `online-payments.db.test.ts`: keys pasted without line breaks are stored encrypted and tested; online mode turned on; Aborted then Success; two returns at once give one payment record; refunds aren't sent to Nagad; switching back to send-money still needs the number.
+  - The old rule "Nagad can't go online" in two tests is now "Nagad needs its keys", and Rocket stays send-money only.
+- **Full suite:** API 896 passing (80 files), DB tests on `ecom_test`.
+- **Types and lint:** API and admin typecheck; no lint errors in the payment files.
+- **In the browser, against the mock:**
+  - after signing in as the seeded dev owner, set Nagad to online and filled the keys (the 500-character limit refused them; fixed);
+  - "Nagad sandbox keys work", then turned it on;
+  - checkout offered Nagad; order 20261021000001 (৳3,335) opened the Nagad page, which showed ৳3335.00 and the 20-character id;
+  - Cancel led to "The payment was cancelled" with "Pay BDT 3,335.00 with Nagad";
+  - paying moved the order to Processing / Paid (tries: cancelled, paid; one payment record).
+- **Dev data:** that test order stays. Nagad is off again, in online mode, with the mock's made-up keys (they won't work with a new mock run). `.env` is back as it was.
+- **Environment:** Docker Desktop had stopped overnight and was started again.
+
+### 41.9 Not done
+- **Real sandbox:** not yet run against Nagad's own sandbox. That needs the sandbox merchant ID and keys Nagad gives when a merchant signs up.
+- **Refunds:** Nagad refunds are paid back by hand (no API).
+- **Next:** part 2: aamarPay, bKash and SSLCommerz in their real sandboxes, with sandbox keys from the shop.

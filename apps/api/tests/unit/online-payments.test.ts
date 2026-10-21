@@ -84,7 +84,8 @@ describe("helpers", () => {
     expect(methodUsable({ code: "bkash", mode: "manual", secrets: null }, true)).toBe(true)
     expect(methodUsable({ code: "bkash", mode: "online", secrets: null }, true)).toBe(false)
     expect(methodUsable({ code: "bkash", mode: "online", secrets: "enc" }, true)).toBe(true)
-    expect(methodUsable({ code: "nagad", mode: "online", secrets: "enc" }, true)).toBe(false)
+    expect(methodUsable({ code: "nagad", mode: "online", secrets: "enc" }, true)).toBe(true)
+    expect(methodUsable({ code: "rocket", mode: "online", secrets: "enc" }, true)).toBe(false) // send-money only
     expect(methodUsable({ code: "stripe", mode: "online", secrets: "enc" }, false)).toBe(false)
   })
 

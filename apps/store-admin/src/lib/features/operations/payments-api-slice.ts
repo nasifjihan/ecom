@@ -214,7 +214,7 @@ export interface PaymentMethodSetting {
   feeFixed: number;
   feePercent: number;
   manualCapable: boolean;
-  /** bKash / SSLCommerz / aamarPay: can take payments online with the store's own merchant keys. */
+  /** bKash / SSLCommerz / aamarPay / Nagad: can take payments online with the store's own merchant keys. */
   onlineCapable: boolean;
   keysSet: boolean;
   keysTestOk: boolean | null;
@@ -222,11 +222,11 @@ export interface PaymentMethodSetting {
 }
 
 export interface GatewayKeys {
-  code: "bkash" | "sslcommerz" | "aamarpay";
+  code: "bkash" | "sslcommerz" | "aamarpay" | "nagad";
   mode: "sandbox" | "live";
   set: boolean;
   /** Saved values come back masked (secrets as dots), never in full. */
-  fields: { key: string; label: string; secret: boolean; value: string | null }[];
+  fields: { key: string; label: string; secret: boolean; multiline?: boolean; value: string | null }[];
   lastTest: { at: string; ok: boolean; note: string | null } | null;
   /** SSLCommerz: the payment notice (IPN) address to enter in its merchant panel. */
   ipnUrl?: string;
