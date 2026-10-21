@@ -361,7 +361,7 @@ export class MarketingService extends BaseService {
       where: { id: { in: bigIds }, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) },
       select: { productId: true },
     });
-    const result = await this.reviews.setStatus(this.ctx, bigIds, dto.action);
+    const result = await this.reviews.moderate(this.ctx, dto);
     for (const productId of new Set(touched.map((t) => t.productId))) await refreshProductRating(productId);
     return { count: result.count, action: dto.action };
   }

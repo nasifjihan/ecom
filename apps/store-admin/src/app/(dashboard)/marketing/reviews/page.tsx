@@ -11,7 +11,6 @@ import {
   Send,
   CheckCircle2,
   XCircle,
-  Pencil,
   Flag,
   Trash2,
   RotateCcw,
@@ -51,11 +50,9 @@ import {
 } from "@/components/ui";
 import {
   useGetReviewsQuery,
-  useUpdateReviewMutation,
-  useBulkUpdateReviewsMutation,
-  useMarkSpamReviewMutation,
-  useDeleteReviewMutation,
+  useModerateReviewsMutation,
   type Review,
+  type ReviewAction,
   type ReviewStatus,
 } from "@/lib/features/marketing/marketing-api-slice";
 
@@ -126,7 +123,6 @@ export default function ReviewsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [replying, setReplying] = useState<string | number | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [editingRating, setEditingRating] = useState<string | number | null>(null);
   const [bulkReplyOpen, setBulkReplyOpen] = useState(false);
   const [bulkReplyText, setBulkReplyText] = useState("");
 
@@ -162,70 +158,48 @@ export default function ReviewsPage() {
     setSelectedIds(next);
   };
 
-  const [updateReview, { isLoading: updateLoading }] = useUpdateReviewMutation();
-  const [bulkUpdate, { isLoading: bulkLoading }] = useBulkUpdateReviewsMutation();
-  const [markSpam, { isLoading: spamLoading }] = useMarkSpamReviewMutation();
-  const [deleteReview, { isLoading: deleteLoading }] = useDeleteReviewMutation();
+  const [moderate, { isLoading: moderating }] = useModerateReviewsMutation();
 
-  const applyAction = async (
-    id: string | number,
-    action: "approve" | "unapprove" | "spam" | "unspam" | "trash" | "restore" | "delete",
-  ) => {
+  const DONE: Record<ReviewAction, string> = {
+    approve: "Approved",
+    unapprove: "Moved back to pending",
+    spam: "Marked as spam",
+    unspam: "Moved back to pending",
+    trash: "Moved to the trash",
+    restore: "Restored to pending",
+    delete: "Deleted for good",
+    reply: "Reply saved",
+  };
+
+  /** Runs one moderation action on some reviews; the API keeps product ratings in step. */
+  const run = async (ids: (string | number)[], action: ReviewAction, reply?: string) => {
+    if (action === "delete" && !window.confirm(`Delete ${ids.length} review(s) for good? This can't be undone.`)) return false;
     try {
-      if (action === "spam") {
-        await markSpam(id).unwrap();
-      } else if (action === "delete") {
-        await deleteReview(id).unwrap();
-      } else {
-        const body: any = {};
-        if (action === "approve") body.status = "approved";
-        if (action === "unapprove") body.status = "pending";
-        if (action === "trash") body.status = "trashed";
-        if (action === "restore") body.status = "pending";
-        if (action === "unspam") body.status = "pending";
-        await updateReview({ id, body }).unwrap();
-      }
-      toast.success(`Review ${action}d.`);
+      const res = await moderate({ ids, action, ...(reply !== undefined ? { reply } : {}) }).unwrap();
+      if (action === "delete" && res.count < ids.length) toast.warning("Only reviews in the trash can be deleted for good.");
+      else toast.success(`${DONE[action]}: ${res.count} review(s).`);
+      return true;
     } catch (e: any) {
       toast.error(e?.data?.message || "Action failed.");
+      return false;
     }
   };
 
-  const runBulk = async (
-    action: "approve" | "unapprove" | "spam" | "unspam" | "trash" | "restore" | "delete",
-  ) => {
+  const applyAction = (id: string | number, action: ReviewAction) => void run([id], action);
+
+  const runBulk = async (action: ReviewAction) => {
     if (selectedIds.size === 0) {
       toast.warning("Select at least one review.");
       return;
     }
-    try {
-      await bulkUpdate({ ids: Array.from(selectedIds), action }).unwrap();
-      toast.success(`Bulk ${action} applied to ${selectedIds.size} review(s).`);
-      setSelectedIds(new Set());
-    } catch (e: any) {
-      toast.error(e?.data?.message || "Bulk action failed.");
-    }
+    if (await run(Array.from(selectedIds), action)) setSelectedIds(new Set());
   };
 
+  /** Saves the reply; an empty one removes it. */
   const sendReply = async (r: Review) => {
-    if (!replyText.trim()) return;
-    try {
-      await updateReview({ id: r.id, body: { reply: replyText.trim() } }).unwrap();
-      toast.success("Reply posted.");
+    if (await run([r.id], "reply", replyText.trim())) {
       setReplying(null);
       setReplyText("");
-    } catch (e: any) {
-      toast.error(e?.data?.message || "Failed to send reply.");
-    }
-  };
-
-  const submitInlineRating = async (r: Review, rating: number) => {
-    try {
-      await updateReview({ id: r.id, body: { rating } }).unwrap();
-      toast.success("Rating updated.");
-      setEditingRating(null);
-    } catch (e: any) {
-      toast.error(e?.data?.message || "Update failed.");
     }
   };
 
@@ -235,18 +209,10 @@ export default function ReviewsPage() {
       return;
     }
     if (!bulkReplyText.trim()) return;
-    try {
-      await bulkUpdate({
-        ids: Array.from(selectedIds),
-        action: "approve",
-        replyText: bulkReplyText.trim(),
-      }).unwrap();
-      toast.success(`Reply sent to ${selectedIds.size} review(s).`);
+    if (await run(Array.from(selectedIds), "reply", bulkReplyText.trim())) {
       setBulkReplyOpen(false);
       setBulkReplyText("");
       setSelectedIds(new Set());
-    } catch (e: any) {
-      toast.error(e?.data?.message || "Failed to send bulk reply.");
     }
   };
 
@@ -363,10 +329,10 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("approve")}
             >
-              {bulkLoading ? (
+              {moderating ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-1" />
@@ -376,7 +342,7 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("unapprove")}
             >
               <XCircle className="h-4 w-4 mr-1" /> Unapprove
@@ -384,7 +350,7 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("spam")}
             >
               <Flag className="h-4 w-4 mr-1" /> Mark Spam
@@ -392,7 +358,7 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("unspam")}
             >
               <RotateCcw className="h-4 w-4 mr-1" /> Unspam
@@ -400,7 +366,7 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("trash")}
             >
               <Trash2 className="h-4 w-4 mr-1" /> Trash
@@ -408,7 +374,7 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={bulkLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0}
               onClick={() => runBulk("restore")}
             >
               <RotateCcw className="h-4 w-4 mr-1" /> Restore
@@ -416,7 +382,8 @@ export default function ReviewsPage() {
             <Button
               size="sm"
               variant="destructive"
-              disabled={bulkLoading || deleteLoading || selectedIds.size === 0}
+              disabled={moderating || selectedIds.size === 0 || tab !== "trashed"}
+              title={tab === "trashed" ? undefined : "Move reviews to the trash first"}
               onClick={() => runBulk("delete")}
             >
               <Trash className="h-4 w-4 mr-1" /> Permanent Delete
@@ -526,33 +493,7 @@ export default function ReviewsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {editingRating === r.id ? (
-                          <div className="flex items-center gap-2">
-                            <StarRow
-                              value={r.rating}
-                              editable
-                              onChange={(v) => submitInlineRating(r, v)}
-                              size="md"
-                            />
-                            <button
-                              onClick={() => setEditingRating(null)}
-                              className="text-xs text-slate-500 hover:underline"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <StarRow value={r.rating} />
-                            <button
-                              onClick={() => setEditingRating(r.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Edit rating"
-                            >
-                              <Pencil className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
-                            </button>
-                          </div>
-                        )}
+                        <StarRow value={r.rating} />
                       </TableCell>
                       <TableCell>
                         <div className="max-w-md">
@@ -576,7 +517,7 @@ export default function ReviewsPage() {
                             <div className="mt-2 space-y-2">
                               <Textarea
                                 rows={2}
-                                placeholder="Write a reply..."
+                                placeholder="Write a reply… (shown under the review on the product page; leave empty to remove it)"
                                 value={replyText}
                                 onChange={(e) => setReplyText(e.target.value)}
                               />
@@ -593,10 +534,10 @@ export default function ReviewsPage() {
                                 </Button>
                                 <Button
                                   size="sm"
-                                  onClick={() => sendReply(r)}
-                                  disabled={updateLoading || !replyText.trim()}
+                                  onClick={() => void sendReply(r)}
+                                  disabled={moderating || (!replyText.trim() && !r.reply)}
                                 >
-                                  <Send className="h-3.5 w-3.5 mr-1" /> Send
+                                  <Send className="h-3.5 w-3.5 mr-1" /> {replyText.trim() ? "Save reply" : "Remove reply"}
                                 </Button>
                               </div>
                             </div>
@@ -640,10 +581,10 @@ export default function ReviewsPage() {
                               size="icon"
                               variant="ghost"
                               className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                              title="Reply"
+                              title={r.reply ? "Edit reply" : "Reply"}
                               onClick={() => {
                                 setReplying(r.id);
-                                setReplyText("");
+                                setReplyText(r.reply ?? "");
                               }}
                             >
                               <Send className="h-4 w-4" />
@@ -655,20 +596,32 @@ export default function ReviewsPage() {
                             className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10"
                             title="Spam"
                             onClick={() => applyAction(r.id, r.status === "spam" ? "unspam" : "spam")}
-                            disabled={spamLoading}
+                            disabled={moderating}
                           >
                             <Flag className="h-4 w-4" />
                           </Button>
                           {r.status === "trashed" ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-slate-500"
-                              title="Restore"
-                              onClick={() => applyAction(r.id, "restore")}
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-slate-500"
+                                title="Restore"
+                                onClick={() => applyAction(r.id, "restore")}
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                title="Delete for good"
+                                onClick={() => applyAction(r.id, "delete")}
+                                disabled={moderating}
+                              >
+                                <Trash className="h-4 w-4" />
+                              </Button>
+                            </>
                           ) : (
                             <Button
                               size="icon"
@@ -676,7 +629,7 @@ export default function ReviewsPage() {
                               className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
                               title="Trash"
                               onClick={() => applyAction(r.id, "trash")}
-                              disabled={deleteLoading}
+                              disabled={moderating}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -710,8 +663,8 @@ export default function ReviewsPage() {
                 <Button variant="outline" onClick={() => setBulkReplyOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={sendBulkReply} disabled={bulkLoading || !bulkReplyText.trim()}>
-                  {bulkLoading ? (
+                <Button onClick={sendBulkReply} disabled={moderating || !bulkReplyText.trim()}>
+                  {moderating ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4 mr-2" />

@@ -514,6 +514,7 @@ export class StorefrontService {
       body: r.body ?? "",
       verified: r.verified,
       date: r.createdAt.toISOString(),
+      reply: r.replyBody ? { body: r.replyBody, date: (r.replyAt ?? r.updatedAt).toISOString() } : null,
     }));
     // Denormalised averageRating/reviewCount are not maintained yet, so fall back to the approved reviews.
     const rating = summary.rating || (reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0);

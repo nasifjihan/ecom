@@ -145,6 +145,7 @@ export interface Review {
   title?: string;
   text: string;
   reply?: string;
+  replyAt?: string;
   status: ReviewStatus;
   submittedAt: string;
   updatedAt?: string;
@@ -167,19 +168,13 @@ export interface ReviewListResponse {
   perPage: number;
 }
 
-export interface UpdateReviewDto {
-  approved?: boolean;
-  rating?: number;
-  reply?: string;
-  title?: string;
-  text?: string;
-  status?: ReviewStatus;
-}
+export type ReviewAction = "approve" | "unapprove" | "spam" | "unspam" | "trash" | "restore" | "delete" | "reply";
 
+/** POST /admin/marketing/reviews/moderate. "delete" only removes reviews already in the trash; an empty reply removes it. */
 export interface BulkUpdateReviewsDto {
   ids: (string | number)[];
-  action: "approve" | "unapprove" | "spam" | "unspam" | "trash" | "restore" | "delete";
-  replyText?: string;
+  action: ReviewAction;
+  reply?: string;
 }
 
 // ---- API ↔ admin shapes. The API uses the Prisma column names; decimals arrive as strings. ----
@@ -346,18 +341,12 @@ export function fromApiReview(r: ApiRow): Review {
     title: r.title ?? undefined,
     text: r.body ?? "",
     reply: r.replyBody ?? undefined,
+    replyAt: r.replyAt ?? undefined,
     status: r.status,
     submittedAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
 }
-
-const MODERATE_ACTIONS: Partial<Record<BulkUpdateReviewsDto["action"], string>> = {
-  approve: "approve",
-  spam: "spam-mark",
-  trash: "bulk-delete",
-  delete: "bulk-delete",
-};
 
 export const marketingApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
@@ -523,9 +512,9 @@ export const marketingApiSlice = api.injectEndpoints({
       query: (filters) => {
         const { rating, verifiedOnly: _v, dateFrom: _df, dateTo: _dt, status, ...rest } = (filters ?? {}) as ReviewListFilters;
         const params = listParams(rest as Record<string, unknown>);
-        // API filters on one rating and on pending/approved/spam only.
+        // The API filters on one rating.
         if (rating?.length === 1) params.set("rating", String(rating[0]));
-        if (status && status !== "trashed") params.set("status", status);
+        if (status) params.set("status", status);
         return { url: `/admin/marketing/reviews?${params}`, method: "GET" };
       },
       transformResponse: (items: ApiRow[], meta) => toListResponse(items.map(fromApiReview), meta),
@@ -545,62 +534,13 @@ export const marketingApiSlice = api.injectEndpoints({
       transformResponse: (r: ApiRow) => fromApiReview(r),
       providesTags: (_, __, id) => [{ type: "Review", id }],
     }),
-    // Only approving (or spam/trash) is supported by the API; replies and edits are not stored yet.
-    updateReview: builder.mutation<void, { id: string | number; body: UpdateReviewDto }>({
-      queryFn: async ({ id, body }, _api, _extra, baseQuery) => {
-        const action =
-          body.approved === true || body.status === "approved"
-            ? "approve"
-            : body.status === "spam"
-              ? "spam-mark"
-              : body.status === "trashed"
-                ? "bulk-delete"
-                : null;
-        if (!action) {
-          return { error: { status: 400, data: "Replying to or editing reviews is not supported by the API yet." } };
-        }
-        const res = await baseQuery({ url: "/admin/marketing/reviews/moderate", method: "POST", body: { ids: [String(id)], action } });
-        return res.error ? { error: res.error } : { data: undefined };
-      },
-      invalidatesTags: (_, __, { id }) => [
-        { type: "Review", id },
-        { type: "Review", id: "LIST" },
-      ],
-    }),
-    bulkUpdateReviews: builder.mutation<void, BulkUpdateReviewsDto>({
-      queryFn: async ({ ids, action }, _api, _extra, baseQuery) => {
-        const apiAction = MODERATE_ACTIONS[action];
-        if (!apiAction) return { error: { status: 400, data: `"${action}" is not supported by the API yet.` } };
-        const res = await baseQuery({
-          url: "/admin/marketing/reviews/moderate",
-          method: "POST",
-          body: { ids: ids.map(String), action: apiAction },
-        });
-        return res.error ? { error: res.error } : { data: undefined };
-      },
-      invalidatesTags: [{ type: "Review", id: "LIST" }],
-    }),
-    markSpamReview: builder.mutation<void, string | number>({
-      query: (id) => ({
+    moderateReviews: builder.mutation<{ count: number; action: ReviewAction }, BulkUpdateReviewsDto>({
+      query: ({ ids, ...body }) => ({
         url: "/admin/marketing/reviews/moderate",
         method: "POST",
-        body: { ids: [String(id)], action: "spam-mark" },
+        body: { ids: ids.map(String), ...body },
       }),
-      invalidatesTags: (_, __, id) => [
-        { type: "Review", id },
-        { type: "Review", id: "LIST" },
-      ],
-    }),
-    deleteReview: builder.mutation<void, string | number>({
-      query: (id) => ({
-        url: "/admin/marketing/reviews/moderate",
-        method: "POST",
-        body: { ids: [String(id)], action: "bulk-delete" },
-      }),
-      invalidatesTags: (_, __, id) => [
-        { type: "Review", id },
-        { type: "Review", id: "LIST" },
-      ],
+      invalidatesTags: (_r, _e, { ids }) => [...ids.map((id) => ({ type: "Review" as const, id })), { type: "Review", id: "LIST" }],
     }),
   }),
   overrideExisting: false,
@@ -624,8 +564,5 @@ export const {
   useStopFlashSaleMutation,
   useGetReviewsQuery,
   useGetReviewQuery,
-  useUpdateReviewMutation,
-  useBulkUpdateReviewsMutation,
-  useMarkSpamReviewMutation,
-  useDeleteReviewMutation,
+  useModerateReviewsMutation,
 } = marketingApiSlice;

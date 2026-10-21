@@ -648,6 +648,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                     </div>
                     <h5 className="font-semibold text-sm mb-1">{r.title}</h5>
                     <p className="text-sm text-muted-foreground leading-relaxed">{r.body}</p>
+                    {r.reply && (
+                      <div className="mt-3 rounded-lg border-l-2 border-primary bg-muted/50 px-4 py-3">
+                        <div className="text-xs font-semibold mb-1">
+                          {t("Reply from the shop")} · <span className="font-normal text-muted-foreground">{formatReviewDate(r.reply.date)}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{r.reply.body}</p>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>

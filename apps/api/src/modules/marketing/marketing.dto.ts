@@ -191,10 +191,13 @@ export type UpdateFlashSaleDto = z.infer<typeof UpdateFlashSaleDto>;
 export const ReviewIdParamDto = z.object({ id: z.coerce.bigint().positive() });
 export type ReviewIdParamDto = z.infer<typeof ReviewIdParamDto>;
 
+export const REVIEW_STATUSES = ["pending", "approved", "spam", "trashed"] as const;
+
 const BaseListReviewsQueryDto = PaginationSchema.extend({
   productId: z.coerce.bigint().optional(),
   customerId: z.coerce.bigint().optional(),
-  status: z.enum(["pending", "approved", "spam"]).optional(),
+  /** Without a status, trashed reviews are left out. */
+  status: z.enum(REVIEW_STATUSES).optional(),
   rating: z.coerce.number().int().min(1).max(5).optional(),
 });
 export const ListReviewsQueryDto = BaseListReviewsQueryDto.superRefine((v, ctx) => {
@@ -218,8 +221,24 @@ const BaseCreateReviewDto = z.object({
 export const CreateReviewDto = BaseCreateReviewDto.superRefine((_v, _ctx) => {});
 export type CreateReviewDto = z.infer<typeof CreateReviewDto>;
 
-export const ReviewModerateDto = z.object({
-  ids: z.array(z.coerce.bigint()).min(1),
-  action: z.enum(["approve", "bulk-delete", "spam-mark"]),
-});
+/**
+ * What each moderation action sets the status to. "delete" removes for good, and only reviews
+ * already in the trash; "reply" sets (or, when empty, removes) the shop's reply.
+ */
+export const REVIEW_ACTION_STATUS = {
+  approve: "approved",
+  unapprove: "pending",
+  spam: "spam",
+  unspam: "pending",
+  trash: "trashed",
+  restore: "pending",
+} as const;
+
+export const ReviewModerateDto = z
+  .object({
+    ids: z.array(z.coerce.bigint()).min(1).max(200),
+    action: z.enum(["approve", "unapprove", "spam", "unspam", "trash", "restore", "delete", "reply"]),
+    reply: z.string().trim().max(2000).refine(noXss, noXssMessage).optional(),
+  })
+  .refine((v) => v.action !== "reply" || v.reply !== undefined, { message: "Write the reply", path: ["reply"] });
 export type ReviewModerateDto = z.infer<typeof ReviewModerateDto>;

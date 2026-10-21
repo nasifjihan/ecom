@@ -1,6 +1,13 @@
 import { prisma } from "../../config";
 import { BaseRepository, type RequestContext, type Paginated, paginate, NotFoundError, ConflictError } from "../../core";
-import { couponTypeToDiscountType, type CouponSearchQueryDto, type ListReviewsQueryDto } from "./marketing.dto";
+import type { Prisma } from "@prisma/client";
+import {
+  couponTypeToDiscountType,
+  REVIEW_ACTION_STATUS,
+  type CouponSearchQueryDto,
+  type ListReviewsQueryDto,
+  type ReviewModerateDto,
+} from "./marketing.dto";
 import { CouponType } from "@ecom/shared-types";
 
 export class CouponRepository extends BaseRepository<"coupon"> {
@@ -173,7 +180,7 @@ export class ReviewRepository extends BaseRepository<"review"> {
     if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
     if (filters.productId) where.productId = BigInt(filters.productId);
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
-    if (filters.status) where.status = filters.status;
+    where.status = filters.status ?? { not: "trashed" };
     if (filters.rating) where.rating = filters.rating;
     if (filters.search) {
       where.OR = [
@@ -212,26 +219,23 @@ export class ReviewRepository extends BaseRepository<"review"> {
     });
   }
 
-  async setStatus(
-    ctx: RequestContext,
-    ids: bigint[],
-    action: "approve" | "bulk-delete" | "spam-mark",
-  ): Promise<{ count: number }> {
-    const bigIds = ids.map((i) => BigInt(i));
-    const storeId = ctx.storeId;
-    const where: Record<string, unknown> = {
-      id: { in: bigIds },
-    };
-    if (storeId !== undefined) where.storeId = storeId;
-
-    if (action === "bulk-delete") {
-      return (this.q as any).deleteMany({ where });
+  async moderate(ctx: RequestContext, dto: ReviewModerateDto): Promise<{ count: number }> {
+    const where: Prisma.ReviewWhereInput = { id: { in: dto.ids.map((i) => BigInt(i)) } };
+    if (ctx.storeId !== undefined) where.storeId = ctx.storeId;
+    switch (dto.action) {
+      // Only from the trash, so one click can't lose a review.
+      case "delete":
+        return prisma.review.deleteMany({ where: { ...where, status: "trashed" } });
+      case "reply": {
+        const reply = dto.reply ?? "";
+        return prisma.review.updateMany({
+          where,
+          data: reply ? { replyBody: reply, replyAt: new Date(), replyAdminId: ctx.admin?.id ?? null } : { replyBody: null, replyAt: null, replyAdminId: null },
+        });
+      }
+      default:
+        return prisma.review.updateMany({ where, data: { status: REVIEW_ACTION_STATUS[dto.action] } });
     }
-    const status = action === "approve" ? "approved" : "spam";
-    return (this.q as any).updateMany({
-      where,
-      data: { status },
-    });
   }
 
   async findExistingReview(

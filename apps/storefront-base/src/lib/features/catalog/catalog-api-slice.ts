@@ -69,6 +69,8 @@ export type ProductReview = {
   body: string;
   verified: boolean;
   date: string;
+  /** The shop's public answer to the review. */
+  reply?: { body: string; date: string } | null;
 };
 
 /** GET /storefront/products/:slug — summary plus everything the product page renders. */

@@ -560,6 +560,7 @@ export const BN: Record<string, string> = {
   "Remove coupon": "কুপন সরান",
   "Remove item": "পণ্য সরান",
   "Removed from your wishlist": "উইশলিস্ট থেকে সরানো হয়েছে",
+  "Reply from the shop": "দোকানের উত্তর",
   "Request a return": "ফেরতের অনুরোধ করুন",
   "Request return": "ফেরতের অনুরোধ পাঠান",
   "Reset links work once, for one hour. Ask for a new one and we'll email it to you.": "রিসেট লিংক একবারই, এক ঘণ্টার জন্য কাজ করে। নতুন লিংক চাইলে ইমেইলে পাঠিয়ে দেব।",

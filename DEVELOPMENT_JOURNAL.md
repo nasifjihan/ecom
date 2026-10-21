@@ -5461,3 +5461,49 @@ Another project on this machine (mbw-erp) uses host ports 3000 and 3001 in Docke
   - API unit tests: 715 passing;
   - the store is found from both new addresses;
   - in the browser, the admin orders page loaded on 3101 and the storefront homepage on 3100.
+
+---
+
+## ✅ BATCH #44 (part 2) — Review moderation (2026-10-21)
+Every button on Marketing → Reviews now works, and the shop's reply shows on the product page. Before, only approve, spam and a hard delete reached the API. Reply, unapprove, unspam and restore said "not supported", and "Trash" deleted the review for good.
+
+### 44.8 API (`POST /admin/marketing/reviews/moderate`)
+- **Request:** `{ ids, action, reply? }`, up to 200 reviews at once. `action` is one of:
+  - `approve`, `unapprove`, `spam`, `unspam`, `trash`, `restore`: these set the status (`REVIEW_ACTION_STATUS`). Unapprove, unspam and restore go back to pending.
+  - `delete`: removes for good, and **only reviews already in the trash**. The others are skipped, and `count` says how many went.
+  - `reply`: saves `replyBody`, `replyAt` and `replyAdminId` (who wrote it). An empty reply removes it. The reply is checked for scripts like other review text, up to 2,000 characters.
+- **Statuses:** pending, approved, spam and **trashed**. The list leaves the trash out unless `status=trashed` is asked for.
+- **Stars:** after every action, each product touched gets its stars and review count re-counted from approved reviews (`refreshProductRating`).
+- **Removed:** the old action names (`bulk-delete`, `spam-mark`). Only the admin used them.
+
+### 44.9 Admin (Marketing → Reviews)
+- **Hooks:** one `useModerateReviewsMutation` replaces the four old ones. Every row and bulk button uses it, and the toast says how many reviews changed.
+- **Reply:** the box opens with the current reply, so it can be edited, or emptied to remove it. Bulk reply now only replies; before, it approved instead.
+- **Trash:** rows in the trash have Restore and "Delete for good". The bulk "Permanent Delete" works only in the Trashed tab, and asks first.
+- **Star rating:** the pencil that edited a customer's star rating is gone. It never saved, and the shop shouldn't change a customer's stars.
+
+### 44.10 Storefront
+- The product page shows **"Reply from the shop"** with its date under the review (Bangla: "দোকানের উত্তর").
+- The API sends `reply: { body, date }` on each review (null when there's none).
+
+### 44.11 Checked
+- **New test:** `tests/integration/review-moderation.db.test.ts` (5), run through the DTO:
+  - approve and unapprove move the stars (3 reviews, average 3 → 2, average 4);
+  - spam and unspam;
+  - delete does nothing outside the trash;
+  - trash hides a review from the default list and shows it under `trashed`;
+  - restore, then delete from the trash, removes it;
+  - a reply saves with the admin, and an empty one clears it;
+  - another store's reviews aren't touched.
+- **Full suite:** API on `ecom_test`, 84 files passing.
+- **Typecheck:** admin and storefront pass.
+- **Lint:** admin lint errors in the touched files went from 103 to 86.
+- **In the browser** (admin on 3101, storefront on 3100):
+  - approving review #59 on the Richman slim-fit shirt set the product to 2 reviews at 4.5★;
+  - a reply on review #68 saved with the owner's id;
+  - the product page showed "Reply from the shop · 21 Oct 2026" with the text.
+  - Both are left in dev data as an example.
+
+### 44.12 Not done
+- **Seeded stars:** seeded products still show 0 stars until one of their reviews is moderated. The seed never counted them, and the storefront falls back to averaging the reviews it shows.
+- **Tab badges:** each tab's count still covers only the tab being looked at.
