@@ -5395,3 +5395,44 @@ Customers who ask for it get their order updates on WhatsApp, through the shop's
 - **Real sending:** needs a WhatsApp Business number in Meta, an access token, and approved templates. No real message has been sent yet.
 - **Out of scope:** no WhatsApp inbox or replies, no broadcasts.
 - **Next:** part 2, new team alerts (reviews, questions, courier problems, payments to check), and WhatsApp for team alerts.
+
+---
+
+## ✅ BATCH #42 (part 2) — More team alerts, and team alerts on WhatsApp (2026-10-21)
+The team now hears about four more things: a review waiting for approval, a product question, a courier problem, and an online payment that needs a check. Any team alert can also go by WhatsApp to staff who turn that on for themselves. This finishes Batch 42.
+
+### 42.7 New alerts (`staff-alerts.rules.ts`)
+Each has the usual bell, email, SMS and "who gets it" settings (owners when nobody is chosen):
+- **Online payment needs a check** (`payment_review`, bell + email): a gateway took money but something didn't match, so the try went to "review". Only the call that settled the try sends it, so a return and an IPN together send one.
+- **Review to approve** (`review_waiting`, bell): a review from someone who hasn't bought the product (it waits for approval), e.g. "Review to approve: ★★★★ on Silk Saree". Verified buyers' reviews go up straight away and don't alert.
+- **Product question** (`question_waiting`, bell): "Question on Silk Saree", with the name and question.
+- **Courier problem** (`courier_problem`, bell + email):
+  - a parcel moved to failed delivery or coming back, on a courier sync or webhook (once per parcel and outcome);
+  - a booked parcel on the way (picked up, in transit, out for delivery) with no courier update for 3 days (`PARCEL_STUCK_DAYS`). This is checked with the scheduled courier sync, at most once every 3 days per parcel.
+
+### 42.8 Team alerts on WhatsApp
+- **Switches:** `StaffAlertSetting.whatsapp` per alert (off by default), plus `AdminUser.whatsappAlerts` per person (migration `20261022120000_team_alerts_whatsapp`). A message goes only when both are on and the person has a BD mobile.
+- **Template:** `staff_alert` in English, with {{1}} the shop name and {{2}} the alert, made once in WhatsApp Manager. In Record only mode it's just logged.
+- **Admin:**
+  - Notifications → "Your team" has a WhatsApp column, and warns who hasn't turned WhatsApp alerts on.
+  - Settings → Profile → "Your admin" has **Team alerts on WhatsApp**, showing the number it goes to (the profile API takes `whatsappAlerts`).
+
+### 42.9 Checked
+- **Tests:**
+  - `tests/unit/staff-alerts-rules.test.ts`: the new alerts default to bell on and WhatsApp off, with email on for courier problems and payments to check;
+  - new `tests/integration/team-alerts-more.db.test.ts` (4):
+    - a non-buyer's review waits and the owner gets "Review to approve: ★★★★ on Silk Saree";
+    - a product question alerts;
+    - a parcel with no update for 5 days alerts once (a parcel updated yesterday doesn't), and the next run doesn't repeat it;
+    - WhatsApp: nothing while the owner hasn't turned it on, then one `staff_alert` message logged with the shop name and alert.
+  - the existing `staff-alerts.db.test.ts` still passes.
+- **Full suite:** API 915 passing (83 files), DB tests on `ecom_test`.
+- **Lint:** no new lint errors (same count in the files touched).
+- **In the browser:**
+  - Notifications listed all 11 team alerts, the new ones with their defaults, and a WhatsApp column;
+  - on Settings → Profile, "Team alerts on WhatsApp" turned on and saved (to +8801700000001), then was switched back off in dev.
+
+### 42.10 Not done
+- **Payment test:** the payment review alert has no DB test of its own. It is raised from the settle step that the online payment tests already cover.
+- **Real sending:** real WhatsApp sending still needs the shop's WhatsApp Business account and approved `staff_alert` and order templates.
+- **Next:** what's left from the feature list is the real gateway sandbox runs (waiting for keys) and Arabic/RTL (left out unless needed).

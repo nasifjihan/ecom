@@ -36,6 +36,8 @@ import {
   type CourierAdapter,
 } from "./couriers.adapters"
 import type { BookParcelDto, BulkBookDto, CreateAccountDto, UpdateAccountDto } from "./couriers.dto"
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
+import { PARCEL_STUCK_DAYS } from "../staff-alerts/staff-alerts.rules"
 
 type Account = Prisma.CourierAccountGetPayload<object>
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
@@ -681,7 +683,47 @@ export class CouriersService {
         data: { shipmentId: s.id, status: s.status, note: `${COURIER_NAMES[courier]}: ${label}` },
       })
     }
+    // Failed delivery or a parcel coming back: tell the team once per parcel and outcome.
+    const bad = moved.find((m) => m === "failed" || m === "returned")
+    if (bad) {
+      const o = await prisma.order.findUnique({ where: { id: s.orderId }, select: { number: true } })
+      alertStaffLater(this.storeId, "courier_problem", {
+        title: `${bad === "failed" ? "Delivery failed" : "Parcel coming back"}: ${s.code} (order ${o?.number ?? s.orderId})`,
+        body: `${COURIER_NAMES[courier]}: ${label}${state.message ? ` — ${state.message}` : ""}`,
+        link: `/orders/${s.orderId}`,
+        refKey: `parcel:${s.id}:${bad}`,
+        onceWithinHours: 24 * 30,
+      })
+    }
     return { parcel: s.code, ok: true, courierStatus: state.status, moved }
+  }
+
+  /**
+   * Booked parcels on the way with no courier update for PARCEL_STUCK_DAYS: a "courier problem"
+   * alert each, at most once every few days per parcel. Run with the scheduled sync.
+   */
+  static async stuckParcelAlerts(now = new Date()) {
+    const cutoff = new Date(now.getTime() - PARCEL_STUCK_DAYS * 86_400_000)
+    const rows = await prisma.shipment.findMany({
+      where: {
+        consignmentId: { not: null },
+        status: { in: ["picked_up", "in_transit", "out_for_delivery"] },
+        createdAt: { lt: cutoff },
+        events: { none: { createdAt: { gte: cutoff } } },
+      },
+      select: { id: true, storeId: true, code: true, status: true, orderId: true, providerName: true, order: { select: { number: true } } },
+      take: 200,
+    })
+    for (const r of rows) {
+      alertStaffLater(r.storeId, "courier_problem", {
+        title: `No courier update for ${PARCEL_STUCK_DAYS} days: ${r.code} (order ${r.order.number})`,
+        body: `${r.providerName ?? "The courier"} last had it as ${r.status.replace(/_/g, " ")}. Check it in the courier's panel.`,
+        link: `/orders/${r.orderId}`,
+        refKey: `parcel:${r.id}:stuck`,
+        onceWithinHours: 24 * PARCEL_STUCK_DAYS,
+      })
+    }
+    return rows.length
   }
 
   /** Syncs this store's booked parcels that are still on the way. */
@@ -735,7 +777,11 @@ export class CouriersService {
         logger.warn({ err: (e as Error).message, parcelId: String(r.id) }, "Courier sync failed")
       }
     }
-    return { checked: rows.length, moved, errors }
+    const stuck = await CouriersService.stuckParcelAlerts().catch((e: unknown) => {
+      logger.warn({ err: (e as Error).message }, "Stuck parcel check failed")
+      return 0
+    })
+    return { checked: rows.length, moved, errors, stuck }
   }
 
   // ================================================================ webhooks

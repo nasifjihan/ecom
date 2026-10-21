@@ -102,6 +102,8 @@ export interface MyProfile {
   avatar?: string | null;
   bio?: string;
   twoFactorEnabled?: boolean;
+  /** Team alerts on WhatsApp to my mobile. */
+  whatsappAlerts?: boolean;
 }
 
 export interface UpdateMyProfileDto {
@@ -111,6 +113,7 @@ export interface UpdateMyProfileDto {
   phone?: string;
   avatar?: string | null;
   bio?: string;
+  whatsappAlerts?: boolean;
 }
 
 export interface ChangePasswordDto {

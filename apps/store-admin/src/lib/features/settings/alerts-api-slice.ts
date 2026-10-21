@@ -32,6 +32,8 @@ export interface StaffAlertRow {
   email: boolean;
   emailTemplate: string;
   sms: boolean;
+  /** To people who turned on WhatsApp alerts on their profile. */
+  whatsapp: boolean;
   toAssignee: boolean;
   staffIds: string[];
 }
@@ -42,12 +44,12 @@ export interface Matrix {
   whatsappReady: boolean;
   customers: CustomerMessageRow[];
   staff: StaffAlertRow[];
-  people: { id: string; name: string; email: string; hasMobile: boolean; role: string; owner: boolean }[];
+  people: { id: string; name: string; email: string; hasMobile: boolean; whatsapp: boolean; role: string; owner: boolean }[];
 }
 
 export interface MatrixInput {
   customers?: { key: string; email?: boolean; sms?: boolean; whatsapp?: boolean }[];
-  staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; staffIds?: string[] }[];
+  staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; whatsapp?: boolean; staffIds?: string[] }[];
 }
 
 const INBOX = { type: "Notice" as const, id: "INBOX" };

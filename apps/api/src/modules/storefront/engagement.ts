@@ -16,6 +16,7 @@ import {
 } from "../../core"
 import { bdMobile, phoneVariants } from "../sms/sms.rules"
 import { flashRules } from "./flash-pricing"
+import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import { StorefrontService } from "./storefront.service"
 import {
   publicName,
@@ -399,6 +400,15 @@ export class StorefrontEngagement {
       await refreshProductRating(productId, t)
       return r
     })
+    // Verified buyers' reviews go up straight away; others wait for someone to approve them.
+    if (review.status === "pending") {
+      const p = await prisma.product.findUnique({ where: { id: productId }, select: { name: true } })
+      alertStaffLater(this.storeId, "review_waiting", {
+        title: `Review to approve: ${"★".repeat(review.rating)} on ${p?.name ?? "a product"}`,
+        body: [review.title, review.body].filter(Boolean).join(" · ").slice(0, 300) || undefined,
+        link: "/marketing/reviews",
+      })
+    }
     return { id: String(review.id), status: review.status, verified }
   }
 
@@ -455,6 +465,12 @@ export class StorefrontEngagement {
         question: dto.question.trim(),
         ip,
       },
+    })
+    const p = await prisma.product.findUnique({ where: { id: productId }, select: { name: true } })
+    alertStaffLater(this.storeId, "question_waiting", {
+      title: `Question on ${p?.name ?? "a product"}`,
+      body: `${q.name}: ${q.question}`.slice(0, 300),
+      link: "/marketing/questions",
     })
     return { id: String(q.id), status: q.status }
   }

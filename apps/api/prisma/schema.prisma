@@ -323,6 +323,8 @@ model AdminUser {
   salesCode          String?
   /// The admin as this person likes it: { bookmarks: [{ href, label }], textSize: "sm" | "md" | "lg" }.
   preferences        Json?
+  /// Team alerts on WhatsApp to this person's mobile (for alerts with WhatsApp on).
+  whatsappAlerts     Boolean           @default(false)
   ordersSold         Order[]           @relation("OrderSalesperson")
   commissions        SalesCommission[]
   salesTargets       SalesTarget[]
@@ -890,11 +892,14 @@ model StaffAlertSetting {
   id        BigInt   @id @default(autoincrement())
   storeId   BigInt
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /// new_order | payment_to_verify | return_requested | quote_request | low_stock | lead_assigned | report_failed
+  /// new_order | payment_to_verify | payment_review | return_requested | quote_request | low_stock |
+  /// lead_assigned | review_waiting | question_waiting | courier_problem | report_failed
   event     String
   inApp     Boolean  @default(true)
   email     Boolean  @default(false)
   sms       Boolean  @default(false)
+  /// To staff who turned on WhatsApp alerts on their profile.
+  whatsapp  Boolean  @default(false)
   /// Who gets it (empty: the store's owners). Not used for "lead_assigned", which goes to the lead's follower.
   staffIds  BigInt[] @default([])
   updatedAt DateTime @updatedAt

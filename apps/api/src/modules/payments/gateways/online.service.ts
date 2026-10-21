@@ -36,6 +36,7 @@ import {
   storefrontOrigin,
   type Verdict,
 } from "./gateway.rules"
+import { alertStaffLater } from "../../staff-alerts/staff-alerts.service"
 
 type T = Prisma.TransactionClient
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
@@ -474,6 +475,15 @@ export class OnlinePaymentsService {
       return { before: "", after: "", orderStatus: "" }
     })
     if (done && verdict.status === "paid") await payments.startIfPaid(attempt.orderId, done)
+    // Only the call that moved the try alerts, so a return and an IPN together send one alert.
+    if (done && verdict.status === "review") {
+      const o = await prisma.order.findUnique({ where: { id: attempt.orderId }, select: { number: true } })
+      alertStaffLater(attempt.storeId, "payment_review", {
+        title: `Online payment to check on order ${o?.number ?? attempt.orderId}`,
+        body: `${name}: ${verdict.note ?? "something didn't match"}`.slice(0, 500),
+        link: `/orders/${attempt.orderId}`,
+      })
+    }
     const now = await prisma.paymentAttempt.findUniqueOrThrow({
       where: { id: attemptId },
       select: { status: true },

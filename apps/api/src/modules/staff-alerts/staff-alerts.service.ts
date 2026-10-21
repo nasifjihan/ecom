@@ -1,6 +1,7 @@
 /**
  * TEAM ALERTS: tells staff about new orders, payments to check, return requests, quote
- * requests, low stock and leads given to them, by the bell in the admin, email and/or SMS,
+ * requests, low stock, leads given to them, reviews and questions waiting, courier problems and
+ * online payments to check, by the bell in the admin, email, SMS and/or WhatsApp,
  * as set in Settings > Notifications. Never throws to the caller: a failed alert is logged.
  */
 import type { Prisma } from "@prisma/client"
@@ -21,6 +22,7 @@ import {
   isStaffEvent,
   staffSetting,
   staffSmsText,
+  STAFF_WA_TEMPLATE,
   type StaffEvent,
 } from "./staff-alerts.rules"
 
@@ -54,10 +56,10 @@ export async function alertStaff(storeId: bigint, event: StaffEvent, a: Alert): 
     const setting = await settingFor(storeId, event)
     const info = STAFF_EVENT_INFO[event]
     const ownEmail = info.emailTemplate !== undefined // sent by its own template elsewhere
-    if (!setting.inApp && !(setting.email && !ownEmail) && !setting.sms) return 0
+    if (!setting.inApp && !(setting.email && !ownEmail) && !setting.sms && !setting.whatsapp) return 0
     const staff = await prisma.adminUser.findMany({
       where: { storeId },
-      select: { id: true, status: true, email: true, phone: true, role: { select: { slug: true } } },
+      select: { id: true, status: true, email: true, phone: true, whatsappAlerts: true, role: { select: { slug: true } } },
     })
     const ids = alertRecipients(
       event,
@@ -91,11 +93,22 @@ export async function alertStaff(storeId: bigint, event: StaffEvent, a: Alert): 
         { title: a.title, body: a.body ?? "", url: `${urls.admin}${a.link ?? ""}` },
       )
     }
-    if (setting.sms) {
+    if (setting.sms || setting.whatsapp) {
       const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } })
-      const sms = new SmsService(storeId)
-      for (const p of people) {
-        if (bdMobile(p.phone)) await sms.send({ to: p.phone!, text: staffSmsText(store?.name ?? "Shop", a.title), kind: `staff_${event}` })
+      const shop = store?.name ?? "Shop"
+      if (setting.sms) {
+        const sms = new SmsService(storeId)
+        for (const p of people) {
+          if (bdMobile(p.phone)) await sms.send({ to: p.phone!, text: staffSmsText(shop, a.title), kind: `staff_${event}` })
+        }
+      }
+      // Only to people who turned WhatsApp alerts on for themselves (Settings → Profile).
+      if (setting.whatsapp) {
+        const wa = new WhatsappService(storeId)
+        for (const p of people) {
+          if (p.whatsappAlerts && bdMobile(p.phone))
+            await wa.send({ to: p.phone!, kind: `staff_${event}`, template: STAFF_WA_TEMPLATE.name, language: STAFF_WA_TEMPLATE.language, params: [shop, a.title.slice(0, 900)] })
+        }
       }
     }
     return people.length
@@ -153,7 +166,7 @@ export class StaffInbox {
 
 export interface MatrixInput {
   customers?: { key: string; email?: boolean; sms?: boolean; whatsapp?: boolean }[]
-  staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; staffIds?: bigint[] }[]
+  staff?: { event: string; inApp?: boolean; email?: boolean; sms?: boolean; whatsapp?: boolean; staffIds?: bigint[] }[]
 }
 
 export class NotificationMatrix {
@@ -195,6 +208,7 @@ export class NotificationMatrix {
           email,
           emailTemplate: info.emailTemplate ?? "staff_alert",
           sms: s.sms,
+          whatsapp: s.whatsapp,
           toAssignee: info.toAssignee ?? false,
           staffIds: s.staffIds.map(String),
         }
@@ -202,7 +216,7 @@ export class NotificationMatrix {
     )
     const people = await prisma.adminUser.findMany({
       where: { storeId: this.storeId, status: "active" },
-      select: { id: true, name: true, email: true, phone: true, role: { select: { name: true, slug: true } } },
+      select: { id: true, name: true, email: true, phone: true, whatsappAlerts: true, role: { select: { name: true, slug: true } } },
       orderBy: { name: "asc" },
     })
     return {
@@ -210,7 +224,16 @@ export class NotificationMatrix {
       whatsappReady,
       customers,
       staff,
-      people: people.map((p) => ({ id: String(p.id), name: p.name, email: p.email, hasMobile: !!bdMobile(p.phone), role: p.role.name, owner: p.role.slug === "owner" })),
+      people: people.map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        email: p.email,
+        hasMobile: !!bdMobile(p.phone),
+        /** Turned on WhatsApp alerts for themselves and has a mobile. */
+        whatsapp: p.whatsappAlerts && !!bdMobile(p.phone),
+        role: p.role.name,
+        owner: p.role.slug === "owner",
+      })),
     }
   }
 
@@ -241,6 +264,7 @@ export class NotificationMatrix {
         inApp: s.inApp ?? current.inApp,
         email: info.emailTemplate ? current.email : (s.email ?? current.email),
         sms: s.sms ?? current.sms,
+        whatsapp: s.whatsapp ?? current.whatsapp,
         staffIds: info.toAssignee ? [] : (s.staffIds ?? current.staffIds),
       }
       await prisma.staffAlertSetting.upsert({

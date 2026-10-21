@@ -10,14 +10,22 @@ const staff = [
 
 describe("staff alert rules", () => {
   it("uses the defaults until a setting is saved", () => {
-    expect(staffSetting("new_order", null)).toEqual({ inApp: true, email: true, sms: false, staffIds: [] })
-    expect(staffSetting("low_stock", { inApp: false, email: true, sms: true, staffIds: [2n] })).toEqual({ inApp: false, email: true, sms: true, staffIds: [2n] })
+    expect(staffSetting("new_order", null)).toEqual({ inApp: true, email: true, sms: false, whatsapp: false, staffIds: [] })
+    expect(staffSetting("low_stock", { inApp: false, email: true, sms: true, whatsapp: true, staffIds: [2n] })).toEqual({ inApp: false, email: true, sms: true, whatsapp: true, staffIds: [2n] })
     expect(STAFF_EVENT_INFO.lead_assigned.toAssignee).toBe(true)
+  })
+
+  it("has the new alerts on in the bell, with WhatsApp off until someone turns it on", () => {
+    for (const e of ["review_waiting", "question_waiting", "courier_problem", "payment_review"] as const) {
+      expect(staffSetting(e, null)).toMatchObject({ inApp: true, whatsapp: false })
+    }
+    expect(staffSetting("courier_problem", null).email).toBe(true)
+    expect(staffSetting("payment_review", null).email).toBe(true)
   })
 
   it("sends to the chosen active people, or the owners when nobody is chosen", () => {
     expect(alertRecipients("new_order", staffSetting("new_order", null), staff)).toEqual([1n, 4n])
-    expect(alertRecipients("new_order", { inApp: true, email: false, sms: false, staffIds: [2n, 3n] }, staff)).toEqual([2n])
+    expect(alertRecipients("new_order", { inApp: true, email: false, sms: false, whatsapp: false, staffIds: [2n, 3n] }, staff)).toEqual([2n])
   })
 
   it("sends 'given to you' alerts only to the follower, and not when they did it themselves", () => {

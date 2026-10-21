@@ -33,6 +33,7 @@ const MatrixBody = z.object({
         inApp: z.boolean().optional(),
         email: z.boolean().optional(),
         sms: z.boolean().optional(),
+        whatsapp: z.boolean().optional(),
         staffIds: z.array(z.coerce.bigint().positive()).max(100).optional(),
       }),
     )

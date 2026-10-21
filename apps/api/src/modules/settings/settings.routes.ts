@@ -54,6 +54,8 @@ const ProfileDto = z.object({
   displayName: z.string().max(120).optional(),
   phone: z.string().max(32).optional().nullable(),
   avatar: z.string().max(500).optional().nullable(),
+  /** Team alerts on WhatsApp to my mobile (for alerts with WhatsApp on in Notifications). */
+  whatsappAlerts: z.boolean().optional(),
 });
 
 const PasswordDto = z
@@ -134,7 +136,7 @@ async function readGeneral(storeId: bigint) {
   };
 }
 
-const profileOf = (u: { id: bigint; name: string; email: string; phone: string | null; avatarUrl: string | null; twoFactorSecret: string | null; role: { name: string } | null }) => {
+const profileOf = (u: { id: bigint; name: string; email: string; phone: string | null; avatarUrl: string | null; twoFactorSecret: string | null; whatsappAlerts: boolean; role: { name: string } | null }) => {
   const [firstName, ...rest] = u.name.trim().split(/\s+/);
   return {
     id: u.id,
@@ -146,6 +148,7 @@ const profileOf = (u: { id: bigint; name: string; email: string; phone: string |
     role: u.role?.name ?? "",
     avatar: u.avatarUrl,
     twoFactorEnabled: !!u.twoFactorSecret,
+    whatsappAlerts: u.whatsappAlerts,
   };
 };
 
@@ -188,6 +191,7 @@ adminSettingsRouter.put(
         name,
         ...(dto.phone !== undefined ? { phone: dto.phone || null } : {}),
         ...(dto.avatar !== undefined ? { avatarUrl: dto.avatar || null } : {}),
+        ...(dto.whatsappAlerts !== undefined ? { whatsappAlerts: dto.whatsappAlerts } : {}),
       },
       include: { role: { select: { name: true } } },
     });

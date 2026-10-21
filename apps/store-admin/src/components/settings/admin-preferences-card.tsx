@@ -5,6 +5,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Star, Type, X } from "lucide-react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from "@/components/ui";
+import { Toggle } from "@/components/content/shared";
+import { useGetMyProfileQuery, useUpdateMyProfileMutation } from "@/lib/features/settings/settings-api-slice";
 import {
   MAX_BOOKMARKS,
   TEXT_SIZES,
@@ -16,6 +18,8 @@ import {
 export function AdminPreferencesCard() {
   const { data } = usePreferencesQuery();
   const [save] = useSavePreferencesMutation();
+  const { data: me } = useGetMyProfileQuery();
+  const [updateProfile] = useUpdateMyProfileMutation();
   if (!data) return null;
 
   const saveBookmarks = (bookmarks: Bookmark[]) =>
@@ -36,6 +40,22 @@ export function AdminPreferencesCard() {
         <CardDescription>Only for you, on every device you sign in on.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {me && (
+          <Toggle
+            checked={!!me.whatsappAlerts}
+            onChange={(v) =>
+              void updateProfile({ whatsappAlerts: v })
+                .unwrap()
+                .then(
+                  () => toast.success(v ? "Team alerts will come to you on WhatsApp too" : "No more team alerts on WhatsApp"),
+                  () => toast.error("Couldn't save. Please try again."),
+                )
+            }
+            label="Team alerts on WhatsApp"
+            hint={me.phone ? `To ${me.phone}, for the alerts that have WhatsApp on in Settings → Notifications.` : "Add your mobile number above first."}
+          />
+        )}
+
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Text size</legend>
           <div role="radiogroup" aria-label="Text size" className="inline-flex rounded-lg border p-1">

@@ -43,6 +43,7 @@ function WhoPicker({ row, people, disabled, onChange }: { row: StaffAlertRow; pe
   const chosen = people.filter((p) => row.staffIds.includes(p.id));
   const summary = chosen.length ? chosen.map((p) => p.name).join(", ") : "Owners";
   const noMobile = row.sms ? (chosen.length ? chosen : people.filter((p) => p.owner)).filter((p) => !p.hasMobile) : [];
+  const noWhatsapp = (chosen.length ? chosen : people.filter((p) => p.owner)).filter((p) => !p.whatsapp);
   return (
     <div className="space-y-1">
       <DropdownMenu>
@@ -68,6 +69,9 @@ function WhoPicker({ row, people, disabled, onChange }: { row: StaffAlertRow; pe
         </DropdownMenuContent>
       </DropdownMenu>
       {noMobile.length > 0 && <p className="text-xs text-amber-700">No mobile on file for {noMobile.map((p) => p.name).join(", ")}: no SMS for them.</p>}
+      {row.whatsapp && noWhatsapp.length > 0 && (
+        <p className="text-xs text-amber-700">Not on WhatsApp alerts yet: {noWhatsapp.map((p) => p.name).join(", ")} (each turns it on in Settings → Profile).</p>
+      )}
     </div>
   );
 }
@@ -99,7 +103,7 @@ export default function NotificationSettingsPage() {
           ...(c.sms === null ? {} : { sms: c.sms }),
           ...(c.whatsapp === null ? {} : { whatsapp: c.whatsapp }),
         })),
-        staff: staff.map((s) => ({ event: s.event, inApp: s.inApp, email: s.email, sms: s.sms, ...(s.toAssignee ? {} : { staffIds: s.staffIds }) })),
+        staff: staff.map((s) => ({ event: s.event, inApp: s.inApp, email: s.email, sms: s.sms, whatsapp: s.whatsapp, ...(s.toAssignee ? {} : { staffIds: s.staffIds }) })),
       }).unwrap();
       toast.success("Saved");
     } catch (e) {
@@ -211,7 +215,8 @@ export default function NotificationSettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Your team</CardTitle>
           <CardDescription>
-            The bell is the icon at the top of the admin. Team SMS go to the mobile number on each person&apos;s staff profile.
+            The bell is the icon at the top of the admin. Team SMS go to the mobile number on each person&apos;s staff profile; WhatsApp
+            alerts only to people who turned them on in Settings → Profile (template &quot;staff_alert&quot;: {"{{1}}"} shop, {"{{2}}"} the alert).
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
@@ -222,6 +227,7 @@ export default function NotificationSettingsPage() {
                 <TableHead className="w-20">Bell</TableHead>
                 <TableHead className="w-20">Email</TableHead>
                 <TableHead className="w-20">SMS</TableHead>
+                <TableHead className="w-24">WhatsApp</TableHead>
                 <TableHead>Who</TableHead>
               </TableRow>
             </TableHeader>
@@ -232,10 +238,10 @@ export default function NotificationSettingsPage() {
                     <div className="text-sm font-medium">{s.label}</div>
                     <div className="max-w-xs text-xs text-muted-foreground">{s.description}</div>
                   </TableCell>
-                  {(["inApp", "email", "sms"] as const).map((k) => (
+                  {(["inApp", "email", "sms", "whatsapp"] as const).map((k) => (
                     <TableCell key={k}>
                       {edit ? (
-                        <Toggle checked={s[k]} onChange={(v) => setS(s.event, { [k]: v })} ariaLabel={`${s.label}: ${k === "inApp" ? "bell" : k === "email" ? "email" : "SMS"}`} />
+                        <Toggle checked={s[k]} onChange={(v) => setS(s.event, { [k]: v })} ariaLabel={`${s.label}: ${k === "inApp" ? "bell" : k === "email" ? "email" : k === "sms" ? "SMS" : "WhatsApp"}`} />
                       ) : s[k] ? (
                         "On"
                       ) : (
