@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AdminPreferencesCard } from "@/components/settings/admin-preferences-card";
+import { TwoFactorCard } from "@/components/settings/two-factor-card";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useForm, FormProvider, Controller } from "react-hook-form";
@@ -468,23 +469,11 @@ export default function ProfileSettingsPage() {
                   <div className="space-y-1 text-xs text-slate-500 max-w-md">
                     <p>
                       <ShieldCheck className="h-3 w-3 inline mr-1 text-emerald-500" />
-                      We strongly recommend enabling two-factor authentication (2FA)
+                      We strongly recommend turning on two-step sign-in
                       below for extra account protection.
                     </p>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      disabled
-                      title="Coming soon"
-                    >
-                      <ShieldCheck className="h-4 w-4 mr-2" /> Set Up 2FA
-                      <Badge variant="secondary" className="ml-2 !h-5 !px-1.5 text-[10px]">
-                        Soon
-                      </Badge>
-                    </Button>
                     <Button
                       type="submit"
                       disabled={passwordLoading}
@@ -503,6 +492,8 @@ export default function ProfileSettingsPage() {
             </FormProvider>
           </CardContent>
         </Card>
+
+        <TwoFactorCard />
 
         <AdminPreferencesCard />
       </motion.div>

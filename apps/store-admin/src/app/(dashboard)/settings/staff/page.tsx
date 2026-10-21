@@ -4,7 +4,7 @@ import { useState } from "react";
 import { StorefrontMultiSelect } from "@/components/storefront-multi-select";
 import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import { toast } from "sonner";
-import { KeyRound, Pencil, UserPlus, Users } from "lucide-react";
+import { KeyRound, Pencil, ShieldCheck, ShieldOff, UserPlus, Users } from "lucide-react";
 import {
   Badge,
   Button,
@@ -34,6 +34,7 @@ import {
   useGetRolesQuery,
   useGetStaffQuery,
   useSetStaffPasswordMutation,
+  useResetStaffTwoFactorMutation,
   useUpdateStaffMutation,
   type StaffMember,
 } from "@/lib/features/team/team-api-slice";
@@ -51,6 +52,17 @@ export default function StaffPage() {
   const [createStaff, { isLoading: creating }] = useCreateStaffMutation();
   const [updateStaff, { isLoading: updating }] = useUpdateStaffMutation();
   const [setPassword, { isLoading: settingPw }] = useSetStaffPasswordMutation();
+  const [resetTwoFactor, { isLoading: resetting2fa }] = useResetStaffTwoFactorMutation();
+  /** For someone who lost their phone: they sign in with the password alone, then can set it up again. */
+  const onResetTwoFactor = async (s: StaffMember) => {
+    if (!window.confirm(`Reset two-step sign-in for ${s.name}? They can then sign in with just their password.`)) return;
+    try {
+      await resetTwoFactor(s.id).unwrap();
+      toast.success(`Two-step sign-in reset for ${s.name}`);
+    } catch (err) {
+      toast.error(errorText(err));
+    }
+  };
 
   const [editing, setEditing] = useState<StaffMember | "new" | null>(null);
   const [pwFor, setPwFor] = useState<StaffMember | null>(null);
@@ -162,6 +174,11 @@ export default function StaffPage() {
                       <TableCell>
                         <div className="font-medium">
                           {s.name} {s.isYou && <Badge variant="secondary">You</Badge>}
+                          {s.twoFactorOn && (
+                            <Badge variant="outline" className="ml-1 gap-1 font-normal" title="Two-step sign-in is on">
+                              <ShieldCheck className="h-3 w-3" /> Two-step
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500">{[s.email, s.phone].filter(Boolean).join(" · ")}</div>
                       </TableCell>
@@ -186,6 +203,11 @@ export default function StaffPage() {
                             <Button variant="ghost" size="icon" title="Set a new password" onClick={() => { setPwFor(s); setPw(""); }}>
                               <KeyRound className="h-4 w-4" />
                             </Button>
+                            {isOwner && s.twoFactorOn && !s.isYou && (
+                              <Button variant="ghost" size="icon" title="Reset two-step sign-in (lost phone)" onClick={() => void onResetTwoFactor(s)} disabled={resetting2fa}>
+                                <ShieldOff className="h-4 w-4" />
+                              </Button>
+                            )}
                             {!s.isYou && (
                               <Button variant="outline" size="sm" onClick={() => toggleActive(s)} disabled={updating}>
                                 {s.status === "active" ? "Deactivate" : "Turn on"}

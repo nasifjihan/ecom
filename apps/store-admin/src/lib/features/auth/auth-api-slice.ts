@@ -6,6 +6,8 @@ export interface LoginCredentials {
   email: string;
   password: string;
   rememberMe?: boolean;
+  /** Two-step sign-in: the authenticator code or a backup code (asked for after AUTH_2FA_REQUIRED). */
+  code?: string;
 }
 
 export interface LoginResponse {
@@ -70,10 +72,10 @@ const toAuthUser = (u: ApiAdminUser) => ({
 export const authApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginCredentials>({
-      query: ({ email, password }) => ({
+      query: ({ email, password, code }) => ({
         url: "/auth/admin/login",
         method: "POST",
-        body: { email, password },
+        body: { email, password, ...(code ? { code } : {}) },
       }),
       // The refresh token is set as an httpOnly cookie by the API, not returned in the body.
       transformResponse: (res: { accessToken: string; user: ApiAdminUser; permissions: string[] }) => ({

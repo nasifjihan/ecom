@@ -33,6 +33,8 @@ export interface StaffMember {
   lastLoginAt: string | null;
   createdAt: string;
   isYou: boolean;
+  /** Two-step sign-in is on for them. */
+  twoFactorOn?: boolean;
 }
 export interface StaffInput {
   name?: string;
@@ -95,6 +97,10 @@ export const teamApi = api.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/admin/staff/${id}`, method: "PATCH", body }),
       invalidatesTags: ["User", "Role"],
     }),
+    resetStaffTwoFactor: b.mutation<void, string>({
+      query: (id) => ({ url: `/admin/staff/${id}/two-factor/reset`, method: "POST" }),
+      invalidatesTags: ["User"],
+    }),
     setStaffPassword: b.mutation<void, { id: string; password: string }>({
       query: ({ id, password }) => ({ url: `/admin/staff/${id}/password`, method: "POST", body: { password } }),
     }),
@@ -120,5 +126,6 @@ export const {
   useCreateStaffMutation,
   useUpdateStaffMutation,
   useSetStaffPasswordMutation,
+  useResetStaffTwoFactorMutation,
   useGetAuditLogsQuery,
 } = teamApi;

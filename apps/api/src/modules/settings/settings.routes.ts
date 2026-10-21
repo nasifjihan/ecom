@@ -136,7 +136,7 @@ async function readGeneral(storeId: bigint) {
   };
 }
 
-const profileOf = (u: { id: bigint; name: string; email: string; phone: string | null; avatarUrl: string | null; twoFactorSecret: string | null; whatsappAlerts: boolean; role: { name: string } | null }) => {
+const profileOf = (u: { id: bigint; name: string; email: string; phone: string | null; avatarUrl: string | null; twoFactorEnabledAt: Date | null; whatsappAlerts: boolean; role: { name: string } | null }) => {
   const [firstName, ...rest] = u.name.trim().split(/\s+/);
   return {
     id: u.id,
@@ -147,7 +147,7 @@ const profileOf = (u: { id: bigint; name: string; email: string; phone: string |
     phone: u.phone ?? "",
     role: u.role?.name ?? "",
     avatar: u.avatarUrl,
-    twoFactorEnabled: !!u.twoFactorSecret,
+    twoFactorEnabled: !!u.twoFactorEnabledAt,
     whatsappAlerts: u.whatsappAlerts,
   };
 };

@@ -31,12 +31,15 @@ export function envelope<T>(
     meta,
     message,
     errors,
+    code,
   }: {
     status?: number;
     data?: T | null;
     meta?: unknown;
     message?: string;
     errors?: Record<string, string[]>;
+    /** Errors only: the machine-readable reason (ErrorCode), e.g. AUTH_2FA_REQUIRED. */
+    code?: string;
   },
 ) {
   const reqId = (res as any).reqId ?? (res.req as any)?.requestId ?? "";
@@ -46,6 +49,7 @@ export function envelope<T>(
     data: data ?? null,
     meta: meta ?? undefined,
     errors,
+    code,
     timestamp: new Date().toISOString(),
     requestId: reqId,
   });

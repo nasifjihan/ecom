@@ -42,6 +42,9 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
+  // Two-step sign-in: shown once the API says the password was right and a code is needed.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const [login, { isLoading }] = useLoginMutation();
 
   const form = useForm<LoginFormValues>({
@@ -70,6 +73,7 @@ export default function LoginPage() {
         email: values.email,
         password: values.password,
         rememberMe: values.rememberMe,
+        code: needCode ? code.trim() : undefined,
       }).unwrap();
 
       dispatch(
@@ -104,6 +108,16 @@ export default function LoginPage() {
       router.replace(redirect);
     } catch (err) {
       const error = err as { data?: string | Record<string, string[]>; status?: number };
+      const body = (typeof error.data === "object" ? error.data : {}) as { code?: string; message?: string };
+      if (body.code === "AUTH_2FA_REQUIRED") {
+        setNeedCode(true);
+        return;
+      }
+      if (body.code === "AUTH_2FA_INVALID") {
+        setCode("");
+        toast.error("Code not accepted", { description: body.message });
+        return;
+      }
       let message = "Invalid email or password. Please try again.";
       if (typeof error.data === "string") {
         message = error.data;
@@ -312,6 +326,29 @@ export default function LoginPage() {
                     />
                   </motion.div>
 
+                  {needCode && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
+                      <label htmlFor="two-factor-code" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Code from your authenticator app
+                      </label>
+                      <Input
+                        id="two-factor-code"
+                        autoFocus
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        maxLength={12}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        className="h-11 tracking-widest text-center text-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        disabled={isLoading}
+                      />
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Lost your phone? Type one of your backup codes instead, or ask the shop owner to reset two-step sign-in.
+                      </p>
+                    </motion.div>
+                  )}
+
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -352,7 +389,7 @@ export default function LoginPage() {
                     <Button
                       type="submit"
                       className="h-11 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg"
-                      disabled={isLoading}
+                      disabled={isLoading || (needCode && code.trim().length < 6)}
                     >
                       {isLoading ? (
                         <span className="flex items-center gap-2">

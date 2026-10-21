@@ -25,6 +25,9 @@ export type ErrorCode =
   | "AUTH_PASSWORD_TOO_WEAK"
   | "AUTH_EMAIL_NOT_VERIFIED"
   | "AUTH_PHONE_NOT_VERIFIED"
+  /** Staff with two-step sign-in on: the password was right, now the code is needed. */
+  | "AUTH_2FA_REQUIRED"
+  | "AUTH_2FA_INVALID"
   | "TENANT_NOT_RESOLVED"
   | "TENANT_SUSPENDED"
   | "TENANT_CANCELLED"

@@ -16,6 +16,7 @@ import { checkStorefrontIds, staffStorefronts } from "../storefronts/storefronts
 import { invalidateAdminPermissions, invalidateRolePermissions } from "../../config/admin-permissions";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
 import { markPasswordChanged } from "../auth/password-reset";
+import { TWO_FACTOR_OFF } from "../auth/staff-two-factor";
 import type { CreateRoleDto, CreateStaffDto, ResetStaffPasswordDto, UpdateRoleDto, UpdateStaffDto } from "./team.dto";
 
 const OWNER = "owner";
@@ -215,6 +216,7 @@ export class TeamService {
     createdAt: Date;
     role: { id: bigint; name: string; slug: string };
     storefrontIds: bigint[];
+    twoFactorEnabledAt?: Date | null;
   }) {
     return {
       id: String(u.id),
@@ -227,6 +229,7 @@ export class TeamService {
       lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
       createdAt: u.createdAt.toISOString(),
       isYou: this.myId !== null && u.id === this.myId,
+      twoFactorOn: !!u.twoFactorEnabledAt,
     };
   }
 
@@ -344,5 +347,16 @@ export class TeamService {
     // Sessions signed in with the old password end.
     await markPasswordChanged("admin", id);
     return { id: String(id), passwordChanged: true };
+  }
+
+  /** For someone who lost their phone: owners only, and not for themselves (they turn it off with their password). */
+  async resetStaffTwoFactor(id: bigint) {
+    if (!this.iAmOwner) throw new ForbiddenError("Only an owner can reset two-step sign-in", "AUTH_INSUFFICIENT_PERMISSION");
+    if (this.myId !== null && id === this.myId) {
+      throw new BadRequestError("Turn off your own two-step sign-in in Settings → Profile", "VALIDATION_FAILED");
+    }
+    await this.getStaffRow(id);
+    await prisma.adminUser.update({ where: { id }, data: TWO_FACTOR_OFF });
+    return { id: String(id), twoFactorOn: false };
   }
 }

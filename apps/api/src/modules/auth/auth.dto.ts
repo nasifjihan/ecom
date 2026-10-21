@@ -8,6 +8,8 @@ export const SuperLoginDto = z.object({
 export const AdminLoginDto = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+  /** Staff with two-step sign-in on: the authenticator code, or a backup code. */
+  code: z.string().trim().max(12).optional(),
 });
 
 export const CustomerLoginDto = z.object({

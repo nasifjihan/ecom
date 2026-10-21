@@ -5507,3 +5507,71 @@ Every button on Marketing → Reviews now works, and the shop's reply shows on t
 ### 44.12 Not done
 - **Seeded stars:** seeded products still show 0 stars until one of their reviews is moderated. The seed never counted them, and the storefront falls back to averaging the reviews it shows.
 - **Tab badges:** each tab's count still covers only the tab being looked at.
+
+---
+
+## ✅ BATCH #44 (part 3) — Two-step sign-in for staff (2026-10-21)
+Staff can turn on a second step at sign-in: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password). It replaces the disabled "Set Up 2FA (Soon)" button on the profile page. This finishes Batch 44.
+
+### 44.13 How it works (`auth/totp.ts`, `auth/staff-two-factor.ts`)
+- **Codes:** TOTP as in RFC 6238 (SHA-1, 30 s, 6 digits), made with Node's own crypto.
+  - Checked against the RFC's test values.
+  - A code from one step before or after is accepted, for phone clocks a little off.
+  - Each code works **once**: `twoFactorLastStep` is moved forward in the same update that accepts it, so two requests with one code can't both get in.
+- **Setup:**
+  - `POST /admin/me/two-factor/start` makes a 160-bit secret, saved **encrypted** in `twoFactorSecret`. It returns the key, the `otpauth://` link and a QR code (PNG drawn on the API with `qrcode` 1.5.4).
+  - Two-step sign-in stays off until `confirm` gets a right code. Then `twoFactorEnabledAt` is set and 10 backup codes are returned, shown once.
+- **Backup codes:** like `k7m2-9qxp`, without look-alike characters. Only SHA-256 hashes are kept (`twoFactorBackupCodes`). Each is removed in the same SQL statement that checks it, so it works once even with two sign-ins at the same moment.
+- **Sign-in:** `POST /auth/admin/login` takes an optional `code`.
+  - With two-step on and no code, the answer is **401 `AUTH_2FA_REQUIRED`**. This comes only after a right password, so it never reveals whether an email exists.
+  - A wrong or used code gets `AUTH_2FA_INVALID`.
+  - A backup code is accepted in place of the 6-digit code.
+  - The login path is already rate-limited per IP, so guessing codes runs into that limit.
+- **Turning off, new codes:** `disable` and `backup-codes` need the password. A wrong password answers 400, not 401, so the admin doesn't treat it as an expired session.
+- **Owner reset:** `POST /admin/staff/:id/two-factor/reset`, for someone who lost their phone.
+  - Owners only.
+  - Not on their own account: they turn it off on their profile with the password.
+  - The staff list shows `twoFactorOn`.
+- **Never in responses:** the backup-code hashes are now filtered from every JSON response, as the secret and password hash already were. The profile's `twoFactorEnabled` now means "turned on", not "a secret exists".
+- **Error codes in responses:** error responses now carry `code` (the `ErrorCode`), so clients can react to `AUTH_2FA_REQUIRED`.
+- **Migration:** `20261023120000_staff_two_factor` adds `twoFactorEnabledAt`, `twoFactorLastStep` and `twoFactorBackupCodes`.
+
+### 44.14 Admin
+- **Sign-in page:** after the password, a code box appears when it's needed. It works with one-time-code autofill, and explains to use a backup code or ask the owner if the phone is lost.
+- **Settings → Profile → "Two-step sign-in":**
+  - Set up: a QR code plus the key in groups of 4, then the code from the app.
+  - The backup codes come next, with Copy and Download.
+  - When it's on, the card shows since when and how many backup codes are left, with "New backup codes" and "Turn off" (each asks for the password).
+- **Settings → Staff:** a "Two-step" label on people who have it on. Owners get a reset button (shield) for others.
+
+### 44.15 Checked
+- **Unit tests:** new `tests/unit/totp.test.ts` (10):
+  - the RFC 6238 test values;
+  - base32;
+  - the ±1 step window, and a used step being refused;
+  - the otpauth link;
+  - backup codes.
+- **DB test:** new `tests/integration/staff-two-factor.db.test.ts` (7), sign-in through the DTO:
+  - off at first;
+  - the setup secret is kept encrypted;
+  - sign-in needs the code, and each code works once, the setup code included;
+  - a backup code works once however it's typed, and two sign-ins at once with one backup code let only one in;
+  - new backup codes need the password and replace the old ones;
+  - turning off needs the password and clears everything;
+  - only owners can reset, and not for themselves.
+- **Full suite:** API on `ecom_test`, 86 files passing.
+- **Typecheck:** API and admin pass.
+- **Lint:** no lint errors in the new files.
+- **In the browser** (admin on 3101), as the seeded owner, with codes worked out from the shown key by our own `totp.ts` (standing in for the phone):
+  - setup showed the QR code and key;
+  - "Turn on" gave 10 backup codes;
+  - the password alone then got `AUTH_2FA_REQUIRED`, and the code box appeared;
+  - signing in with a fresh code worked ("Login successful");
+  - Staff showed "Two-step" on the owner;
+  - "Turn off" refused a wrong password ("That password isn't right", still signed in), then turned off with the right one.
+  - Dev data is back to off.
+
+### 44.16 Not done
+- **Super admin:** the platform team's own sign-in (super admin) doesn't have two-step sign-in yet.
+- **Other sessions:** turning it on doesn't end sessions already signed in elsewhere. They carry on until they expire or the password changes.
+- **Store rule:** a store can't yet require two-step sign-in for all staff.

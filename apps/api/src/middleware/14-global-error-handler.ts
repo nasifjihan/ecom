@@ -126,6 +126,7 @@ export default function globalErrorHandler(
     data: null,
     message,
     errors: fields,
+    code,
   });
 
   if (debug && isDev && statusCode >= 500) {

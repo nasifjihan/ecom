@@ -48,6 +48,7 @@ import { adminOrderSmsRouter, adminSmsRouter, registerSmsListeners } from "./mod
 import { adminOrderWhatsappRouter, adminWhatsappRouter, registerWhatsappListeners, whatsappWebhookRouter } from "./modules/whatsapp";
 import { adminLoginSettingsRouter } from "./modules/auth/customer-login.routes";
 import { adminPreferencesRouter } from "./modules/admin-users/preferences";
+import { adminTwoFactorRouter } from "./modules/auth/staff-two-factor";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { docsRouter } from "./modules/docs";
@@ -97,7 +98,7 @@ export function buildApp(): Express {
   const app = express();
   // Prisma returns BigInt ids; JSON.stringify throws on BigInt, so emit them as strings.
   // Credential columns are dropped from every response, whichever query returned the row.
-  const SECRET_KEYS = new Set(["passwordHash", "twoFactorSecret"]);
+  const SECRET_KEYS = new Set(["passwordHash", "twoFactorSecret", "twoFactorBackupCodes"]);
   app.set("json replacer", (key: string, value: unknown) => {
     if (SECRET_KEYS.has(key)) return undefined;
     return typeof value === "bigint" ? value.toString() : value;
@@ -157,6 +158,7 @@ export function buildApp(): Express {
   app.use("/api/admin/roles", adminTeamRolesRouter);                // roles and their permissions
   app.use("/api/admin/staff", adminStaffRouter);                    // staff accounts
   app.use("/api/admin/me/preferences", adminPreferencesRouter);       // bookmarks, text size
+  app.use("/api/admin/me/two-factor", adminTwoFactorRouter);         // two-step sign-in
   app.use("/api/admin/audit-logs", adminAuditRouter);               // activity log
   app.use("/api/admin/products", adminProductsRouter);
   app.use("/api/admin/categories", adminCategoriesRouter);

@@ -54,6 +54,12 @@ adminStaffRouter.post(
   validate({ params: IdParam, body: ResetStaffPasswordDto }),
   send((r) => svc(r).resetStaffPassword(id(r), r.body as ResetStaffPasswordDto)),
 );
+adminStaffRouter.post(
+  "/:id/two-factor/reset",
+  rbacMiddleware("staff.edit"),
+  validate({ params: IdParam }),
+  send((r) => svc(r).resetStaffTwoFactor(id(r))),
+);
 
 export const adminAuditRouter = Router();
 adminAuditRouter.use(authMiddleware("adminOrSuper"));

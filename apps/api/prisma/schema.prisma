@@ -296,44 +296,50 @@ model PermissionAssignment {
 }
 
 model AdminUser {
-  id                 BigInt            @id @default(autoincrement())
-  storeId            BigInt
-  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email              String
-  passwordHash       String
-  name               String
-  phone              String?
-  avatarUrl          String?
-  roleId             BigInt
-  role               Role              @relation(fields: [roleId], references: [id])
-  status             String            @default("active")
+  id                   BigInt            @id @default(autoincrement())
+  storeId              BigInt
+  store                Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email                String
+  passwordHash         String
+  name                 String
+  phone                String?
+  avatarUrl            String?
+  roleId               BigInt
+  role                 Role              @relation(fields: [roleId], references: [id])
+  status               String            @default("active")
   /// Storefronts this staff member works on (empty: all): their orders, reports and storefront content.
-  storefrontIds      BigInt[]          @default([])
-  twoFactorSecret    String?
-  lastLoginAt        DateTime?
-  lastLoginIp        String?
-  auditLogs          AuditLog[]
-  orderStatusLogs    OrderStatusLog[]
-  ordersCreated      Order[]           @relation("OrderCreatedBy")
+  storefrontIds        BigInt[]          @default([])
+  /// Two-step sign-in (Batch 44): the TOTP secret, encrypted. Set while setting up; on only once twoFactorEnabledAt is set.
+  twoFactorSecret      String?
+  twoFactorEnabledAt   DateTime?
+  /// The last 30-second step a code was used for, so a code works once.
+  twoFactorLastStep    Int?
+  /// SHA-256 hashes of the unused one-time backup codes.
+  twoFactorBackupCodes String[]          @default([])
+  lastLoginAt          DateTime?
+  lastLoginIp          String?
+  auditLogs            AuditLog[]
+  orderStatusLogs      OrderStatusLog[]
+  ordersCreated        Order[]           @relation("OrderCreatedBy")
   /// Sales team (Batch 33): earns commission on the orders credited to them.
-  isSalesperson      Boolean           @default(false)
+  isSalesperson        Boolean           @default(false)
   /// Added to the product / category / store rate, in %.
-  commissionExtraPct Decimal           @default(0) @db.Decimal(5, 2)
+  commissionExtraPct   Decimal           @default(0) @db.Decimal(5, 2)
   /// For share links (?sp=CODE): online orders from the link are credited to them.
-  salesCode          String?
+  salesCode            String?
   /// The admin as this person likes it: { bookmarks: [{ href, label }], textSize: "sm" | "md" | "lg" }.
-  preferences        Json?
+  preferences          Json?
   /// Team alerts on WhatsApp to this person's mobile (for alerts with WhatsApp on).
-  whatsappAlerts     Boolean           @default(false)
-  ordersSold         Order[]           @relation("OrderSalesperson")
-  commissions        SalesCommission[]
-  salesTargets       SalesTarget[]
-  leadsOwned         Lead[]            @relation("LeadOwner")
-  notices            StaffNotice[]
-  refunds            Refund[]
-  authoredPosts      BlogPost[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  whatsappAlerts       Boolean           @default(false)
+  ordersSold           Order[]           @relation("OrderSalesperson")
+  commissions          SalesCommission[]
+  salesTargets         SalesTarget[]
+  leadsOwned           Lead[]            @relation("LeadOwner")
+  notices              StaffNotice[]
+  refunds              Refund[]
+  authoredPosts        BlogPost[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@unique([storeId, email])
   @@unique([storeId, salesCode])

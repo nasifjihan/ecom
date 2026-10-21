@@ -20,6 +20,7 @@ import {
 } from "../../core";
 import bcrypt from "bcryptjs";
 import { assertNotRevoked } from "./password-reset";
+import { checkSignInCode } from "./staff-two-factor";
 import type { RequestContext } from "../../core/base.repository";
 import type { TokenAudience, TokenPayload } from "../../config/jwt";
 import { UserType, AdminRole } from "@ecom/shared-types";
@@ -80,6 +81,7 @@ export class AuthService extends BaseService {
     if (row.status !== "active") {
       throw new UnauthorizedError("Account inactive", "AUTH_ACCOUNT_INACTIVE");
     }
+    await checkSignInCode(row, dto.code);
     const lastLoginIp = this.ctx.ip ?? "";
     await prisma.adminUser.update({
       where: { id: row.id },
