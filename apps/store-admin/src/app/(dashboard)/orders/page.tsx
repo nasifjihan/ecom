@@ -102,6 +102,8 @@ import { useExportJob } from "@/components/jobs/use-export-job";
 import { cn } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
 import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
+import { useGetStaffQuery } from "@/lib/features/team/team-api-slice";
+import { useGetZonesQuery } from "@/lib/features/shipping/shipping-api-slice";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -140,7 +142,24 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
     "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20",
 };
 
-const DATE_PRESETS = ["Today", "Yesterday", "7 days", "30 days", "Custom"];
+const DATE_PRESETS = ["All time", "Today", "Yesterday", "7 days", "30 days", "Custom"];
+
+/** A day (YYYY-MM-DD) in the shop's time zone, n days before today. */
+function dhakaDay(daysAgo = 0): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date(Date.now() - daysAgo * 86_400_000));
+}
+
+/** The first and last day a date preset covers (both optional). */
+function presetDays(preset: string, from: string, to: string): { from?: string; to?: string } {
+  switch (preset) {
+    case "Today": return { from: dhakaDay(), to: dhakaDay() };
+    case "Yesterday": return { from: dhakaDay(1), to: dhakaDay(1) };
+    case "7 days": return { from: dhakaDay(6) };
+    case "30 days": return { from: dhakaDay(29) };
+    case "Custom": return { from: from || undefined, to: to || undefined };
+    default: return {};
+  }
+}
 
 function getAvatarColor(name: string) {
   const colors = [
@@ -185,7 +204,7 @@ function formatCurrency(n: number) {
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
-  const [datePreset, setDatePreset] = useState<string>("30 days");
+  const [datePreset, setDatePreset] = useState<string>("All time");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -210,11 +229,33 @@ export default function OrdersPage() {
   const { can } = useCan();
   const exportJob = useExportJob();
 
-  const { data, isLoading } = useGetOrderListQuery({
+  const { data: staff = [] } = useGetStaffQuery(undefined, { skip: !can("staff.view") });
+  const { data: zones = [] } = useGetZonesQuery(undefined, { skip: !can("shipping.view") });
+
+  // Back to the first page whenever a filter changes.
+  useEffect(() => {
+    setPage(1);
+  }, [datePreset, customDateFrom, customDateTo, filterPaymentMethod, filterMinTotal, filterMaxTotal, filterStaff, filterCoupon, filterShippingZone]);
+
+  // The same filters go to the list and to the export.
+  const days = presetDays(datePreset, customDateFrom, customDateTo);
+  const filters = {
     status: activeTab === "ALL" ? undefined : activeTab,
     search: search || undefined,
     source: filterSource || undefined,
     storefrontId: filterStorefront || undefined,
+    minTotal: filterMinTotal === "" ? undefined : Number(filterMinTotal),
+    maxTotal: filterMaxTotal === "" ? undefined : Number(filterMaxTotal),
+    paymentGateway: filterPaymentMethod || undefined,
+    hasCoupon: filterCoupon ? true : undefined,
+    createdByAdminId: filterStaff || undefined,
+    shippingZoneId: filterShippingZone || undefined,
+  };
+  const { data, isLoading } = useGetOrderListQuery({
+    ...filters,
+    // Whole days in the shop's time zone (Asia/Dhaka, UTC+6).
+    dateFrom: days.from ? `${days.from}T00:00:00+06:00` : undefined,
+    dateTo: days.to ? `${days.to}T23:59:59.999+06:00` : undefined,
     page,
     limit: 20,
   });
@@ -479,9 +520,12 @@ export default function OrdersPage() {
     setRowSelection({});
   }
 
-  /** Orders export in the background, with the tab and search shown here (and the staff member's storefronts). */
+  /** Orders export in the background, with the tab, search and filters shown here (and the staff member's storefronts). */
   function handleBulkExport(format: "csv" | "xlsx") {
-    void exportJob.run("export_orders", format, { ...(activeTab === "ALL" ? {} : { status: activeTab }), ...(search ? { search } : {}) });
+    const set = Object.fromEntries(
+      Object.entries({ ...filters, dateFrom: days.from, dateTo: days.to }).filter(([, v]) => v !== undefined),
+    );
+    void exportJob.run("export_orders", format, set);
   }
 
   /** One PDF with the invoices of every selected order, one after another. */
@@ -708,7 +752,7 @@ export default function OrdersPage() {
                 <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
                   <SelectItem value="">All</SelectItem>
                   {Object.entries(PAYMENT_METHOD_META).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                    <SelectItem key={k} value={k.toLowerCase()}>{v.label}</SelectItem>
                   ))}
                 </Select>
               </div>
@@ -732,28 +776,32 @@ export default function OrdersPage() {
                   />
                 </div>
               </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">Assigned to Staff</Label>
-                <Select value={filterStaff} onValueChange={setFilterStaff}>
-                  <SelectItem value="">Any</SelectItem>
-                  <SelectItem value="1">Admin User</SelectItem>
-                  <SelectItem value="2">Staff Member A</SelectItem>
-                  <SelectItem value="3">Staff Member B</SelectItem>
-                </Select>
-              </div>
+              {staff.length > 0 && (
+                <div>
+                  <Label className="text-xs mb-1.5 block">Made by staff</Label>
+                  <Select value={filterStaff} onValueChange={setFilterStaff}>
+                    <SelectItem value="">Anyone</SelectItem>
+                    {staff.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </Select>
+                </div>
+              )}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 h-10">
                   <Checkbox checked={filterCoupon} onCheckedChange={setFilterCoupon} />
                   <Label className="text-sm cursor-pointer">Has coupon applied</Label>
                 </div>
               </div>
+              {zones.length > 0 && (
               <div className="md:col-span-2 lg:col-span-4">
                 <Label className="text-xs mb-1.5 block">Shipping Zone</Label>
                 <div className="flex flex-wrap gap-2">
-                  {(["DHAKA_METRO", "REST_BD", "INTERNATIONAL"] as ShippingZone[]).map((z) => (
+                  {zones.map(({ id: z, name }) => (
                     <button
                       key={z}
                       type="button"
+                      aria-pressed={filterShippingZone === z}
                       onClick={() => setFilterShippingZone(filterShippingZone === z ? "" : z)}
                       className={cn(
                         "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
@@ -762,11 +810,12 @@ export default function OrdersPage() {
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800",
                       )}
                     >
-                      {z.replace(/_/g, " ")}
+                      {name}
                     </button>
                   ))}
                 </div>
               </div>
+              )}
             </motion.div>
           )}
 

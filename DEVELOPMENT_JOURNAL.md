@@ -5439,6 +5439,63 @@ Each has the usual bell, email, SMS and "who gets it" settings (owners when nobo
 
 ---
 
+## ✅ BATCH #44 (part 1) — Admin fixes (2026-10-21)
+Fixes for rough edges in the store admin: the blank page after the session refreshes, a broken settings link, the orders filters that did nothing, and the Taxes page that only said "coming soon".
+
+### 44.1 Blank page after the session refresh (`packages/api-client`)
+- **Cause:** the refresh-on-401 skipped every `/auth/` URL, so when the access token expired, the "who am I" call (`/auth/me/admin`) answered 401 and was never retried. Any page waiting on it stayed blank.
+- **Fix:** `refreshesOn401(url)` refreshes for every call except sign-in calls (login, refresh, codes, OAuth finish), which answer 401 for a wrong password or code. `/auth/me/…` refreshes and retries like any other call.
+- **Test:** new `packages/api-client/tests/refresh.test.ts` (10 cases).
+
+### 44.2 Store Settings link
+- The header's "Store Settings" went to `/settings/store`, which doesn't exist. It now goes to `/settings/general`.
+
+### 44.3 Orders filters
+- **Dates:** the date button now filters. The choices are All time (the new default), Today, Yesterday, 7 days, 30 days and Custom, all as whole days in Dhaka time.
+- **Filters panel:** every option now filters too:
+  - payment method;
+  - min/max total;
+  - made by staff, from the real staff list (shown to those who may see staff);
+  - has a coupon;
+  - shipping zone, from the shop's real zones (it used to show three made-up zones).
+- **API:**
+  - new query fields `paymentGateway`, `hasCoupon`, `createdByAdminId` and `shippingZoneId` on `GET /admin/orders`;
+  - one shared `orderExtraWhere` (`orders/order-filters.ts`), used by both the order list and the orders export.
+- **Export:** the orders export now uses every filter on screen: tab, search, dates, storefront, source and the panel options.
+- **Paging:** changing a filter goes back to page 1.
+- **Test:** new `tests/unit/order-filters.test.ts` (4).
+
+### 44.4 Shipping → Taxes
+- **The page:** it lists the VAT/tax rates that checkout adds when the address matches. You can add, edit and delete rates: name, %, tax class, country (or `*` for every country), optional division, district and postcode, and compound. Buttons follow `taxes.create`, `taxes.edit` and `taxes.delete`. It links to Settings → VAT & invoices for "prices include VAT".
+- **API fixes:**
+  - new `GET /admin/shipping/tax-classes`, which lists the store's classes for the form;
+  - creating or moving a rate now refuses another store's tax class (before, any class id was accepted);
+  - the list is filtered by store in the query, so its total and pages are right (before, it filtered after paging);
+  - the country may be `*`, as the seeded "Export Exempt" rate already was (the form couldn't save it before).
+
+### 44.5 Storefront cache note
+- The Homepage and Sliders editors now say that saved changes show on the store within a minute. The storefront caches pages for 60 s.
+
+### 44.6 Checked
+- **Typecheck:** API and admin pass.
+- **Lint:** no new lint errors in the files touched.
+- **Tests:** api-client refresh tests, order filter tests and the shipping smoke tests (22) pass.
+- **Full suite:**
+  - API on `ecom_test`: 909 passed in 83 files.
+  - `online-payments.db.test.ts` timed out in setup while the admin was compiling at the same time. Run alone, all 10 of its tests pass.
+- **In the browser** (the admin ran on port 3011, because another project's Docker containers held 3000/3001; this needed a temporary `localhost:3011` admin domain row, removed afterwards):
+  - **Blank page:** with an invalid access token, `/auth/me/admin` got 401, then refresh, then 200, and the orders page loaded.
+  - **Dates:** "7 days" sent `dateFrom=2026-10-15T00:00:00+06:00`.
+  - **Filters:** COD plus the Dhaka Metro zone sent `paymentGateway=cod&shippingZoneId=1` and showed 1 order, the same as the database count.
+  - **Export:** CSV export job #3 had the same filters and 1 row.
+  - **Taxes:** the page listed the seeded VAT 15% (BD) and Export Exempt 0% (every country). A test rate "Test levy 1.5%" for BD · Dhaka saved. Checkout tax on ৳1,000 was ৳165 for Dhaka and ৳150 for Sylhet. The rate was then deleted.
+
+### 44.7 Not done
+- **Dev ports:** the other project's containers on ports 3000/3001 were left alone. Fixed in the next entry: ecom moved to 3100–3102.
+- **Tax classes:** rates still apply to every product whatever its tax class, as before. Per-product classes at checkout are not part of this batch.
+
+---
+
 ## ✅ Dev ports 3100–3102 (2026-10-21)
 Another project on this machine (mbw-erp) uses host ports 3000 and 3001 in Docker. The ecom web apps moved so both can run at once:
 

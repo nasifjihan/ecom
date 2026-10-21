@@ -188,11 +188,14 @@ export interface OrderListFilters {
   customerId?: string | number;
   dateFrom?: string;
   dateTo?: string;
-  paymentMethod?: PaymentMethod;
   minTotal?: number;
   maxTotal?: number;
-  coupon?: boolean;
-  shippingZone?: ShippingZone;
+  /** Payment gateway code: cod, bkash, ... */
+  paymentGateway?: string;
+  hasCoupon?: boolean;
+  /** Staff member who made the order by hand. */
+  createdByAdminId?: string;
+  shippingZoneId?: string;
   search?: string;
   source?: string;
   storefrontId?: string;
@@ -782,6 +785,10 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.source) params.set("source", filters.source);
         if (filters.storefrontId) params.set("storefrontId", filters.storefrontId);
         if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
+        if (filters.paymentGateway) params.set("paymentGateway", filters.paymentGateway);
+        if (filters.hasCoupon !== undefined) params.set("hasCoupon", String(filters.hasCoupon));
+        if (filters.createdByAdminId) params.set("createdByAdminId", filters.createdByAdminId);
+        if (filters.shippingZoneId) params.set("shippingZoneId", filters.shippingZoneId);
         params.set("page", String(filters.page ?? 1));
         params.set("perPage", String(filters.limit ?? 20));
         const [list, stats] = await Promise.all([

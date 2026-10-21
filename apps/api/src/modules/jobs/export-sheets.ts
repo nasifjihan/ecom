@@ -8,7 +8,8 @@ import type { Prisma } from "@prisma/client"
 import { attachmentHeader, formatTimestampFilename, generateCsv, generateXlsx, type ExportColumn } from "@ecom/export-utils"
 import { prisma } from "../../config"
 import type { RequestContext } from "../../core"
-import { staffOrderScope } from "../storefronts/storefronts.context"
+import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context"
+import { orderExtraWhere, type OrderExtraFilters } from "../orders/order-filters"
 
 export type SheetFormat = "csv" | "xlsx"
 type Row = Record<string, string | number>
@@ -32,7 +33,11 @@ export async function toFile(format: SheetFormat, base: string, sheet: string, c
 
 // ------------------------------------------------------------------ orders
 
-export interface OrderExportFilters {
+export interface OrderExportFilters extends Omit<OrderExtraFilters, "createdByAdminId" | "shippingZoneId"> {
+  createdByAdminId?: string
+  shippingZoneId?: string
+  storefrontId?: string
+  source?: string
   status?: string[]
   dateFrom?: string
   dateTo?: string
@@ -62,9 +67,18 @@ export const ORDER_COLUMNS: ExportColumn<Row>[] = [
 
 export function orderWhere(ctx: RequestContext, f: OrderExportFilters): Prisma.OrderWhereInput {
   const search = f.search?.trim()
+  const allowed = staffStorefronts(ctx)
+  const front = f.storefrontId ? BigInt(f.storefrontId) : undefined
   return {
     storeId: ctx.storeId!,
     ...staffOrderScope(ctx),
+    ...(front !== undefined ? { storefrontId: allowed && !allowed.includes(front) ? { in: [] } : front } : {}),
+    ...(f.source ? { source: { in: f.source.split(",") } } : {}),
+    ...orderExtraWhere({
+      ...f,
+      createdByAdminId: f.createdByAdminId ? BigInt(f.createdByAdminId) : undefined,
+      shippingZoneId: f.shippingZoneId ? BigInt(f.shippingZoneId) : undefined,
+    }),
     ...(f.status?.length ? { status: { in: f.status as never[] } } : {}),
     ...(f.dateFrom || f.dateTo
       ? { createdAt: { ...(f.dateFrom ? { gte: new Date(`${f.dateFrom}T00:00:00+06:00`) } : {}), ...(f.dateTo ? { lte: new Date(`${f.dateTo}T23:59:59.999+06:00`) } : {}) } }

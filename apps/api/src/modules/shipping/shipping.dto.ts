@@ -119,7 +119,8 @@ export type ShippingRatesQueryDto = z.infer<typeof ShippingRatesQueryDto>;
 
 const BaseTaxRateDtoPlain = z.object({
   taxClassId: z.coerce.bigint(),
-  countryCode: z.string().length(2).toUpperCase(),
+  /** Two-letter country code, or "*" for every country. */
+  countryCode: z.string().regex(/^([A-Za-z]{2}|\*)$/, "Use a two-letter country code or *").toUpperCase(),
   state: z.string().max(64).optional(),
   city: z.string().max(64).optional(),
   postcode: z.string().max(12).optional(),

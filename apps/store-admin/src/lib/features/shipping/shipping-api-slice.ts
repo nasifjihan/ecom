@@ -135,6 +135,34 @@ export const parseCostRules = (v: ShippingMethod["costRules"]): CostRules => {
   return v;
 };
 
+/** A VAT/tax rate added at checkout when the delivery address matches (API: /admin/shipping/tax-rates). */
+export interface TaxRate {
+  id: string;
+  taxClassId: string;
+  taxClass?: { name: string };
+  /** Two-letter country code, or "*" for every country. */
+  countryCode: string;
+  state: string | null;
+  city: string | null;
+  postcode: string | null;
+  rate: number;
+  name: string;
+  compound: boolean;
+  priority: number;
+}
+export interface TaxRateInput {
+  taxClassId: string;
+  countryCode: string;
+  state?: string;
+  city?: string;
+  postcode?: string;
+  rate: number;
+  name: string;
+  compound: boolean;
+  priority: number;
+}
+const TAXES = { type: "Store" as const, id: "TAX_RATES" };
+
 export const shippingApi = api.injectEndpoints({
   endpoints: (b) => ({
     getLocations: b.query<AdminLocation[], void>({
@@ -210,6 +238,28 @@ export const shippingApi = api.injectEndpoints({
       query: (id) => ({ url: `/admin/shipping/slots/${id}`, method: "DELETE" }),
       invalidatesTags: ["DeliverySlot"],
     }),
+    getTaxRates: b.query<TaxRate[], void>({
+      query: () => ({ url: "/admin/shipping/tax-rates", params: { perPage: 100 } }),
+      transformResponse: (data: { rows: (Omit<TaxRate, "rate"> & { rate: string | number })[] }) =>
+        data.rows.map((r) => ({ ...r, rate: Number(r.rate) })),
+      providesTags: [TAXES],
+    }),
+    getTaxClasses: b.query<{ id: string; name: string }[], void>({
+      query: () => "/admin/shipping/tax-classes",
+      providesTags: [TAXES],
+    }),
+    createTaxRate: b.mutation<unknown, TaxRateInput>({
+      query: (body) => ({ url: "/admin/shipping/tax-rates", method: "POST", body }),
+      invalidatesTags: [TAXES],
+    }),
+    updateTaxRate: b.mutation<unknown, { id: string } & TaxRateInput>({
+      query: ({ id, ...body }) => ({ url: `/admin/shipping/tax-rates/${id}`, method: "PUT", body }),
+      invalidatesTags: [TAXES],
+    }),
+    deleteTaxRate: b.mutation<unknown, string>({
+      query: (id) => ({ url: `/admin/shipping/tax-rates/${id}`, method: "DELETE" }),
+      invalidatesTags: [TAXES],
+    }),
     saveSlotSettings: b.mutation<SlotSettings, { daysAhead: number; closedDates: string[] }>({
       query: (body) => ({ url: "/admin/shipping/slots/settings", method: "PUT", body }),
       invalidatesTags: ["DeliverySlot"],
@@ -233,4 +283,9 @@ export const {
   useUpdateDeliverySlotMutation,
   useDeleteDeliverySlotMutation,
   useSaveSlotSettingsMutation,
+  useGetTaxRatesQuery,
+  useGetTaxClassesQuery,
+  useCreateTaxRateMutation,
+  useUpdateTaxRateMutation,
+  useDeleteTaxRateMutation,
 } = shippingApi;

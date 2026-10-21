@@ -2,6 +2,7 @@ import { BaseRepository, type RequestContext, ConflictError, NotFoundError } fro
 import { staffOrderScope, staffStorefronts } from "../storefronts/storefronts.context";
 import { prisma } from "../../config/prisma";
 import type { OrderSearchQueryDto } from "./orders.dto";
+import { orderExtraWhere } from "./order-filters";
 import type { Paginated } from "../../core/pagination";
 import { paginate } from "../../core/pagination";
 
@@ -101,12 +102,7 @@ export class OrderRepository extends BaseRepository<"order"> {
     }
     if (filters.dateFrom) where.createdAt = { ...(where.createdAt as object || {}), gte: filters.dateFrom };
     if (filters.dateTo) where.createdAt = { ...(where.createdAt as object || {}), lte: filters.dateTo };
-    if (filters.minTotal !== undefined) {
-      where.grandTotal = { ...(where.grandTotal as object || {}), gte: filters.minTotal };
-    }
-    if (filters.maxTotal !== undefined) {
-      where.grandTotal = { ...(where.grandTotal as object || {}), lte: filters.maxTotal };
-    }
+    Object.assign(where, orderExtraWhere(filters));
     if (filters.customerId) where.customerId = BigInt(filters.customerId);
     if (filters.source && filters.source.length > 0) where.source = { in: filters.source };
     // Staff limited to some storefronts only see those storefronts' orders.
