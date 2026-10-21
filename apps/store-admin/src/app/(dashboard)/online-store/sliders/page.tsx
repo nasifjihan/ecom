@@ -120,7 +120,7 @@ export default function SlidersPage() {
       <PageTitle
         icon={GalleryHorizontal}
         title="Sliders"
-        description="Banners you can use in hero blocks on the homepage, pages and landing pages. Edit one here and every page using it changes."
+        description="Banners you can use in hero blocks on the homepage, pages and landing pages. Edit one here and every page using it changes, within a minute of saving."
         actions={
           canEdit ? (
             <Button

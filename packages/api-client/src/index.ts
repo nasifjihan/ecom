@@ -80,6 +80,18 @@ const rawBaseQuery = fetchBaseQuery({
 });
 
 /**
+ * Whether a 401 on this URL means "the session expired" (refresh and retry) rather than "wrong
+ * credentials". Sign-in calls answer 401 for a bad password or code and must never refresh;
+ * "who am I" (/auth/me/…) is an ordinary signed-in call and must, or a page waiting on it after
+ * the access token expires stays blank.
+ */
+export function refreshesOn401(url: string): boolean {
+  const path = url.split("?")[0] ?? url;
+  if (!path.startsWith("/auth/")) return true;
+  return path.startsWith("/auth/me");
+}
+
+/**
  * Wrapper that unwraps the ApiEnvelope OR surfaces the structured error.
  * RTK Query expects `{ data }` for success / `{ error }` for failure.
  * The actual RTK data will be `envelope.data` (the typed payload).
@@ -93,8 +105,7 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
 
   // Access tokens are short-lived: on 401, refresh once via the httpOnly cookie and retry.
   const url = typeof args === "string" ? args : args.url;
-  // Auth calls (login, register, refresh) answer 401 for bad credentials: never refresh on those.
-  if (res.error?.status === 401 && refreshOpts && !url.startsWith("/auth/")) {
+  if (res.error?.status === 401 && refreshOpts && refreshesOn401(url)) {
     const opts = refreshOpts;
     refreshInFlight ??= (async () => {
       const r = await rawBaseQuery({ url: opts.path, method: "POST", body: {} }, api, extraOptions);

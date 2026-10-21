@@ -29,6 +29,15 @@ const ExportDto = z.object({
       dateFrom: day,
       dateTo: day,
       search: z.string().trim().max(100).optional(),
+      // Orders page filters (see orders/order-filters.ts).
+      minTotal: z.number().nonnegative().optional(),
+      maxTotal: z.number().nonnegative().optional(),
+      paymentGateway: z.string().max(40).optional(),
+      hasCoupon: z.boolean().optional(),
+      createdByAdminId: z.string().regex(/^\d+$/).optional(),
+      shippingZoneId: z.string().regex(/^\d+$/).optional(),
+      storefrontId: z.string().regex(/^\d+$/).optional(),
+      source: z.string().max(200).optional(),
       groupId: z.string().regex(/^\d+$/).optional(),
       acceptMarketing: z.boolean().optional(),
     })

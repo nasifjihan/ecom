@@ -51,7 +51,7 @@ These are our advantages. Keep them.
 ### Orders & fulfilment (reference 11, 06, 07.10)
 | Feature | Status | Note |
 |---|---|---|
-| Order list, detail, status change, invoice, email | ✅ | |
+| Order list, detail, status change, invoice, email | ✅ | Batch 44: filters by date, payment method, total, staff, coupon and zone; the export uses the same filters |
 | **Four separate statuses** (order / payment / shipment / return), each logged | ✅ | Batch 20: order status, payment status, fulfilment status (from parcels) and return status, each with its own history |
 | Manual order by staff (`/orders/new`), discount capped by role | ✅ | Batch 19 |
 | Order source (website / Facebook / WhatsApp / phone / walk-in) | ✅ | Batch 19: stored per order, filter on the list |
@@ -168,7 +168,7 @@ These are our advantages. Keep them.
 | **Custom role editor** (area × view/create/edit/delete grid), max manual discount % | ✅ | Batch 25 |
 | Staff on some sites only | ✅ | Batch 32: staff can be limited to some storefronts (their orders, parcels, returns, payments, reports and storefront content) |
 | Notification rules matrix (event × email/SMS/in-app/WhatsApp) | ✅ | Batch 37: Settings → Notifications, customer messages × email/SMS and team alerts × bell/email/SMS with who gets them. Batch 42: WhatsApp for customers (Cloud API templates, opt-in, delivery log) and for staff who opt in; new alerts: review to approve, product question, courier problem (failed, returned, no update for 3 days), online payment to check |
-| VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out |
+| VAT: prices VAT-inclusive, rate kept per order, VAT report | ✅ | Batch 35: "Prices include VAT" switch; each order keeps its rate; reports take the VAT out; Batch 44: Shipping → Taxes edits the rates (country, area, compound) |
 | Company & legal details (BIN, trade licence) on invoices | ✅ | Batch 35: registered name, BIN and trade licence from Store details |
 | Admin UX: menu search, bookmarked items, dark mode, text size, global scope switcher | 🟡 | Batch 39: search (Ctrl+K) across the pages you may open and orders, customers, products, with recent searches; dark mode was already there. Batch 43: bookmarks (header ☆, sidebar, search) and text size, saved per person. No scope switcher |
 

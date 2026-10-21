@@ -83,6 +83,10 @@ export class ShippingController extends BaseController {
     envelope(res, { status: 200, data });
   });
 
+  taxClasses = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 200, data: await this.svc(req.ctx).taxClasses(req.ctx) });
+  });
+
   createTax = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const data = await this.svc(req.ctx).createTax(req.ctx, req.body as any);
     envelope(res, { status: 201, data });
@@ -192,6 +196,12 @@ adminShippingRouter.get(
   rbacMiddleware("taxes.view"),
   validate({ query: TaxRateSearchDto }),
   shippingController.listTaxes,
+);
+adminShippingRouter.get(
+  "/tax-classes",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("taxes.view"),
+  shippingController.taxClasses,
 );
 adminShippingRouter.post(
   "/tax-rates",

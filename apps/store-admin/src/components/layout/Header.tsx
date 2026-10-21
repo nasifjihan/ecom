@@ -190,7 +190,7 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link
-                href="/settings/store"
+                href="/settings/general"
                 className="flex items-center gap-3 cursor-pointer"
               >
                 <Building2 className="h-4 w-4" />

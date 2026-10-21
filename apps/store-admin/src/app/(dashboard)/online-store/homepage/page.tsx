@@ -53,7 +53,7 @@ export default function HomepageEditorPage() {
       <PageTitle
         icon={Home}
         title="Homepage"
-        description="Drag blocks to reorder them, switch them on or off, and click one to edit what it says."
+        description="Drag blocks to reorder them, switch them on or off, and click one to edit what it says. Saved changes show on the store within a minute."
         actions={
           <>
             <Button variant="outline" asChild>

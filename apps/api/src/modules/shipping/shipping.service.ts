@@ -35,6 +35,7 @@ export class ShippingService {
   bulkImport(ctx: RequestContext, d: BulkImportMethodsDto) { return this.methods.bulkImport(ctx, d); }
 
   listTaxes(ctx: RequestContext, q: any) { return this.taxes.list(ctx, q); }
+  taxClasses(ctx: RequestContext) { return this.taxes.classes(ctx); }
   createTax(ctx: RequestContext, d: CreateTaxRateDto) { return this.taxes.create(ctx, d); }
   updateTax(ctx: RequestContext, id: bigint, d: UpdateTaxRateDto) { return this.taxes.update(ctx, id, d); }
   deleteTax(ctx: RequestContext, id: bigint) { return this.taxes.delete(ctx, id); }

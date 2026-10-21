@@ -53,6 +53,13 @@ const BaseOrderSearchQueryDto = PaginationSchema.extend({
   source: csvArray(z.string().max(20)).optional(),
   /** Orders placed on one storefront. */
   storefrontId: z.coerce.bigint().positive().optional(),
+  /** Payment gateway code: cod, bkash, ... */
+  paymentGateway: z.string().max(40).optional(),
+  /** "true" = only orders with a coupon, "false" = only without. */
+  hasCoupon: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  /** Staff member who made the order by hand. */
+  createdByAdminId: z.coerce.bigint().positive().optional(),
+  shippingZoneId: z.coerce.bigint().positive().optional(),
 });
 
 export const OrderSearchQueryDto = BaseOrderSearchQueryDto.superRefine((v, ctx) => {

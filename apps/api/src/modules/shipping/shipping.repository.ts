@@ -231,7 +231,26 @@ export class TaxRateRepository {
   get model() { return prisma.taxRate as any; }
   private scope(ctx: RequestContext, extra: Record<string, any> = {}) {
     const where: any = { ...extra };
+    if (ctx.storeId !== undefined) where.taxClass = { storeId: ctx.storeId };
     return where;
+  }
+
+  /** The store's tax classes, for the tax rate form. */
+  classes(ctx: RequestContext) {
+    return prisma.taxClass.findMany({
+      where: ctx.storeId !== undefined ? { storeId: ctx.storeId } : {},
+      select: { id: true, name: true },
+      orderBy: { id: "asc" },
+    });
+  }
+
+  /** Refuses a tax class of another store. */
+  private async assertClass(ctx: RequestContext, taxClassId: bigint) {
+    const found = await prisma.taxClass.findFirst({
+      where: { id: taxClassId, ...(ctx.storeId !== undefined ? { storeId: ctx.storeId } : {}) },
+      select: { id: true },
+    });
+    if (!found) throw new BadRequestError("Pick one of this store's tax classes", "VALIDATION_FAILED");
   }
 
   async list(ctx: RequestContext, q: { page?: number; perPage?: number; taxClassId?: bigint; countryCode?: string }) {
@@ -248,8 +267,7 @@ export class TaxRateRepository {
       }),
       this.model.count({ where }),
     ]);
-    const filtered = ctx.storeId === undefined ? rows : rows.filter((r: any) => r.taxClass?.storeId === undefined || r.taxClass.storeId === ctx.storeId);
-    return { rows: filtered, total: filtered.length, page, perPage };
+    return { rows, total, page, perPage };
   }
 
   async get(ctx: RequestContext, id: bigint) {
@@ -261,12 +279,14 @@ export class TaxRateRepository {
     return row;
   }
 
-  async create(_ctx: RequestContext, dto: any) {
+  async create(ctx: RequestContext, dto: any) {
+    await this.assertClass(ctx, BigInt(dto.taxClassId));
     return this.model.create({ data: dto });
   }
 
   async update(ctx: RequestContext, id: bigint, dto: any) {
     await this.get(ctx, id);
+    if (dto.taxClassId !== undefined) await this.assertClass(ctx, BigInt(dto.taxClassId));
     return this.model.update({ where: { id }, data: dto });
   }
 
