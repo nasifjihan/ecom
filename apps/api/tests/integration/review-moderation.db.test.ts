@@ -117,6 +117,14 @@ describe.skipIf(!runDb)("review moderation (Postgres)", () => {
     expect(r.replyAt).toBeNull()
   })
 
+  it("counts the reviews in every tab, and follows each action", async () => {
+    // By now: review 0 was deleted from the trash, 1 is approved, 2 is pending.
+    expect(await svc().reviewCounts()).toEqual({ pending: 1, approved: 1, spam: 0, trashed: 0 })
+    await moderate({ ids: [String(ids[2])], action: "trash" })
+    expect(await svc().reviewCounts()).toEqual({ pending: 0, approved: 1, spam: 0, trashed: 1 })
+    await moderate({ ids: [String(ids[2])], action: "restore" })
+  })
+
   it("doesn't touch another store's reviews", async () => {
     const other = await prisma.store.create({ data: { name: "Other", slug: `other-${suffix}` } })
     try {

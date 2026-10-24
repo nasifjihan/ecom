@@ -516,13 +516,9 @@ export class StorefrontService {
       date: r.createdAt.toISOString(),
       reply: r.replyBody ? { body: r.replyBody, date: (r.replyAt ?? r.updatedAt).toISOString() } : null,
     }));
-    // Denormalised averageRating/reviewCount are not maintained yet, so fall back to the approved reviews.
-    const rating = summary.rating || (reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0);
-
+    // averageRating/reviewCount follow every approved review (refreshProductRating), not just the 20 shown.
     return {
       ...summary,
-      rating: round2(rating),
-      reviewCount: summary.reviewCount || reviews.length,
       description: tr(p, this.locale, "description") ?? undefined,
       breadcrumbs: [parent, primary?.category]
         .filter((c): c is NonNullable<typeof parent> => Boolean(c))

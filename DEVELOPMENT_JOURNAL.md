@@ -5751,3 +5751,32 @@ Products and delivery options can now have a tax class (e.g. Reduced or Exempt),
 - **New product form:** it has no Tax class field. New products use the default class until edited.
 - **Classes can't be deleted:** deleting one would also delete its rates.
 - **Gift box lines:** the checkout preview's lines leave out gift box lines; the order itself counts them.
+
+---
+
+## ✅ BATCH #45 (part 3) — Review accuracy: seeded stars and real tab counts (2026-10-24)
+This finishes Batch 45.
+
+### 45.11 Star ratings everywhere
+- **Seed:** after creating reviews, the seed counts each product's stars and review count from its approved reviews. Before, seeded products showed 0★ in lists until one of their reviews was moderated.
+- **Script:** new `pnpm --filter @ecom/api ratings:refresh` recounts every product with `refreshProductRating`, for data from before Batch 44 or added straight to the database.
+  - Run on the dev database: 13 products recounted, 11 with approved reviews (e.g. the Aarong embroidered panjabi: 4.5★ from 4).
+- **Product page:** no longer averages "the 20 reviews shown" when the stored numbers were 0. The stored numbers are kept right now, and they cover every approved review.
+
+### 45.12 Real counts on the review tabs
+- **API:** new `GET /admin/marketing/reviews/counts` → `{ pending, approved, spam, trashed }` for the store (`reviews.view`).
+- **Admin tabs:** each tab's badge is the real number for that status. Before, it counted only the reviews loaded in the open tab, so the other tabs showed nothing.
+- **Refresh:** the counts update after every moderation action (same cache tag as the list).
+
+### 45.13 Checked
+- **DB test:** `review-moderation.db.test.ts` gains a counts test (6 tests): pending 1 / approved 1, then trash moves one to trashed, then restore.
+- **Flaky test fixed:** in `two-factor.db.test.ts`, "each code works once" sometimes failed when a 30-second step boundary passed between setup and the check. It now uses the stored step, not "now".
+- **Full suite:** API on `ecom_test`, 89 files passing.
+- **Typecheck:** API and admin pass.
+- **Lint:** no new lint errors.
+- **In the browser:**
+  - Marketing → Reviews showed "Pending Approval 9" and "Approved 20", the database's numbers, both at once.
+  - The storefront API gave the Aarong embroidered panjabi 4.5★ from 4 reviews, on its page and in the product list (the list showed 0 before the recount).
+
+### 45.14 Not done
+- **Spam and trash badges:** a tab with 0 shows no badge, as before.

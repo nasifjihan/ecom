@@ -132,6 +132,14 @@ marketingReviewsRouter.post(
   marketingController.moderateReviews,
 );
 
+// How many reviews are in each tab (pending, approved, spam, trashed).
+marketingReviewsRouter.get(
+  "/counts",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("reviews.view"),
+  marketingController.reviewCounts,
+);
+
 marketingReviewsRouter.get(
   "/:id",
   authMiddleware("adminOrSuper"),

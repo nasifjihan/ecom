@@ -90,11 +90,12 @@ describe.skipIf(!runDb)("two-step sign-in (Postgres)", () => {
   it("then sign-in needs the code, and each code works once", async () => {
     expect(await fails(login())).toBe("AUTH_2FA_REQUIRED")
     expect(await fails(login("123456"))).toBe("AUTH_2FA_INVALID")
-    // The setup code was already used.
-    expect(await fails(login(codeOf(secret)))).toBe("AUTH_2FA_INVALID")
-    // The next step's code (a phone clock a little ahead) works once.
-    expect((await login(codeOf(secret, 1))).user.id).toBe(staff)
-    expect(await fails(login(codeOf(secret, 1)))).toBe("AUTH_2FA_INVALID")
+    // The setup code was already used (its step is stored; "now" may have moved to the next step).
+    const used = (await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })).twoFactorLastStep!
+    expect(await fails(login(totpCode(secret, used)))).toBe("AUTH_2FA_INVALID")
+    // The step after it (now, or a phone clock a little ahead) works once.
+    expect((await login(totpCode(secret, used + 1))).user.id).toBe(staff)
+    expect(await fails(login(totpCode(secret, used + 1)))).toBe("AUTH_2FA_INVALID")
   })
 
   it("a backup code works once, however it's typed", async () => {

@@ -121,6 +121,10 @@ class MarketingController extends BaseController {
     envelope(res, { status: 200, data: result });
   });
 
+  reviewCounts = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 200, data: await this.getService(req.ctx).reviewCounts() });
+  });
+
   moderateReviews = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const svc = this.getService(req.ctx);
     const dto = req.body as ReviewModerateDtoType;

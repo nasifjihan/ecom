@@ -526,6 +526,11 @@ export const marketingApiSlice = api.injectEndpoints({
             ]
           : [{ type: "Review", id: "LIST" }],
     }),
+    /** How many reviews are in each tab; refreshed by every moderation action (LIST tag). */
+    getReviewCounts: builder.query<Record<ReviewStatus, number>, void>({
+      query: () => "/admin/marketing/reviews/counts",
+      providesTags: [{ type: "Review", id: "LIST" }],
+    }),
     getReview: builder.query<Review, string | number>({
       query: (id) => ({
         url: `/admin/marketing/reviews/${id}`,
@@ -564,5 +569,6 @@ export const {
   useStopFlashSaleMutation,
   useGetReviewsQuery,
   useGetReviewQuery,
+  useGetReviewCountsQuery,
   useModerateReviewsMutation,
 } = marketingApiSlice;

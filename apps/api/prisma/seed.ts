@@ -1100,6 +1100,21 @@ async function seedFashionBDStore() {
   }
   console.log("  ✅ 30 reviews seeded (10 pending, 20 approved)");
 
+  // Product stars count the approved reviews (refreshProductRating keeps them right after that).
+  const ratings = await prisma.review.groupBy({
+    by: ["productId"],
+    where: { storeId: demoStoreId, status: "approved" },
+    _avg: { rating: true },
+    _count: true,
+  });
+  for (const r of ratings) {
+    await prisma.product.update({
+      where: { id: r.productId },
+      data: { reviewCount: r._count, averageRating: Math.round(Number(r._avg.rating ?? 0) * 100) / 100 },
+    });
+  }
+  console.log(`  ✅ Star ratings counted for ${ratings.length} products`);
+
   console.log("  ✅ Store + Settings baseline seeded.");
   return store;
 }

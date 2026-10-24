@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -50,6 +50,7 @@ import {
 } from "@/components/ui";
 import {
   useGetReviewsQuery,
+  useGetReviewCountsQuery,
   useModerateReviewsMutation,
   type Review,
   type ReviewAction,
@@ -136,15 +137,7 @@ export default function ReviewsPage() {
   });
   const reviews = listData?.items ?? [];
 
-  const counts = useMemo(() => {
-    const all = listData?.items ?? [];
-    return {
-      pending: all.filter((r) => r.status === "pending").length,
-      approved: all.filter((r) => r.status === "approved").length,
-      spam: all.filter((r) => r.status === "spam").length,
-      trashed: all.filter((r) => r.status === "trashed").length,
-    };
-  }, [listData]);
+  const { data: counts = { pending: 0, approved: 0, spam: 0, trashed: 0 } } = useGetReviewCountsQuery();
 
   const allSelected = reviews.length > 0 && reviews.every((r) => selectedIds.has(r.id));
   const toggleAll = () => {

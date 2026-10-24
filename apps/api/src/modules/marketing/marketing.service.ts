@@ -2,7 +2,7 @@ import { prisma, tx } from "../../config";
 import { refreshProductRating } from "../storefront/engagement";
 import { BaseService, ConflictError, NotFoundError, BadRequestError, type RequestContext, type Paginated } from "../../core";
 import { CouponRepository, FlashSaleRepository, ReviewRepository } from "./marketing.repository";
-import { couponTypeToDiscountType } from "./marketing.dto";
+import { couponTypeToDiscountType, REVIEW_STATUSES } from "./marketing.dto";
 import { checkStorefrontIds } from "../storefronts/storefronts.context";
 import type {
   CreateCouponDto,
@@ -352,6 +352,18 @@ export class MarketingService extends BaseService {
 
   async getReview(id: bigint | number): Promise<unknown> {
     return this.reviews.findById(this.ctx, id);
+  }
+
+  /** Reviews in each status, for the moderation tabs. */
+  async reviewCounts(): Promise<Record<(typeof REVIEW_STATUSES)[number], number>> {
+    const rows = await prisma.review.groupBy({
+      by: ["status"],
+      where: this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {},
+      _count: true,
+    });
+    const counts = Object.fromEntries(REVIEW_STATUSES.map((s) => [s, 0])) as Record<(typeof REVIEW_STATUSES)[number], number>;
+    for (const r of rows) if (r.status in counts) counts[r.status as (typeof REVIEW_STATUSES)[number]] = r._count;
+    return counts;
   }
 
   async moderateReviews(dto: ReviewModerateDto): Promise<{ count: number; action: string }> {
