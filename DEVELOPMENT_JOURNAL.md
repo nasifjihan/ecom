@@ -5912,3 +5912,59 @@ Nightly database backups kept on the server and in a separate private bucket, wi
 ### 46.11 Not done
 - **Images:** product images aren't backed up by this; turn on versioning in the image bucket.
 - **CI:** the scripts aren't typechecked there (outside `tsconfig.json`).
+
+---
+
+## ✅ BATCH #46 (part 3) — Error monitoring, readiness and failed-email alerts (2026-10-24)
+Errors from every app reach Sentry with private data stripped, `/readyz` says whether the shop really works, and an email that fails for good alerts the team.
+
+### 46.12 Sentry (`@sentry/node` and `@sentry/nextjs` 8.55.0)
+- **Only with a DSN:** nothing is sent without one. The API, worker and backup read `SENTRY_DSN` (`config/sentry.ts`: `initSentry(role)`, `reportError`).
+- **Web apps:** `src/instrumentation.ts` for the server (Next 15 runs it on start; page and route errors through `onRequestError`), and a small `<SentryInit />` in each root layout for the browser. It reads `NEXT_PUBLIC_SENTRY_DSN`, which CI bakes in from the repository variable `PUBLIC_SENTRY_DSN`, and loads after the page. `next.config` is untouched.
+- **What reports:**
+  - every 5xx from the API's error handler, tagged with its request ID and path;
+  - failed nightly backups;
+  - uncaught errors in any process.
+- **Tags:** environment, release (the image's commit, `IMAGE_TAG`) and app or role.
+- **Private data (`@ecom/utils` `scrubEvent` / `sentryOptions`, shared by all apps):** before anything is sent, these are replaced by "[filtered]" wherever they sit:
+  - fields named like passwords, secrets, tokens, OTP or backup codes, cookies, authorization, API keys, phones, emails or cards;
+  - query strings: the request's, and those in any URL in a message or breadcrumb;
+  - emails and Bangladeshi mobiles in free text.
+
+  `statusCode` and error codes like `AUTH_2FA_INVALID` stay. The user is sent by id only. No tracing, no default personal data.
+
+### 46.13 Readiness: `GET /readyz`
+- **Checks:** the database (`SELECT 1`), Redis (`PING`), the background worker, and the email queue (no more than 200 waiting). Each check gives up after 3 s.
+- **Worker heartbeat:** the worker writes one to Redis every 30 s (or the API, when it runs the jobs itself with `EMAIL_WORKER=on`). It counts as stopped after 2 minutes.
+- **Answer:** 200 `{ ok: true, … }`, or 503 with the problems in plain words, e.g. "The background worker stopped 2 minutes ago".
+- **Who uses it:** an outside uptime monitor. Docker keeps using `/healthz`, so a stopped worker doesn't make the API container look unhealthy.
+- **Pure verdict:** `readinessProblems`.
+
+### 46.14 Failed emails alert the team
+- **New alert:** `job_failed`, "Email couldn't be sent", bell only by default.
+- **When:** an email that fails after every retry (3) raises it for the store's owners, with the subject, the recipient, the number of tries and the mail server's error, linking to Settings → Emails.
+- **No loop:** a failed team-alert email (`staff_alert`) never raises one; if the mail server is down, that would raise an alert about every failed alert. Email delivery for this alert is off by default for the same reason.
+- **Import/export:** failed jobs already told the person who started them; unchanged.
+
+### 46.15 Settings and docs
+- **Compose:** the web services get `SENTRY_DSN` and `IMAGE_TAG`.
+- **Web image:** gets `NEXT_PUBLIC_SENTRY_DSN`.
+- **`.env.production.example`:** gains `SENTRY_DSN`.
+- **`DEPLOYMENT.md`, new Monitoring section:** setting up Sentry (DSN in `.env` and the GitHub variable), what's stripped, uptime checks on `/readyz` and the storefront, team alerts, logs.
+- **Logs:** already JSON in production, rotated since part 1.
+
+### 46.16 Checked
+- **Tests:**
+  - new `packages/utils/src/scrub.test.ts` (headers, body, nested keys, query strings in the request and in text, emails and phones, `statusCode` and error codes kept, the original not changed);
+  - new `tests/unit/readiness.test.ts` (7).
+- **Full suite:** API on `ecom_test`, 94 files passing; utils 4 files.
+- **Typecheck and lint:** API, the three web apps and utils typecheck. No lint errors in the new files.
+- **In the production rehearsal**, with a local stand-in for Sentry's ingest endpoint (DSN `http://test@host.docker.internal:9999/1`):
+  - **Forced 500:** `DELETE /api/admin/shipping/tax-rates/abc?token=…&phone=…` with `Authorization` and `Cookie` headers.
+  - **First report:** tagged `role=api`, `requestId`, `path`, `release=rehearsal`; `authorization`, `cookie` and the query string filtered. **But the request URL still carried the query string.** Fixed: the scrubber now strips query strings from every URL. After rebuilding, the URL arrived as `…/abc?[filtered]`.
+  - **`/readyz`:** 200 with the worker's heartbeat 4 s old. After stopping the worker, 503 at 2 minutes ("The background worker stopped 2 minutes ago"); green again after starting it.
+  - **Failed email:** with a worker pointed at a mail server that doesn't exist, an order's two emails failed after 3 tries. The owner got two "Email couldn't be sent: Order #20261024000002 confirmed / New order #…" alerts with the error ("getaddrinfo ENOTFOUND").
+
+### 46.17 Not done / found
+- **Web apps not run-tested:** their Sentry wiring is typechecked but not run, because the web images weren't rebuilt for this.
+- **Unvalidated ids:** `DELETE /admin/shipping/tax-rates/:id` (and other shipping routes that turn `:id` into a number without validating it) answer 500 for an id like `abc`, instead of 400. Harmless, but it shows as an error in Sentry; to fix with the part 4 safety pass.

@@ -15,6 +15,10 @@ import { startFestivalReminders, stopFestivalReminders } from "./modules/festiva
 import { startReportSchedules, stopReportSchedules } from "./modules/reports";
 import { startDataJobs, stopDataJobs } from "./modules/jobs";
 import { syncLocations } from "./modules/locations";
+import { initSentry } from "./config/sentry";
+import { startWorkerHeartbeat } from "./modules/health/health";
+
+initSentry("api");
 
 async function bootstrap() {
   const app = buildApp();
@@ -38,6 +42,7 @@ async function bootstrap() {
   initEmailQueue();
   if (env.EMAIL_WORKER === "on") {
     startEmailWorker();
+    startWorkerHeartbeat();
     // Background jobs run in the same process as the email sender.
     void startCourierSync();
     void startFestivalReminders();

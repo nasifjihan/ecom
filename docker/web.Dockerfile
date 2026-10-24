@@ -16,6 +16,8 @@ ARG NEXT_PUBLIC_SITE_URL=http://localhost:3100
 # Links between the apps (the admin's "View store", the super admin's store-admin sign-in).
 ARG NEXT_PUBLIC_STOREFRONT_URL=http://localhost:3100
 ARG NEXT_PUBLIC_STORE_ADMIN_URL=http://localhost:3101/login
+# Browser error reports (empty: off). The server side reads SENTRY_DSN at runtime.
+ARG NEXT_PUBLIC_SENTRY_DSN=
 RUN test -n "$APP" || (echo "Pass --build-arg APP=<app folder>" && exit 1)
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
@@ -32,7 +34,8 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
     NEXT_PUBLIC_STOREFRONT_URL=${NEXT_PUBLIC_STOREFRONT_URL} \
-    NEXT_PUBLIC_STORE_ADMIN_URL=${NEXT_PUBLIC_STORE_ADMIN_URL}
+    NEXT_PUBLIC_STORE_ADMIN_URL=${NEXT_PUBLIC_STORE_ADMIN_URL} \
+    NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN cd apps/${APP} && pnpm exec next build --no-lint && mkdir -p public
 
 FROM ${NODE_IMAGE} AS runtime

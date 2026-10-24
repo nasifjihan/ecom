@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { SentryInit } from "@/components/sentry-init";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -171,6 +172,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {colorVars && <style>{`:root{${colorVars}}`}</style>}
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
+        <SentryInit />
         <Providers locale={locale} languages={languages} display={theme?.display}>
           {announcement && (
             <div className="bg-primary text-primary-foreground text-center text-xs sm:text-sm font-medium px-4 py-2">

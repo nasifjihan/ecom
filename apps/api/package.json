@@ -40,6 +40,7 @@
     "@ecom/utils": "workspace:*",
     "@ecom/zod-schemas": "workspace:*",
     "@paralleldrive/cuid2": "^2.3.1",
+    "@sentry/node": "8.55.0",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.4",

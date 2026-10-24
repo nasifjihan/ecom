@@ -122,6 +122,8 @@ services:
       # Server-side requests go straight to the API container.
       API_INTERNAL_URL: http://api:4000/api
       STOREFRONT_ORIGIN: https://${SHOP_DOMAIN:?set SHOP_DOMAIN in .env}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      IMAGE_TAG: ${IMAGE_TAG:-latest}
     depends_on: [api]
     logging: *logging
     networks: [ecom]
@@ -129,6 +131,9 @@ services:
   store-admin:
     image: ghcr.io/${GHCR_OWNER}/ecom-store-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      IMAGE_TAG: ${IMAGE_TAG:-latest}
     depends_on: [api]
     logging: *logging
     networks: [ecom]
@@ -136,6 +141,9 @@ services:
   super-admin:
     image: ghcr.io/${GHCR_OWNER}/ecom-super-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      IMAGE_TAG: ${IMAGE_TAG:-latest}
     depends_on: [api]
     logging: *logging
     networks: [ecom]

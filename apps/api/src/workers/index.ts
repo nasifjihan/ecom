@@ -9,8 +9,14 @@ import { startCourierSync, stopCourierSync } from "../modules/couriers"
 import { startFestivalReminders, stopFestivalReminders } from "../modules/festivals"
 import { startReportSchedules, stopReportSchedules } from "../modules/reports"
 import { startDataJobs, stopDataJobs } from "../modules/jobs"
+import { initSentry } from "../config/sentry"
+import { startWorkerHeartbeat, stopWorkerHeartbeat } from "../modules/health/health"
+
+initSentry("worker")
 
 startEmailWorker()
+// /readyz reads this to know the worker is alive.
+startWorkerHeartbeat()
 void startCourierSync()
 void startFestivalReminders()
 void startReportSchedules()
@@ -18,6 +24,7 @@ startDataJobs()
 logger.info("Worker running. Press Ctrl+C to stop.")
 
 const stop = async () => {
+  stopWorkerHeartbeat()
   await stopEmailQueue()
   await stopCourierSync()
   await stopFestivalReminders()

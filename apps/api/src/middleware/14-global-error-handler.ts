@@ -17,6 +17,7 @@ import {
   envelope,
 } from "../core";
 import { logger, isDev } from "../config";
+import { reportError } from "../config/sentry";
 import type { ErrorCode } from "../core/error-codes";
 
 type AnyErr = {
@@ -114,6 +115,8 @@ export default function globalErrorHandler(
 
   if (statusCode >= 500) {
     logger.error({ err, requestId: (req as any).requestId, path: req.path }, "Unhandled exception");
+    // The request ID ties the Sentry report to this log line.
+    reportError(err, { requestId: String((req as any).requestId ?? ""), path: req.path });
   } else if (statusCode >= 400) {
     logger.warn(
       { requestId: (req as any).requestId, path: req.path, statusCode, code },

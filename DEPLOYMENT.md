@@ -37,7 +37,8 @@ browser ──▶ │ Caddy :443 ─▶ storefront · store-admin · super-admin
    - `PUBLIC_STORE_ADMIN_URL` = `https://admin.shop.com/login`
 
    The web apps bake these in when they're built. If you change them, rebuild by pushing to `main`, or re-run the "Docker images" job.
-2. **Images:** push to `main` and wait for the **Docker images** CI job. Its packages appear under the repository's "Packages".
+2. **Error reports (optional):** add `PUBLIC_SENTRY_DSN` too (see Monitoring).
+3. **Images:** push to `main` and wait for the **Docker images** CI job. Its packages appear under the repository's "Packages".
 
 ## 3. Prepare the server
 
@@ -130,7 +131,30 @@ C="docker compose -f docker-compose.prod.yml"
 - **New server:** restore there the same way. It fetches the file from the bucket when it isn't on the server.
 - **Afterwards:** everyone signs in again; sessions are lost with the old server's Redis.
 
-## 7. Updating
+## 7. Monitoring
+
+**Error reports (Sentry, free tier):**
+
+1. Create a project at sentry.io (platform: Node.js; one project is enough for all apps).
+2. Copy its DSN into `SENTRY_DSN` in `.env`, and into the GitHub repository variable **`PUBLIC_SENTRY_DSN`**. The browser side of the web apps bakes it in at build, so push to `main` afterwards.
+3. Restart: `docker compose -f docker-compose.prod.yml up -d`.
+
+- **What reports:** the API, the worker, the backup service and the three web apps, tagged by app.
+- **API errors:** carry the request ID, so a Sentry event matches the log line (`logs api | grep <requestId>`).
+- **Stripped before sending:** passwords, codes, tokens, keys, cookies, the `Authorization` header, customers' emails and phones, and every URL's query string.
+- **Failed backups:** report too.
+- **No DSN:** nothing is sent.
+
+**Uptime:** add a free check (e.g. UptimeRobot, Better Stack) for:
+
+- `https://api.shop.com/readyz`: 200 when the database, Redis and the background worker are fine and emails aren't piling up. 503 lists the problems, e.g. "The background worker stopped 5 minutes ago".
+- `https://shop.com`: the storefront itself.
+
+**Team alerts:** an email that fails after every retry shows "Email couldn't be sent" in the store admin's bell (Settings → Notifications → "Email couldn't be sent" can add email or SMS). Import and export jobs tell the person who started them when they fail.
+
+**Logs:** every service logs JSON, rotated at 5 × 10 MB. `docker compose -f docker-compose.prod.yml logs -f --tail=100 api worker`.
+
+## 8. Updating
 
 ```bash
 cd ~/ecom
@@ -141,14 +165,14 @@ docker image prune -f
 
 **To pin a version,** set `IMAGE_TAG=<commit>` in `.env` (the 7-character commit shown in GitHub), then `pull` and `up -d`.
 
-## 8. Rolling back
+## 9. Rolling back
 
 - **Code-only change:** set `IMAGE_TAG` to the previous commit, then `pull` and `up -d`.
 - **Release with a database migration:** migrations don't undo themselves.
   1. Restore the last backup taken before the update (see section 6). Take one by hand just before a big update.
   2. Then start the previous `IMAGE_TAG`.
 
-## 9. Everyday commands
+## 10. Everyday commands
 
 ```bash
 C="docker compose -f docker-compose.prod.yml"
@@ -165,7 +189,7 @@ $C run --rm api ./node_modules/.bin/tsx scripts/reset-two-factor.ts --super you@
 $C run --rm api ./node_modules/.bin/tsx scripts/refresh-ratings.ts
 ```
 
-## 10. Rehearse locally first (optional)
+## 11. Rehearse locally first (optional)
 
 The same images and compose file run on a developer machine, at `http://*.ecom.localhost`:
 

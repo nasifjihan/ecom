@@ -79,6 +79,11 @@ export function initEmailQueue(): void {
 }
 
 /** Queues a saved email, or sends it now when there's no queue. Never throws. */
+/** Emails waiting to be sent (0 with no queue, e.g. EMAIL_QUEUE=inline), for /readyz. */
+export async function emailBacklog(): Promise<number> {
+  return queue ? queue.getWaitingCount() : 0
+}
+
 export async function dispatchEmail(logId: bigint): Promise<void> {
   if (useQueue()) {
     initEmailQueue()
@@ -187,6 +192,16 @@ export async function deliver(logId: bigint, attempt: number, maxAttempts: numbe
       last ? "Email failed" : "Email failed, will retry",
     )
     if (!last) throw err
+    // Gave up: tell the team. Never for a team-alert email itself, or a broken mail server would
+    // make every failed alert raise another one.
+    if (data.template !== "staff_alert") {
+      const { alertStaffLater } = await import("../staff-alerts/staff-alerts.service")
+      alertStaffLater(row.storeId, "job_failed", {
+        title: `Email couldn't be sent: ${row.title}`.slice(0, 200),
+        body: `To ${[data.to].flat().join(", ")} after ${attempt} tries: ${message}`.slice(0, 500),
+        link: "/settings/emails",
+      })
+    }
   }
 }
 

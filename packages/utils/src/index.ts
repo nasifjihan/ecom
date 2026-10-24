@@ -98,3 +98,4 @@ export const wait = (ms: number): Promise<void> =>
 export * from "./variants";
 export * from "./video";
 export * from "./color";
+export * from "./scrub";

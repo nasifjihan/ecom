@@ -15,6 +15,7 @@ export const STAFF_EVENTS = [
   "question_waiting",
   "courier_problem",
   "report_failed",
+  "job_failed",
 ] as const
 export type StaffEvent = (typeof STAFF_EVENTS)[number]
 export const isStaffEvent = (v: string): v is StaffEvent => (STAFF_EVENTS as readonly string[]).includes(v)
@@ -44,6 +45,8 @@ export const STAFF_EVENT_INFO: Record<StaffEvent, StaffEventInfo> = {
   review_waiting: { label: "Review to approve", description: "A customer who hasn't bought the product writes a review (it waits for approval).", inApp: true, email: false, sms: false },
   question_waiting: { label: "Product question", description: "A customer asks a question on a product page.", inApp: true, email: false, sms: false },
   courier_problem: { label: "Courier problem", description: "Delivery failed, a parcel is coming back, or a booked parcel has had no courier update for 3 days.", inApp: true, email: true, sms: false },
+  // Bell only by default: an emailed alert about a failed email could fail the same way.
+  job_failed: { label: "Email couldn't be sent", description: "An email to a customer or the team failed after every retry (e.g. the mail provider refused it).", inApp: true, email: false, sms: false },
   report_failed: { label: "Scheduled report stopped", description: "A scheduled report email failed 3 times in a row and was switched off (Reports > Scheduled emails).", inApp: true, email: true, sms: false },
 }
 

@@ -49,6 +49,7 @@ import { adminOrderWhatsappRouter, adminWhatsappRouter, registerWhatsappListener
 import { adminLoginSettingsRouter } from "./modules/auth/customer-login.routes";
 import { adminPreferencesRouter } from "./modules/admin-users/preferences";
 import { adminTwoFactorRouter, superTwoFactorRouter } from "./modules/auth/two-factor";
+import { readyzRouter } from "./modules/health/health";
 import { adminPurchasingRouter } from "./modules/purchasing";
 import { adminReportsRouter } from "./modules/reports";
 import { docsRouter } from "./modules/docs";
@@ -133,6 +134,8 @@ export function buildApp(): Express {
       });
     }),
   );
+  // Database, Redis, the worker and the email queue: for an outside uptime monitor.
+  app.use("/readyz", readyzRouter);
   app.get("/", ctrl(async (_req: Request & { ctx: any }, res: Response) => {
     envelope(res, { message: "E-Commerce Platform API — see /healthz", data: { version: "0.1.0" } });
   }));

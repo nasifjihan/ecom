@@ -6,4 +6,4 @@ export {
   emitOrderStatusChanged,
   registerEmailListeners,
 } from "./notifications.events"
-export { initEmailQueue, startEmailWorker, stopEmailQueue } from "./email.queue"
+export { emailBacklog, initEmailQueue, startEmailWorker, stopEmailQueue } from "./email.queue"

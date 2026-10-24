@@ -11,6 +11,7 @@ import { mkdir, readdir, stat, unlink } from "node:fs/promises"
 import path from "node:path"
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3"
 import { env, logger } from "../src/config"
+import { initSentry, reportError } from "../src/config/sentry"
 import { s3 } from "../src/config/s3"
 import { backupName, backupsToDelete, nextBackupAt, pgUrl } from "../src/modules/backups/backup.rules"
 
@@ -57,11 +58,16 @@ async function daemon() {
   for (;;) {
     const next = nextBackupAt(new Date())
     await new Promise((r) => setTimeout(r, next.getTime() - Date.now()))
-    await backupOnce().catch((err: Error) => logger.error({ err: err.message }, "Database backup FAILED"))
+    await backupOnce().catch((err: Error) => {
+      logger.error({ err: err.message }, "Database backup FAILED")
+      // An alert in Sentry: nobody reads this container's logs every morning.
+      reportError(err, { job: "backup" })
+    })
   }
 }
 
 if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/backup.ts")) {
+  initSentry("backup")
   const job = process.argv.includes("--daemon") ? daemon() : backupOnce().then(() => process.exit(0))
   job.catch((err: Error) => {
     logger.error({ err: err.message }, "Database backup FAILED")
