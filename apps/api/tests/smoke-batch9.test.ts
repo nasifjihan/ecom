@@ -162,6 +162,8 @@ vi.mock("../src/config/prisma", () => {
         ),
         delete: vi.fn().mockResolvedValue({ id: 101 }),
       },
+      // No default tax class: every matching rate applies (Batch 45).
+      taxClass: { findFirst: vi.fn().mockResolvedValue(null) },
       taxRate: {
         findMany: vi.fn().mockResolvedValue([fakeTax1]),
         findUnique: vi.fn().mockResolvedValue(fakeTax1),

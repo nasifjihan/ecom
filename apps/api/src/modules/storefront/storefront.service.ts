@@ -1183,6 +1183,11 @@ export class StorefrontService {
       postcode: ship.postcode || undefined,
       subtotal: round2(itemsSubtotal - discountTotal),
       shippingTotal,
+      // Each product with its own tax class; delivery with its option's class.
+      lines: lines.map((l) => ({ amount: l.lineSubtotal, taxClassId: l.product.taxClassId })),
+      deliveryTaxClassId: pickedOption
+        ? ((await prisma.shippingMethod.findUnique({ where: { id: BigInt(pickedOption.id) }, select: { taxClassId: true } }))?.taxClassId ?? null)
+        : null,
     });
     const taxTotal = round2(taxes.totalTax);
     const taxIncluded = taxes.included;

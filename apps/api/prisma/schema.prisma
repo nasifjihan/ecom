@@ -1022,6 +1022,8 @@ model TaxClass {
   storeId         BigInt
   store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name            String
+  /// Products and delivery options with no class use this one (Batch 45). No default: every matching rate applies.
+  isDefault       Boolean          @default(false)
   rates           TaxRate[]
   products        Product[]
   shippingMethods ShippingMethod[]

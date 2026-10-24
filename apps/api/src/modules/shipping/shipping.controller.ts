@@ -15,7 +15,9 @@ import {
   CreateTaxRateDto,
   UpdateTaxRateDto,
   TaxRateSearchDto,
-  TaxesForAddressDto,
+  TaxPreviewDto,
+  TaxClassDto,
+  UpdateTaxClassDto,
   ExportShippingDto,
 } from "./shipping.dto";
 
@@ -83,6 +85,14 @@ export class ShippingController extends BaseController {
     envelope(res, { status: 200, data });
   });
 
+  createTaxClass = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { status: 201, data: await this.svc(req.ctx).createTaxClass(req.ctx, (req.body as { name: string }).name) });
+  });
+
+  updateTaxClass = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { data: await this.svc(req.ctx).updateTaxClass(req.ctx, BigInt(req.params.id ?? "0"), req.body as { name?: string; isDefault?: boolean }) });
+  });
+
   taxClasses = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     envelope(res, { status: 200, data: await this.svc(req.ctx).taxClasses(req.ctx) });
   });
@@ -103,7 +113,7 @@ export class ShippingController extends BaseController {
   });
 
   resolveTaxes = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
-    const data = await this.svc(req.ctx).orderTax(req.ctx, req.query as any);
+    const data = await this.svc(req.ctx).taxPreview(req.ctx, req.query as unknown as TaxPreviewDto);
     envelope(res, { status: 200, data });
   });
 
@@ -204,6 +214,20 @@ adminShippingRouter.get(
   shippingController.taxClasses,
 );
 adminShippingRouter.post(
+  "/tax-classes",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("taxes.create"),
+  validate({ body: TaxClassDto }),
+  shippingController.createTaxClass,
+);
+adminShippingRouter.put(
+  "/tax-classes/:id",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("taxes.edit"),
+  validate({ body: UpdateTaxClassDto }),
+  shippingController.updateTaxClass,
+);
+adminShippingRouter.post(
   "/tax-rates",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("taxes.create"),
@@ -243,6 +267,6 @@ storefrontShippingRouter.get(
 );
 storefrontShippingRouter.get(
   "/taxes",
-  validate({ query: TaxesForAddressDto }),
+  validate({ query: TaxPreviewDto }),
   shippingController.resolveTaxes,
 );

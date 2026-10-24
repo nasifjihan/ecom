@@ -26,6 +26,8 @@ import { EmptyState, Field, PageTitle, Toggle } from "@/components/content/share
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { useCan } from "@/lib/permissions";
 import {
+  useCreateTaxClassMutation,
+  useUpdateTaxClassMutation,
   useCreateTaxRateMutation,
   useDeleteTaxRateMutation,
   useGetTaxClassesQuery,
@@ -157,6 +159,78 @@ function RateDialog({ rate, onClose }: { rate: TaxRate | "new" | null; onClose: 
   );
 }
 
+/** The classes rates belong to. Products and delivery options pick one; the default covers those without. */
+function TaxClassesCard({ canEdit }: { canEdit: boolean }) {
+  const { data: classes = [] } = useGetTaxClassesQuery();
+  const [create, { isLoading: creating }] = useCreateTaxClassMutation();
+  const [update, { isLoading: updating }] = useUpdateTaxClassMutation();
+  const [name, setName] = useState("");
+  const hasDefault = classes.some((c) => c.isDefault);
+
+  const run = async (p: Promise<unknown>, done: string) => {
+    try {
+      await p;
+      toast.success(done);
+    } catch (err) {
+      toast.error(errorText(err));
+    }
+  };
+  const rename = (c: { id: string; name: string }) => {
+    const next = window.prompt("New name for this tax class", c.name)?.trim();
+    if (next && next !== c.name) void run(update({ id: c.id, name: next }).unwrap(), "Renamed");
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div>
+          <div className="font-semibold">Tax classes</div>
+          <p className="text-sm text-slate-500">
+            Give a product or delivery option a class (e.g. Reduced or Exempt) to tax it with that class's rates only.
+            {hasDefault
+              ? " Anything without a class uses the default class."
+              : " No default class yet: anything without a class gets every rate that matches the address."}
+          </p>
+        </div>
+        <ul className="divide-y rounded-md border">
+          {classes.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <span className="font-medium">{c.name}</span>
+              {c.isDefault && <Badge variant="secondary">Default</Badge>}
+              {canEdit && (
+                <span className="ml-auto flex gap-2">
+                  {!c.isDefault && (
+                    <Button variant="outline" size="sm" disabled={updating} onClick={() => void run(update({ id: c.id, isDefault: true }).unwrap(), `${c.name} is now the default class`)}>
+                      Make default
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => rename(c)}>
+                    Rename
+                  </Button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {canEdit && (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(create({ name: name.trim() }).unwrap(), "Tax class added").then(() => setName(""));
+            }}
+          >
+            <Input aria-label="New tax class name" placeholder="e.g. Reduced" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} className="max-w-xs" />
+            <Button type="submit" variant="outline" disabled={creating || name.trim().length < 2}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add class
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function TaxesPage() {
   const { data: rates, isLoading } = useGetTaxRatesQuery();
   const [remove] = useDeleteTaxRateMutation();
@@ -194,6 +268,7 @@ export default function TaxesPage() {
         </Link>
         .
       </p>
+      <TaxClassesCard canEdit={can("taxes.edit")} />
       {isLoading || !rates ? (
         <Skeleton className="h-48 w-full" />
       ) : rates.length === 0 ? (

@@ -37,6 +37,7 @@ import type { Prisma } from "@prisma/client";
 import { slugify } from "@ecom/utils";
 import { resyncProductTotals, setStockTotal } from "../stock";
 import { optimizeImage } from "../../services/images/optimize";
+import { assertStoreTaxClass } from "../shipping/shipping.repository";
 
 function randomAlphanum(length: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -114,6 +115,7 @@ export class CatalogService extends BaseService {
 
   async createProduct(dto: CreateProductDto) {
     const storeId = this.ctx.storeId!;
+    await assertStoreTaxClass(storeId, dto.taxClassId);
 
     const baseSlug = dto.slug ?? slugify(dto.name);
     const uniqueSlug = await this.generateUniqueSlug(baseSlug, async (s) => {
@@ -250,6 +252,7 @@ export class CatalogService extends BaseService {
     const existing = await prisma.product.findFirst({ where: { id: productId, storeId } });
     if (!existing) throw new NotFoundError("product", id);
     if (existing.deletedAt) throw new BadRequestError("This product is in the Trash. Restore it before changing it.", "VALIDATION_FAILED");
+    await assertStoreTaxClass(storeId, dto.taxClassId);
 
     let uniqueSlug: string | undefined = undefined;
     if (dto.slug !== undefined && dto.slug !== existing.slug) {

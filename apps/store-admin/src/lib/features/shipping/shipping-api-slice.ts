@@ -31,6 +31,8 @@ export interface CostRules {
 export interface ShippingMethod {
   id: string;
   zoneId: string;
+  /** The VAT rates on the delivery charge (null: the store's default class). */
+  taxClassId?: string | null;
   code: string;
   name: string;
   description: string | null;
@@ -96,6 +98,7 @@ export interface MethodInput {
   deliveryEstimateMinDays?: number | null;
   deliveryEstimateMaxDays?: number | null;
   useSlots?: boolean;
+  taxClassId?: string | null;
 }
 
 export interface DeliverySlot {
@@ -162,6 +165,12 @@ export interface TaxRateInput {
   priority: number;
 }
 const TAXES = { type: "Store" as const, id: "TAX_RATES" };
+/** A group of products/delivery options that share rates; the default one covers anything without a class. */
+export interface TaxClass {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
 
 export const shippingApi = api.injectEndpoints({
   endpoints: (b) => ({
@@ -244,9 +253,17 @@ export const shippingApi = api.injectEndpoints({
         data.rows.map((r) => ({ ...r, rate: Number(r.rate) })),
       providesTags: [TAXES],
     }),
-    getTaxClasses: b.query<{ id: string; name: string }[], void>({
+    getTaxClasses: b.query<TaxClass[], void>({
       query: () => "/admin/shipping/tax-classes",
       providesTags: [TAXES],
+    }),
+    createTaxClass: b.mutation<TaxClass, { name: string }>({
+      query: (body) => ({ url: "/admin/shipping/tax-classes", method: "POST", body }),
+      invalidatesTags: [TAXES],
+    }),
+    updateTaxClass: b.mutation<TaxClass, { id: string; name?: string; isDefault?: true }>({
+      query: ({ id, ...body }) => ({ url: `/admin/shipping/tax-classes/${id}`, method: "PUT", body }),
+      invalidatesTags: [TAXES],
     }),
     createTaxRate: b.mutation<unknown, TaxRateInput>({
       query: (body) => ({ url: "/admin/shipping/tax-rates", method: "POST", body }),
@@ -285,6 +302,8 @@ export const {
   useSaveSlotSettingsMutation,
   useGetTaxRatesQuery,
   useGetTaxClassesQuery,
+  useCreateTaxClassMutation,
+  useUpdateTaxClassMutation,
   useCreateTaxRateMutation,
   useUpdateTaxRateMutation,
   useDeleteTaxRateMutation,

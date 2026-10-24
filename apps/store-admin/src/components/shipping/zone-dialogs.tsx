@@ -23,6 +23,7 @@ import {
   useCreateMethodMutation,
   useCreateZoneMutation,
   useGetLocationsQuery,
+  useGetTaxClassesQuery,
   useUpdateMethodMutation,
   useUpdateZoneMutation,
   type ShippingMethod,
@@ -188,6 +189,8 @@ const EMPTY_METHOD = {
   minDays: "",
   maxDays: "",
   useSlots: false,
+  /** "" = no class (the store's default class applies). */
+  taxClassId: "",
   tiers: [] as Tier[],
 };
 
@@ -204,6 +207,8 @@ export function MethodDialog({
   const [update, { isLoading: updating }] = useUpdateMethodMutation();
   const [f, setF] = useState(EMPTY_METHOD);
   const [codeTouched, setCodeTouched] = useState(false);
+  const { data: taxClasses = [] } = useGetTaxClassesQuery();
+  const defaultClass = taxClasses.find((c) => c.isDefault);
   const set = <K extends keyof typeof EMPTY_METHOD>(k: K, v: (typeof EMPTY_METHOD)[K]) => setF((s) => ({ ...s, [k]: v }));
 
   useEffect(() => {
@@ -228,6 +233,7 @@ export function MethodDialog({
       minDays: method.deliveryEstimateMinDays?.toString() ?? "",
       maxDays: method.deliveryEstimateMaxDays?.toString() ?? "",
       useSlots: !!method.useSlots,
+      taxClassId: method.taxClassId ? String(method.taxClassId) : "",
       tiers: (r.weightTiers ?? []).map((t) => ({ upToKg: String(t.upToKg), cost: String(t.cost) })),
     });
     setCodeTouched(true);
@@ -256,6 +262,7 @@ export function MethodDialog({
       deliveryEstimateMinDays: optNum(f.minDays),
       deliveryEstimateMaxDays: optNum(f.maxDays),
       useSlots: f.useSlots,
+      taxClassId: f.taxClassId || null,
     };
     try {
       if (method === "new") await create({ zoneId, code: f.code, ...body }).unwrap();
@@ -391,6 +398,21 @@ export function MethodDialog({
             label="Customer picks a delivery time"
             hint="Checkout asks for a day and time slot (set them under Shipping → Delivery slots). The slot's charge is added."
           />
+          <Field label="Tax class for the delivery charge" htmlFor="m-tax-class" hint="Which VAT rates apply to this delivery charge (Shipping → Taxes).">
+            <select
+              id="m-tax-class"
+              value={f.taxClassId}
+              onChange={(e) => set("taxClassId", e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">{defaultClass ? `Default (${defaultClass.name})` : "No class (every matching rate)"}</option>
+              {taxClasses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Toggle checked={f.enabled} onChange={(v) => set("enabled", v)} label="Offer at checkout" />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>

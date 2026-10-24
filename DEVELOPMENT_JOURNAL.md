@@ -5694,3 +5694,60 @@ Builds on Batch 44 part 3: the platform team (super admin) gets two-step sign-in
 ### 45.6 Not done
 - **Platform team screen:** there's still no screen for managing the platform team; the reset for them is the script.
 - **Other devices:** they stay signed in for up to 15 minutes after the change (access token lifetime).
+
+---
+
+## ✅ BATCH #45 (part 2) — Tax classes at checkout (2026-10-24)
+Products and delivery options can now have a tax class (e.g. Reduced or Exempt), and checkout taxes each with that class's rates. Before, every rate matching the address applied to everything, so a class did nothing.
+
+### 45.7 How tax is worked out now
+- **Grouping:**
+  - Each line is taxed with its product's class, else the store's **default class** (new: `TaxClass.isDefault`, migration `20261024150000_default_tax_class`).
+  - The delivery charge uses its delivery option's class, else the default.
+  - With no default class, anything without a class still gets every matching rate, exactly as before. Existing stores don't change until they pick a default.
+- **Pure rules (`tax.rules.ts`):**
+  - `spreadAmounts` shares the order's discounts over the lines by value, the last line taking the rounding;
+  - `taxClassGroups` groups the lines by class;
+  - `sharedRate` gives the one rate the order keeps: the rate every taxed part shares, or none when two non-zero rates differ. An exempt part doesn't count, so 15% + exempt still keeps 15%.
+- **`ShippingService.orderTax`:**
+  - **One class:** one calculation, as before, compound rates included.
+  - **Several classes:** one calculation per class plus one for delivery, added up.
+  - **VAT-inclusive prices:** handled the same way.
+  - **Who uses it:** storefront checkout, staff manual orders and quotations all go through `quoteOrder`, so they all follow.
+- **No hidden VAT:** the silent "VAT 15% (default)" for BD addresses with no matching rate now applies only when no class is in play, so a class with no matching rate is no tax.
+- **Delivery in the breakdown:** VAT on the delivery charge is now listed as its own line ("VAT (delivery)"). It was always in the total but never listed, so the lines didn't add up (150 shown against 165).
+- **Checkout preview:** `/storefront/shipping/taxes` now takes the cart lines (`lines=productId:amount,…`) and `shippingMethodId`. The checkout page sends both, so the VAT it shows is the VAT the order charges.
+
+### 45.8 Admin
+- **Shipping → Taxes → "Tax classes":**
+  - lists the classes, with **Default** on one, plus Make default, Rename and Add class (`POST`/`PUT /admin/shipping/tax-classes`);
+  - the note explains what happens with and without a default.
+- **Product → Inventory:** a **Tax class** select ("Default (Standard)" or a class).
+- **Delivery option dialog:** "Tax class for the delivery charge".
+- **Checks:** the API refuses another store's class on a product (create and update) and on a delivery option.
+- **Seed:** "Standard" is the default class.
+
+### 45.9 Checked
+- **Unit tests:** new `tests/unit/tax-classes.test.ts` (12): discount spread and rounding, grouping with and without a default class, empty groups, and the shared rate.
+- **DB test:** new `tests/integration/tax-classes.db.test.ts` (5), real checkouts:
+  - **No default class:** the exempt book pays only the delivery's 15% (15). An unclassed saree pays 165, as before.
+  - **Standard as default:** saree + book = 165 (15% of the saree's 1,000 and the delivery's 100), and the order keeps 15%. The book alone pays 15 (delivery).
+  - **Delivery class:** delivery on the exempt class means no VAT on delivery (300 on 2,000 of saree).
+  - **Preview:** the checkout preview gives 165, the same as the order.
+  - **Other store:** another store's class on a product is refused.
+- **Smoke test:** `smoke-batch9` mocks the new default-class lookup.
+- **Full suite:** API on `ecom_test`, 89 files passing.
+- **Typecheck:** API, admin and storefront pass.
+- **Lint:** no new lint errors (the shipping repository went from 140 older errors to 138).
+- **In the browser:**
+  - **Taxes page:** listed Standard and Reduced Rate; "Make default" set Standard.
+  - **Product:** the Richman slim-fit shirt was set to Reduced Rate (0% rate only) on its Inventory tab and saved.
+  - **Preview:** for a Dhaka order of ৳1,000 + ৳100 delivery it went from 165 ("VAT 150", "VAT (delivery) 15") to 15 ("VAT (delivery) 15").
+  - **Storefront checkout:** with the shirt in the cart, it sent `lines=79:2890` and showed total tax BDT 0.00 before a delivery option was picked.
+  - **Dev data:** the shirt is back on Standard; Standard stays the default, as in the new seed.
+
+### 45.10 Not done
+- **Removing a default:** a default class can be changed but not removed; going back to "every rate" means editing the database.
+- **New product form:** it has no Tax class field. New products use the default class until edited.
+- **Classes can't be deleted:** deleting one would also delete its rates.
+- **Gift box lines:** the checkout preview's lines leave out gift box lines; the order itself counts them.

@@ -297,8 +297,10 @@ export default function CheckoutPage() {
       district: shippingAddress.district,
       subtotal: Math.max(0, subtotal - couponDiscount - promoDiscount - memberDiscount),
       shipping: shippingAmount,
+      lines: items.map((it) => ({ productId: String(it.productId), amount: it.price * it.qty })),
+      shippingMethodId: selectedRate?.methodId,
     }),
-    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, promoDiscount, memberDiscount, shippingAmount],
+    [shippingAddress.country, shippingAddress.division, shippingAddress.district, subtotal, couponDiscount, promoDiscount, memberDiscount, shippingAmount, items, selectedRate?.methodId],
   );
 
   const {

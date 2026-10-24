@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useGetTaxClassesQuery } from "@/lib/features/shipping/shipping-api-slice";
 import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -139,6 +140,8 @@ const productEditSchema = z.object({
   isFeatured: z.boolean().default(false),
   categoryIds: z.array(z.coerce.bigint()).default([]),
   brandId: z.coerce.bigint().nullable().optional(),
+  /** "" = no class (the store's default class applies). */
+  taxClassId: z.string().optional(),
   tagNames: z.array(z.string()).default([]),
   relatedProductIds: z.array(z.coerce.bigint()).default([]),
   seoTitle: z.string().max(60).optional().or(z.literal("")),
@@ -178,6 +181,8 @@ export default function EditProductPage() {
 
   const { data: categoriesData } = useGetCategoriesQuery();
   const { data: brandsData } = useGetBrandsQuery({ page: 1, perPage: 100 });
+  const { data: taxClasses = [] } = useGetTaxClassesQuery();
+  const defaultClass = taxClasses.find((c) => c.isDefault);
   const { data: relatedProducts } = useGetProductsQuery({ page: 1, perPage: 50 });
 
   const [gallery, setGallery] = useState<MediaImage[]>([]);
@@ -215,6 +220,7 @@ export default function EditProductPage() {
       isFeatured: false,
       categoryIds: [],
       brandId: null,
+      taxClassId: "",
       tagNames: [],
       relatedProductIds: [],
       seoTitle: "",
@@ -254,6 +260,7 @@ export default function EditProductPage() {
         isFeatured: !!product.featured,
         categoryIds: (product.categoryIds as any) || [],
         brandId: (product.brandId as any) || null,
+        taxClassId: product.taxClassId ? String(product.taxClassId) : "",
         tagNames: product.tags ?? [],
         relatedProductIds: [],
         seoTitle: product.seoTitle || "",
@@ -414,6 +421,7 @@ export default function EditProductPage() {
           originCountry: values.sourcing === "imported" && values.originCountry?.trim() ? values.originCountry.trim() : null,
           categoryIds: values.categoryIds as any,
           brandId: values.brandId as any,
+          taxClassId: values.taxClassId === "" ? null : (values.taxClassId ?? null),
           featured: values.isFeatured,
           imageUrls,
           thumbnailUrl,
@@ -996,6 +1004,26 @@ export default function EditProductPage() {
                             </FormItem>
                           )}
                         />
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="tax-class" className="font-medium">Tax class</Label>
+                        <select
+                          id="tax-class"
+                          value={watch("taxClassId") ?? ""}
+                          onChange={(e) => setValue("taxClassId", e.target.value, { shouldDirty: true })}
+                          className="h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">{defaultClass ? `Default (${defaultClass.name})` : "No class (every matching rate)"}</option>
+                          {taxClasses.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-slate-500">Which VAT rates apply at checkout (Shipping → Taxes).</p>
                       </div>
 
                       <Separator />

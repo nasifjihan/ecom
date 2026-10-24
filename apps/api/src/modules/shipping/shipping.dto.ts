@@ -151,6 +151,16 @@ export const TaxesForAddressDto = z.object({
 });
 export type TaxesForAddressDto = z.infer<typeof TaxesForAddressDto>;
 
+/** The checkout preview: also the cart lines (`productId:amount,…`) and the delivery option, so each is taxed with its class. */
+export const TaxPreviewDto = TaxesForAddressDto.extend({
+  lines: z.string().regex(/^\d+:\d+(\.\d+)?(,\d+:\d+(\.\d+)?){0,199}$/, "Use productId:amount pairs").optional(),
+  shippingMethodId: z.coerce.bigint().positive().optional(),
+});
+export type TaxPreviewDto = z.infer<typeof TaxPreviewDto>;
+
+export const TaxClassDto = z.object({ name: z.string().trim().min(2).max(60) });
+export const UpdateTaxClassDto = z.object({ name: z.string().trim().min(2).max(60).optional(), isDefault: z.literal(true).optional() });
+
 export const ExportShippingDto = z.object({
   zoneId: z.coerce.bigint().optional(),
   format: z.enum(["csv", "xlsx", "pdf"]).default("csv"),

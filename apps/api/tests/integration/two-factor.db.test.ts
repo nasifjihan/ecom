@@ -188,7 +188,7 @@ describe.skipIf(!runDb)("two-step sign-in (Postgres)", () => {
     await asOwner.setTwoFactorRule(false)
     await new TwoFactor("admin", owner).disable(PASSWORD)
     await new TwoFactor("admin", staff).disable(PASSWORD)
-  })
+  }, 30_000) // builds the whole app the first time
 
   it("turning it on ends the person's other sessions; the new tokens keep working", async () => {
     const auth = new Auth(ctx())

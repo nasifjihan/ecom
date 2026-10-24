@@ -340,6 +340,10 @@ export const checkoutApi = api.injectEndpoints({
         district?: string;
         subtotal?: number;
         shipping?: number;
+        /** Cart lines, so each product is taxed with its own tax class. */
+        lines?: { productId: string; amount: number }[];
+        /** The chosen delivery option (its tax class taxes the delivery charge). */
+        shippingMethodId?: string;
       }
     >({
       query: (args) => {
@@ -349,6 +353,9 @@ export const checkoutApi = api.injectEndpoints({
         if (args.division) params.set("state", args.division);
         if (args.district) params.set("city", args.district);
         if (args.shipping) params.set("shippingTotal", String(args.shipping));
+        const lines = (args.lines ?? []).filter((l) => /^\d+$/.test(l.productId) && l.amount >= 0);
+        if (lines.length) params.set("lines", lines.map((l) => `${l.productId}:${Math.round(l.amount * 100) / 100}`).join(","));
+        if (args.shippingMethodId && /^\d+$/.test(args.shippingMethodId)) params.set("shippingMethodId", args.shippingMethodId);
         const qs = params.toString();
         return {
           url: qs ? `/storefront/shipping/taxes?${qs}` : `/storefront/shipping/taxes`,

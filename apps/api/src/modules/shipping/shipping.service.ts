@@ -4,14 +4,14 @@ import type {
   CreateShippingZoneDto, UpdateShippingZoneDto,
   CreateShippingMethodDto, UpdateShippingMethodDto, BulkImportMethodsDto,
   CreateTaxRateDto, UpdateTaxRateDto,
-  ShippingRatesQueryDto, TaxesForAddressDto,
+  ShippingRatesQueryDto, TaxesForAddressDto, TaxPreviewDto,
 } from "./shipping.dto";
 import { BadRequestError } from "../../core";
 import { locationDepth, offInChain, resolveAddressLocation, storeLocationsOff } from "../locations/locations.service";
 import { optionsSummary, pickZone, shippingOptions } from "./shipping.rules";
 import { storefrontZones } from "../storefronts/storefronts.rules";
 import { prisma } from "../../config";
-import { splitTaxOnTop, taxInside } from "./tax.rules";
+import { sharedRate, splitTaxOnTop, taxClassGroups, taxInside } from "./tax.rules";
 import {
   generateCsv, generateXlsx, generatePdf,
   attachmentHeader, formatTimestampFilename,
@@ -36,6 +36,8 @@ export class ShippingService {
 
   listTaxes(ctx: RequestContext, q: any) { return this.taxes.list(ctx, q); }
   taxClasses(ctx: RequestContext) { return this.taxes.classes(ctx); }
+  createTaxClass(ctx: RequestContext, name: string) { return this.taxes.createClass(ctx, name); }
+  updateTaxClass(ctx: RequestContext, id: bigint, d: { name?: string; isDefault?: boolean }) { return this.taxes.updateClass(ctx, id, d); }
   createTax(ctx: RequestContext, d: CreateTaxRateDto) { return this.taxes.create(ctx, d); }
   updateTax(ctx: RequestContext, id: bigint, d: UpdateTaxRateDto) { return this.taxes.update(ctx, id, d); }
   deleteTax(ctx: RequestContext, id: bigint) { return this.taxes.delete(ctx, id); }
@@ -84,8 +86,70 @@ export class ShippingService {
    * Tax on an order's goods (after discounts) and delivery. When the store's prices include VAT
    * (`included`), the amounts are the VAT already inside them and aren't added to the total.
    * Goods and delivery are worked out separately so each has its own share.
+   *
+   * With `lines` (checkout), each product is taxed with its own tax class, else the store's
+   * default class; delivery with its delivery option's class, else the default. With no default
+   * class, unclassed goods and delivery use every rate that matches the address (as before).
    */
-  async orderTax(ctx: RequestContext, d: TaxesForAddressDto) {
+  async orderTax(
+    ctx: RequestContext,
+    d: TaxesForAddressDto & { lines?: { amount: number; taxClassId: bigint | null }[]; deliveryTaxClassId?: bigint | null },
+  ) {
+    const fallback = ctx.storeId === undefined ? null : await prisma.taxClass.findFirst({
+      where: { storeId: BigInt(ctx.storeId), isDefault: true },
+      select: { id: true },
+    });
+    const defaultId = fallback ? String(fallback.id) : null;
+    const { lines, deliveryTaxClassId, ...address } = d;
+    const toId = (k: string | null) => (k === null ? undefined : BigInt(k));
+    const goods = Number(address.subtotal || 0);
+    const delivery = Number(address.shippingTotal || 0);
+    const groups = lines?.length
+      ? taxClassGroups(lines.map((l) => ({ amount: l.amount, taxClassId: l.taxClassId === null ? null : String(l.taxClassId) })), goods, defaultId)
+      : [{ taxClassId: address.taxClassId !== undefined ? String(address.taxClassId) : defaultId, amount: goods }];
+    const deliveryClass = deliveryTaxClassId != null ? String(deliveryTaxClassId) : address.taxClassId !== undefined ? String(address.taxClassId) : defaultId;
+    // One class for everything: one calculation, exactly as before classes (compound rates included).
+    if (groups.length <= 1 && (delivery === 0 || (groups[0]?.taxClassId ?? deliveryClass) === deliveryClass)) {
+      return this.partTax(ctx, { ...address, taxClassId: toId(groups[0]?.taxClassId ?? deliveryClass) });
+    }
+    const parts = await Promise.all([
+      ...groups.map((g) => this.partTax(ctx, { ...address, subtotal: g.amount, shippingTotal: 0, taxClassId: toId(g.taxClassId) })),
+      ...(delivery > 0 ? [this.partTax(ctx, { ...address, subtotal: 0, shippingTotal: delivery, taxClassId: toId(deliveryClass) })] : []),
+    ]);
+    const sum = (pick: (p: (typeof parts)[number]) => number) => Math.round(parts.reduce((s, p) => s + pick(p), 0) * 100) / 100;
+    const taxed = parts.find((p) => p.totalTax > 0);
+    return {
+      effectiveTaxRatePct: sharedRate(parts.map((p) => ({ ratePct: p.effectiveTaxRatePct, tax: p.totalTax }))),
+      primaryName: taxed?.primaryName ?? "No tax",
+      totalTax: sum((p) => p.totalTax),
+      breakdown: parts.flatMap((p) => p.breakdown).filter((b) => b.amount > 0),
+      included: parts[0]!.included,
+      itemTax: sum((p) => p.itemTax),
+      shippingTax: sum((p) => p.shippingTax),
+    };
+  }
+
+  /** What checkout shows before the order: the same calculation, from the cart lines and delivery option. */
+  async taxPreview(ctx: RequestContext, q: TaxPreviewDto) {
+    const { lines: raw, shippingMethodId, ...address } = q;
+    const pairs = raw ? raw.split(",").map((p) => p.split(":")).map(([id, amount]) => ({ id: BigInt(id!), amount: Number(amount) })) : [];
+    const where = ctx.storeId !== undefined ? { storeId: BigInt(ctx.storeId) } : {};
+    const products = pairs.length
+      ? await prisma.product.findMany({ where: { ...where, id: { in: pairs.map((p) => p.id) } }, select: { id: true, taxClassId: true } })
+      : [];
+    const classOf = new Map(products.map((p) => [String(p.id), p.taxClassId]));
+    const method = shippingMethodId
+      ? await prisma.shippingMethod.findFirst({ where: { id: shippingMethodId, zone: where }, select: { taxClassId: true } })
+      : null;
+    return this.orderTax(ctx, {
+      ...address,
+      ...(pairs.length ? { lines: pairs.map((p) => ({ amount: p.amount, taxClassId: classOf.get(String(p.id)) ?? null })) } : {}),
+      deliveryTaxClassId: method?.taxClassId ?? null,
+    });
+  }
+
+  /** Tax on goods and delivery with one class's rates (or every rate, with no class). */
+  private async partTax(ctx: RequestContext, d: TaxesForAddressDto) {
     const setting = ctx.storeId === undefined ? null : await prisma.storeGeneralSetting.findUnique({
       where: { storeId: BigInt(ctx.storeId) },
       select: { pricesIncludeTax: true },

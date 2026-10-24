@@ -323,7 +323,8 @@ async function seedFashionBDStore() {
   });
   if (!stdTax) {
     const tc = await prisma.taxClass.create({
-      data: { storeId: store.id, name: "Standard" },
+      // Products and delivery options without a class use it.
+      data: { storeId: store.id, name: "Standard", isDefault: true },
     });
     await prisma.taxRate.create({
       data: {

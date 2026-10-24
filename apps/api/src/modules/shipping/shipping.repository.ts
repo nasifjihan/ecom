@@ -158,6 +158,7 @@ export class ShippingMethodRepository {
     const exists = await this.model.findFirst({ where: { zoneId: dto.zoneId, code: dto.code } });
     if (exists) throw new ConflictError("Duplicate shipping code in zone", "DUPLICATE_SHIPPING_CODE_ZONE");
     await new ShippingZoneRepository().get(ctx, dto.zoneId);
+    await assertStoreTaxClass(ctx.storeId, dto.taxClassId);
     const rules = { perKgExtra: dto.perKgExtra, minimumCost: dto.minimumCost, weightTiers: dto.weightTiers, minSubtotal: dto.minSubtotal };
     return this.model.create({
       data: {
@@ -181,6 +182,7 @@ export class ShippingMethodRepository {
 
   async update(ctx: RequestContext, id: bigint, dto: UpdateShippingMethodDto) {
     const prev = await this.get(ctx, id);
+    await assertStoreTaxClass(ctx.storeId, dto.taxClassId);
     const RULE_KEYS = ["perKgExtra", "minimumCost", "weightTiers", "minSubtotal"] as const;
     const patch: any = {};
     for (const k of Object.keys(dto)) {
@@ -227,6 +229,16 @@ export class ShippingMethodRepository {
   }
 }
 
+/** Refuses a tax class of another store (products, delivery options and rates point at one). */
+export async function assertStoreTaxClass(storeId: bigint | undefined, taxClassId: bigint | null | undefined) {
+  if (taxClassId === null || taxClassId === undefined) return;
+  const found = await prisma.taxClass.findFirst({
+    where: { id: taxClassId, ...(storeId !== undefined ? { storeId } : {}) },
+    select: { id: true },
+  });
+  if (!found) throw new BadRequestError("Pick one of this store's tax classes", "VALIDATION_FAILED");
+}
+
 export class TaxRateRepository {
   get model() { return prisma.taxRate as any; }
   private scope(ctx: RequestContext, extra: Record<string, any> = {}) {
@@ -235,22 +247,31 @@ export class TaxRateRepository {
     return where;
   }
 
-  /** The store's tax classes, for the tax rate form. */
+  /** The store's tax classes, for the tax rate, product and delivery option forms. */
   classes(ctx: RequestContext) {
     return prisma.taxClass.findMany({
       where: ctx.storeId !== undefined ? { storeId: ctx.storeId } : {},
-      select: { id: true, name: true },
+      select: { id: true, name: true, isDefault: true },
       orderBy: { id: "asc" },
     });
   }
 
-  /** Refuses a tax class of another store. */
-  private async assertClass(ctx: RequestContext, taxClassId: bigint) {
-    const found = await prisma.taxClass.findFirst({
-      where: { id: taxClassId, ...(ctx.storeId !== undefined ? { storeId: ctx.storeId } : {}) },
-      select: { id: true },
+  async createClass(ctx: RequestContext, name: string) {
+    if (ctx.storeId === undefined) throw new BadRequestError("Store not resolved", "TENANT_NOT_RESOLVED");
+    return prisma.taxClass.create({ data: { storeId: ctx.storeId, name }, select: { id: true, name: true, isDefault: true } });
+  }
+
+  /** Rename, or make it the default (the store's other classes stop being the default). */
+  async updateClass(ctx: RequestContext, id: bigint, d: { name?: string; isDefault?: boolean }) {
+    await this.assertClass(ctx, id);
+    return prisma.$transaction(async (t) => {
+      if (d.isDefault) await t.taxClass.updateMany({ where: { storeId: ctx.storeId, NOT: { id } }, data: { isDefault: false } });
+      return t.taxClass.update({ where: { id }, data: d, select: { id: true, name: true, isDefault: true } });
     });
-    if (!found) throw new BadRequestError("Pick one of this store's tax classes", "VALIDATION_FAILED");
+  }
+
+  private assertClass(ctx: RequestContext, taxClassId: bigint) {
+    return assertStoreTaxClass(ctx.storeId, taxClassId);
   }
 
   async list(ctx: RequestContext, q: { page?: number; perPage?: number; taxClassId?: bigint; countryCode?: string }) {
@@ -322,10 +343,17 @@ export class TaxRateRepository {
       breakdown.push({ name: r.name, ratePct, base, amount, compound: !!r.compound });
       totalTax += amount;
     }
-    const firstSimple = matched.find((r) => !r.compound);
-    const shipTax = firstSimple ? Math.round(Number(address.shippingTotal || 0) * Number(firstSimple.rate || 0)) / 100 : 0;
+    const firstSimple = matched.find((r) => !r.compound) as { name: string; rate: unknown } | undefined;
+    const shipBase = Number(address.shippingTotal ?? 0);
+    const shipRate = Number(firstSimple?.rate ?? 0);
+    const shipTax = firstSimple ? Math.round(shipBase * shipRate) / 100 : 0;
+    // Listed too, so the lines add up to the total.
+    if (firstSimple && shipTax > 0) {
+      breakdown.push({ name: `${firstSimple.name} (delivery)`, ratePct: shipRate, base: shipBase, amount: shipTax, compound: false });
+    }
     totalTax = Math.round((totalTax + shipTax) * 100) / 100;
-    if (breakdown.length === 0 && address.countryCode === "BD") {
+    // Only with no class in play: a class with no matching rate (e.g. exempt) really is no tax.
+    if (breakdown.length === 0 && address.countryCode === "BD" && !address.taxClassId) {
       const subtotal = Number(address.subtotal || 0);
       const ship = Number(address.shippingTotal || 0);
       breakdown.push({ name: "VAT 15% (default)", ratePct: 15, base: Math.round(subtotal * 100) / 100, amount: Math.round(subtotal * 15) / 100, compound: false });
