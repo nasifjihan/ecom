@@ -16,7 +16,7 @@ import { checkStorefrontIds, staffStorefronts } from "../storefronts/storefronts
 import { invalidateAdminPermissions, invalidateRolePermissions } from "../../config/admin-permissions";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
 import { markPasswordChanged } from "../auth/password-reset";
-import { TWO_FACTOR_OFF } from "../auth/staff-two-factor";
+import { resetTwoFactor } from "../auth/two-factor";
 import type { CreateRoleDto, CreateStaffDto, ResetStaffPasswordDto, UpdateRoleDto, UpdateStaffDto } from "./team.dto";
 
 const OWNER = "owner";
@@ -356,7 +356,32 @@ export class TeamService {
       throw new BadRequestError("Turn off your own two-step sign-in in Settings → Profile", "VALIDATION_FAILED");
     }
     await this.getStaffRow(id);
-    await prisma.adminUser.update({ where: { id }, data: TWO_FACTOR_OFF });
+    await resetTwoFactor("admin", id);
     return { id: String(id), twoFactorOn: false };
+  }
+
+  /** The store rule: every staff member must have two-step sign-in on before using the admin. */
+  async twoFactorRule() {
+    const [store, without] = await Promise.all([
+      prisma.store.findUniqueOrThrow({ where: { id: this.storeId }, select: { requireStaffTwoFactor: true } }),
+      prisma.adminUser.count({ where: { storeId: this.storeId, status: "active", twoFactorEnabledAt: null } }),
+    ]);
+    const me = this.myId === null ? null : await prisma.adminUser.findUnique({ where: { id: this.myId }, select: { twoFactorEnabledAt: true } });
+    return { required: store.requireStaffTwoFactor, staffWithout: without, youHaveIt: !!me?.twoFactorEnabledAt };
+  }
+
+  async setTwoFactorRule(required: boolean) {
+    if (!this.iAmOwner) throw new ForbiddenError("Only an owner can change this", "AUTH_INSUFFICIENT_PERMISSION");
+    // So nobody locks the shop out: the owner turning it on must already have it.
+    if (required && this.myId !== null) {
+      const me = await prisma.adminUser.findUnique({ where: { id: this.myId }, select: { twoFactorEnabledAt: true } });
+      if (!me?.twoFactorEnabledAt) {
+        throw new BadRequestError("Turn on your own two-step sign-in first (Settings → Profile)", "VALIDATION_FAILED");
+      }
+    }
+    await prisma.store.update({ where: { id: this.storeId }, data: { requireStaffTwoFactor: required } });
+    const all = await prisma.adminUser.findMany({ where: { storeId: this.storeId }, select: { id: true } });
+    await invalidateAdminPermissions(this.storeId, all.map((a) => a.id));
+    return this.twoFactorRule();
   }
 }

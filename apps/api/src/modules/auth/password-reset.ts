@@ -86,7 +86,7 @@ export async function assertNotRevoked(aud: TokenAudience, sub: string, iat: num
   }
   if (changedAt && (iat ?? 0) < changedAt) {
     throw new UnauthorizedError(
-      "Your password was changed. Please sign in again.",
+      "Your password or sign-in settings changed. Please sign in again.",
       "AUTH_EXPIRED_TOKEN",
     )
   }

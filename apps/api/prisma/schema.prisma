@@ -49,14 +49,16 @@ model BillingSubscription {
 }
 
 model Store {
-  id          BigInt               @id @default(autoincrement())
-  name        String
-  slug        String               @unique
-  planId      BigInt?
-  plan        Plan?                @relation(fields: [planId], references: [id])
-  status      String               @default("active")
-  trialEndsAt DateTime?
-  billingSub  BillingSubscription?
+  id                    BigInt               @id @default(autoincrement())
+  name                  String
+  slug                  String               @unique
+  planId                BigInt?
+  plan                  Plan?                @relation(fields: [planId], references: [id])
+  status                String               @default("active")
+  /// Staff must turn on two-step sign-in before they can use the admin (Batch 45).
+  requireStaffTwoFactor Boolean              @default(false)
+  trialEndsAt           DateTime?
+  billingSub            BillingSubscription?
 
   domains               Domain[]
   admins                AdminUser[]
@@ -253,16 +255,20 @@ model ProductStorefront {
 }
 
 model PlatformAdmin {
-  id              BigInt    @id @default(autoincrement())
-  email           String    @unique
-  passwordHash    String
-  name            String
-  role            String    @default("super_owner")
-  twoFactorSecret String?
-  lastLoginAt     DateTime?
-  lastLoginIp     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                   BigInt    @id @default(autoincrement())
+  email                String    @unique
+  passwordHash         String
+  name                 String
+  role                 String    @default("super_owner")
+  /// Two-step sign-in (Batch 45), as on AdminUser: secret encrypted, on once twoFactorEnabledAt is set.
+  twoFactorSecret      String?
+  twoFactorEnabledAt   DateTime?
+  twoFactorLastStep    Int?
+  twoFactorBackupCodes String[]  @default([])
+  lastLoginAt          DateTime?
+  lastLoginIp          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 // ============================================================

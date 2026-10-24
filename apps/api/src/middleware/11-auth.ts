@@ -10,7 +10,7 @@ import { jwt as jwtCfg, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config
 import { UnauthorizedError, ForbiddenError } from "../core";
 import type { TokenAudience } from "../config/jwt";
 import { COOKIE_NAMES } from "../config";
-import { adminPermissions, adminStorefronts } from "../config/admin-permissions";
+import { adminNeedsTwoFactor, adminPermissions, adminStorefronts } from "../config/admin-permissions";
 import type { UserType } from "@ecom/shared-types";
 import { tagRoute } from "../core/route-meta";
 
@@ -31,6 +31,9 @@ function readToken(req: Request, audience: TokenAudience): string | undefined {
   return undefined;
 }
 
+/** What staff can still reach before setting up a required two-step sign-in. */
+const TWO_FACTOR_SETUP_PATHS = /^\/api\/(auth\/|admin\/me\/two-factor(\/|\?|$))/;
+
 async function attachToCtx(
   req: Request,
   audience: TokenAudience,
@@ -47,7 +50,7 @@ async function attachToCtx(
     req.ctx.super = { id: obj.id };
     req.ctx.admin = { id: obj.id, role: "SUPER", permissions: ["*"] };
   } else if (audience === "admin") {
-    const storeId = (decoded as any).storeId;
+    const storeId = decoded.storeId;
     const permissions = storeId && decoded.sub
       ? await adminPermissions(BigInt(storeId), BigInt(decoded.sub)).catch(() => [] as string[])
       : [];
@@ -55,6 +58,14 @@ async function attachToCtx(
       ? (await adminStorefronts(BigInt(String(storeId)), BigInt(String(decoded.sub))).catch((): string[] => [])).map((s) => BigInt(s))
       : [];
     req.ctx.admin = { id: obj.id, role: obj.role ?? "ADMIN", permissions, storefrontIds };
+    // The store requires two-step sign-in: until it's set up, only sign-in and its setup work.
+    if (
+      storeId && decoded.sub && decoded.via !== "platform" &&
+      !TWO_FACTOR_SETUP_PATHS.test(req.originalUrl) &&
+      (await adminNeedsTwoFactor(BigInt(storeId), BigInt(decoded.sub)).catch(() => false))
+    ) {
+      throw new ForbiddenError("Set up two-step sign-in to keep using the admin", "AUTH_2FA_SETUP_REQUIRED");
+    }
   } else {
     req.ctx.customer = { id: obj.id };
   }
@@ -74,14 +85,16 @@ export default function authMiddleware(guard: AuthGuardType = "any") {
       for (const aud of candidates) {
         const tok = readToken(req, aud);
         if (!tok) continue;
+        let decoded: ReturnType<typeof jwtCfg.verifyAccessToken>;
         try {
-          const decoded = jwtCfg.verifyAccessToken(tok, aud);
-          await attachToCtx(req, aud, decoded);
-          found = true;
-          break;
+          decoded = jwtCfg.verifyAccessToken(tok, aud);
         } catch {
-          // keep trying other audiences
+          continue; // keep trying other audiences
         }
+        // Outside the try: a refusal here (two-step setup required) must reach the caller.
+        await attachToCtx(req, aud, decoded);
+        found = true;
+        break;
       }
 
       if (!found && guard !== "optional") {

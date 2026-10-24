@@ -12,6 +12,7 @@ import {
   Receipt,
   ShieldCheck,
   PieChart,
+  UserCog,
   FileSearch,
   ChevronRight,
   Shield,
@@ -64,6 +65,10 @@ const superNavSections: NavSection[] = [
       { href: "/reports", label: "Platform Reports", icon: PieChart },
       { href: "/reports/audit", label: "Audit Logs", icon: FileSearch },
     ],
+  },
+  {
+    title: "You",
+    items: [{ href: "/account", label: "My account", icon: UserCog }],
   },
 ];
 

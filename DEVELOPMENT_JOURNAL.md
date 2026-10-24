@@ -5632,3 +5632,65 @@ Staff can turn on a second step at sign-in: a 6-digit code from an authenticator
 - **Super admin:** the platform team's own sign-in (super admin) doesn't have two-step sign-in yet.
 - **Other sessions:** turning it on doesn't end sessions already signed in elsewhere. They carry on until they expire or the password changes.
 - **Store rule:** a store can't yet require two-step sign-in for all staff.
+
+---
+
+## ✅ BATCH #45 (part 1) — Two-step sign-in for the platform team, a store rule, and ending other sessions (2026-10-24)
+Builds on Batch 44 part 3: the platform team (super admin) gets two-step sign-in, a store can require it for all staff, and turning it on signs the person out everywhere else.
+
+### 45.1 One service for both kinds of account (`auth/two-factor.ts`)
+- **Renamed:** `staff-two-factor.ts` is now `two-factor.ts`. `TwoFactor(kind, id)` serves store staff (`"admin"`) and the platform team (`"super"`).
+- **Shared:** the code checks, each-code-once, encryption and backup codes are one copy for both.
+- **Database:** `PlatformAdmin` gets the same columns as `AdminUser`: `twoFactorEnabledAt`, `twoFactorLastStep`, `twoFactorBackupCodes`. Migration `20261024120000_two_step_more`.
+- **Routes:** `/api/super/me/two-factor/*` mirror `/api/admin/me/two-factor/*`.
+- **Sign-in:** super sign-in takes `code` and answers `AUTH_2FA_REQUIRED` / `AUTH_2FA_INVALID`, like staff sign-in.
+
+### 45.2 Super admin app
+- **Login:** the login page gets the code step. Backup codes work there too.
+- **My account** (new, in the sidebar under "You"): set up with a QR code or the key, the 10 backup codes, "New backup codes" and "Turn off" (each asks for the password).
+- **Admins page:** a **Two-step** column with a **Reset** button for store admins who have it on. This covers a shop's only owner losing their phone, which the store's own reset can't. Each reset is written to that store's activity log as `super.two_factor_reset`.
+- **Change from the plan:** there's no screen for managing the platform team itself, so a platform admin who loses their phone and backup codes is reset by whoever runs the server: `pnpm --filter @ecom/api two-factor:reset --super <email>` (or `--admin <email> --store <slug>` for store staff). The script ends their sessions too.
+
+### 45.3 The store rule
+- **Setting:** `Store.requireStaffTwoFactor`, set with the new Staff page switch "Require two-step sign-in for all staff" (`GET`/`PUT /admin/staff/two-factor-rule`).
+  - Owners only.
+  - Can't be turned on until the owner has two-step on, so nobody locks the shop out.
+  - The hint says how many active staff don't have it yet.
+- **Enforcement:** in the auth middleware.
+  - A staff member who hasn't set it up gets **403 `AUTH_2FA_SETUP_REQUIRED`** on every admin API except `/api/auth/*` (who am I, sign-out) and `/api/admin/me/two-factor/*`.
+  - The check is cached with permissions for 5 minutes (`adminNeedsTwoFactor`). Setting it up, turning it off, a reset and a rule change clear the cache.
+  - The platform's "log in as owner" tokens carry `via: "platform"` and skip the rule.
+- **Admin screen:** `/auth/me/admin` returns `twoFactorSetupRequired`. While it's true, the admin shows only a full-page "Set up two-step sign-in to continue" with the setup card.
+  - The backup codes stay on screen until "I've saved them". Only then does the admin re-read who-am-I and open the dashboard, so the codes aren't hidden too early.
+- **Fixed on the way:** the auth middleware caught every error while reading a token and tried the next token type, so a 403 from the setup check turned into 401 "Invalid or expired token". Now only the token check itself is retried.
+
+### 45.4 Turning it on ends other sessions
+- **When:** confirming setup, a new set of backup codes, an owner reset, a super reset and the reset script all mark the account changed. This reuses the password-change mechanism: a Redis timestamp, and refresh tokens issued before it are refused.
+- **This browser:** confirm and backup-codes answer with a new `accessToken` and set a new refresh cookie, so the person stays signed in.
+- **Limit:** another device's access token keeps working until it expires: **15 minutes** (`JWT_ACCESS_TTL_MIN`).
+- **Message:** the refusal now reads "Your password or sign-in settings changed. Please sign in again."
+- **Tidy-up:** the refresh-cookie code moved to an exported `setRefreshCookie`, and `twoFactorLastStep` joins the fields stripped from every JSON response.
+
+### 45.5 Checked
+- **Tests:** `tests/integration/two-factor.db.test.ts` (10, renamed from `staff-two-factor`), adding:
+  - **Platform team:** setup, then super sign-in needs the code, and a reset makes the password enough again.
+  - **The rule, over HTTP:**
+    - turning it on is refused before the owner has two-step;
+    - an unprotected staff member gets 403 `AUTH_2FA_SETUP_REQUIRED` on `/api/admin/orders`;
+    - the same person gets 200 on `/api/admin/me/two-factor`, and `twoFactorSetupRequired: true` from who-am-I;
+    - after setup the 403 is gone.
+  - **Sessions:** a refresh token issued before turning it on is refused (`AUTH_EXPIRED_TOKEN`), and one issued after works.
+- **Full suite:** API on `ecom_test`, 87 files passing.
+- **Typecheck:** API, store admin and super admin pass.
+- **Lint:** no new lint errors (the auth middleware went from 5 older errors to 2).
+- **In the browser** (super admin on 3102, store admin on 3101), with codes worked out from the shown key:
+  - **Super, setup:** My account showed the QR code; "Turn on" gave 10 backup codes; the Admins page still loaded (still signed in).
+  - **Super, sign-in:** the password alone got `AUTH_2FA_REQUIRED`; the code box appeared and a code signed in.
+  - **Super, script:** the reset script turned it off (an unknown email is refused), and the password alone worked again.
+  - **Store rule, switch:** greyed out with "Turn on your own two-step sign-in first" while the owner had none. After that it switched on ("Everyone on the team now needs two-step sign-in").
+  - **Store rule, screen:** with the owner's own two-step then off, the admin showed only "Set up two-step sign-in to continue". Setting it up there kept the backup codes on screen, and "I've saved them" opened the orders page.
+  - **Dev data:** reset afterwards (rule off, no two-step on any account).
+
+### 45.6 Not done
+- **Platform team screen:** there's still no screen for managing the platform team; the reset for them is the script.
+- **Other devices:** they stay signed in for up to 15 minutes after the change (access token lifetime).

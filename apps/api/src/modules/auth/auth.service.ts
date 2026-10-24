@@ -20,7 +20,7 @@ import {
 } from "../../core";
 import bcrypt from "bcryptjs";
 import { assertNotRevoked } from "./password-reset";
-import { checkSignInCode } from "./staff-two-factor";
+import { checkSignInCode } from "./two-factor";
 import type { RequestContext } from "../../core/base.repository";
 import type { TokenAudience, TokenPayload } from "../../config/jwt";
 import { UserType, AdminRole } from "@ecom/shared-types";
@@ -48,6 +48,7 @@ export class AuthService extends BaseService {
     if (!ok) {
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
+    await checkSignInCode("super", row, dto.code);
     const lastLoginIp = this.ctx.ip ?? "";
     await prisma.platformAdmin.update({
       where: { id: row.id },
@@ -81,7 +82,7 @@ export class AuthService extends BaseService {
     if (row.status !== "active") {
       throw new UnauthorizedError("Account inactive", "AUTH_ACCOUNT_INACTIVE");
     }
-    await checkSignInCode(row, dto.code);
+    await checkSignInCode("admin", row, dto.code);
     const lastLoginIp = this.ctx.ip ?? "";
     await prisma.adminUser.update({
       where: { id: row.id },
@@ -171,8 +172,10 @@ export class AuthService extends BaseService {
     return row;
   }
 
-  async issueTokens(user: any, audience: TokenAudience) {
+  /** `via: "platform"` marks the platform team signing in as a store owner (no staff two-step rule). */
+  async issueTokens(user: any, audience: TokenAudience, opts: { via?: "platform" } = {}) {
     const payload: Omit<TokenPayload, "aud" | "jti" | "iat" | "exp"> = {
+      ...(opts.via ? { via: opts.via } : {}),
       sub: String(user.id),
       type:
         audience === "super"

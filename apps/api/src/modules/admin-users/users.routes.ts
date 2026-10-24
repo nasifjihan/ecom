@@ -1,4 +1,7 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import { prisma } from "../../config";
+import { NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
+import { resetTwoFactor } from "../auth/two-factor";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { usersController } from "./users.controller";
 import {
@@ -152,6 +155,29 @@ superAdminUsersRouter.post(
 );
 
 superAdminUsersRouter.post("/:id/reset-password", usersController.resetPassword);
+
+// A store admin who lost their phone (e.g. a shop's only owner): two-step sign-in off, sessions end.
+superAdminUsersRouter.post(
+  "/:id/two-factor/reset",
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const id = BigInt((req.params as { id: string }).id);
+    const admin = await prisma.adminUser.findUnique({ where: { id }, select: { storeId: true } });
+    if (!admin) throw new NotFoundError("Admin user", String(id));
+    await resetTwoFactor("admin", id);
+    await prisma.auditLog.create({
+      data: {
+        storeId: admin.storeId,
+        adminId: id,
+        action: "super.two_factor_reset",
+        objectType: "admin_user",
+        objectId: String(id),
+        changes: { superAdminId: String(req.ctx.super?.id ?? "") },
+        ipAddress: req.ctx.ip ?? null,
+      },
+    });
+    envelope(res, { data: { id: String(id), twoFactorOn: false }, message: "Two-step sign-in reset" });
+  }),
+);
 
 const superRolesRouter = Router();
 

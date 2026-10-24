@@ -6,6 +6,9 @@
  * backup codes, needs the password.
  */
 import { useState } from "react";
+import { useDispatch } from "react-redux";
+import { api } from "@ecom/api-client";
+import { setAccessToken } from "@/lib/features/auth/auth-slice";
 import { toast } from "sonner";
 import { Copy, Download, ShieldCheck, ShieldOff } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Skeleton } from "@/components/ui";
@@ -58,6 +61,7 @@ function BackupCodes({ codes, onDone }: { codes: string[]; onDone: () => void })
 }
 
 export function TwoFactorCard() {
+  const dispatch = useDispatch();
   const { data, isLoading } = useTwoFactorStatusQuery();
   const [start, { isLoading: starting }] = useStartTwoFactorMutation();
   const [confirm, { isLoading: confirming }] = useConfirmTwoFactorMutation();
@@ -81,6 +85,8 @@ export function TwoFactorCard() {
     e.preventDefault();
     try {
       const res = await confirm({ code: code.trim() }).unwrap();
+      // Other sessions just ended; this one carries on with the new token.
+      dispatch(setAccessToken(res.accessToken));
       setSetup(null);
       setCodes(res.backupCodes);
       toast.success("Two-step sign-in is on");
@@ -95,7 +101,9 @@ export function TwoFactorCard() {
         await disable({ password }).unwrap();
         toast.success("Two-step sign-in is off");
       } else {
-        setCodes((await renew({ password }).unwrap()).backupCodes);
+        const res = await renew({ password }).unwrap();
+        dispatch(setAccessToken(res.accessToken));
+        setCodes(res.backupCodes);
       }
       setAsking(null);
       setPassword("");
@@ -120,7 +128,14 @@ export function TwoFactorCard() {
         {isLoading || !data ? (
           <Skeleton className="h-10 w-48" />
         ) : codes ? (
-          <BackupCodes codes={codes} onDone={() => setCodes(null)} />
+          <BackupCodes
+            codes={codes}
+            onDone={() => {
+              setCodes(null);
+              // Only now: re-reading "who am I" clears a "set up first" screen, which would hide the codes.
+              dispatch(api.util.invalidateTags(["Me"]));
+            }}
+          />
         ) : setup ? (
           <form onSubmit={onConfirm} className="grid gap-4 sm:grid-cols-[auto_1fr]">
             <img src={setup.qr} alt="QR code to scan with your authenticator app" width={180} height={180} className="rounded-md border bg-white p-1" />

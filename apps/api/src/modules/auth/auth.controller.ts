@@ -26,6 +26,7 @@ import { SmsService } from "../sms/sms.service";
 import type { OtpVerifyDto } from "../sms/sms.dto";
 import { CustomerLoginService, type EmailCodeVerifyDto } from "./customer-login";
 import { isOAuthProvider } from "./oauth.providers";
+import { adminNeedsTwoFactor } from "../../config/admin-permissions";
 import type {
   SuperLoginDto,
   AdminLoginDto,
@@ -41,24 +42,29 @@ function omitPasswordHash(obj: any): any {
   return rest;
 }
 
+/** The httpOnly refresh-token cookie for one kind of account (also used after two-step changes). */
+export function setRefreshCookie(res: Response, audience: TokenAudience, refreshToken: string) {
+  const name =
+    audience === "super"
+      ? COOKIE_NAMES.SUPER_REFRESH
+      : audience === "admin"
+        ? COOKIE_NAMES.ADMIN_REFRESH
+        : COOKIE_NAMES.CUSTOMER_REFRESH;
+  res.cookie(name, refreshToken, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+    domain: env.COOKIE_DOMAIN,
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
 export class AuthController extends BaseController {
   private service = (ctx: RequestContext) => new AuthService(ctx);
 
   private setCookie(res: Response, audience: TokenAudience, refreshToken: string) {
-    const name =
-      audience === "super"
-        ? COOKIE_NAMES.SUPER_REFRESH
-        : audience === "admin"
-          ? COOKIE_NAMES.ADMIN_REFRESH
-          : COOKIE_NAMES.CUSTOMER_REFRESH;
-    res.cookie(name, refreshToken, {
-      httpOnly: true,
-      secure: env.NODE_ENV === "production",
-      sameSite: "lax",
-      domain: env.COOKIE_DOMAIN,
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setRefreshCookie(res, audience, refreshToken);
   }
 
   private clearCookie(res: Response, audience: TokenAudience) {
@@ -423,7 +429,9 @@ export class AuthController extends BaseController {
     if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
     const svc = this.service(req.ctx);
     const user = await svc.getAdminProfile(id, storeId);
-    envelope(res, { status: 200, data: omitPasswordHash(user) });
+    // The store requires two-step sign-in and this person hasn't set it up: the admin shows the setup screen.
+    const twoFactorSetupRequired = await adminNeedsTwoFactor(BigInt(storeId), BigInt(id));
+    envelope(res, { status: 200, data: { ...omitPasswordHash(user), twoFactorSetupRequired } });
   });
 
   getMeCustomer = ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {

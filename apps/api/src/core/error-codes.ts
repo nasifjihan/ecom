@@ -28,6 +28,8 @@ export type ErrorCode =
   /** Staff with two-step sign-in on: the password was right, now the code is needed. */
   | "AUTH_2FA_REQUIRED"
   | "AUTH_2FA_INVALID"
+  /** The store requires two-step sign-in and this staff member hasn't set it up. */
+  | "AUTH_2FA_SETUP_REQUIRED"
   | "TENANT_NOT_RESOLVED"
   | "TENANT_SUSPENDED"
   | "TENANT_CANCELLED"

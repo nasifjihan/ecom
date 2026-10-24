@@ -6,6 +6,8 @@ import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import { PageGuard } from "@/components/layout/page-guard";
 import { useTextSize } from "@/lib/features/settings/preferences-api-slice";
+import { useMeQuery } from "@/lib/features/auth/auth-api-slice";
+import { TwoFactorCard } from "@/components/settings/two-factor-card";
 
 export default function DashboardLayout({
   children,
@@ -14,6 +16,22 @@ export default function DashboardLayout({
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   useTextSize();
+  const { data: me } = useMeQuery();
+
+  // The store requires two-step sign-in: nothing else works until it's set up (the API refuses the rest).
+  if (me?.twoFactorSetupRequired) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
+        <div className="w-full max-w-2xl space-y-4">
+          <div>
+            <h1 className="text-2xl font-bold">Set up two-step sign-in to continue</h1>
+            <p className="text-sm text-slate-500">The shop owner requires it for everyone on the team. It takes a minute with an authenticator app on your phone.</p>
+          </div>
+          <TwoFactorCard />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">

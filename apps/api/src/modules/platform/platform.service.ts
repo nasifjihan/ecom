@@ -570,7 +570,7 @@ export class PlatformService extends BaseService {
     const adminDomain = store.domains.find((d) => d.type === "admin");
     if (!adminDomain) throw new ConflictError("Add an admin domain to this store first", "CONFLICT");
 
-    const tokens = await new AuthService({ ...this.ctx, storeId }).issueTokens(owner, "admin");
+    const tokens = await new AuthService({ ...this.ctx, storeId }).issueTokens(owner, "admin", { via: "platform" });
     await prisma.auditLog.create({
       data: {
         storeId,

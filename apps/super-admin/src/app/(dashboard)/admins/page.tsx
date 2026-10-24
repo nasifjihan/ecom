@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck, ShieldOff } from "lucide-react";
+import { toast } from "sonner";
+import { useResetStoreAdminTwoFactorMutation } from "@/lib/features/auth/two-factor-api-slice";
 import {
   Badge,
+  Button,
   Card,
   CardContent,
   CardHeader,
@@ -37,6 +40,17 @@ export default function StoreAdminsPage() {
 
   const { data, isLoading, isError } = useGetStoreAdminsQuery({ page, search: debounced || undefined });
   const { data: stores } = useGetStoresQuery({ perPage: 100 });
+  const [resetTwoFactor, { isLoading: resetting }] = useResetStoreAdminTwoFactorMutation();
+  /** For a store admin who lost their phone, e.g. a shop's only owner: they sign in with the password, then set it up again. */
+  const onReset = async (id: string, name: string) => {
+    if (!window.confirm(`Reset two-step sign-in for ${name}? Their sessions end and they can sign in with just their password.`)) return;
+    try {
+      await resetTwoFactor(id).unwrap();
+      toast.success(`Two-step sign-in reset for ${name}`);
+    } catch {
+      toast.error("Couldn't reset it. Please try again.");
+    }
+  };
   const storeNames = useMemo(() => new Map((stores?.items ?? []).map((s) => [s.id, s.name])), [stores]);
   const admins = data?.items ?? [];
 
@@ -65,19 +79,20 @@ export default function StoreAdminsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Last Login</TableHead>
                   <TableHead>Added</TableHead>
+                  <TableHead className="text-right">Two-step</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
                 ) : isError ? (
-                  <EmptyRow colSpan={7} icon={ShieldCheck} title="Couldn't load admins" />
+                  <EmptyRow colSpan={8} icon={ShieldCheck} title="Couldn't load admins" />
                 ) : admins.length === 0 ? (
-                  <EmptyRow colSpan={7} icon={ShieldCheck} title="No admins found" />
+                  <EmptyRow colSpan={8} icon={ShieldCheck} title="No admins found" />
                 ) : (
                   admins.map((a) => (
                     <TableRow key={a.id}>
@@ -98,6 +113,21 @@ export default function StoreAdminsPage() {
                       </TableCell>
                       <TableCell className="text-xs text-slate-500">{a.lastLoginAt ? formatDate(a.lastLoginAt) : "Never"}</TableCell>
                       <TableCell className="text-xs text-slate-500">{formatDate(a.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        {a.twoFactorEnabledAt ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={resetting}
+                            title="Reset two-step sign-in (lost phone)"
+                            onClick={() => void onReset(a.id, `${a.firstName} ${a.lastName}`.trim() || a.email)}
+                          >
+                            <ShieldOff className="mr-1.5 h-4 w-4" /> Reset
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-400">Off</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

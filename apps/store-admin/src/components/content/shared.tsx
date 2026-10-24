@@ -58,6 +58,7 @@ export function Toggle({
   hint,
   id,
   ariaLabel,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -66,17 +67,20 @@ export function Toggle({
   id?: string;
   /** Screen-reader name for a switch shown without a visible label. */
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
-    <label htmlFor={id} className="flex cursor-pointer select-none items-start gap-3">
+    <label htmlFor={id} className={cn("flex select-none items-start gap-3", disabled ? "cursor-not-allowed" : "cursor-pointer")}>
       <button
         id={id}
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={ariaLabel ?? label}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
+          "disabled:opacity-50",
           "focus-visible:ring-ring relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2",
           checked ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-700",
         )}

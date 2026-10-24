@@ -45,6 +45,8 @@ export interface MeResponse {
     name: string;
   };
   permissions: string[];
+  /** The store requires two-step sign-in and this person hasn't set it up yet. */
+  twoFactorSetupRequired?: boolean;
 }
 
 /** AdminUser row as returned by /auth/admin/login and /auth/me/admin. */
@@ -57,6 +59,7 @@ interface ApiAdminUser {
   isSalesperson?: boolean;
   roleId?: string;
   role?: { name: string; permissions?: { permission: string }[] } | null;
+  twoFactorSetupRequired?: boolean;
 }
 
 const toAuthUser = (u: ApiAdminUser) => ({
@@ -100,6 +103,7 @@ export const authApiSlice = api.injectEndpoints({
         user: toAuthUser(u),
         storeId: u.storeId,
         permissions: u.role?.permissions?.map((p) => p.permission) ?? [],
+        twoFactorSetupRequired: !!u.twoFactorSetupRequired,
       }),
       providesTags: ["Me"],
     }),

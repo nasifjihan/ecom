@@ -21,6 +21,8 @@ export type TokenPayload = {
   iat?: number;
   exp?: number;
   jti: string;
+  /** "platform": the platform team signed in as this store admin. */
+  via?: "platform";
 };
 
 const SECRETS: Record<TokenAudience, { access: string; refresh: string }> = {

@@ -25,6 +25,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:reset": "prisma migrate reset --force",
     "prisma:seed": "tsx prisma/seed.ts",
+    "two-factor:reset": "tsx scripts/reset-two-factor.ts",
     "prisma:studio": "prisma studio --port 5555"
   },
   "dependencies": {

@@ -8,6 +8,21 @@ import { cacheDel, cacheGet, cacheSet } from "./redis";
 
 const key = (storeId: bigint | string, adminId: bigint | string) => `admin:perms:${storeId}:${adminId}`;
 const sfKey = (storeId: bigint | string, adminId: bigint | string) => `admin:storefronts:${storeId}:${adminId}`;
+const tfaKey = (storeId: bigint | string, adminId: bigint | string) => `admin:tfa:${storeId}:${adminId}`;
+
+/** The store requires two-step sign-in and this staff member hasn't set it up (cached like permissions). */
+export async function adminNeedsTwoFactor(storeId: bigint, adminId: bigint): Promise<boolean> {
+  const k = tfaKey(storeId, adminId);
+  const cached = await cacheGet<boolean>(k).catch(() => null);
+  if (cached !== null && cached !== undefined) return cached;
+  const admin = await prisma.adminUser.findFirst({
+    where: { id: adminId, storeId },
+    select: { twoFactorEnabledAt: true, store: { select: { requireStaffTwoFactor: true } } },
+  });
+  const needs = !!admin?.store.requireStaffTwoFactor && !admin.twoFactorEnabledAt;
+  await cacheSet(k, needs, 300).catch(() => void 0);
+  return needs;
+}
 
 /** Storefront ids a staff member is limited to ([] = every storefront), cached like permissions. */
 export async function adminStorefronts(storeId: bigint, adminId: bigint): Promise<string[]> {
@@ -36,7 +51,7 @@ export async function adminPermissions(storeId: bigint, adminId: bigint): Promis
 
 export async function invalidateAdminPermissions(storeId: bigint, adminIds: bigint[]) {
   if (adminIds.length) {
-    await cacheDel(...adminIds.flatMap((id) => [key(storeId, id), sfKey(storeId, id)])).catch(() => void 0);
+    await cacheDel(...adminIds.flatMap((id) => [key(storeId, id), sfKey(storeId, id), tfaKey(storeId, id)])).catch(() => void 0);
   }
 }
 

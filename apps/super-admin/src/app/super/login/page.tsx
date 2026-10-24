@@ -45,6 +45,9 @@ export default function SuperAdminLoginPage() {
   const searchParams = useSearchParams();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
+  // Two-step sign-in: shown once the API says the password was right and a code is needed.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const [loginSuper, { isLoading }] = useLoginSuperMutation();
 
   const form = useForm<SuperLoginFormValues>({
@@ -71,6 +74,7 @@ export default function SuperAdminLoginPage() {
         email: values.email,
         password: values.password,
         rememberMe: values.rememberMe,
+        code: needCode ? code.trim() : undefined,
       }).unwrap();
 
       dispatch(
@@ -96,6 +100,16 @@ export default function SuperAdminLoginPage() {
         data?: string | Record<string, string[]>;
         status?: number;
       };
+      const body = (typeof error.data === "object" ? error.data : {}) as { code?: string; message?: string };
+      if (body.code === "AUTH_2FA_REQUIRED") {
+        setNeedCode(true);
+        return;
+      }
+      if (body.code === "AUTH_2FA_INVALID") {
+        setCode("");
+        toast.error("Code not accepted", { description: body.message });
+        return;
+      }
       let message = "Invalid super admin credentials. Please try again.";
       if (typeof error.data === "string") {
         message = error.data;
@@ -327,6 +341,27 @@ export default function SuperAdminLoginPage() {
                     />
                   </motion.div>
 
+                  {needCode && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
+                      <label htmlFor="two-factor-code" className="text-sm font-medium text-slate-300">
+                        Code from your authenticator app
+                      </label>
+                      <Input
+                        id="two-factor-code"
+                        autoFocus
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        maxLength={12}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        className="h-11 tracking-widest text-center text-lg"
+                        disabled={isLoading}
+                      />
+                      <p className="text-xs text-slate-400">Lost your phone? Type one of your backup codes instead.</p>
+                    </motion.div>
+                  )}
+
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -361,7 +396,7 @@ export default function SuperAdminLoginPage() {
                     <Button
                       type="submit"
                       className="h-11 w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg shadow-lg shadow-rose-900/30"
-                      disabled={isLoading}
+                      disabled={isLoading || (needCode && code.trim().length < 6)}
                     >
                       {isLoading ? (
                         <span className="flex items-center gap-2">

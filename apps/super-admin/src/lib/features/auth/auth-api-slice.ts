@@ -7,6 +7,8 @@ export interface SuperLoginCredentials {
   email: string;
   password: string;
   rememberMe?: boolean;
+  /** Two-step sign-in: the authenticator code or a backup code (asked for after AUTH_2FA_REQUIRED). */
+  code?: string;
 }
 
 export interface SuperLoginResponse {
@@ -40,10 +42,10 @@ const toSuperUser = (u: ApiPlatformAdmin): SuperAuthUser => ({
 export const superAuthApiSlice = api.injectEndpoints({
   endpoints: (builder) => ({
     loginSuper: builder.mutation<SuperLoginResponse, SuperLoginCredentials>({
-      query: ({ email, password }) => ({
+      query: ({ email, password, code }) => ({
         url: "/auth/super/login",
         method: "POST",
-        body: { email, password },
+        body: { email, password, ...(code ? { code } : {}) },
       }),
       // The refresh token is set as an httpOnly cookie by the API, not returned in the body.
       transformResponse: (res: { accessToken: string; user: ApiPlatformAdmin }) => ({

@@ -3,6 +3,8 @@ import { z } from "zod";
 export const SuperLoginDto = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+  /** With two-step sign-in on: the authenticator code, or a backup code. */
+  code: z.string().trim().max(12).optional(),
 });
 
 export const AdminLoginDto = z.object({

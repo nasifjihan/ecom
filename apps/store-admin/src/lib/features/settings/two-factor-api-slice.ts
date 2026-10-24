@@ -23,7 +23,7 @@ export const twoFactorApi = api.injectEndpoints({
     startTwoFactor: b.mutation<TwoFactorSetup, void>({
       query: () => ({ url: "/admin/me/two-factor/start", method: "POST" }),
     }),
-    confirmTwoFactor: b.mutation<{ backupCodes: string[] }, { code: string }>({
+    confirmTwoFactor: b.mutation<{ backupCodes: string[]; accessToken: string }, { code: string }>({
       query: (body) => ({ url: "/admin/me/two-factor/confirm", method: "POST", body }),
       invalidatesTags: [TAG],
     }),
@@ -31,7 +31,7 @@ export const twoFactorApi = api.injectEndpoints({
       query: (body) => ({ url: "/admin/me/two-factor/disable", method: "POST", body }),
       invalidatesTags: [TAG],
     }),
-    newBackupCodes: b.mutation<{ backupCodes: string[] }, { password: string }>({
+    newBackupCodes: b.mutation<{ backupCodes: string[]; accessToken: string }, { password: string }>({
       query: (body) => ({ url: "/admin/me/two-factor/backup-codes", method: "POST", body }),
       invalidatesTags: [TAG],
     }),

@@ -9,6 +9,7 @@
  *   GET              /api/admin/audit-logs              activity log
  */
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { BadRequestError, ctrl, envelope, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { TeamService } from "./team.service";
@@ -24,6 +25,7 @@ import {
 } from "./team.dto";
 
 type Req = Request & { ctx: RequestContext };
+const TwoFactorRuleDto = z.object({ required: z.boolean() });
 const svc = (req: Req) => new TeamService(req.ctx);
 const id = (req: Req) => BigInt((req.params as { id: string }).id);
 const send = (run: (req: Req) => Promise<unknown> | unknown, status = 200) =>
@@ -46,6 +48,13 @@ adminTeamRolesRouter.delete("/:id", rbacMiddleware("roles.delete"), validate({ p
 export const adminStaffRouter = Router();
 adminStaffRouter.use(authMiddleware("adminOrSuper"));
 adminStaffRouter.get("/", rbacMiddleware("staff.view"), send((r) => svc(r).listStaff()));
+adminStaffRouter.get("/two-factor-rule", rbacMiddleware("staff.view"), send((r) => svc(r).twoFactorRule()));
+adminStaffRouter.put(
+  "/two-factor-rule",
+  rbacMiddleware("staff.edit"),
+  validate({ body: TwoFactorRuleDto }),
+  send((r) => svc(r).setTwoFactorRule((r.body as z.infer<typeof TwoFactorRuleDto>).required)),
+);
 adminStaffRouter.post("/", rbacMiddleware("staff.create"), validate({ body: CreateStaffDto }), send((r) => svc(r).createStaff(r.body as CreateStaffDto), 201));
 adminStaffRouter.patch("/:id", rbacMiddleware("staff.edit"), validate({ params: IdParam, body: UpdateStaffDto }), send((r) => svc(r).updateStaff(id(r), r.body as UpdateStaffDto)));
 adminStaffRouter.post(

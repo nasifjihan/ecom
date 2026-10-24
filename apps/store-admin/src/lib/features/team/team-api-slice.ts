@@ -97,6 +97,14 @@ export const teamApi = api.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/admin/staff/${id}`, method: "PATCH", body }),
       invalidatesTags: ["User", "Role"],
     }),
+    twoFactorRule: b.query<{ required: boolean; staffWithout: number; youHaveIt: boolean }, void>({
+      query: () => "/admin/staff/two-factor-rule",
+      providesTags: ["User"],
+    }),
+    setTwoFactorRule: b.mutation<{ required: boolean; staffWithout: number; youHaveIt: boolean }, boolean>({
+      query: (required) => ({ url: "/admin/staff/two-factor-rule", method: "PUT", body: { required } }),
+      invalidatesTags: ["User"],
+    }),
     resetStaffTwoFactor: b.mutation<void, string>({
       query: (id) => ({ url: `/admin/staff/${id}/two-factor/reset`, method: "POST" }),
       invalidatesTags: ["User"],
@@ -127,5 +135,7 @@ export const {
   useUpdateStaffMutation,
   useSetStaffPasswordMutation,
   useResetStaffTwoFactorMutation,
+  useTwoFactorRuleQuery,
+  useSetTwoFactorRuleMutation,
   useGetAuditLogsQuery,
 } = teamApi;

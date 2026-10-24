@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui";
-import { Field } from "@/components/content/shared";
+import { Field, Toggle } from "@/components/content/shared";
 import { errorText } from "@/lib/features/content/content-api-slice";
 import { useCan } from "@/lib/permissions";
 import {
@@ -35,6 +35,8 @@ import {
   useGetStaffQuery,
   useSetStaffPasswordMutation,
   useResetStaffTwoFactorMutation,
+  useTwoFactorRuleQuery,
+  useSetTwoFactorRuleMutation,
   useUpdateStaffMutation,
   type StaffMember,
 } from "@/lib/features/team/team-api-slice";
@@ -53,6 +55,16 @@ export default function StaffPage() {
   const [updateStaff, { isLoading: updating }] = useUpdateStaffMutation();
   const [setPassword, { isLoading: settingPw }] = useSetStaffPasswordMutation();
   const [resetTwoFactor, { isLoading: resetting2fa }] = useResetStaffTwoFactorMutation();
+  const { data: rule } = useTwoFactorRuleQuery();
+  const [saveRule, { isLoading: savingRule }] = useSetTwoFactorRuleMutation();
+  const onRule = async (required: boolean) => {
+    try {
+      await saveRule(required).unwrap();
+      toast.success(required ? "Everyone on the team now needs two-step sign-in" : "Two-step sign-in is now each person's choice");
+    } catch (err) {
+      toast.error(errorText(err));
+    }
+  };
   /** For someone who lost their phone: they sign in with the password alone, then can set it up again. */
   const onResetTwoFactor = async (s: StaffMember) => {
     if (!window.confirm(`Reset two-step sign-in for ${s.name}? They can then sign in with just their password.`)) return;
@@ -139,6 +151,27 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-6">
+      {rule && (
+        <Card>
+          <CardContent className="pt-6">
+            <Toggle
+              checked={rule.required}
+              onChange={(v) => void onRule(v)}
+              disabled={!isOwner || savingRule || (!rule.required && !rule.youHaveIt)}
+              label="Require two-step sign-in for all staff"
+              hint={
+                !isOwner
+                  ? "Only an owner can change this."
+                  : !rule.required && !rule.youHaveIt
+                    ? "Turn on your own two-step sign-in first (Settings → Profile), so the shop can't be locked out."
+                    : rule.staffWithout > 0
+                      ? `${rule.staffWithout} active staff member(s) don't have it yet. ${rule.required ? "They must set it up before they can do anything else." : "With this on, they must set it up before they can do anything else."}`
+                      : "Everyone on the team has it on."
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <div>

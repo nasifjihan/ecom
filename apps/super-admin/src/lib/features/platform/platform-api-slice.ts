@@ -106,6 +106,8 @@ export interface StoreAdmin {
   lastLoginAt: string | null;
   createdAt: string;
   role: { name: string; slug: string } | null;
+  /** Two-step sign-in is on (set when they confirmed it). */
+  twoFactorEnabledAt?: string | null;
 }
 
 export interface AuditLog {
@@ -223,6 +225,8 @@ export interface ApiAdminUser {
   lastLoginAt: string | null;
   createdAt: string;
   role: { name: string; slug: string } | null;
+  /** Two-step sign-in is on (set when they confirmed it). */
+  twoFactorEnabledAt?: string | null;
 }
 
 /* ============================== Helpers ============================== */
