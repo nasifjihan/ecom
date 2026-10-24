@@ -19,6 +19,14 @@ services:
       PRODUCTION_REHEARSAL: "on"
       EMAIL_WORKER: "off"
   worker: *rehearsal
+  backup: *rehearsal
+
+  # S3-compatible stand-in for the backup bucket (MinIO no longer publishes free images).
+  s3:
+    image: adobe/s3mock:3.12.0
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ecom-backups
+    networks: [ecom]
 
   mailpit:
     image: axllent/mailpit:latest

@@ -95,7 +95,42 @@ Then:
 3. **Domains:** add the store's addresses. Storefront: `shop.com` (and `www.shop.com`). Admin: `admin.shop.com`. The API finds the store from these.
 4. **Store admin:** sign in at `https://admin.shop.com` as the store owner and set up the store's settings: payments, couriers, SMS, shipping, taxes. Turn on two-step sign-in there too. **Staff → "Require two-step sign-in for all staff"** is recommended.
 
-## 6. Updating
+## 6. Backups
+
+- **Every night at 02:30 (Dhaka time)** the `backup` service saves a compressed copy of the database (`pg_dump`):
+  - on the server, in the `backups` volume;
+  - in the **private** bucket `BACKUP_S3_BUCKET`.
+- **What's kept:** the last 7 nights, and one from each of the 4 weeks before, in both places. Older ones are deleted.
+- **What isn't in it:**
+  - product images: they live in the storage bucket, so turn on its versioning or lifecycle rules with your provider;
+  - Redis: only queues and caches.
+
+```bash
+C="docker compose -f docker-compose.prod.yml"
+ exec backup ./node_modules/.bin/tsx scripts/backup.ts              # a backup now (e.g. before a big change)
+ logs backup | tail                                                # last runs ("Database backup done")
+ exec backup ls -lh /backups                                       # what's on the server
+```
+
+**Test a restore once a month.** It restores into a scratch database, compares every table's row count with the live one, and deletes the scratch copy. Nothing live is touched:
+
+```bash
+ exec backup ./node_modules/.bin/tsx scripts/restore.ts latest --test
+```
+
+**In an emergency** (a bad migration, or data deleted by mistake), this replaces the live database with a backup:
+
+```bash
+ stop api worker
+ exec backup ./node_modules/.bin/tsx scripts/restore.ts latest --yes        # or a file name: ecom-20261025-0230.dump
+ start api worker
+```
+
+- **Atomic:** it runs as one transaction. If anything fails, the database stays as it was.
+- **New server:** restore there the same way. It fetches the file from the bucket when it isn't on the server.
+- **Afterwards:** everyone signs in again; sessions are lost with the old server's Redis.
+
+## 7. Updating
 
 ```bash
 cd ~/ecom
@@ -106,14 +141,14 @@ docker image prune -f
 
 **To pin a version,** set `IMAGE_TAG=<commit>` in `.env` (the 7-character commit shown in GitHub), then `pull` and `up -d`.
 
-## 7. Rolling back
+## 8. Rolling back
 
 - **Code-only change:** set `IMAGE_TAG` to the previous commit, then `pull` and `up -d`.
 - **Release with a database migration:** migrations don't undo themselves.
-  1. Restore the last backup taken before the update (see Backups).
+  1. Restore the last backup taken before the update (see section 6). Take one by hand just before a big update.
   2. Then start the previous `IMAGE_TAG`.
 
-## 8. Everyday commands
+## 9. Everyday commands
 
 ```bash
 C="docker compose -f docker-compose.prod.yml"
@@ -130,7 +165,7 @@ $C run --rm api ./node_modules/.bin/tsx scripts/reset-two-factor.ts --super you@
 $C run --rm api ./node_modules/.bin/tsx scripts/refresh-ratings.ts
 ```
 
-## 9. Rehearse locally first (optional)
+## 10. Rehearse locally first (optional)
 
 The same images and compose file run on a developer machine, at `http://*.ecom.localhost`:
 

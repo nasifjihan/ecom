@@ -5869,3 +5869,46 @@ The production setup: one Linux server with Docker Compose, Caddy for HTTPS, ima
 - **Checkout page:** in the rehearsal, the checkout page's Place Order sent nothing, and no message showed in the hidden browser pane. The order was placed through the same API instead. To look at next with the browser visible.
 - **Empty terms label on new stores:** a brand-new store has no terms or privacy pages, so the checkout's "I have read and agree to the … and …" shows empty link names.
 - **Moved to part 4:** audit finding 4 (the session cut-off kept only in Redis) and finding 5 (sign-in limits skipped while Redis is down).
+
+---
+
+## ✅ BATCH #46 (part 2) — Database backups and restore (2026-10-24)
+Nightly database backups kept on the server and in a separate private bucket, with a restore that can be tested safely and a documented emergency restore.
+
+### 46.8 Backups (`scripts/backup.ts`, the `backup` service)
+- **What it saves:** a compressed `pg_dump` (custom format) named in Dhaka time, e.g. `ecom-20261025-0230.dump`.
+- **Where:** kept in the `backups` volume (`BACKUP_DIR`) and copied to `BACKUP_S3_BUCKET`, with the same storage keys as the images.
+- **When:** the `backup` service runs `backup.ts --daemon`, every night at 02:30.
+- **On demand:** `pnpm --filter @ecom/api backup` (`backup.ts`) takes one now.
+- **Failures:** a failed backup is logged as "Database backup FAILED" and retried the next night; on demand it exits non-zero. Part 3 turns that into an alert.
+- **What's kept:** the newest of each of the last 7 days with a backup, plus the newest of each of the 4 weeks before. Older ones are deleted from both places; files that aren't backups are never touched.
+- **Pure rules (`modules/backups/backup.rules.ts`):** `backupName`, `nextBackupAt`, `backupsToDelete`, and `pgUrl` (drops Prisma's `?schema=` options, which `pg_dump` refuses).
+- **API image:** now carries `postgresql17-client` (same version as the server), and a `/backups` directory owned by `node`, so a new volume is writable.
+
+### 46.9 Restore (`scripts/restore.ts`)
+- **Which backup:** `latest` or a file name. If it isn't on the server, it's fetched from the bucket (the new-server case).
+- **`--test`:** restores into a scratch database, compares every table's row count with the live one, then drops the scratch copy. Nothing live is touched.
+- **`--yes`:** replaces the live database in one transaction (`pg_restore --clean --single-transaction`). If anything fails, it's left as it was. Without `--yes` it refuses and says to stop api and worker first.
+- **Docs:** `DEPLOYMENT.md` gains a Backups section (taking one now, a monthly restore test, the emergency restore, a new server). Rollback points to it. `.env.production.example` gains `BACKUP_S3_BUCKET`.
+
+### 46.10 Checked
+- **Unit tests:** new `tests/unit/backup-rules.test.ts` (6):
+  - names round-trip;
+  - next run tonight or tomorrow, across a month end;
+  - 60 nightly backups keep exactly the last 7 nights plus one from each of 4 earlier weeks (each the newest of its week);
+  - several backups in a day keep the newest;
+  - unknown files are never deleted;
+  - `pgUrl`.
+- **Full suite:** API on `ecom_test`, 93 files passing.
+- **Typecheck and lint:** API and the scripts (with a throwaway config, since `tsconfig.json` leaves `scripts/` out) typecheck. No lint errors in the new files.
+- **In the production rehearsal** (real image, Adobe S3Mock standing in for the bucket):
+  - the backup service started ("Nightly database backups at 02:30");
+  - with no bucket it failed with "The specified bucket does not exist";
+  - after creating the bucket, a backup gave `ecom-20261024-1443.dump`, 578 KB, copied to the bucket;
+  - `--test` restored 147 tables, 880 rows, with "Every table matches the live database";
+  - the same with no local copy (fetched from the bucket);
+  - **real restore:** a product renamed after the backup; `restore.ts latest` without `--yes` refused; with api and worker stopped, `--yes` brought the old name back with the order intact; the API answered again after restarting.
+
+### 46.11 Not done
+- **Images:** product images aren't backed up by this; turn on versioning in the image bucket.
+- **CI:** the scripts aren't typechecked there (outside `tsconfig.json`).

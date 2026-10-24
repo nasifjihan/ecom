@@ -13,8 +13,8 @@
 #   Never run the demo seed in production.
 # ============================================================
 FROM node:22-alpine
-# Prisma needs OpenSSL on Alpine.
-RUN apk add --no-cache openssl
+# Prisma needs OpenSSL on Alpine; pg_dump/pg_restore (17, as the server) for backups.
+RUN apk add --no-cache openssl postgresql17-client
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
@@ -34,7 +34,7 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 RUN cd apps/api && pnpm exec prisma generate
 # Runs as the unprivileged node user; it only writes local uploads (STORAGE_DRIVER=local).
-RUN mkdir -p apps/api/uploads && chown -R node:node apps/api/uploads
+RUN mkdir -p apps/api/uploads /backups && chown -R node:node apps/api/uploads /backups
 
 # Order numbers and the dashboard's "today" read the local day: the shop's, not the container's UTC.
 ENV NODE_ENV=production TZ=Asia/Dhaka

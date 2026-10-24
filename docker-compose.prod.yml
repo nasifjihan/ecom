@@ -101,6 +101,20 @@ services:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
 
+  # Nightly database backup at 02:30: kept in the backups volume, copied to BACKUP_S3_BUCKET.
+  backup:
+    <<: *api-image
+    restart: unless-stopped
+    command: ["./node_modules/.bin/tsx", "scripts/backup.ts", "--daemon"]
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Dhaka
+      BACKUP_DIR: /backups
+    volumes: [backups:/backups]
+    healthcheck: { disable: true }
+    depends_on:
+      postgres: { condition: service_healthy }
+
   storefront:
     image: ghcr.io/${GHCR_OWNER}/ecom-storefront:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -128,6 +142,7 @@ services:
 
 volumes:
   pgdata:
+  backups:
   redisdata:
   caddy_data:
   caddy_config:
