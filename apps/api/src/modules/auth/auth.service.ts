@@ -20,7 +20,7 @@ import {
 } from "../../core";
 import bcrypt from "bcryptjs";
 import { assertNotRevoked } from "./password-reset";
-import { checkSignInCode } from "./two-factor";
+import { SIGNED_IN, assertNotLocked, checkSignInCode, recordFailedSignIn } from "./two-factor";
 import type { RequestContext } from "../../core/base.repository";
 import type { TokenAudience, TokenPayload } from "../../config/jwt";
 import { UserType, AdminRole } from "@ecom/shared-types";
@@ -44,15 +44,17 @@ export class AuthService extends BaseService {
     if (!row) {
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
+    assertNotLocked(row);
     const ok = await bcrypt.compare(dto.password, row.passwordHash ?? "");
     if (!ok) {
+      await recordFailedSignIn("super", row.id);
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
     await checkSignInCode("super", row, dto.code);
     const lastLoginIp = this.ctx.ip ?? "";
     await prisma.platformAdmin.update({
       where: { id: row.id },
-      data: { lastLoginAt: new Date(), lastLoginIp },
+      data: { lastLoginAt: new Date(), lastLoginIp, ...SIGNED_IN },
     });
     // AuditLog is store-scoped (storeId required), so platform logins are logged only.
     logger.info({ superAdminId: String(row.id), ip: lastLoginIp }, "Super login");
@@ -75,8 +77,10 @@ export class AuthService extends BaseService {
     if (!row) {
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
+    assertNotLocked(row);
     const ok = await bcrypt.compare(dto.password, row.passwordHash ?? "");
     if (!ok) {
+      await recordFailedSignIn("admin", row.id);
       throw new UnauthorizedError("Invalid credentials", "AUTH_CREDENTIALS_INVALID");
     }
     if (row.status !== "active") {
@@ -86,7 +90,7 @@ export class AuthService extends BaseService {
     const lastLoginIp = this.ctx.ip ?? "";
     await prisma.adminUser.update({
       where: { id: row.id },
-      data: { lastLoginAt: new Date(), lastLoginIp },
+      data: { lastLoginAt: new Date(), lastLoginIp, ...SIGNED_IN },
     });
     const perms: string[] = [];
     if (row.role?.permissions) {

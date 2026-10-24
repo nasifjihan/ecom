@@ -1,0 +1,35 @@
+# Caddy gets and renews HTTPS certificates for every address below by itself.
+# The addresses come from .env (SHOP_DOMAINS can list several storefront domains, comma separated).
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+{$API_DOMAIN} {
+	import common
+	reverse_proxy api:4000
+}
+
+{$SHOP_DOMAINS} {
+	import common
+	reverse_proxy storefront:3000
+}
+
+{$ADMIN_DOMAIN} {
+	import common
+	reverse_proxy store-admin:3000
+}
+
+{$SUPER_DOMAIN} {
+	import common
+	reverse_proxy super-admin:3000
+}

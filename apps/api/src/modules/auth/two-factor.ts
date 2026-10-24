@@ -19,7 +19,7 @@ import { Router, type Request, type Response } from "express"
 import { z } from "zod"
 import { decrypt, encrypt, prisma } from "../../config"
 import { invalidateAdminPermissions } from "../../config/admin-permissions"
-import { BadRequestError, ConflictError, UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core"
+import { BadRequestError, ConflictError, RateLimitError, UnauthorizedError, ctrl, envelope, type RequestContext } from "../../core"
 import { authMiddleware, validate } from "../../middleware"
 import { markPasswordChanged } from "./password-reset"
 import {
@@ -71,6 +71,39 @@ async function useBackupCode(kind: TwoFactorKind, id: bigint, code: string): Pro
   return n === 1
 }
 
+/** Wrong passwords or codes in a row before the account is locked, and for how long. */
+export const SIGN_IN_MAX_FAILS = 5
+export const SIGN_IN_LOCK_MINUTES = 15
+
+/** Before checking a password: a locked account is refused, even with the right one. */
+export function assertNotLocked(row: { signInLockedUntil: Date | null }, nowMs = Date.now()) {
+  const until = row.signInLockedUntil?.getTime() ?? 0
+  if (until > nowMs) {
+    const minutes = Math.ceil((until - nowMs) / 60_000)
+    throw new RateLimitError(`Too many wrong tries. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`)
+  }
+}
+
+/**
+ * One more wrong password or code. Counted per account (not per address), so guesses spread
+ * over many IP addresses still stop: the 5th locks it for 15 minutes and starts the count again.
+ */
+export async function recordFailedSignIn(kind: TwoFactorKind, id: bigint, nowMs = Date.now()) {
+  const row = (await accounts(kind).update({
+    where: { id },
+    data: { failedSignIns: { increment: 1 } },
+  })) as { failedSignIns: number }
+  if (row.failedSignIns >= SIGN_IN_MAX_FAILS) {
+    await accounts(kind).update({
+      where: { id },
+      data: { failedSignIns: 0, signInLockedUntil: new Date(nowMs + SIGN_IN_LOCK_MINUTES * 60_000) },
+    })
+  }
+}
+
+/** What a successful sign-in writes to the account (with its last sign-in time). */
+export const SIGNED_IN = { failedSignIns: 0, signInLockedUntil: null }
+
 /** After a right password: nothing to do when two-step sign-in is off, else the code must be right. */
 export async function checkSignInCode(kind: TwoFactorKind, row: TwoFactorRow, code: string | undefined, nowMs = Date.now()) {
   if (!row.twoFactorEnabledAt) return
@@ -82,7 +115,10 @@ export async function checkSignInCode(kind: TwoFactorKind, row: TwoFactorRow, co
   const ok =
     (step !== null && (await useStep(kind, row.id, step))) ||
     (step === null && looksLikeBackupCode(code) && (await useBackupCode(kind, row.id, code)))
-  if (!ok) throw new UnauthorizedError("That code isn't right, or was already used", "AUTH_2FA_INVALID")
+  if (!ok) {
+    await recordFailedSignIn(kind, row.id, nowMs)
+    throw new UnauthorizedError("That code isn't right, or was already used", "AUTH_2FA_INVALID")
+  }
 }
 
 /** Turns two-step sign-in off and forgets the secret and backup codes. */

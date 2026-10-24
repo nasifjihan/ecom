@@ -111,6 +111,11 @@ export default function SuperAdminLoginPage() {
         return;
       }
       let message = "Invalid super admin credentials. Please try again.";
+      // A locked account (too many wrong tries) says how long to wait.
+      if (body.code === "RATE_LIMITED" && body.message) {
+        toast.error("Sign-in paused", { description: body.message });
+        return;
+      }
       if (typeof error.data === "string") {
         message = error.data;
       } else if (error.data && typeof error.data === "object") {

@@ -5780,3 +5780,92 @@ This finishes Batch 45.
 
 ### 45.14 Not done
 - **Spam and trash badges:** a tab with 0 shows no badge, as before.
+
+---
+
+## ✅ BATCH #46 (part 1) — Deploy to one server, plus three audit fixes (2026-10-24)
+The production setup: one Linux server with Docker Compose, Caddy for HTTPS, images built by CI into GitHub's registry. A full local rehearsal of it found one real gap (new stores had no payment methods), and an audit found three must-fix issues, all fixed here.
+
+### 46.1 Production files
+- **`docker-compose.prod.yml`:**
+  - **Apps:** Caddy (ports 80/443), the API, a separate **worker** (emails and every background job; the API runs with `EMAIL_WORKER=off`), storefront, store admin, super admin.
+  - **Data:** Postgres, and Redis with a password and append-only saving.
+  - **Migrations:** a one-off **`migrate`** service runs `prisma migrate deploy` first. The API and worker start only when it succeeds, so two API copies can't race on a migration, and a failed migration stops the deploy.
+  - **Logs:** rotated, 5 × 10 MB per service.
+  - **Images:** `ghcr.io/<GHCR_OWNER>/ecom-*:<IMAGE_TAG>`, and `ENV_FILE` picks the settings file.
+- **`docker/Caddyfile`:** the four addresses from `.env`, plus compression, HSTS and basic security headers. `SHOP_DOMAINS` can list several storefront domains. The storefront already renders each request for the domain it was opened on (it forwards the host).
+- **`.env.production.example`:** every production setting explained. It's now tracked in git; `.env.*` stays ignored.
+- **API image:**
+  - no migration at start-up;
+  - runs as the unprivileged `node` user, calling `./node_modules/.bin/tsx` directly (as `node`, `pnpm` would make corepack try to download itself);
+  - `TZ=Asia/Dhaka`.
+- **Web image:** new build args `NEXT_PUBLIC_STOREFRONT_URL` and `NEXT_PUBLIC_STORE_ADMIN_URL`.
+- **CI, new "Docker images" job:**
+  - builds the four images on every run;
+  - on `main` it pushes them, tagged with the 7-character commit and `latest`;
+  - the web apps' public addresses come from the repository variables `PUBLIC_API_URL`, `PUBLIC_SITE_URL` and `PUBLIC_STORE_ADMIN_URL`.
+- **`DEPLOYMENT.md`:** server size, GitHub setup, preparing the server, DNS, `.env`, first start, updating, rolling back, everyday commands and a local rehearsal.
+- **Change from the plan:** the API still runs TypeScript with `tsx` rather than compiled JavaScript. The shared packages ship TypeScript source, so compiling means bundling, which breaks five file paths (fonts, location data, uploads) and the Prisma client's location, all for a few seconds of start-up. The Dockerfile already explains this choice.
+
+### 46.2 Production refuses unsafe settings (`config/env-rules.ts`)
+- **What it refuses:** in production the API and worker won't start with:
+  - JWT/cookie secrets under 32 characters, placeholders (`replace…`, repeated characters), or the same secret twice;
+  - a weak `APP_ENCRYPTION_KEY`;
+  - the MinIO keys;
+  - a localhost `S3_PUBLIC_URL`, non-https `API_BASE_URL`, localhost `COOKIE_DOMAIN`, or localhost in `ALLOWED_ORIGINS_REGEX`;
+  - `MAIL_DRIVER` other than smtp, or the local mail catcher.
+
+  Each problem is printed with how to fix it.
+- **Rehearsal switch:** `PRODUCTION_REHEARSAL=on`, for a local run only, lets localhost addresses through but never weak secrets, and logs a warning.
+
+### 46.3 First start: `bootstrap`
+- **What it does:** `scripts/bootstrap.ts` (`pnpm --filter @ecom/api bootstrap`) creates the platform owner from `BOOTSTRAP_EMAIL` / `BOOTSTRAP_PASSWORD` (at least 12 characters, letters and numbers) and nothing else.
+- **Second run:** refused when a platform admin already exists.
+- **Not the demo seed:** that never runs in production. The first store and its domains are added in the super admin.
+
+### 46.4 Found by the rehearsal: new stores had no payment methods
+- **Problem:** a store created in the super admin got no payment-method rows; only the demo seed made them. Its Settings → Payments was empty and nothing could be turned on.
+- **Fix:** the list moved to `payments/default-gateways.ts`, used by the seed and by `StoresService.createStore` (inside the store's transaction). Cash on delivery starts on; bKash, Nagad, Rocket and bank transfer start manual; the card gateways online.
+- **Test:** new `tests/integration/new-store.db.test.ts`.
+
+### 46.5 Audit fixes
+1. **Dates followed the server's UTC clock.** Order numbers (`20261024…`) and the dashboard's "today" read the local clock. Docker containers run on UTC, so a 01:00 Dhaka order got the previous day's number, and "today" started at 06:00. The API and worker now run with `TZ=Asia/Dhaka` (image and compose). Node honours it.
+2. **Wrong passwords and two-step codes now lock the account.**
+   - Before, only 20 tries a minute per IP address were allowed, and nothing counted per account. An attacker with a staff password could try codes from many addresses.
+   - New `failedSignIns` and `signInLockedUntil` columns on staff and platform admins (migration `20261025120000_sign_in_lock`).
+   - Each wrong password or code adds one; the 5th locks the account for 15 minutes ("Too many wrong tries. Try again in 15 minutes.", 429), even for the right password, without checking it.
+   - A successful sign-in clears the count.
+   - Both login pages show that message.
+3. **Public storefront reads aren't rate-limited any more.**
+   - The general limit (600 a minute per IP) came before sign-in, so it always counted by IP.
+   - Every server-rendered storefront page reaches the API from the storefront container's one address, so under a sale the shop would get "too many requests" and blank pages. Shoppers on mobile networks that share one address had the same problem in their browsers.
+   - `GET /api/storefront/*` now has no limit (Next caches them).
+   - Order tracking stays strict, and storefront writes and admin calls keep their limits.
+   - The choice is the pure `rateLimitTier()`.
+
+### 46.6 Checked
+- **Tests:**
+  - new `env-rules.test.ts` (21: production refusals, bootstrap rules, the rehearsal switch);
+  - new `rate-limit-tier.test.ts` (10);
+  - `two-factor.db.test.ts` gains the lock test: wrong passwords and codes count together, the 5th locks even the right password, and after the lock time the right code works with the count cleared;
+  - the new-store test.
+- **Full suite:** API on `ecom_test`, 92 files passing.
+- **Typecheck and lint:** API, admin and super admin typecheck. No new lint errors.
+- **Local rehearsal of the production setup:** the real images, `docker-compose.prod.yml` plus `docker-compose.rehearsal.yml`, project `ecom-rehearsal`, `http://*.ecom.localhost`, a fresh database.
+  - **Refused:** a placeholder secret (with the rehearsal switch off) stopped the API with the list of problems.
+  - **Started:** `migrate` exited 0; the API was healthy; the worker ran the email and job queues; all four apps answered through Caddy.
+  - **Bootstrap:** refused a short password, created one platform owner (0 stores, 0 products), refused a second run.
+  - **Browser, super admin:** signed in (production secure cookies work on `*.localhost`), created "Rehearsal Shop" with its owner, added `shop.` and `admin.ecom.localhost`.
+  - **Browser, store admin:** the shop owner signed in on `admin.ecom.localhost`.
+  - **After the fix, from scratch:** the new store listed all 8 payment methods with COD on. The product page rendered from the new store's data.
+  - **Order:** a cash-on-delivery order was placed through `/api/storefront/checkout`: 20261024000001, ৳1,150. The worker sent "Order #… confirmed" to the buyer and "New order #…" to the owner (seen in Mailpit).
+  - **Audit fixes on the real image:**
+    - both containers report Asia/Dhaka;
+    - 5 wrong passwords → the right one refused with the 15-minute message;
+    - storefront reads have no rate-limit headers, admin calls do.
+
+### 46.7 Not done / found
+- **MinIO:** it no longer publishes free images on Docker Hub. The dev compose's optional `minio` (extras profile) can't be pulled, and the rehearsal used the API's local disk storage. Production uses an S3-compatible service (R2, Spaces, S3).
+- **Checkout page:** in the rehearsal, the checkout page's Place Order sent nothing, and no message showed in the hidden browser pane. The order was placed through the same API instead. To look at next with the browser visible.
+- **Empty terms label on new stores:** a brand-new store has no terms or privacy pages, so the checkout's "I have read and agree to the … and …" shows empty link names.
+- **Moved to part 4:** audit finding 4 (the session cut-off kept only in Redis) and finding 5 (sign-in limits skipped while Redis is down).

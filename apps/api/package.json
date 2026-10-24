@@ -27,6 +27,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "two-factor:reset": "tsx scripts/reset-two-factor.ts",
     "ratings:refresh": "tsx scripts/refresh-ratings.ts",
+    "bootstrap": "tsx scripts/bootstrap.ts",
     "prisma:studio": "prisma studio --port 5555"
   },
   "dependencies": {

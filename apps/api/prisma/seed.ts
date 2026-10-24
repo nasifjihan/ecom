@@ -2,6 +2,7 @@ import { Prisma, PrismaClient, PlanType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
 import { syncLocations } from "../src/modules/locations/locations.data";
+import { defaultGatewayRows } from "../src/modules/payments/default-gateways";
 
 const prisma = new PrismaClient();
 
@@ -254,26 +255,13 @@ async function seedFashionBDStore() {
     });
   }
 
-  // Default Payment Gateway configs (disabled by default except COD)
-  const defaultGateways = [
-    { code: "cod", name: "Cash On Delivery", enabled: true, sortOrder: 1 },
-    { code: "bkash", name: "bKash", sortOrder: 2 },
-    { code: "nagad", name: "Nagad", sortOrder: 3 },
-    { code: "rocket", name: "Rocket", sortOrder: 4 },
-    { code: "sslcommerz", name: "SSLCommerz", sortOrder: 5 },
-    { code: "aamarpay", name: "aamarPay", sortOrder: 6 },
-    { code: "stripe", name: "Stripe", sortOrder: 10 },
-    { code: "bank_transfer", name: "Bank Transfer", sortOrder: 20 },
-  ] as const;
-  for (const g of defaultGateways) {
+  // Default payment methods (the same list a new store gets; COD on, the rest off)
+  for (const g of defaultGatewayRows(store.id)) {
     const ex = await prisma.paymentGatewayConfig.findFirst({
       where: { storeId: store.id, code: g.code },
     });
     if (!ex) {
-      await prisma.paymentGatewayConfig.create({
-        // bKash / Nagad / Rocket / bank: customers pay by hand and staff verify the transaction ID.
-        data: { storeId: store.id, ...g, mode: ["bkash", "nagad", "rocket", "bank_transfer"].includes(g.code) ? "manual" : "online" },
-      });
+      await prisma.paymentGatewayConfig.create({ data: g });
       console.log(`  ✅ Payment gateway ${g.code} (${g.name}) default row added`);
     }
   }

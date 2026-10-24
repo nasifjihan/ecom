@@ -58,6 +58,19 @@ const authLimiter = rateLimit({
 const STRICT_PATHS = /\/api\/(auth|super|admin)\/((customer|admin|super)\/)?(login|register|password-reset|forgot|reset-password|otp|verify)/i;
 const PUBLIC_PATHS = /\/api\/(store|pub|v1)\/(products|categories|brands|collections|pages|blogs|search|currencies|shipping|payment-methods|settings|countries|states)/i;
 
+/**
+ * Which limit a request gets. Public storefront reads get none: the storefront renders pages on
+ * its server, so they all arrive from its one address (one shared bucket would empty under a
+ * sale), and many shoppers on mobile networks share one address too. Next caches those reads.
+ */
+export function rateLimitTier(method: string, path: string): "strict" | "public" | "none" | "general" {
+  // Public order tracking takes an order number + phone: limited like a login.
+  if (STRICT_PATHS.test(path) || (path === "/api/storefront/track" && method === "GET")) return "strict";
+  if (method === "GET" && path.startsWith("/api/storefront/")) return "none";
+  if (PUBLIC_PATHS.test(path)) return "public";
+  return "general";
+}
+
 export default function rateLimitMiddleware(
   req: Request,
   res: Response,
@@ -69,14 +82,7 @@ export default function rateLimitMiddleware(
     next();
     return;
   }
-  // Public order tracking takes an order number + phone: limited like a login.
-  if (STRICT_PATHS.test(req.path) || (req.path === "/api/storefront/track" && req.method === "GET")) {
-    strictLimiter(req, res, next);
-    return;
-  }
-  if (PUBLIC_PATHS.test(req.path)) {
-    publicLimiter(req, res, next);
-    return;
-  }
-  authLimiter(req, res, next);
+  const tier = rateLimitTier(req.method, req.path);
+  if (tier === "none") return next();
+  (tier === "strict" ? strictLimiter : tier === "public" ? publicLimiter : authLimiter)(req, res, next);
 }

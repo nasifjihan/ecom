@@ -1,0 +1,27 @@
+# ============================================================
+#   LOCAL REHEARSAL of the production setup only. Never use on a server.
+#   Adds Mailpit (mail catcher; files use the API's local disk, STORAGE_DRIVER=local), and lets the API accept the
+#   *.ecom.localhost addresses (PRODUCTION_REHEARSAL=on). Run under its own project name so
+#   it never touches the dev database:
+#     docker compose -p ecom-rehearsal --env-file .env.rehearsal \
+#       -f docker-compose.prod.yml -f docker-compose.rehearsal.yml up -d
+# ============================================================
+x-rehearsal: &rehearsal
+  environment:
+    NODE_ENV: production
+    PRODUCTION_REHEARSAL: "on"
+
+services:
+  migrate: *rehearsal
+  api:
+    environment:
+      NODE_ENV: production
+      PRODUCTION_REHEARSAL: "on"
+      EMAIL_WORKER: "off"
+  worker: *rehearsal
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8026:8025"]
+    networks: [ecom]
+

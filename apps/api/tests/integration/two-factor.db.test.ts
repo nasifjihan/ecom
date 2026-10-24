@@ -204,4 +204,31 @@ describe.skipIf(!runDb)("two-step sign-in (Postgres)", () => {
     expect((await auth.validateRefresh(mine.refreshToken, "admin")).sub).toBe(String(staff))
     await new TwoFactor("admin", staff).disable(PASSWORD)
   })
+
+  it("wrong passwords and codes lock the account after 5, wherever they come from", async () => {
+    const wrong = () =>
+      new Auth(ctx()).adminLogin(AdminLoginDto.parse({ email, password: "Wrong-pass-123" }), storeId!)
+    // Two wrong passwords, then a right one: the count starts again.
+    for (let i = 0; i < 2; i++) expect(await fails(wrong())).toBe("AUTH_CREDENTIALS_INVALID")
+    expect((await login()).user.id).toBe(staff)
+    expect((await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })).failedSignIns).toBe(0)
+
+    // Wrong codes count too: 3 wrong passwords + 2 wrong codes = locked.
+    const s = await new TwoFactor("admin", staff).start()
+    await new TwoFactor("admin", staff).confirm(codeOf(s.secret))
+    for (let i = 0; i < 3; i++) expect(await fails(wrong())).toBe("AUTH_CREDENTIALS_INVALID")
+    for (let i = 0; i < 2; i++) expect(await fails(login("000000"))).toBe("AUTH_2FA_INVALID")
+    // Now even the right password and code are refused, without checking them.
+    const used = (await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })).twoFactorLastStep!
+    expect(await fails(login(totpCode(s.secret, used + 1)))).toBe("RATE_LIMITED")
+    const locked = await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })
+    expect(locked.signInLockedUntil!.getTime()).toBeGreaterThan(Date.now() + 14 * 60_000)
+
+    // After the 15 minutes: the right password and code work, and the count is cleared.
+    await prisma.adminUser.update({ where: { id: staff }, data: { signInLockedUntil: new Date(Date.now() - 1000) } })
+    expect((await login(totpCode(s.secret, used + 1))).user.id).toBe(staff)
+    const after = await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })
+    expect([after.failedSignIns, after.signInLockedUntil]).toEqual([0, null])
+    await new TwoFactor("admin", staff).disable(PASSWORD)
+  })
 })

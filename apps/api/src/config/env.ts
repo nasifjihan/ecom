@@ -13,6 +13,7 @@ import dotenv from "dotenv";
 import { z } from "zod";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { productionProblems } from "./env-rules";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,6 +123,9 @@ const envSchema = z.object({
   PLATFORM_WEBHOOK_SECRET: z.string().min(16).optional(),
   PLATFORM_SUBDOMAIN_SUFFIX: z.string().default(".localstore.dev"),
 
+  /** "on" only for a local rehearsal of the production setup (see env-rules.ts). */
+  PRODUCTION_REHEARSAL: z.enum(["on", "off"]).default("off"),
+
   ALLOWED_ORIGINS_REGEX: z
     .string()
     .default("^https?://(localhost|127\\.0\\.0\\.1|.*\\.local)(:\\d+)?$"),
@@ -139,6 +143,18 @@ if (!parsed.success) {
       lines.join("\n") +
       "\n",
   );
+  process.exit(1);
+}
+
+// Production refuses placeholder secrets and local addresses (see env-rules.ts).
+const unsafe = parsed.data.NODE_ENV === "production" ? productionProblems(parsed.data) : [];
+if (parsed.data.NODE_ENV === "production" && parsed.data.PRODUCTION_REHEARSAL === "on") {
+  // eslint-disable-next-line no-console
+  console.warn("\n⚠️  PRODUCTION_REHEARSAL=on: localhost addresses are allowed. Never set this on a real server.\n");
+}
+if (unsafe.length) {
+  // eslint-disable-next-line no-console
+  console.error("\n🔥 FATAL: These settings aren't safe for production:\n\n" + unsafe.map((p) => `  ❌ ${p}`).join("\n") + "\n");
   process.exit(1);
 }
 
