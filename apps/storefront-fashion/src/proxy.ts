@@ -46,7 +46,7 @@ async function rulesFor(origin: string): Promise<Map<string, Rule>> {
   }
 }
 
-export async function middleware(req: NextRequest, event: NextFetchEvent) {
+export async function proxy(req: NextRequest, event: NextFetchEvent) {
   const origin = req.nextUrl.origin;
   const path = normalize(req.nextUrl.pathname);
   if (path === "/") return NextResponse.next();

@@ -36,7 +36,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_STOREFRONT_URL=${NEXT_PUBLIC_STOREFRONT_URL} \
     NEXT_PUBLIC_STORE_ADMIN_URL=${NEXT_PUBLIC_STORE_ADMIN_URL} \
     NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
-RUN cd apps/${APP} && pnpm exec next build --no-lint && mkdir -p public
+RUN cd apps/${APP} && pnpm exec next build && mkdir -p public
 
 FROM ${NODE_IMAGE} AS runtime
 ARG APP

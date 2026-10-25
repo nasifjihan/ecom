@@ -54,7 +54,7 @@
       "source-map-js": "^1.2.2",
       "postcss@8": "^8.5.18",
       "sharp@<0.35.5": "^0.35.5",
-      "rollup@3": "^3.30.0"
+      "brace-expansion@5": "^5.0.12"
     }
   }
 }

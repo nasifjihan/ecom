@@ -14,9 +14,7 @@ const nextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
-  experimental: {
-    outputFileTracingRoot: repoRoot,
-  },
+  outputFileTracingRoot: repoRoot,
 };
 
 export default nextConfig;

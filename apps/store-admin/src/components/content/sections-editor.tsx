@@ -310,7 +310,7 @@ export function SectionsEditor({
   };
 
   /** Chrome cancels a drag if the page changes during dragstart, so the drag styles wait a tick. */
-  const pending = React.useRef<ReturnType<typeof setTimeout>>();
+  const pending = React.useRef<ReturnType<typeof setTimeout>>(undefined);
   const startDrag = (d: Drag) => {
     pending.current = setTimeout(() => setDrag(d), 0);
   };

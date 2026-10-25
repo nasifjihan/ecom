@@ -2,19 +2,23 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_ROUTES = [
   "/dashboard",
-  "/stores",
-  "/billing",
-  "/admins",
-  "/reports",
+  "/catalog",
+  "/orders",
+  "/customers",
+  "/inventory",
+  "/marketing",
+  "/shipping",
   "/settings",
+  "/super",
 ];
 
-const AUTH_ROUTES = ["/super/login"];
+const AUTH_ROUTES = ["/login"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const accessToken = request.cookies.get("superAccessToken")?.value;
+  const accessToken = request.cookies.get("accessToken")?.value;
+  const storeId = request.cookies.get("X-Store-Id")?.value;
 
   const isProtectedRoute = PROTECTED_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -29,22 +33,31 @@ export function middleware(request: NextRequest) {
   }
 
   if (isProtectedRoute && !accessToken) {
-    const loginUrl = new URL("/super/login", request.url);
+    const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  if (storeId) {
+    response.headers.set("X-Store-Id", storeId);
+  }
+
+  return response;
 }
 
 export const config = {
   matcher: [
     "/dashboard/:path*",
-    "/stores/:path*",
-    "/billing/:path*",
-    "/admins/:path*",
-    "/reports/:path*",
+    "/catalog/:path*",
+    "/orders/:path*",
+    "/customers/:path*",
+    "/inventory/:path*",
+    "/marketing/:path*",
+    "/shipping/:path*",
     "/settings/:path*",
-    "/super/login",
+    "/super/:path*",
+    "/login",
   ],
 };

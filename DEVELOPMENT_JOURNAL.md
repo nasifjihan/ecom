@@ -6050,3 +6050,60 @@ A k6 load test against the production rehearsal, a cheaper product list, several
   - **zod 3 (high: memory on oversized collections):** request bodies are capped (10 MB JSON); zod 4 is a rewrite.
 - **Web images not rebuilt:** the shared Sentry options change is typechecked, not run.
 - **Not fixed (noted in part 3):** the storefront checkout button sent nothing in a hidden browser pane, and new stores have an empty terms label.
+
+---
+
+## ✅ BATCH #47 — Next.js 16 (2026-10-25)
+The three web apps move from the Next 15.0.0 release candidate to Next 16.4.3, the current stable release, with React 19. The release candidate carried a high-severity Server Components denial of service (fixed in 15.0.6).
+
+### 47.1 Versions
+| Package | Was | Now |
+|---|---|---|
+| `next` (store admin, super admin, storefront, storefront-base) | 15.0.0-rc.1 | 16.4.3 |
+| `react`, `react-dom` (also `packages/ui`) | 18.3 | 19.3.1 |
+| `@types/react`, `@types/react-dom` | 18 | 19 |
+| `@sentry/nextjs` | 8.55.0 (stops at Next 15) | 11.9.0 (supports Next 16) |
+| `next-themes` | 0.3 (stops at React 18) | 0.4.6 |
+
+- **Other libraries:** all already accepted React 19 (framer-motion, recharts, sonner, dnd-kit, react-hook-form, react-redux, TanStack Table, Radix, lucide).
+- **The API:** stays on `@sentry/node` 8.55.
+
+### 47.2 What Next 16 changed for us
+- **`middleware.ts` is now `proxy.ts`** (exporting `proxy`) in all three apps: the store admin and super admin sign-in guards and the storefront's redirects. The build lists it as "Proxy (Middleware)".
+- **`next.config`:**
+  - `outputFileTracingRoot` moved out of `experimental`;
+  - the empty `serverComponentsExternalPackages` was dropped.
+- **`next lint` is gone:** each app's `lint` script is now `eslint src` (the root flat config, as before). The Docker build's `next build --no-lint` became `next build` (it no longer lints).
+- **Builds use Turbopack by default.** Turbopack resolves packages strictly. The storefront's Tailwind config loads `tailwindcss-animate`, which only `packages/ui` declared, so the animations would have been dropped silently. It's now a dev dependency of the storefront and storefront-base.
+- **Async `params`, `searchParams`, `cookies()` and `headers()`:** already used everywhere; no change.
+- **React 19:** one fix. `useRef()` now needs a starting value (the sections editor's drag timer).
+- **Sentry:** `init`, `captureException` and `captureRequestError` are unchanged in 11.x; our wiring is the same.
+
+### 47.3 Dependencies
+- **`pnpm audit --prod`:** Next's issue is gone.
+- **Dropped:** the `rollup@3` override from Batch 46. Nothing uses rollup 3 any more, and the pin had rewritten the Sentry plugins' peer ranges.
+- **Added:** a `brace-expansion@5` override, for a copy that Sentry 11's build plugins bring.
+- **Left:**
+  - swiper 11 (critical, but only through options an attacker controls; ours are fixed);
+  - zod 3 (high; request bodies are capped);
+  - vite 5: it comes from vitest 2 and is only reached through an optional peer of Sentry's Cloudflare package. Its two issues affect vite's own dev server on Windows, which production never runs.
+
+### 47.4 Checked
+- **Builds:** `next build` (Turbopack) passes for the store admin, the super admin and the storefront, with no warnings after the Tailwind fix.
+- **Typecheck:** all three apps and `packages/ui` typecheck.
+- **Lint:** no new kinds of lint errors (the usual unsafe-any and style rules), none in the changed files.
+- **Tests:** storefront-base unit tests pass.
+- **In dev (Next 16 dev server, ports 3100–3102):**
+  - **storefront:** home with the hero slider, the product list, a product page with its gallery, add to cart (drawer and toast);
+  - **store admin:** sign-in through the `proxy.ts` guard, the dashboard charts, the homepage sections editor, the light/dark switch, products and orders;
+  - **super admin:** sign-in and the dashboard;
+  - no console errors.
+- **In the production rehearsal (rebuilt web images behind Caddy):**
+  - the shop's home page renders;
+  - the store admin signs in and loads its dashboard and menu pages.
+
+### 47.5 Not done / found
+- **Sentry 11 start-up warning:** in the standalone images it logs that it couldn't load `@sentry/server-runtime-injection`, which it uses only to record performance spans. We don't trace, so error reports are unaffected. But a server-side error report from a web app hasn't been run end to end.
+- **Pre-existing, unchanged:**
+  - storefront-base's own typecheck fails where it imports itself as `@ecom/storefront-base` (4 files);
+  - the store admin's login page links to `/help`, which doesn't exist (a 404 when prefetched).

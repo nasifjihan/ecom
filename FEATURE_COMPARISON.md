@@ -11,7 +11,7 @@ Legend: ✅ we have it · 🟡 partly · ❌ missing
 | | Ours | Reference |
 |---|---|---|
 | Tenancy | **SaaS**: many independent stores, each with its own admins, catalog, orders and customers. A super admin sells plans. | **One business, several storefronts** (e.g. a main shop and a kids' shop on different domains). They share stock, staff and suppliers. Each storefront has its own look, menus, payment gateways and couriers. |
-| Stack | Express + Prisma + Postgres + Redis/BullMQ, Next.js apps | NestJS + Prisma + Postgres + Redis/BullMQ, Next.js apps |
+| Stack | Express + Prisma + Postgres + Redis/BullMQ, Next.js 16 + React 19 apps (Batch 47) | NestJS + Prisma + Postgres + Redis/BullMQ, Next.js apps |
 
 **Decision needed:** we keep our SaaS model and add *multi-storefront inside one store* later (one store → several storefront domains that share stock). That gives us both. We don't switch to NestJS: our Express layers already do what the spec's guards and interceptors do.
 

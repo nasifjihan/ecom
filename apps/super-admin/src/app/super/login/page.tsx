@@ -85,7 +85,7 @@ export default function SuperAdminLoginPage() {
         }),
       );
 
-      // Read by middleware.ts to gate dashboard routes; the API refresh cookie keeps the session alive.
+      // Read by proxy.ts to gate dashboard routes; the API refresh cookie keeps the session alive.
       const maxAge = values.rememberMe ? `; max-age=${7 * 24 * 60 * 60}` : "";
       document.cookie = `superAccessToken=${result.accessToken}; path=/; SameSite=Lax${maxAge}`;
 
