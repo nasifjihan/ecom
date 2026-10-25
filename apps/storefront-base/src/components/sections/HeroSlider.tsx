@@ -86,7 +86,8 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({
         effect="fade"
         spaceBetween={0}
         slidesPerView={1}
-        loop={slides.length > 1}
+        // Rewind, not loop: loop mode needs more slides than are shown and got stuck with 2; with a fade it looks the same.
+        rewind={slides.length > 1}
         autoplay={autoPlay ? { delay: 6000, disableOnInteraction: false } : false}
         pagination={
           showPagination

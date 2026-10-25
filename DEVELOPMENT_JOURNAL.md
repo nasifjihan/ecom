@@ -6107,3 +6107,24 @@ The three web apps move from the Next 15.0.0 release candidate to Next 16.4.3, t
 - **Pre-existing, unchanged:**
   - storefront-base's own typecheck fails where it imports itself as `@ecom/storefront-base` (4 files);
   - the store admin's login page links to `/help`, which doesn't exist (a 404 when prefetched).
+
+---
+
+## ✅ BATCH #48 (part 1) — swiper 14 (2026-10-25)
+Clears the last critical `pnpm audit` warning (swiper 11: prototype pollution through swiper's options, fixed in 12.1.2).
+
+### 48.1 Upgrade
+- **Version:** `swiper` ^11.1.14 → ^14.3.0 in the storefront and storefront-base.
+- **Code:** no changes needed. Everything we use (`swiper/react`, the Autoplay, Pagination, Navigation, EffectFade, Thumbs and FreeMode modules, and their CSS files) is unchanged.
+
+### 48.2 Found and fixed: the hero slider got stuck
+- **Symptom:** with 2 slides (the default homepage), the arrows and dots stopped working once the second slide showed.
+- **Cause:** loop mode needs more slides than it shows at once, so with 2 it can't loop.
+- **Old bug:** the same happened on swiper 11 (checked in the rehearsal).
+- **Fix:** the slider now uses `rewind` (after the last slide, back to the first) instead of `loop`. It works with any number of slides and looks the same with a fade.
+
+### 48.3 Checked
+- **Build and tests:** the storefront typechecks and builds; storefront-base tests pass.
+- **In the browser, hero slider:** starts and autoplays; next, previous and both dots now cycle through the slides.
+- **In the browser, product gallery:** clicking a thumbnail switches the main image, and the thumbnail is marked.
+- **`pnpm audit --prod`:** 0 critical; 3 high left (zod and vite, parts 2 and 3).
