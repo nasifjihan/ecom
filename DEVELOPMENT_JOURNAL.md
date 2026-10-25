@@ -6128,3 +6128,21 @@ Clears the last critical `pnpm audit` warning (swiper 11: prototype pollution th
 - **In the browser, hero slider:** starts and autoplays; next, previous and both dots now cycle through the slides.
 - **In the browser, product gallery:** clicking a thumbnail switches the main image, and the thumbnail is marked.
 - **`pnpm audit --prod`:** 0 critical; 3 high left (zod and vite, parts 2 and 3).
+
+---
+
+## ✅ BATCH #48 (part 2) — vitest 5 (2026-10-25)
+The test runner moves from vitest 2.1 to 5.0.5 in every package. This removes vite 5 and its two high warnings, which are in vite's dev server on Windows.
+
+### 48.4 Upgrade
+- **Versions:** `vitest` and `@vitest/coverage-v8` ^2.1 → ^5.0.5 (root, the API, the three apps, storefront-base and the six packages).
+- **vite:** vitest 5 expects vite to be installed beside it, so the root gains `vite` ^8.3.5.
+- **Node:** vitest 5 needs Node 22.12 or newer. CI's `node-version: 22` gets the latest 22.x; local is 26.
+- **No config or test changes:** the API's `vitest.config.ts` (globals, setup file, aliases, coverage) and every test work unchanged.
+
+### 48.5 Checked
+- **API on `ecom_test`:** 95 files, 1013 tests pass, the same as on vitest 2.
+- **Other packages:** utils 15, api-client 10, storefront-base 4 pass; the rest have no tests.
+- **Coverage report:** still runs (v8 provider).
+- **API typecheck:** clean.
+- **`pnpm audit --prod`:** 1 high left (zod, part 3); moderate warnings down from 25 to 19.
