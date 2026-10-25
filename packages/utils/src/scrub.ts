@@ -40,7 +40,7 @@ export function sentryOptions(dsn: string, app: string, release?: string) {
     environment: process.env.NODE_ENV,
     release,
     sendDefaultPii: false,
-    tracesSampleRate: 0,
+    // No tracesSampleRate, not even 0: its presence turns tracing on.
     initialScope: { tags: { app } },
     beforeSend: <E extends { user?: { id?: unknown } | null; request?: { query_string?: unknown } }>(event: E) => scrubEvent(event),
   }

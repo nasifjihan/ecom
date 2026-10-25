@@ -74,6 +74,11 @@ export default function globalErrorHandler(
       statusCode = 400;
       code = "BAD_REQUEST";
       message = "Invalid JSON body";
+    } else if (e.message?.includes("to a BigInt")) {
+      // An id in the path that isn't a number (BigInt("abc")), from any route.
+      statusCode = 400;
+      code = "BAD_REQUEST";
+      message = "Invalid id";
     }
   } else if (e.name === "PrismaClientKnownRequestError") {
     const prismaCode = e.code ?? "";
@@ -107,9 +112,10 @@ export default function globalErrorHandler(
     message = "Query validation failed";
     debug = isDev ? e.message : undefined;
   } else if (err instanceof Error) {
-    message = err.message || message;
+    // Unexpected errors keep their wording out of answers outside dev (it can name tables or files).
+    if (isDev) message = err.message || message;
     debug = isDev ? err.stack : undefined;
-  } else {
+  } else if (isDev) {
     message = String(err) || message;
   }
 

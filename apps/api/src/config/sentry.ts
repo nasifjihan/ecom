@@ -16,7 +16,7 @@ export function initSentry(role: "api" | "worker" | "backup") {
     environment: env.NODE_ENV,
     release: process.env.IMAGE_TAG,
     sendDefaultPii: false,
-    tracesSampleRate: 0,
+    // No tracesSampleRate, not even 0: its presence turns tracing on (about 10 ms CPU a request).
     initialScope: { tags: { role } },
     beforeSend: (event) => scrubEvent(event),
   })

@@ -124,7 +124,8 @@ const envSchema = z.object({
   PLATFORM_SUBDOMAIN_SUFFIX: z.string().default(".localstore.dev"),
 
   /** Error reports go to Sentry when set (the API, worker and backup; the web apps have their own). */
-  SENTRY_DSN: z.string().url().optional(),
+  // Blank (as in .env.production.example) means off.
+  SENTRY_DSN: z.union([z.literal(""), z.string().url()]).optional(),
 
   /** Nightly database backups (scripts/backup.ts): kept here, and copied to this bucket when set. */
   BACKUP_DIR: z.string().default("./backups"),

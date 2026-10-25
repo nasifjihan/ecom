@@ -10,7 +10,7 @@
 import { rateLimit } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import type { Request, Response, NextFunction } from "express";
-import { redis, RATE_LIMITS } from "../config";
+import { env, redis, RATE_LIMITS } from "../config";
 import { RateLimitError } from "../core";
 
 function sendRedis(...args: any[]) {
@@ -76,13 +76,15 @@ export default function rateLimitMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
-  // Graceful degradation: if Redis not connected, skip rate-limiting entirely
-  // (prevents hanging when Docker services aren't running locally).
-  if ((redis as any).status !== "ready") {
-    next();
-    return;
-  }
   const tier = rateLimitTier(req.method, req.path);
   if (tier === "none") return next();
+  // Redis down: skip the limits (so local dev works without it), except sign-in and resets
+  // in production, which are refused rather than left open to password guessing.
+  if ((redis as any).status !== "ready") {
+    if (tier === "strict" && env.NODE_ENV === "production") {
+      return next(new RateLimitError("Signing in is paused for a moment. Try again in a minute."));
+    }
+    return next();
+  }
   (tier === "strict" ? strictLimiter : tier === "public" ? publicLimiter : authLimiter)(req, res, next);
 }

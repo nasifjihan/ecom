@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest"
-import { rateLimitTier } from "../../src/middleware/09-rate-limit"
+import { describe, expect, it, vi } from "vitest"
+import rateLimitMiddleware, { rateLimitTier } from "../../src/middleware/09-rate-limit"
+import { env } from "../../src/config"
+
+vi.mock("../../src/config", async (orig) => ({ ...(await orig<object>()), redis: { status: "end" } }))
 
 describe("rateLimitTier", () => {
   it.each([
@@ -21,4 +24,18 @@ describe("rateLimitTier", () => {
   ])("%s %s → %s", (method, path, want) => {
     expect(rateLimitTier(method, path)).toBe(want)
   })
+})
+
+describe("rate limits with Redis down", () => {
+  const run = (path: string, nodeEnv: typeof env.NODE_ENV) => {
+    const was = env.NODE_ENV
+    env.NODE_ENV = nodeEnv
+    const next = vi.fn()
+    rateLimitMiddleware({ method: "POST", path } as never, {} as never, next)
+    env.NODE_ENV = was
+    return next.mock.calls[0]?.[0] as { statusCode?: number } | undefined
+  }
+  it("refuses sign-in in production", () => expect(run("/api/auth/admin/login", "production")?.statusCode).toBe(429))
+  it("lets other calls through in production", () => expect(run("/api/admin/orders", "production")).toBeUndefined())
+  it("lets sign-in through in development", () => expect(run("/api/auth/admin/login", "development")).toBeUndefined())
 })

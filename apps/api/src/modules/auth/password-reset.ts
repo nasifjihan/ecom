@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { cacheGet, cacheSet, env, logger, prisma } from "../../config"
+import { env, prisma } from "../../config"
 import { BadRequestError, UnauthorizedError } from "../../core"
 import type { TokenAudience } from "../../config/jwt"
 import { EmailService, inBackground } from "../notifications"
@@ -58,32 +58,26 @@ function readResetToken(kind: Kind, token: string, storeId: bigint) {
   }
 }
 
-const changedKey = (aud: TokenAudience, id: string) => `pwchanged:${aud}:${id}`
+// Kept on the account row, not in Redis: a Redis restart or eviction must not bring ended sessions back.
+const accounts = {
+  super: prisma.platformAdmin,
+  admin: prisma.adminUser,
+  customer: prisma.customer,
+} as unknown as Record<TokenAudience, {
+  update(a: { where: { id: bigint }; data: { sessionsValidFrom: Date } }): Promise<unknown>
+  findUnique(a: { where: { id: bigint }; select: { sessionsValidFrom: true } }): Promise<{ sessionsValidFrom: Date | null } | null>
+}>
 
 /** Ends sessions issued before now (refresh tokens older than this are refused). */
 export async function markPasswordChanged(aud: TokenAudience, id: bigint) {
-  try {
-    await cacheSet(
-      changedKey(aud, String(id)),
-      Math.floor(Date.now() / 1000),
-      env.JWT_REFRESH_TTL_DAYS * 86_400,
-    )
-  } catch (err) {
-    logger.warn(
-      { err: (err as Error).message },
-      "Couldn't record password change; older sessions stay signed in",
-    )
-  }
+  // Whole seconds, like a token's iat: tokens issued right after this (same second) stay valid.
+  await accounts[aud].update({ where: { id }, data: { sessionsValidFrom: new Date(Math.floor(Date.now() / 1000) * 1000) } })
 }
 
 /** Refuses refresh tokens issued before the account's last password reset. */
 export async function assertNotRevoked(aud: TokenAudience, sub: string, iat: number | undefined) {
-  let changedAt: number | null = null
-  try {
-    changedAt = await cacheGet<number>(changedKey(aud, sub))
-  } catch {
-    return
-  }
+  const row = await accounts[aud].findUnique({ where: { id: BigInt(sub) }, select: { sessionsValidFrom: true } })
+  const changedAt = row?.sessionsValidFrom ? row.sessionsValidFrom.getTime() / 1000 : null
   if (changedAt && (iat ?? 0) < changedAt) {
     throw new UnauthorizedError(
       "Your password or sign-in settings changed. Please sign in again.",

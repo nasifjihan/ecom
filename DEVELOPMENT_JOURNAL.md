@@ -5968,3 +5968,85 @@ Errors from every app reach Sentry with private data stripped, `/readyz` says wh
 ### 46.17 Not done / found
 - **Web apps not run-tested:** their Sentry wiring is typechecked but not run, because the web images weren't rebuilt for this.
 - **Unvalidated ids:** `DELETE /admin/shipping/tax-rates/:id` (and other shipping routes that turn `:id` into a number without validating it) answer 500 for an id like `abc`, instead of 400. Harmless, but it shows as an error in Sentry; to fix with the part 4 safety pass.
+
+---
+
+## ✅ BATCH #46 (part 4) — Load test and safety pass (2026-10-24)
+A k6 load test against the production rehearsal, a cheaper product list, several API copies behind Caddy, and a safety pass that includes audit findings 4 and 5.
+
+### 46.18 Load test (`loadtest/`)
+- **`shop.k6.js`:** 50 shoppers browsing (home, list, product, search), plus 3 placing cash-on-delivery orders, for about 4 minutes, through Caddy like real traffic. Targets: browse p95 under 500 ms, checkout p95 under 1.5 s, under 1% errors.
+- **`api-cost.k6.js`:** a fixed rate of one API call (`RATE`, `PATH_TO`), to measure what one request costs.
+- **Rehearsal Postgres:** runs with `pg_stat_statements`, to find slow queries.
+
+### 46.19 What it found, and the fix
+- **The database was not the bottleneck:**
+  - mean query time under 4 ms;
+  - a product page runs 9 queries, 0.7 ms of database time in total.
+- **The API's CPU was the cost:**
+  - measured from the container's CPU counter, a product list cost 34 ms of CPU and `/healthz` 5 ms;
+  - a CPU profile showed the JavaScript itself at about 5 ms. The rest went to Sentry's tracing hooks and Prisma's query engine.
+- **Cause: `tracesSampleRate: 0` turned Sentry's tracing on.** Sentry treats tracing as on whenever the option is present, even at 0. So it loaded its Express, Postgres and Prisma tracing on every request.
+- **Fix:** removed the option, in the API and in the web apps' shared `sentryOptions`.
+- **Result:** the product list dropped from 34 to 26 ms of CPU and `/healthz` from 5 to 4 ms. Error reports still arrive, with the same scrubbing (checked with a forced 500).
+
+### 46.20 Several API copies
+- **Compose:** `deploy.replicas: ${API_REPLICAS:-2}` on the API. Only Caddy publishes ports, and the API runs no timers (the worker does), so copies don't clash.
+- **Caddy:** finds every copy by name (`dynamic a api 4000`, refreshed every 10 s) and sends each request to the least busy one.
+- **Docs:** `API_REPLICAS` in `.env.production.example`, and a new section 12 in `DEPLOYMENT.md`. Run one copy per spare core; on a 2-core server, use 1.
+
+### 46.21 Numbers (4-core laptop, k6 on the same cores; a floor, not the server's)
+| | Browse p95 | Checkout p95 | Errors | Requests/s |
+|---|---|---|---|---|
+| Before (1 copy) | 0.96 s | — | 0 | 25 |
+| After, 1 copy | 1.02 s | 0.60 s | 0 | 25 |
+| After, 2 copies | 0.84 s | 0.71 s | 0 | 26 |
+
+- **The laptop was the limit:** the storefront's Next process used the most CPU (about 70%), then the two API copies (about 37% together), the worker and Postgres.
+- **API savings vs the browse target:** the API savings show per request, but the 500 ms browse target can't be judged here. It must be rerun on the real server.
+- **Discarded run:** one run made while the test suite was also running was thrown out (p95 near 3 s).
+
+### 46.22 Safety pass
+- **Audit finding 4, ended sessions stay ended:**
+  - the cut-off is now stored on the account (`sessionsValidFrom` on `AdminUser`, `PlatformAdmin` and `Customer`; migration `20261025150000_sessions_valid_from`), not in Redis;
+  - a Redis restart or eviction no longer brings back sessions ended by a password change, two-step change or deactivation;
+  - it is checked on each refresh, so one indexed read every 15 minutes or so per person.
+- **Audit finding 5, sign-in when Redis is down:**
+  - in production, sign-in, reset and code endpoints answer 429 ("Signing in is paused for a moment") instead of running without limits;
+  - other calls still go through, and development still works without Redis;
+  - the per-account lock from part 1 is a second guard.
+- **Error answers:**
+  - an id that isn't a number (`BigInt("abc")`, in any route) now answers 400 "Invalid id" instead of 500, and is no longer reported to Sentry;
+  - outside development, an unexpected error's own wording (which can name tables or files) no longer reaches the client: it's "Internal Server Error" plus the request ID.
+- **Web app headers (Caddy):** `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'`, which stops other sites framing the shop or the admin. Scripts aren't restricted: Next's inline scripts would need a nonce setup. The API already sends its own strict CSP (helmet).
+- **Blank `SENTRY_DSN` crashed the API:** `.env.production.example` ships it blank, and the API refused a blank value at start-up. It now means "off".
+- **Uploads:** already fine; no change.
+  - images: 10 MB, JPEG/PNG/WebP/GIF/AVIF only;
+  - imports: 5 MB;
+  - both answer 413 when too big.
+- **Secrets:** no env files, keys or tokens in the tree or the git history. The only defaults are the MinIO dev keys, which the production check already refuses.
+- **Dependencies (`pnpm audit --prod`):** 18 high + 4 critical down to 3 high + 1 critical.
+  - multer 2.5.0, handlebars 4.7.10 and sharp 0.35.5 bumped directly;
+  - root `pnpm.overrides` for proxy-addr (critical: IP spoofing), body-parser, follow-redirects, brace-expansion, source-map-js, postcss and rollup 3.
+
+### 46.23 Checked
+- **Tests:**
+  - API on `ecom_test`: 95 files, 1013 tests passing; utils: 4 files;
+  - new `tests/unit/error-handler.test.ts`;
+  - Redis-down cases in `rate-limit-tier.test.ts`;
+  - the stored cut-off in `two-factor.db.test.ts`.
+- **Typecheck and lint:** API typecheck clean; no new lint errors.
+- **In the rehearsal:**
+  - migration applied;
+  - `/readyz` green;
+  - `DELETE /api/admin/shipping/tax-rates/abc` answers 400;
+  - with Redis stopped, a store owner's sign-in answers 429, and `/readyz` went green again after Redis restarted;
+  - the web apps send the new headers, and their pages still load.
+
+### 46.24 Not done / found
+- **Left in `pnpm audit`, all major upgrades:**
+  - **next 15.0.0-rc.1 (high: a Server Components denial of service; fixed in 15.0.6):** the biggest one. All three web apps are on the release candidate; moving to stable 15 needs a build and a check of every app. Its own batch, before launch.
+  - **swiper 11 (critical: prototype pollution):** only exploitable through options the attacker controls; ours are fixed in code. Swiper 12 is a major upgrade.
+  - **zod 3 (high: memory on oversized collections):** request bodies are capped (10 MB JSON); zod 4 is a rewrite.
+- **Web images not rebuilt:** the shared Sentry options change is typechecked, not run.
+- **Not fixed (noted in part 3):** the storefront checkout button sent nothing in a hidden browser pane, and new stores have an empty terms label.

@@ -201,4 +201,28 @@ The same images and compose file run on a developer machine, at `http://*.ecom.l
      -f docker-compose.prod.yml -f docker-compose.rehearsal.yml up -d
    ```
 
-The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's local disk (`STORAGE_DRIVER=local`),, and runs under its own project name, so it never touches the dev database. **Never set `PRODUCTION_REHEARSAL` on a real server.**
+The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's local disk (`STORAGE_DRIVER=local`), and runs under its own project name, so it never touches the dev database. **Never set `PRODUCTION_REHEARSAL` on a real server.**
+
+## 12. Load test
+
+`loadtest/` has two [k6](https://k6.io) scripts. Run them against the rehearsal or a staging copy, **never a live shop** (they place real cash-on-delivery orders):
+
+```bash
+# 50 shoppers browsing (home, list, product, search) and 3 placing orders, for about 4 minutes.
+docker run --rm -i --network ecom-rehearsal_ecom -v "$PWD/loadtest:/t" grafana/k6:0.57.0 run /t/shop.k6.js
+# CPU cost of one API call: a fixed rate; watch `docker stats` (CPU% ÷ RATE = cost per request).
+docker run --rm -i --network ecom-rehearsal_ecom -v "$PWD/loadtest:/t" -e RATE=20 -e PATH_TO=/api/storefront/products grafana/k6:0.57.0 run /t/api-cost.k6.js
+```
+
+**Targets:** browsing p95 under 500 ms, checkout p95 under 1.5 s, under 1% errors.
+
+**API copies (`API_REPLICAS`, default 2):** one Node process uses one core, so run one copy per core you can spare after the storefront (it renders every page) and Postgres. Caddy finds every copy by name and sends each request to the least busy one. On a 2-core server, set `API_REPLICAS=1`.
+
+**Results on a 4-core laptop** (everything plus k6 on the same 4 cores, so this is a floor, not the server's numbers), Batch 46:
+
+| | Browse p95 | Checkout p95 | Errors | Requests/s |
+|---|---|---|---|---|
+| 1 API copy | 1.02 s | 0.60 s | 0 | 25 |
+| 2 API copies | 0.84 s | 0.71 s | 0 | 26 |
+
+The machine was the limit: the storefront used the most CPU, then the API copies. Run it again on the real server before launch.

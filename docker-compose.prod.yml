@@ -78,6 +78,9 @@ services:
   api:
     <<: *api-image
     restart: unless-stopped
+    # Node uses one core per process: one copy per core (the load test in DEPLOYMENT.md).
+    deploy:
+      replicas: ${API_REPLICAS:-2}
     environment:
       NODE_ENV: production
       # The worker service sends emails and runs the background jobs.

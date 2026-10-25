@@ -43,5 +43,18 @@
   },
   "engines": {
     "node": ">=20.11.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "proxy-addr": "^2.0.8",
+      "body-parser@1": "^1.20.9",
+      "follow-redirects": "^1.16.1",
+      "brace-expansion@1": "^1.1.20",
+      "brace-expansion@2": "^2.1.6",
+      "source-map-js": "^1.2.2",
+      "postcss@8": "^8.5.18",
+      "sharp@<0.35.5": "^0.35.5",
+      "rollup@3": "^3.30.0"
+    }
   }
 }

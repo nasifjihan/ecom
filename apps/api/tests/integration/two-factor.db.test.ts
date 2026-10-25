@@ -200,6 +200,8 @@ describe.skipIf(!runDb)("two-step sign-in (Postgres)", () => {
     const s = await new TwoFactor("admin", staff).start()
     await new TwoFactor("admin", staff).confirm(codeOf(s.secret))
     expect(await fails(auth.validateRefresh(other.refreshToken, "admin"))).toBe("AUTH_EXPIRED_TOKEN")
+    // Kept on the account, not in Redis, so a Redis restart doesn't bring the old session back.
+    expect((await prisma.adminUser.findUniqueOrThrow({ where: { id: staff } })).sessionsValidFrom).not.toBeNull()
     const mine = await auth.issueTokens(staffRow, "admin")
     expect((await auth.validateRefresh(mine.refreshToken, "admin")).sub).toBe(String(staff))
     await new TwoFactor("admin", staff).disable(PASSWORD)

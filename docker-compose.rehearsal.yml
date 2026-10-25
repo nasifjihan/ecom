@@ -19,6 +19,9 @@ services:
       PRODUCTION_REHEARSAL: "on"
       EMAIL_WORKER: "off"
   worker: *rehearsal
+  # Query statistics for the load test (Batch 46 part 4): which queries are slowest.
+  postgres:
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all"]
   backup: *rehearsal
 
   # S3-compatible stand-in for the backup bucket (MinIO no longer publishes free images).

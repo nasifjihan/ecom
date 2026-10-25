@@ -268,6 +268,8 @@ model PlatformAdmin {
   /// Wrong passwords or two-step codes in a row; at 5 the account is locked for 15 minutes (Batch 46).
   failedSignIns        Int       @default(0)
   signInLockedUntil    DateTime?
+  /// Refresh tokens issued before this are refused (password change, two-step change, deactivation; Batch 46).
+  sessionsValidFrom    DateTime?
   lastLoginAt          DateTime?
   lastLoginIp          String?
   createdAt            DateTime  @default(now())
@@ -328,6 +330,8 @@ model AdminUser {
   /// Wrong passwords or two-step codes in a row; at 5 the account is locked for 15 minutes (Batch 46).
   failedSignIns        Int               @default(0)
   signInLockedUntil    DateTime?
+  /// Refresh tokens issued before this are refused (password change, two-step change, deactivation; Batch 46).
+  sessionsValidFrom    DateTime?
   lastLoginAt          DateTime?
   lastLoginIp          String?
   auditLogs            AuditLog[]
@@ -1457,6 +1461,8 @@ model Customer {
   totalSpent            Decimal                @default(0) @db.Decimal(14, 2)
   orderCount            Int                    @default(0)
   twoFactorSecret       String?
+  /// Refresh tokens issued before this are refused (password change, two-step change, deactivation; Batch 46).
+  sessionsValidFrom     DateTime?
   lastLoginAt           DateTime?
   lastLoginIp           String?
   addresses             CustomerAddress[]

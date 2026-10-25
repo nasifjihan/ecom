@@ -14,22 +14,38 @@
 	}
 }
 
+# The web apps: no framing by other sites (clickjacking), no plugins, no <base> rewrites. Scripts
+# aren't restricted here: Next's inline scripts and the payment pages would need a nonce setup.
+(web) {
+	import common
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+	}
+}
+
 {$API_DOMAIN} {
 	import common
-	reverse_proxy api:4000
+	# Every copy of the API (API_REPLICAS), found by name and kept up to date.
+	reverse_proxy {
+		dynamic a api 4000 {
+			refresh 10s
+		}
+		lb_policy least_conn
+	}
 }
 
 {$SHOP_DOMAINS} {
-	import common
+	import web
 	reverse_proxy storefront:3000
 }
 
 {$ADMIN_DOMAIN} {
-	import common
+	import web
 	reverse_proxy store-admin:3000
 }
 
 {$SUPER_DOMAIN} {
-	import common
+	import web
 	reverse_proxy super-admin:3000
 }
