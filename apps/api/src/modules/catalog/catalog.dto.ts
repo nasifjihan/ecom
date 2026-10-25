@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 import { PaginationSchema } from "@ecom/zod-schemas";
 
 const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
@@ -47,7 +48,7 @@ export type VariantIdParamDto = z.infer<typeof VariantIdParamDto>;
 const BaseProductVariantDto = z.object({
   /** Present when updating an existing variant; omitted for new ones. */
   id: z.coerce.bigint().positive().optional(),
-  attributeValues: z.record(z.unknown()).default({}),
+  attributeValues: z.record(z.string(), z.unknown()).default({}),
   sku: z.string().max(100).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
@@ -80,7 +81,7 @@ const priceStockRefine = (v: any, ctx: z.RefinementCtx) => {
 };
 export const CreateProductVariantDto = BaseProductVariantDto.superRefine(priceStockRefine);
 export type CreateProductVariantDto = z.infer<typeof CreateProductVariantDto>;
-export const UpdateProductVariantDto = BaseProductVariantDto.partial();
+export const UpdateProductVariantDto = patchOf(BaseProductVariantDto);
 export type UpdateProductVariantDto = z.infer<typeof UpdateProductVariantDto>;
 
 /** Lower-case, trimmed, no duplicates: "Eid", " eid " and "EID" are one tag. */
@@ -185,7 +186,7 @@ const BaseCreateProductDto = z.object({
 export const CreateProductDto = BaseCreateProductDto.superRefine(priceStockRefine);
 export type CreateProductDto = z.infer<typeof CreateProductDto>;
 // Tags and specification rows keep their full rules on update (deepPartial would loosen each row).
-export const UpdateProductDto = BaseCreateProductDto.deepPartial().extend({
+export const UpdateProductDto = patchOf(BaseCreateProductDto).extend({
   tags: ProductTags.optional(),
   specifications: ProductSpecifications.optional(),
 });
@@ -207,7 +208,7 @@ export const CreateCategoryDto = z.object({
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
   menuIncluded: z.boolean().default(true),
-  megaMenuConfig: z.record(z.unknown()).optional().nullable(),
+  megaMenuConfig: z.record(z.string(), z.unknown()).optional().nullable(),
   seoTitle: z.string().max(255).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
@@ -215,7 +216,7 @@ export const CreateCategoryDto = z.object({
   translations: nameAndDescription(5000),
 });
 export type CreateCategoryDto = z.infer<typeof CreateCategoryDto>;
-export const UpdateCategoryDto = CreateCategoryDto.partial();
+export const UpdateCategoryDto = patchOf(CreateCategoryDto);
 export type UpdateCategoryDto = z.infer<typeof UpdateCategoryDto>;
 
 export const CategoryIdParamDto = z.object({ id: z.coerce.bigint().positive() });
@@ -239,7 +240,7 @@ export const CreateBrandDto = z.object({
   translations: nameAndDescription(5000),
 });
 export type CreateBrandDto = z.infer<typeof CreateBrandDto>;
-export const UpdateBrandDto = CreateBrandDto.partial();
+export const UpdateBrandDto = patchOf(CreateBrandDto);
 export type UpdateBrandDto = z.infer<typeof UpdateBrandDto>;
 export const BrandIdParamDto = z.object({ id: z.coerce.bigint().positive() });
 export type BrandIdParamDto = z.infer<typeof BrandIdParamDto>;
@@ -263,7 +264,7 @@ export const CreateAttributeDto = z.object({
   options: z.array(CreateAttributeTermDto).default([]),
 });
 export type CreateAttributeDto = z.infer<typeof CreateAttributeDto>;
-export const UpdateAttributeDto = CreateAttributeDto.partial().extend({
+export const UpdateAttributeDto = patchOf(CreateAttributeDto).extend({
   options: z.array(CreateAttributeTermDto).optional(),
 });
 export type UpdateAttributeDto = z.infer<typeof UpdateAttributeDto>;

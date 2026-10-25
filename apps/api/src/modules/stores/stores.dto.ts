@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 
 export const StoreOwnerDto = z.object({
   name: z.string().trim().min(2).max(120),
@@ -20,7 +21,7 @@ const StoreFieldsDto = z.object({
 export const CreateStoreDto = StoreFieldsDto.extend({ owner: StoreOwnerDto.optional() });
 export type CreateStoreDto = z.infer<typeof CreateStoreDto>;
 
-export const UpdateStoreDto = StoreFieldsDto.deepPartial();
+export const UpdateStoreDto = patchOf(StoreFieldsDto);
 export type UpdateStoreDto = z.infer<typeof UpdateStoreDto>;
 
 export const CreateDomainDto = z.object({

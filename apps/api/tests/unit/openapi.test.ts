@@ -52,7 +52,7 @@ describe("API docs from the routes", () => {
     const doc = buildOpenApi(tinyApp())
     const list = doc.paths["/api/admin/orders"]!.get!
     expect(list.parameters).toEqual([
-      { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1, default: 1 } },
+      { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER, default: 1 } },
       { name: "status", in: "query", required: false, schema: { type: "string", enum: ["new", "paid"] } },
     ])
     expect(list.security).toEqual([{ bearerAuth: [] }])
@@ -62,7 +62,6 @@ describe("API docs from the routes", () => {
       type: "object",
       properties: { note: { type: "string", maxLength: 200 } },
       required: ["note"],
-      additionalProperties: false,
     })
     // A path part without a schema is still listed.
     expect(doc.paths["/api/storefront/products/{slug}"]!.get!.parameters).toEqual([{ name: "slug", in: "path", required: true, schema: { type: "string" } }])

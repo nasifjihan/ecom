@@ -120,7 +120,7 @@ export function ShippingAddressForm({
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<AddressFormData>({
+  } = useForm<z.input<typeof addressSchema>, unknown, AddressFormData>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       firstName: "",
@@ -146,7 +146,7 @@ export function ShippingAddressForm({
     control: billingControl,
     handleSubmit: handleBillingSubmit,
     formState: { errors: billingErrors },
-  } = useForm<AddressFormData>({
+  } = useForm<z.input<typeof addressSchema>, unknown, AddressFormData>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       firstName: "",

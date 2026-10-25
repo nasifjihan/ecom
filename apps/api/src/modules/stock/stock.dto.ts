@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 
 const noXss = (v: string) => !/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i.test(v)
 const text = (max: number) => z.string().trim().max(max).refine(noXss, "No HTML please")
@@ -16,7 +17,7 @@ export const WarehouseDto = z.object({
   isActive: z.boolean().optional(),
   sortOrder: z.coerce.number().int().min(0).max(1000).optional(),
 })
-export const UpdateWarehouseDto = WarehouseDto.partial()
+export const UpdateWarehouseDto = patchOf(WarehouseDto)
 
 export const StockQuery = z.object({
   search: z.string().trim().max(80).optional(),

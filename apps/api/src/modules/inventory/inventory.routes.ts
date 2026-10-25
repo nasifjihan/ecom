@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { inventoryController } from "./inventory.controller";
+import { patchOf } from "../../core/patch-schema";
 import {
   StockAdjustmentDto,
   MovementQueryDto,
@@ -77,7 +78,7 @@ adminInventoryRouter.post(
   "/variants/:variantId/adjust",
   authMiddleware("adminOrSuper"),
   rbacMiddleware("inventory.edit"),
-  validate({ params: VariantIdParamDto, body: StockAdjustLineDto.partial() as any }),
+  validate({ params: VariantIdParamDto, body: patchOf(StockAdjustLineDto) as any }),
   inventoryController.adjustVariant,
 );
 

@@ -80,13 +80,13 @@ const addressSchema = z.object({
 });
 
 const mediaSchema = z.object({
-  thumbnailWidth: z.coerce.number().int().min(16).max(2048).default(150),
-  thumbnailHeight: z.coerce.number().int().min(16).max(2048).default(150),
-  mediumWidth: z.coerce.number().int().min(16).max(4096).default(600),
-  mediumHeight: z.coerce.number().int().min(16).max(4096).default(600),
-  largeWidth: z.coerce.number().int().min(16).max(5000).default(1200),
-  largeHeight: z.coerce.number().int().min(16).max(5000).default(1200),
-  uploadQuality: z.coerce.number().int().min(0).max(100).default(82),
+  thumbnailWidth: z.coerce.number<number>().int().min(16).max(2048).default(150),
+  thumbnailHeight: z.coerce.number<number>().int().min(16).max(2048).default(150),
+  mediumWidth: z.coerce.number<number>().int().min(16).max(4096).default(600),
+  mediumHeight: z.coerce.number<number>().int().min(16).max(4096).default(600),
+  largeWidth: z.coerce.number<number>().int().min(16).max(5000).default(1200),
+  largeHeight: z.coerce.number<number>().int().min(16).max(5000).default(1200),
+  uploadQuality: z.coerce.number<number>().int().min(0).max(100).default(82),
   webpCompression: z.boolean().default(true),
   watermarkEnabled: z.boolean().default(false),
   watermarkPosition: z
@@ -103,7 +103,7 @@ const mediaSchema = z.object({
     ])
     .default("bottom_right"),
   watermarkImage: z.string().optional().or(z.literal("")),
-  watermarkOpacity: z.coerce.number().min(0).max(100).default(60),
+  watermarkOpacity: z.coerce.number<number>().min(0).max(100).default(60),
 });
 
 const legalSchema = z.object({
@@ -240,7 +240,7 @@ export default function GeneralSettingsPage() {
 
   const [updateSettings, { isLoading: updateLoading }] = useUpdateSettingsMutation();
 
-  const generalMethods = useForm<GeneralForm>({
+  const generalMethods = useForm<z.input<typeof generalSchema>, unknown, GeneralForm>({
     resolver: zodResolver(generalSchema),
     defaultValues: {
       storeName: "",
@@ -258,7 +258,7 @@ export default function GeneralSettingsPage() {
       weekStartsOn: "sunday",
     },
   });
-  const addressMethods = useForm<AddressForm>({
+  const addressMethods = useForm<z.input<typeof addressSchema>, unknown, AddressForm>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       addressLine1: "",
@@ -272,7 +272,7 @@ export default function GeneralSettingsPage() {
       companyNumber: "",
     },
   });
-  const mediaMethods = useForm<MediaForm>({
+  const mediaMethods = useForm<z.input<typeof mediaSchema>, unknown, MediaForm>({
     resolver: zodResolver(mediaSchema),
     defaultValues: {
       thumbnailWidth: 150,
@@ -289,7 +289,7 @@ export default function GeneralSettingsPage() {
       watermarkOpacity: 60,
     },
   });
-  const legalMethods = useForm<LegalForm>({
+  const legalMethods = useForm<z.input<typeof legalSchema>, unknown, LegalForm>({
     resolver: zodResolver(legalSchema),
     defaultValues: {
       refundPolicy: "",

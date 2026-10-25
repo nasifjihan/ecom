@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 
 export const CreateAdminUserDto = z.object({
   email: z.string().email(),
@@ -16,8 +17,7 @@ export const CreateAdminUserDto = z.object({
   twoFactorEnabled: z.boolean().default(false),
 });
 
-export const UpdateAdminUserDto = CreateAdminUserDto.omit({ password: true })
-  .partial()
+export const UpdateAdminUserDto = patchOf(CreateAdminUserDto.omit({ password: true }))
   .extend({
     password: z.string().min(8).optional(),
     resetPassword: z.boolean().optional(),

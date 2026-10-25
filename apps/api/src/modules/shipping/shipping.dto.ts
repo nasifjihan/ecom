@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 import { PaginationSchema } from "@ecom/zod-schemas";
 
 const NO_XSS = /<\s*script|javascript:|\son[a-z]+\s*=/i;
@@ -27,14 +28,7 @@ const BaseShippingZoneDto = z.object({
   ),
 });
 export const CreateShippingZoneDto = BaseShippingZoneDto;
-export const UpdateShippingZoneDto = z.object({
-  name: BaseShippingZoneDto.shape.name.optional(),
-  enabled: z.boolean().optional(),
-  storefrontIds: z.array(z.coerce.bigint().positive()).max(50).optional(),
-  countries: z.array(CountryCode).min(1).max(50).optional(),
-  locationIds: z.array(z.coerce.bigint().positive()).max(700).optional(),
-  postcodes: BaseShippingZoneDto.shape.postcodes.optional(),
-});
+export const UpdateShippingZoneDto = patchOf(BaseShippingZoneDto);
 export type CreateShippingZoneDto = z.infer<typeof CreateShippingZoneDto>;
 export type UpdateShippingZoneDto = z.infer<typeof UpdateShippingZoneDto>;
 
@@ -77,15 +71,7 @@ export const CreateShippingMethodDto = BaseShippingMethodPlain.superRefine((v, c
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "min days <= max days", path: ["deliveryEstimateMinDays"] });
   }
 });
-// .partial() keeps .default()s, which would reset unsent fields; strip them for PATCH-style updates.
-export const UpdateShippingMethodDto = z.object(
-  Object.fromEntries(
-    Object.entries(BaseShippingMethodPlain.omit({ zoneId: true }).shape).map(([k, v]) => [
-      k,
-      (v instanceof z.ZodDefault ? v.removeDefault() : v).optional(),
-    ]),
-  ) as { [K in keyof Omit<typeof BaseShippingMethodPlain.shape, "zoneId">]: z.ZodOptional<z.ZodTypeAny> },
-);
+export const UpdateShippingMethodDto = patchOf(BaseShippingMethodPlain.omit({ zoneId: true }));
 export type CreateShippingMethodDto = z.infer<typeof CreateShippingMethodDto>;
 export type UpdateShippingMethodDto = z.infer<typeof UpdateShippingMethodDto>;
 
@@ -130,7 +116,7 @@ const BaseTaxRateDtoPlain = z.object({
   priority: z.coerce.number().int().min(0).max(1000).default(1),
 });
 export const CreateTaxRateDto = BaseTaxRateDtoPlain;
-export const UpdateTaxRateDto = BaseTaxRateDtoPlain.partial();
+export const UpdateTaxRateDto = patchOf(BaseTaxRateDtoPlain);
 export type CreateTaxRateDto = z.infer<typeof CreateTaxRateDto>;
 export type UpdateTaxRateDto = z.infer<typeof UpdateTaxRateDto>;
 

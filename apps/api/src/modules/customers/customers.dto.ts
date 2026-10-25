@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 import { CUSTOMER_SOURCES } from "./customer.rules";
 import { PaginationSchema } from "@ecom/zod-schemas";
 import { ExportFormat, CustomerStatus } from "@ecom/shared-types";
@@ -89,7 +90,7 @@ export const CreateCustomerDto = BaseCustomerDto.superRefine((v, ctx) => {
   if (!v.email && !v.phone) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a phone number or an email", path: ["phone"] });
 });
 export type CreateCustomerDto = z.infer<typeof CreateCustomerDto>;
-export const UpdateCustomerDto = BaseCustomerDto.partial();
+export const UpdateCustomerDto = patchOf(BaseCustomerDto);
 export type UpdateCustomerDto = z.infer<typeof UpdateCustomerDto>;
 
 const BaseCustomerSearchQueryDto = PaginationSchema.extend({

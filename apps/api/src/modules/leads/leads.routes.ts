@@ -9,7 +9,7 @@
  */
 import { Router, type Request, type Response } from "express"
 import { z } from "zod"
-import { ctrl, envelope, type RequestContext } from "../../core"
+import { ctrl, envelope, patchOf, type RequestContext } from "../../core"
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware"
 import { LEAD_CHANNELS, LEAD_STATUSES, NOTE_KINDS } from "./leads.rules"
 import { LeadsService, type LeadQuery } from "./leads.service"
@@ -91,7 +91,7 @@ adminLeadsRouter.get(
 adminLeadsRouter.patch(
   "/:id",
   rbacMiddleware("leads.edit"),
-  validate({ params: IdParam, body: LeadBody.omit({ note: true }).partial() }),
+  validate({ params: IdParam, body: patchOf(LeadBody.omit({ note: true })) }),
   ctrl(async (req: Req, res: Response) => {
     envelope(res, { status: 200, data: await svc(req).update(idOf(req), req.body as Partial<z.infer<typeof LeadBody>>), message: "Lead saved" })
   }),

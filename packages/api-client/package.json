@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.2.7",
-    "zod": "^3.23.8",
+    "zod": "^4.6.7",
     "@ecom/shared-types": "workspace:*",
     "@ecom/zod-schemas": "workspace:*"
   },

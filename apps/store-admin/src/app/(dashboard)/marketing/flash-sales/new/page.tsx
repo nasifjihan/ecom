@@ -47,11 +47,11 @@ const flashSaleSchema = z
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().min(1, "End date is required"),
     discountType: z.enum(["percentage", "fixed"]),
-    discountValue: z.coerce.number().min(0),
+    discountValue: z.coerce.number<number>().min(0),
     applyTo: z.enum(["all", "products", "categories"]),
     excludeOnSale: z.boolean().default(false),
     visibility: z.boolean().default(true),
-    priority: z.coerce.number().int().default(0),
+    priority: z.coerce.number<number>().int().default(0),
   })
   .superRefine((v, ctx) => {
     if (new Date(v.endDate) <= new Date(v.startDate)) {
@@ -160,7 +160,7 @@ export default function FlashSaleEditorPage() {
   const editId = searchParams?.get("edit");
   const isEdit = !!editId;
 
-  const methods = useForm<FlashSaleForm>({
+  const methods = useForm<z.input<typeof flashSaleSchema>, unknown, FlashSaleForm>({
     resolver: zodResolver(flashSaleSchema),
     defaultValues: {
       title: "",

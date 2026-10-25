@@ -97,7 +97,7 @@ const categorySchema = z.object({
   imageUrl: z.string().max(500).optional().or(z.literal("")),
   displayMode: z.enum(["products", "children", "both"]).default("products"),
   commissionRate: z.string().regex(/^(\d{1,2}(\.\d{1,2})?|100)?$/, "0–100").optional().or(z.literal("")),
-  sortOrder: z.coerce.number().int().default(0),
+  sortOrder: z.coerce.number<number>().int().default(0),
   isActive: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().or(z.literal("")),
   metaDesc: z.string().max(500).optional().or(z.literal("")),
@@ -221,7 +221,7 @@ export default function CategoriesPage() {
     metaDesc: "",
   };
 
-  const methods = useForm<CategoryFormValues>({
+  const methods = useForm<z.input<typeof categorySchema>, unknown, CategoryFormValues>({
     resolver: zodResolver(categorySchema),
     defaultValues,
     mode: "onSubmit",

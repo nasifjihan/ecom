@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 import { PROMOTION_SLOTS, PROMOTION_TYPES } from "./promotions.rules"
 
 const ids = z.array(z.coerce.bigint().positive()).max(500).default([])
@@ -75,16 +76,7 @@ export const CreatePromotionDto = Base.superRefine((v, ctx) => {
 export type CreatePromotionDto = z.infer<typeof CreatePromotionDto>
 
 // No defaults on update: a field left out stays as it is.
-export const UpdatePromotionDto = z.object(
-  Object.fromEntries(
-    Object.entries(Base.shape).map(([k, s]) => [
-      k,
-      (s instanceof z.ZodDefault ? s.removeDefault() : s).optional(),
-    ]),
-  ) as {
-    [K in keyof typeof Base.shape]: z.ZodOptional<z.ZodTypeAny>
-  },
-)
+export const UpdatePromotionDto = patchOf(Base)
 export type UpdatePromotionDto = Shape
 
 export const PromotionIdParam = z.object({ id: z.coerce.bigint().positive() })

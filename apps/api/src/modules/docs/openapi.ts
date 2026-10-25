@@ -5,8 +5,7 @@
  * under it. So the docs follow the code: a new route shows up with nothing else to write.
  */
 import type { Express } from "express"
-import type { z } from "zod"
-import { zodToJsonSchema } from "zod-to-json-schema"
+import { z } from "zod"
 import { routeMetaOf, type RouteMeta } from "../../core/route-meta"
 
 interface Layer {
@@ -86,14 +85,15 @@ export function listRoutes(app: Express): RouteInfo[] {
 }
 
 type Json = Record<string, unknown>
-const json = (s: z.ZodTypeAny) => {
-  const j = zodToJsonSchema(s as Parameters<typeof zodToJsonSchema>[0], { target: "openApi3", $refStrategy: "none" }) as Json
+// io "input": what a caller sends. Coerced bigints and dates have no JSON form; they show as any.
+const json = (s: z.ZodType) => {
+  const j = z.toJSONSchema(s, { target: "openapi-3.0", io: "input", unrepresentable: "any", reused: "inline" }) as Json
   delete j.$schema
   return j
 }
 
 /** A query or params schema as OpenAPI parameters. */
-function parameters(s: z.ZodTypeAny | undefined, where: "query" | "path"): Json[] {
+function parameters(s: z.ZodType | undefined, where: "query" | "path"): Json[] {
   if (!s) return []
   const j = json(s) as { properties?: Record<string, Json>; required?: string[] }
   return Object.entries(j.properties ?? {}).map(([name, schema]) => ({

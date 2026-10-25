@@ -123,18 +123,18 @@ const productEditSchema = z.object({
     .min(0, { message: "Sale price cannot be negative" })
     .nullable()
     .optional(),
-  costPrice: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0, { message: "Cost can't be negative" }).nullable()),
-  commissionRate: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().min(0).max(100, { message: "Up to 100%" }).nullable()),
+  costPrice: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number<number>().min(0, { message: "Cost can't be negative" }).nullable()),
+  commissionRate: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number<number>().min(0).max(100, { message: "Up to 100%" }).nullable()),
   salePriceStartAt: z.string().optional().or(z.literal("")),
   salePriceEndAt: z.string().optional().or(z.literal("")),
-  stockQty: z.coerce.number().int().min(0, { message: "Stock cannot be negative" }).optional(),
+  stockQty: z.coerce.number<number>().int().min(0, { message: "Stock cannot be negative" }).optional(),
   manageStock: z.boolean().default(true),
-  lowStockThreshold: z.coerce.number().int().min(0).optional(),
+  lowStockThreshold: z.coerce.number<number>().int().min(0).optional(),
   allowBackorder: z.boolean().default(false),
-  weight: z.coerce.number().min(0).nullable().optional(),
-  length: z.coerce.number().min(0).nullable().optional(),
-  width: z.coerce.number().min(0).nullable().optional(),
-  height: z.coerce.number().min(0).nullable().optional(),
+  weight: z.coerce.number<number>().min(0).nullable().optional(),
+  length: z.coerce.number<number>().min(0).nullable().optional(),
+  width: z.coerce.number<number>().min(0).nullable().optional(),
+  height: z.coerce.number<number>().min(0).nullable().optional(),
   sourcing: z.enum(["local", "imported"]).nullable().optional(),
   originCountry: z.string().max(60).nullable().optional(),
   isFeatured: z.boolean().default(false),
@@ -191,7 +191,7 @@ export default function EditProductPage() {
   const [relatedSearch, setRelatedSearch] = useState("");
   const [activeTab, setActiveTab] = useState("basic");
 
-  const methods = useForm<ProductEditFormValues>({
+  const methods = useForm<z.input<typeof productEditSchema>, unknown, ProductEditFormValues>({
     resolver: zodResolver(productEditSchema),
     defaultValues: {
       name: "",
@@ -807,8 +807,8 @@ export default function EditProductPage() {
                     variants={variants}
                     onChange={setVariants}
                     skuPrefix={watch("sku") || undefined}
-                    defaultPrice={watch("regularPrice") ?? null}
-                    defaultCost={watch("costPrice") ?? null}
+                    defaultPrice={(watch("regularPrice") as number | null | undefined) ?? null}
+                    defaultCost={(watch("costPrice") as number | null | undefined) ?? null}
                   />
                 </TabsContent>
 
@@ -889,7 +889,7 @@ export default function EditProductPage() {
                               <Input type="number" min={0} step="0.01" placeholder="What one unit costs you" {...field} value={watch("costPrice") ?? ""} />
                             </FormControl>
                             <FormMessage>{methods.formState.errors.costPrice?.message}</FormMessage>
-                            <CostMargin cost={watch("costPrice")} price={watch("salePrice") ?? watch("regularPrice")} />
+                            <CostMargin cost={(watch("costPrice") as number | null | undefined)} price={(watch("salePrice") as number | null | undefined) ?? (watch("regularPrice") as number | null | undefined)} />
                           </FormItem>
                         )}
                       />

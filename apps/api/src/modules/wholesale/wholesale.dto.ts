@@ -1,13 +1,15 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 import { BUSINESS_STATUSES, BUSINESS_TYPES } from "./wholesale.rules"
 
 const noXss = (v: string) => !/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i.test(v)
 const text = (max: number) => z.string().trim().max(max).refine(noXss, "No HTML please")
 const optText = (max: number) =>
+  // .optional() last: zod 4 makes a key required when a transform wraps the optional.
   text(max)
-    .optional()
     .nullable()
-    .transform((v) => (v === undefined ? undefined : v === "" ? null : v))
+    .transform((v) => (v === "" ? null : v))
+    .optional()
 const money = z.coerce.number().min(0).max(100_000_000)
 
 export const IdParam = z.object({ id: z.coerce.bigint().positive() })
@@ -38,7 +40,7 @@ export const ApplyDto = BusinessDetailsDto
 /** Staff make an existing customer a business account (approved straight away). */
 export const CreateAccountDto = BusinessDetailsDto.extend({ customerId: z.coerce.bigint().positive() })
 
-export const UpdateAccountDto = BusinessDetailsDto.partial()
+export const UpdateAccountDto = patchOf(BusinessDetailsDto)
 
 export const ReviewDto = z.object({
   action: z.enum(["approve", "reject", "suspend"]),

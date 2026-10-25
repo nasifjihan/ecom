@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 import { PaginationSchema } from "@ecom/zod-schemas";
 
 const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
@@ -151,7 +152,7 @@ export const CreateOrderFromCartDto = BaseCreateOrderFromCartDto.superRefine((v,
 });
 export type CreateOrderFromCartDto = z.infer<typeof CreateOrderFromCartDto>;
 
-export const UpdateOrderFromCartDto = BaseCreateOrderFromCartDto.partial();
+export const UpdateOrderFromCartDto = patchOf(BaseCreateOrderFromCartDto);
 export type UpdateOrderFromCartDto = z.infer<typeof UpdateOrderFromCartDto>;
 
 export const TransitionStatusDto = z
@@ -219,7 +220,7 @@ export const CartItemLineDto = z.object({
   variantId: z.coerce.bigint().positive().optional().nullable(),
   quantity: z.coerce.number().int().min(1).max(999),
   unitPrice: z.coerce.number().nonnegative().optional().nullable(),
-  meta: z.record(z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 export type CartItemLineDto = z.infer<typeof CartItemLineDto>;
 
@@ -246,7 +247,7 @@ export const CreateCartDto = BaseCreateCartDto.superRefine((v, ctx) => {
 });
 export type CreateCartDto = z.infer<typeof CreateCartDto>;
 
-export const UpdateCartDto = BaseCreateCartDto.partial();
+export const UpdateCartDto = patchOf(BaseCreateCartDto);
 export type UpdateCartDto = z.infer<typeof UpdateCartDto>;
 
 export const AddCartItemDto = CartItemLineDto;

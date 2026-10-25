@@ -100,7 +100,7 @@ const brandSchema = z.object({
   /** The name and description in Bangla (optional; the storefront shows them in Bangla). */
   nameBn: z.string().max(255).optional().or(z.literal("")),
   descriptionBn: z.string().max(5000).optional().or(z.literal("")),
-  sortOrder: z.coerce.number().int().default(0),
+  sortOrder: z.coerce.number<number>().int().default(0),
   isActive: z.boolean().default(true),
   seoTitle: z.string().max(255).optional().or(z.literal("")),
   metaDesc: z.string().max(500).optional().or(z.literal("")),
@@ -165,7 +165,7 @@ function BrandDialog({
   onSubmit: (v: BrandFormValues) => void;
   isSubmitting: boolean;
 }) {
-  const methods = useForm<BrandFormValues>({
+  const methods = useForm<z.input<typeof brandSchema>, unknown, BrandFormValues>({
     resolver: zodResolver(brandSchema),
     defaultValues: {
       name: brand?.name || "",

@@ -58,9 +58,9 @@ const createCouponSchema = z
     code: z.string().min(3, "Code must be at least 3 chars").max(50, "Max 50 chars"),
     description: z.string().max(255).optional().or(z.literal("")),
     type: CouponTypeSchema,
-    amount: z.coerce.number().min(0, "Amount must be >= 0"),
-    minimumSpend: z.coerce.number().min(0).optional(),
-    maximumSpend: z.coerce.number().min(0).optional(),
+    amount: z.coerce.number<number>().min(0, "Amount must be >= 0"),
+    minimumSpend: z.coerce.number<number>().min(0).optional(),
+    maximumSpend: z.coerce.number<number>().min(0).optional(),
     individualUseOnly: z.boolean().default(false),
     excludeSaleItems: z.boolean().default(false),
     productIds: z.string().optional(),
@@ -68,14 +68,14 @@ const createCouponSchema = z
     categoryIds: z.string().optional(),
     excludeCategoryIds: z.string().optional(),
     allowedEmails: z.string().optional(),
-    usageLimit: z.coerce.number().int().min(0).optional(),
-    usageLimitPerXCustomers: z.coerce.number().int().min(0).optional(),
-    usageLimitPerUser: z.coerce.number().int().min(1).default(1),
+    usageLimit: z.coerce.number<number>().int().min(0).optional(),
+    usageLimitPerXCustomers: z.coerce.number<number>().int().min(0).optional(),
+    usageLimitPerUser: z.coerce.number<number>().int().min(1).default(1),
     freeShipping: z.boolean().default(false),
     validFrom: z.string().optional().or(z.literal("")),
     validUntil: z.string().optional().or(z.literal("")),
-    bogoBuyQty: z.coerce.number().int().min(1).optional(),
-    bogoGetQty: z.coerce.number().int().min(1).optional(),
+    bogoBuyQty: z.coerce.number<number>().int().min(1).optional(),
+    bogoGetQty: z.coerce.number<number>().int().min(1).optional(),
     audience: z.enum(["private", "public", "given"]).default("private"),
     worksWithPromotions: z.boolean().default(true),
     storefrontIds: z.array(z.string()).default([]),
@@ -189,7 +189,7 @@ export default function NewCouponPage() {
   const searchParams = useSearchParams();
   const duplicateId = searchParams?.get("duplicate");
 
-  const methods = useForm<CreateCouponForm>({
+  const methods = useForm<z.input<typeof createCouponSchema>, unknown, CreateCouponForm>({
     resolver: zodResolver(createCouponSchema),
     defaultValues: {
       code: "",

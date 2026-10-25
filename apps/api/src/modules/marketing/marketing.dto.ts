@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 import { PaginationSchema } from "@ecom/zod-schemas";
 import { CouponType } from "@ecom/shared-types";
 
@@ -108,7 +109,7 @@ export const CreateCouponDto = BaseCouponDto.superRefine((v, ctx) => {
 });
 export type CreateCouponDto = z.infer<typeof CreateCouponDto>;
 
-export const UpdateCouponDto = BaseCouponDto.partial();
+export const UpdateCouponDto = patchOf(BaseCouponDto);
 export type UpdateCouponDto = z.infer<typeof UpdateCouponDto>;
 
 const BaseCouponSearchQueryDto = PaginationSchema.extend({
@@ -185,7 +186,7 @@ export const CreateFlashSaleDto = BaseFlashSaleDto.superRefine((v, ctx) => {
 });
 export type CreateFlashSaleDto = z.infer<typeof CreateFlashSaleDto>;
 
-export const UpdateFlashSaleDto = BaseFlashSaleDto.partial();
+export const UpdateFlashSaleDto = patchOf(BaseFlashSaleDto);
 export type UpdateFlashSaleDto = z.infer<typeof UpdateFlashSaleDto>;
 
 export const ReviewIdParamDto = z.object({ id: z.coerce.bigint().positive() });

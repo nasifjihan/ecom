@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 import { videoEmbed } from "@ecom/utils"
 
 const slug = z
@@ -50,7 +51,7 @@ export const CreatePageDto = z.object({
     .optional()
     .nullable(),
 })
-export const UpdatePageDto = CreatePageDto.partial()
+export const UpdatePageDto = patchOf(CreatePageDto)
 export type CreatePageDto = z.infer<typeof CreatePageDto>
 export type UpdatePageDto = z.infer<typeof UpdatePageDto>
 
@@ -62,7 +63,7 @@ export const BlogCategoryDto = z.object({
   description: optText(500),
   isActive: z.boolean().default(true),
 })
-export const UpdateBlogCategoryDto = BlogCategoryDto.partial()
+export const UpdateBlogCategoryDto = patchOf(BlogCategoryDto)
 export type BlogCategoryDto = z.infer<typeof BlogCategoryDto>
 
 export const CreatePostDto = z.object({
@@ -82,7 +83,7 @@ export const CreatePostDto = z.object({
   seoTitle: optText(200),
   metaDesc: optText(320),
 })
-export const UpdatePostDto = CreatePostDto.partial()
+export const UpdatePostDto = patchOf(CreatePostDto)
 export type CreatePostDto = z.infer<typeof CreatePostDto>
 export type UpdatePostDto = z.infer<typeof UpdatePostDto>
 
@@ -95,7 +96,7 @@ export const FaqDto = z.object({
   sortOrder: z.coerce.number().int().default(0),
   isPublished: z.boolean().default(true),
 })
-export const UpdateFaqDto = FaqDto.partial()
+export const UpdateFaqDto = patchOf(FaqDto)
 export type FaqDto = z.infer<typeof FaqDto>
 
 /* ------------------------------ Menus ------------------------------ */
@@ -108,7 +109,7 @@ export const MenuDto = z.object({
   /** The storefront the menu belongs to (null / omitted: the default one, shared by the rest). */
   storefrontId: z.coerce.bigint().positive().nullish(),
 })
-export const UpdateMenuDto = MenuDto.partial()
+export const UpdateMenuDto = patchOf(MenuDto)
 export type MenuDto = z.infer<typeof MenuDto>
 
 const MenuLeaf = z.object({

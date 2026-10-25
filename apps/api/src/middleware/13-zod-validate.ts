@@ -7,9 +7,13 @@
  *   router.post("/", validate({ body: CreateProductDto, query: PaginationSchema }), controller.create)
  */
 import type { Request, Response, NextFunction } from "express";
-import type { z } from "zod";
+import { z } from "zod";
 import { ValidationError } from "../core";
 import { tagRoute } from "../core/route-meta";
+
+// Zod 4 words a missing field "Invalid input: expected string, received undefined"; people see these
+// next to form fields, so keep zod 3's "Required". A message written on a schema still wins.
+z.config({ customError: (iss) => (iss.code === "invalid_type" && iss.input === undefined ? "Required" : undefined) });
 
 type Targets = {
   params?: z.ZodTypeAny;

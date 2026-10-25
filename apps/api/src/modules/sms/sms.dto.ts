@@ -15,7 +15,7 @@ export const SaveSmsSettingsDto = z.object({
     .max(20)
     .regex(/^[\w .-]*$/, "Letters, numbers, spaces, dots and dashes only")
     .nullish(),
-  credentials: z.record(z.string().max(300)).optional(),
+  credentials: z.record(z.string(), z.string().max(300)).optional(),
   events: z
     .object(Object.fromEntries(SMS_EVENTS.map((e) => [e, event.optional()])))
     .partial()

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 import { CHECKOUT_STYLES } from "./storefronts.context"
 
 const noXss = (v: string) => !/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i.test(v)
@@ -29,7 +30,7 @@ export const StorefrontDto = z.object({
   /** Off: customers sign in or sign up before ordering. */
   guestCheckout: z.boolean().optional(),
 })
-export const UpdateStorefrontDto = StorefrontDto.partial()
+export const UpdateStorefrontDto = patchOf(StorefrontDto)
 
 export const AddDomainDto = z.object({ hostname: text(255).pipe(z.string().min(3, "Type the web address")) })
 export const MoveDomainDto = z.object({ storefrontId: id.nullable() })

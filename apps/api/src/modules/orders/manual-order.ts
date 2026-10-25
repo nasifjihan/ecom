@@ -64,10 +64,10 @@ const Discount = z.object({
 });
 
 const Base = z.object({
-  customer: Customer.default({}),
-  items: z.array(Line).max(100).default([]),
-  address: Address.default({}),
-  delivery: Delivery.default({ type: "pickup" }),
+  customer: Customer.prefault({}),
+  items: z.array(Line).max(100).prefault([]),
+  address: Address.prefault({}),
+  delivery: Delivery.prefault({ type: "pickup" }),
   couponCode: z.string().trim().toUpperCase().max(40).optional().or(z.literal("")),
   /** The store's automatic promotions (discounts, free gifts, free delivery); on unless staff turn them off. */
   applyPromotions: z.boolean().default(true),

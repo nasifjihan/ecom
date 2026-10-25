@@ -47,7 +47,7 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [login, { isLoading }] = useLoginMutation();
 
-  const form = useForm<LoginFormValues>({
+  const form = useForm<z.input<typeof loginSchema>, unknown, LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: searchParams.get("email") ?? "",

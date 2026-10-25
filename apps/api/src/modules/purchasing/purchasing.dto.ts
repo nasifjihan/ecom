@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { patchOf } from "../../core/patch-schema"
 import { MONEY_ACCOUNT_TYPES, PAYMENT_METHODS, PAYMENT_TERMS } from "./purchasing.rules"
 
 const noXss = (v: string) => !/<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i.test(v)
@@ -20,7 +21,7 @@ export const SupplierDto = z.object({
   notes: text(1000).nullish(),
   isActive: z.boolean().optional(),
 })
-export const UpdateSupplierDto = SupplierDto.partial()
+export const UpdateSupplierDto = patchOf(SupplierDto)
 export const SupplierQuery = z.object({
   search: z.string().trim().max(80).optional(),
   active: z
@@ -38,7 +39,7 @@ export const AccountDto = z.object({
   openingBalance: z.coerce.number().min(-100_000_000).max(100_000_000).optional(),
   isActive: z.boolean().optional(),
 })
-export const UpdateAccountDto = AccountDto.partial()
+export const UpdateAccountDto = patchOf(AccountDto)
 export const MoveMoneyDto = z.object({
   kind: z.enum(["deposit", "withdrawal", "adjustment", "transfer"]),
   accountId: z.coerce.bigint().positive(),

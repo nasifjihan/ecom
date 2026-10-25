@@ -90,7 +90,7 @@ export default function ProfileSettingsPage() {
   const [updateProfile, { isLoading: updateLoading }] = useUpdateMyProfileMutation();
   const [changePassword, { isLoading: passwordLoading }] = useChangePasswordMutation();
 
-  const profileMethods = useForm<ProfileForm>({
+  const profileMethods = useForm<z.input<typeof profileSchema>, unknown, ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       firstName: "",
@@ -101,7 +101,7 @@ export default function ProfileSettingsPage() {
       avatar: "",
     },
   });
-  const passwordMethods = useForm<PasswordForm>({
+  const passwordMethods = useForm<z.input<typeof passwordSchema>, unknown, PasswordForm>({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
       oldPassword: "",

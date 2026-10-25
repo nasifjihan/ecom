@@ -50,7 +50,7 @@ export default function SuperAdminLoginPage() {
   const [code, setCode] = useState("");
   const [loginSuper, { isLoading }] = useLoginSuperMutation();
 
-  const form = useForm<SuperLoginFormValues>({
+  const form = useForm<z.input<typeof superLoginSchema>, unknown, SuperLoginFormValues>({
     resolver: zodResolver(superLoginSchema),
     defaultValues: {
       email: "",

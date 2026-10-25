@@ -87,5 +87,5 @@ export const LabelsQuery = z.object({
         .map((x) => x.trim())
         .filter(Boolean),
     )
-    .pipe(z.array(z.coerce.bigint().positive()).min(1).max(200)),
+    .pipe(z.array(z.coerce.bigint<string>().positive()).min(1).max(200)),
 })

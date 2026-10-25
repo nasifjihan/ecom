@@ -6146,3 +6146,64 @@ The test runner moves from vitest 2.1 to 5.0.5 in every package. This removes vi
 - **Coverage report:** still runs (v8 provider).
 - **API typecheck:** clean.
 - **`pnpm audit --prod`:** 1 high left (zod, part 3); moderate warnings down from 25 to 19.
+
+---
+
+## ✅ BATCH #48 (part 3) — zod 4 (2026-10-25)
+Every package moves from zod 3.25 to zod 4.6.7. This clears the last high `pnpm audit` warning: zod could use a great deal of memory checking an oversized list, and every API request body goes through zod.
+
+### 48.6 Versions
+- **zod:** `zod` ^4.6.7 in the API, the three web apps, storefront-base, `api-client` and `zod-schemas`. No zod 3 left in the tree.
+- **Forms:** `@hookform/resolvers` 3.9 → 6.0.0 (the first line that supports zod 4).
+- **API docs:** `zod-to-json-schema` removed. The docs now use zod 4's own `z.toJSONSchema`, describing what callers send (`io: "input"`).
+
+### 48.7 The dangerous change: defaults inside updates
+- **What changed:** zod 4's `.partial()` fills in `.default()` values for fields that weren't sent. Zod 3 left them out.
+- **Why it matters:** every update schema was a create schema made partial, so a PATCH would have reset unsent fields. Two examples:
+  - changing a product's name would have set it back to its default status, emptied its tags and turned off "featured";
+  - editing a staff member's name would have reset their status to "invited" and turned off two-step sign-in.
+
+  The tests didn't catch this. A checker that parsed an empty body against every update schema did.
+- **Fix: `patchOf(schema)` in `core/patch-schema.ts`.** Every field becomes optional with its default removed. A field that allowed `null` still does, and a `.refine()` written after `.default()` (which zod 4 keeps on the default's wrapper) moves to the inner schema, so the rule isn't lost.
+- **Where it's used:** all 30 update schemas: products, variants, categories, brands, attributes, pages, posts, FAQs, menus, customers, coupons, flash sales, carts and orders, plans, suppliers and accounts, tax rates, delivery zones and methods, warehouses, storefronts, stores, staff, wholesale accounts, stock lines and leads.
+- **Old helpers replaced:** the two hand-written strips (delivery methods, promotions) now use it.
+- **`deepPartial` (removed in zod 4):** the product and store updates now use `patchOf`. In zod 3 it never reached inside the refined variant rows, so updates behave the same.
+- **Checked:** with the checker, which now finds no update schema that fills anything in. Also against the dev API: changing only a product's name left its status, `featured: true` (default `false`), tags, categories and images as they were.
+
+### 48.8 Other zod 4 changes
+- **`z.record(values)`** needs a key schema: `z.record(z.string(), …)` (5 places).
+- **Object defaults:**
+  - zod 4's `.default({})` no longer runs the value through the schema;
+  - the manual-order form uses `.prefault()`, so nested defaults still apply;
+  - the others type-check as complete values, so they don't need it.
+- **Smaller fixes:**
+  - **terms checkbox:** `errorMap` became `error` ("You must accept the terms");
+  - **courier sync pipe:** `z.coerce.bigint<string>()`, because coerced inputs are typed `unknown`;
+  - **wholesale optional texts:** `.optional()` now comes last. A transform around an optional made the key required in zod 4's types.
+- **Error wording:**
+  - zod 4 says "Invalid input: expected string, received undefined" for a missing field. One global rule in the validator (`z.config` `customError`) keeps zod 3's "Required";
+  - messages written on a schema still win;
+  - other messages use zod 4's wording, e.g. "Too small: expected string to have >=2 characters".
+- **API docs:**
+  - integer fields now carry zod 4's safe-integer maximum;
+  - bodies no longer claim "no extra keys" (unknown keys are stripped, not refused);
+  - all 590 operations build (243 with bodies). `tests/unit/openapi.test.ts` was updated for both changes.
+- **Web forms (13 forms):**
+  - `useForm<Out>` became `useForm<z.input<typeof schema>, unknown, Out>`, because the zod 4 resolver types what's typed in and what validation returns separately;
+  - coerced numbers in forms are `z.coerce.number<number>()`, as zod 3 typed them;
+  - three price read-backs on the product pages are read as numbers.
+
+### 48.9 Checked
+- **Tests:**
+  - API on `ecom_test`: 96 files, 1020 tests pass, including the new `tests/unit/patch-schema.test.ts` (the rules above, plus the staff, product and delivery-zone updates changing only what was sent);
+  - utils 15 tests.
+- **Typecheck:** the API, the three web apps, storefront-base, `api-client` and `zod-schemas` all pass (storefront-base's own self-import errors remain, unchanged).
+- **Builds:** all three web apps build.
+- **`pnpm audit`, production and full:** no high or critical warnings left; 19 moderate.
+- **In the browser (dev):**
+  - the store admin's product edit form saves ("Product updated successfully"), and an empty new product is stopped by the form with "Name must be at least 2 characters";
+  - on the storefront, a cash-on-delivery order placed through the checkout page with real clicks gets a 201 and the thank-you page (order 20261025000001). So the "Place Order sends nothing" seen in Batch 46 part 3 doesn't happen; it was most likely the hidden browser pane at the time.
+
+### 48.10 Not done / found
+- **`patchOf` is for updates:** new code that makes an update schema with `.partial()` would bring the problem back. `core/patch-schema.ts` explains why.
+- **Wording:** zod 4's other default messages ("Too small: …") are more technical than zod 3's. Schemas with their own messages are unaffected.

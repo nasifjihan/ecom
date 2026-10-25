@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { patchOf } from "../../core/patch-schema";
 
-const PlanFeaturesDto = z.record(z.union([z.string(), z.number(), z.boolean()]));
+const PlanFeaturesDto = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
 
 export const CreatePlanDto = z.object({
   name: z.string().trim().min(2).max(60),
@@ -11,7 +12,7 @@ export const CreatePlanDto = z.object({
 });
 export type CreatePlanDto = z.infer<typeof CreatePlanDto>;
 
-export const UpdatePlanDto = CreatePlanDto.partial();
+export const UpdatePlanDto = patchOf(CreatePlanDto);
 export type UpdatePlanDto = z.infer<typeof UpdatePlanDto>;
 
 export const IdParamDto = z.object({ id: z.coerce.bigint() });

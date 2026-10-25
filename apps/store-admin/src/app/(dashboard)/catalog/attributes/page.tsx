@@ -72,7 +72,7 @@ const attributeSchema = z.object({
   isActive: z.boolean().default(true),
   isGlobal: z.boolean().default(true),
   isFilterable: z.boolean().default(true),
-  sortOrder: z.coerce.number().int().default(0),
+  sortOrder: z.coerce.number<number>().int().default(0),
 });
 
 type AttributeFormValues = z.infer<typeof attributeSchema>;
@@ -81,7 +81,7 @@ const termSchema = z.object({
   name: z.string().min(1, { message: "Term name is required" }).max(255),
   slug: z.string().optional().or(z.literal("")),
   value: z.string().optional().or(z.literal("")),
-  sortOrder: z.coerce.number().int().default(0),
+  sortOrder: z.coerce.number<number>().int().default(0),
   swatchUrl: z.string().optional().or(z.literal("")),
 });
 
@@ -162,7 +162,7 @@ export default function AttributesPage() {
   const [deleteTerm, { isLoading: isDeletingTerm }] = useDeleteTermMutation();
   const [deleteAttribute] = useDeleteAttributeMutation();
 
-  const attrMethods = useForm<AttributeFormValues>({
+  const attrMethods = useForm<z.input<typeof attributeSchema>, unknown, AttributeFormValues>({
     resolver: zodResolver(attributeSchema),
     defaultValues: {
       name: "",
@@ -177,7 +177,7 @@ export default function AttributesPage() {
   });
 
   const [termAttrId, setTermAttrId] = useState<string | number | null>(null);
-  const termMethods = useForm<TermFormValues>({
+  const termMethods = useForm<z.input<typeof termSchema>, unknown, TermFormValues>({
     resolver: zodResolver(termSchema),
     defaultValues: {
       name: "",
