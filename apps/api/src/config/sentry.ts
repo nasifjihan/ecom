@@ -3,7 +3,7 @@
  * data is stripped before anything is sent (scrubEvent). The release is the image's commit.
  */
 import * as Sentry from "@sentry/node"
-import { scrubEvent } from "@ecom/utils"
+import { SENTRY_DATA_COLLECTION, scrubEvent } from "@ecom/utils"
 import { env } from "./env"
 
 let on = false
@@ -15,7 +15,7 @@ export function initSentry(role: "api" | "worker" | "backup") {
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV,
     release: process.env.IMAGE_TAG,
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION,
     // No tracesSampleRate, not even 0: its presence turns tracing on (about 10 ms CPU a request).
     initialScope: { tags: { role } },
     beforeSend: (event) => scrubEvent(event),

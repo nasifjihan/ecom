@@ -33,13 +33,32 @@ export function scrub<T>(value: T, depth = 0): T {
   return out as T
 }
 
+/**
+ * What Sentry may collect by itself. Sentry 11 collects cookies, headers, request bodies, query
+ * strings, user info and stack-frame variables unless told not to (it replaced sendDefaultPii), so
+ * all of it is off; a few headers that carry no personal data stay, for debugging.
+ */
+export const SENTRY_DATA_COLLECTION = {
+  userInfo: false,
+  cookies: false,
+  httpHeaders: { request: { allow: ["user-agent", "host", "referer", "content-type"] }, response: false },
+  httpBodies: [] as never[],
+  urlQueryParams: false,
+  databaseQueryData: false,
+  queues: false,
+  stackFrameVariables: false,
+  graphQL: { document: false, variables: false },
+  genAI: { inputs: false, outputs: false },
+  mcp: { inputs: false, outputs: false },
+}
+
 /** The Sentry options every app uses: errors only (no tracing), never default personal data. */
 export function sentryOptions(dsn: string, app: string, release?: string) {
   return {
     dsn,
     environment: process.env.NODE_ENV,
     release,
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION,
     // No tracesSampleRate, not even 0: its presence turns tracing on.
     initialScope: { tags: { app } },
     beforeSend: <E extends { user?: { id?: unknown } | null; request?: { query_string?: unknown } }>(event: E) => scrubEvent(event),

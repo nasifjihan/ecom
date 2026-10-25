@@ -6237,3 +6237,39 @@ Three small things a shopper, a staff member or the build would hit.
 - **Tests:** API on `ecom_test`, 96 files, 1021 tests pass. `new-store.db.test.ts` gains "comes with the terms and privacy pages that checkout links to". Its first test's limit went from 30 to 60 s, after one cold run took 34 s.
 - **Typecheck and build:** `pnpm typecheck` passes across the repo, and the storefront builds.
 - **Store admin login (dev):** shows the new wording, with no `/help` link.
+
+---
+
+## ✅ BATCH #49 (part 2) — Sentry 11 everywhere, web reports checked, moderate warnings (2026-10-25)
+The API's Sentry catches up with the web apps, the web apps' start-up warning is gone, a report from each kind of app is checked end to end, and 18 of the 19 moderate audit warnings are cleared.
+
+### 49.5 Sentry 11 collects more unless told not to
+- **What changed:** Sentry 11 removed `sendDefaultPii`, our "no personal data" switch. In its place, `dataCollection` collects cookies, headers, all request bodies, query strings, user info and stack-frame variables by default.
+- **Why it matters:** our scrubber masks passwords, emails and phones. But request bodies, such as delivery addresses, would have been sent.
+- **Fix:** new shared `SENTRY_DATA_COLLECTION` in `@ecom/utils`, used by the web apps' `sentryOptions` and the API's `initSentry`. It turns all of that off and keeps only four request headers that carry no personal data (user-agent, host, referer, content-type).
+- **Test:** `scrub.test.ts` checks these settings, and that there's no `tracesSampleRate` (which would turn tracing on).
+
+### 49.6 The API moves to `@sentry/node` 11.9.0
+- **Why:** the same major version as the web apps' `@sentry/nextjs` 11.9.0. It also drops Sentry 8's old OpenTelemetry packages: 8 moderate warnings and the unmet-peer warnings on every install.
+- **Code:** `init` and `captureException` are unchanged. Node 22.12 or newer is needed; the image runs Node 22.
+
+### 49.7 The web apps' Sentry start-up warning
+- **The problem:** in the Docker (standalone) image, Sentry printed "Cannot find package '@sentry/server-runtime-injection'" at start-up. Next's file tracing copied that package's files but not its `package.json`, and the package loads itself by name.
+- **Fix:** an `outputFileTracingIncludes` entry for that `package.json` in each web app's `next.config`.
+- **Checked:** the standalone build now contains it, and the server starts without the warning.
+
+### 49.8 Reports checked end to end (local stand-in for Sentry)
+- **Browser:** a production standalone build of the super admin with a browser DSN, and an error thrown in the page. It arrived tagged `super-admin-browser`, with "owner@example.com 01711000999" shown as "[email] [phone]" and only the user-agent header.
+- **Web server:** `Sentry.init(sentryOptions(…))` as `instrumentation.ts` does, then an error. It arrived tagged `app: storefront` and scrubbed the same way.
+- **API:** `initSentry("api")` and `reportError`. It arrived tagged with role, request ID and path, scrubbed, and the URL's query string filtered.
+- **Not shown:** a page that crashes while rendering on the server, reported through `onRequestError`. The storefront handles an unreachable API without crashing, so there was no such error to trigger. That path goes through the same client checked above.
+
+### 49.9 Moderate audit warnings: 19 → 1
+- **Fixed:** nodemailer ^10.2.1; root overrides for `qs` ^6.16.1 (Express), `ip-address` ^10.7.5 (rate limiter) and `uuid` ^11.1.1 (exceljs); the 8 OpenTelemetry ones through Sentry 11.
+- **Left:** `postcss-selector-parser` 6 (quadratic parsing). Tailwind 3 requires version 6, and it only runs at build time on our own CSS.
+
+### 49.10 Checked
+- **Tests:** API on `ecom_test`, 96 files, 1021 tests pass; utils 16 tests.
+- **Typecheck:** `pnpm typecheck` passes across the repo (11 packages).
+- **Builds:** all three web apps build.
+- **`pnpm audit --prod`:** 0 critical, 0 high, 1 moderate.

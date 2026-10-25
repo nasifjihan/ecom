@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { scrub, scrubEvent, scrubText } from "./scrub"
+import { scrub, scrubEvent, scrubText, sentryOptions } from "./scrub"
 
 describe("scrub", () => {
   it("removes private fields wherever they are", () => {
@@ -35,5 +35,16 @@ describe("scrub", () => {
       "SMS to [phone] and [phone] for [email] failed",
     )
     expect(scrub({ message: "Order 20261025000001 by 01712345678" })).toEqual({ message: "Order 20261025000001 by [phone]" })
+  })
+})
+
+describe("sentryOptions", () => {
+  // Sentry 11 collects these unless told not to.
+  it("lets Sentry collect no personal data by itself", () => {
+    const d = sentryOptions("https://k@sentry.example/1", "shop").dataCollection
+    expect([d.userInfo, d.cookies, d.urlQueryParams, d.stackFrameVariables, d.databaseQueryData]).toEqual([false, false, false, false, false])
+    expect(d.httpBodies).toEqual([])
+    expect(d.httpHeaders.request).toEqual({ allow: ["user-agent", "host", "referer", "content-type"] })
+    expect("tracesSampleRate" in sentryOptions("x", "shop")).toBe(false)
   })
 })

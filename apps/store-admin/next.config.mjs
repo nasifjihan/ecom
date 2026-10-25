@@ -9,6 +9,11 @@ const nextConfig = {
   ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" } : {}),
   transpilePackages: ["@ecom/*"],
   outputFileTracingRoot: repoRoot,
+  // Sentry loads this package by its own name at start-up; tracing copies its files but not its
+  // package.json, so it failed to load in the Docker image (standalone).
+  outputFileTracingIncludes: {
+    "/**": ["../../node_modules/.pnpm/@sentry+server-runtime-injection@*/node_modules/@sentry/server-runtime-injection/package.json"],
+  },
 };
 
 export default nextConfig;
