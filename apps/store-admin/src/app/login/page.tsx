@@ -436,13 +436,8 @@ export default function LoginPage() {
                 transition={{ delay: 0.8, duration: 0.5 }}
                 className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400"
               >
-                Having trouble signing in?{" "}
-                <Link
-                  href="/help"
-                  className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                >
-                  Contact support
-                </Link>
+                Having trouble signing in? Staff: ask your store&apos;s owner to reset your access. Owners: use
+                &ldquo;Forgot password?&rdquo; above.
               </motion.p>
             </motion.div>
           </div>

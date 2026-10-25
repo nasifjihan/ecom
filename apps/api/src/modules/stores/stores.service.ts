@@ -11,6 +11,7 @@ import {
 } from "../../core";
 import { StoreRepository, DomainRepository, PlanRepository } from "./stores.repository";
 import { defaultGatewayRows } from "../payments/default-gateways";
+import { defaultPageRows } from "../content/default-pages";
 import type {
   CreateStoreDto,
   UpdateStoreDto,
@@ -64,6 +65,8 @@ export class StoresService extends BaseService {
 
       // Settings → Payments needs these rows to list and turn on the store's payment methods.
       await tx.paymentGatewayConfig.createMany({ data: defaultGatewayRows(store.id) });
+      // Checkout links to these two; without them shoppers agree to pages that don't exist.
+      await tx.cmsPage.createMany({ data: defaultPageRows(store.id) });
 
       await tx.storeGeneralSetting.create({
         data: {

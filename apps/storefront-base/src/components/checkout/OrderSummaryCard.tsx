@@ -11,20 +11,8 @@ import {
   Loader2,
   Info,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Button,
-  Badge,
-  Separator,
-  Checkbox,
-  Label,
-  Skeleton,
-  useCart,
-  CartItem,
-} from "@ecom/storefront-base";
+import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Separator, Checkbox, Label, Skeleton } from "../ui";
+import { useCart, type CartItem } from "../cart/CartProvider";
 import { cn, formatMoney } from "@ecom/utils";
 import { CouponApplyInput, CouponAppliedState } from "./CouponApplyInput";
 import { useT } from "../../i18n/provider";

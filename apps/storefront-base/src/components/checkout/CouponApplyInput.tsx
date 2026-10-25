@@ -2,17 +2,8 @@
 
 import * as React from "react";
 import { Tag, X, Check, Loader2 } from "lucide-react";
-import {
-  Button,
-  Input,
-  Label,
-  Form,
-  FormItem,
-  FormLabel,
-  FormControl,
-  cn,
-  formatMoney,
-} from "@ecom/storefront-base";
+import { Button, Input, Label, Form, FormItem, FormLabel, FormControl } from "../ui";
+import { cn, formatMoney } from "@ecom/utils";
 import { useT } from "../../i18n/provider";
 
 export type CouponAppliedState = {

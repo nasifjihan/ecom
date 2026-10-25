@@ -6207,3 +6207,33 @@ Every package moves from zod 3.25 to zod 4.6.7. This clears the last high `pnpm 
 ### 48.10 Not done / found
 - **`patchOf` is for updates:** new code that makes an update schema with `.partial()` would bring the problem back. `core/patch-schema.ts` explains why.
 - **Wording:** zod 4's other default messages ("Too small: …") are more technical than zod 3's. Schemas with their own messages are unaffected.
+
+---
+
+## ✅ BATCH #49 (part 1) — Launch fixes: terms pages, sign-in help, a green typecheck (2026-10-25)
+Three small things a shopper, a staff member or the build would hit.
+
+### 49.1 New stores get their terms and privacy pages
+- **The problem:** checkout asks shoppers to agree to the "Terms & Conditions" and "Privacy Policy" and links to `/terms-of-service` and `/privacy-policy`. A store created from the super admin had neither, so both links opened "Page not found" (checked in the rehearsal store).
+- **Batch 46 note corrected:** it said the link *names* were empty. They weren't; the pages were missing.
+- **Fix:** new `content/default-pages.ts` (`DEFAULT_PAGES`, `defaultPageRows`), the same pattern as the default payment methods.
+  - **What's in it:** the generic privacy and terms text the seed already used.
+  - **Where it's used:** `StoresService.createStore` creates both pages, published, in the same transaction as the store. The seed now takes these two pages from the same list.
+  - **Seed-only pages:** shipping, returns and contact contain Fashion BD's own facts (delivery charges, phone), so new stores don't get them.
+- **The owner's job:** these are starter texts, to edit in Content → Pages before launch.
+- **Existing stores:** not backfilled; there are no live stores yet, and the dev store already has them.
+- **Left as is:** a missing page answers HTTP 200 with "Page not found". Next streams the page, so the status can't change mid-response, and the page carries `noindex` instead. Search engines won't index it.
+
+### 49.2 The store admin's "Contact support" link went nowhere
+- **The problem:** the login page linked to `/help`, which doesn't exist, and there's no support address to point to.
+- **Fix:** the link became guidance that works today: "Staff: ask your store's owner to reset your access. Owners: use 'Forgot password?' above." Owners who lose their two-step device are reset by the platform team (super admin → Admins, or `reset-two-factor.ts`).
+
+### 49.3 storefront-base typechecks
+- **The problem:** four checkout components imported from their own package name (`@ecom/storefront-base`), which doesn't resolve inside the package. So storefront-base's typecheck failed (11 errors), and `pnpm typecheck` was never green.
+- **Fix:** they now import from where things live: `../ui`, `../cart/CartProvider` and `@ecom/utils`.
+- **Result:** `pnpm typecheck` passes for all 11 packages.
+
+### 49.4 Checked
+- **Tests:** API on `ecom_test`, 96 files, 1021 tests pass. `new-store.db.test.ts` gains "comes with the terms and privacy pages that checkout links to". Its first test's limit went from 30 to 60 s, after one cold run took 34 s.
+- **Typecheck and build:** `pnpm typecheck` passes across the repo, and the storefront builds.
+- **Store admin login (dev):** shows the new wording, with no `/help` link.

@@ -5,23 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Home, Building2, User } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-  Select,
-  SelectItem,
-  Checkbox,
-  Form,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-  cn,
-} from "@ecom/storefront-base";
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectItem, Checkbox, Form, FormItem, FormLabel, FormControl, FormMessage } from "../ui";
+import { cn } from "@ecom/utils";
 
 export const BANGLADESH_DIVISIONS = [
   "Dhaka",

@@ -13,18 +13,7 @@ import {
   FileText,
 } from "lucide-react";
 import { PaymentMethod } from "@ecom/shared-types";
-import {
-  Card,
-  CardContent,
-  Input,
-  Label,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-  Badge,
-  Separator,
-} from "@ecom/storefront-base";
+import { Card, CardContent, Input, Label, FormItem, FormLabel, FormControl, FormMessage, Badge, Separator } from "../ui";
 import { cn, formatMoney } from "@ecom/utils";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";

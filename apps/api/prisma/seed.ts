@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { STORE_ROLE_MANUAL_DISCOUNT, STORE_ROLE_PERMISSIONS } from "../src/modules/stores/store-roles";
 import { syncLocations } from "../src/modules/locations/locations.data";
 import { defaultGatewayRows } from "../src/modules/payments/default-gateways";
+import { DEFAULT_PAGES } from "../src/modules/content/default-pages";
 
 const prisma = new PrismaClient();
 
@@ -1206,18 +1207,7 @@ async function seedContent(storeId: bigint) {
       content:
         "## 7-day returns\nIf something is not right, you can return it within **7 days** of delivery.\n\n## Conditions\n- Items must be unused, with tags attached\n- Sale items can be exchanged but not refunded\n\n## Refunds\nRefunds go back to your original payment method, or by bKash for cash on delivery orders, within 5 working days of us receiving the item.",
     },
-    {
-      slug: "privacy-policy",
-      title: "Privacy Policy",
-      content:
-        "We collect only what we need to deliver your order: your name, phone number, email and address.\n\n## How we use it\n- To process and deliver your orders\n- To send order updates\n- To send offers, only if you opt in\n\nWe never sell your personal information.",
-    },
-    {
-      slug: "terms-of-service",
-      title: "Terms of Service",
-      content:
-        "By using this website you agree to these terms.\n\n## Orders\nAn order is confirmed once we call or message you to verify it. Prices are in Bangladeshi Taka (৳) and include VAT where applicable.\n\n## Cancellations\nYou can cancel an order from **My Account** until it is shipped.",
-    },
+    ...DEFAULT_PAGES,
     {
       slug: "contact",
       title: "Contact Us",

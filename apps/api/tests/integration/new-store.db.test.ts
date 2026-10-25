@@ -41,5 +41,10 @@ describe.skipIf(!runDb)("a new store (Postgres)", () => {
       "stripe:off:online",
       "bank_transfer:off:manual",
     ])
-  }, 30_000) // loads the store module the first time
+  }, 60_000) // loads the store module the first time (34 s once on a cold machine)
+
+  it("comes with the terms and privacy pages that checkout links to", async () => {
+    const pages = await prisma!.cmsPage.findMany({ where: { storeId, isPublished: true }, orderBy: { sortOrder: "asc" } })
+    expect(pages.map((p) => p.slug)).toEqual(["privacy-policy", "terms-of-service"])
+  })
 })
