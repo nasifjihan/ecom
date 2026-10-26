@@ -162,6 +162,8 @@ export class AuthService extends BaseService {
         role: {
           include: { permissions: true },
         },
+        // The admin shows which store you're in (sidebar title).
+        store: { select: { id: true, name: true } },
       },
     });
     if (!row) throw new NotFoundError("AdminUser", id);

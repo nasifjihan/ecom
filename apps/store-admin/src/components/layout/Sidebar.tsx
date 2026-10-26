@@ -71,7 +71,7 @@ function NavLink({
 export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const { data: meData } = useMeQuery();
-  const storeName = meData?.store?.name ?? "Fashion BD Admin";
+  const storeName = meData?.store?.name ?? "Store Admin";
   const { can, ready } = useCan();
   const { data: prefs } = usePreferencesQuery();
   // Only the pages this person may open (nothing until their permissions have loaded).

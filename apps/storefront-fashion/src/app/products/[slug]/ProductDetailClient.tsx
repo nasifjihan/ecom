@@ -337,8 +337,8 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
           <div className="grid grid-cols-3 gap-3 pt-2">
             {[
-              { icon: <Truck className="h-5 w-5" />, title: msg("Free Delivery"), desc: msg("On orders > ৳1000") },
-              { icon: <RotateCcw className="h-5 w-5" />, title: msg("7-day Returns"), desc: msg("No questions asked") },
+              { icon: <Truck className="h-5 w-5" />, title: msg("Nationwide Delivery"), desc: msg("All 64 districts") },
+              { icon: <RotateCcw className="h-5 w-5" />, title: msg("Easy Returns"), desc: msg("See our return policy") },
               { icon: <ShieldCheck className="h-5 w-5" />, title: msg("Authentic"), desc: msg("100% genuine products") },
             ].map((f) => (
               <div key={f.title} className="flex items-center gap-2 p-3 rounded-xl bg-card border">
@@ -527,7 +527,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             <div className="pt-2 text-xs text-muted-foreground space-y-1.5">
               <div className="flex items-center gap-2">
                 <Truck className="h-3.5 w-3.5 text-primary" />
-                {t("Delivery inside Dhaka: 24-48hrs • Outside: 2-4 days")}
+                {t("Delivery time and charge are shown at checkout")}
               </div>
               <div className="flex items-center gap-2">
                 <RotateCcw className="h-3.5 w-3.5 text-primary" />

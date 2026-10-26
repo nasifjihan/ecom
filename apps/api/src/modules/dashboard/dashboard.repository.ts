@@ -539,6 +539,8 @@ export class StoreDashboardRepo {
         JOIN "Order" o ON o.id = oi."orderId"
         JOIN "Product" p ON p.id = oi."productId"
         WHERE o.status NOT IN ('CANCELLED', 'FAILED')
+          -- A promotion's free gift isn't a sale (it would top the list on every qualifying order).
+          AND NOT (COALESCE(oi.meta, '{}'::jsonb) ? 'gift')
           AND o."createdAt" >= ${since}
           AND (${storeId}::bigint IS NULL OR o."storeId" = ${storeId}::bigint)
         GROUP BY p.id, p.name

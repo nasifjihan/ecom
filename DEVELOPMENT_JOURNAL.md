@@ -6386,3 +6386,73 @@ The demo shop gets its homepage, menus, pages, blog, FAQs and offers (`scripts/d
 ### 50.9 Not done / next
 - **Part 3:** customers, order history, reviews, staff and the second ("Outlet") storefront.
 - **Cart page title:** like the flash-sale page, the cart page still shows the shop's generic title.
+
+---
+
+## ✅ BATCH #50 (part 3) — Demo shop: a shop that has been trading (2026-10-26)
+Customers, staff, three months of orders, reviews and a second storefront (`scripts/demo/history.ts`), made through the real checkout and order code.
+
+### 50.10 What it adds
+- **Second storefront, "Rongtuli Outlet":**
+  - 15% below the main shop on everything, sharing the same stock;
+  - on `outlet.ecom.localhost` (`--outlet-host`);
+  - its own name, teal colours, announcement and a short homepage; the menus are shared.
+- **Staff (4):** in the store's default roles: Order Manager, Customer Support, Shipper, Product Manager.
+- **Customers (42):**
+  - 16 surnames and 34 first names, joined over the last six months;
+  - each has a saved address (mostly Dhaka city, plus Chattogram, Sylhet, Rajshahi, Khulna, Gazipur and others);
+  - some subscribed to marketing; a VIP group.
+  - **One shop sign-in:** `nusrat@rongtuli.test` / `Customer@123!`.
+- **Orders (150):**
+  - **how they're placed:** through `StorefrontService.placeOrder` (the checkout page's code), cash on delivery, signed in as the customer; regulars order more, and recent days are busier;
+  - **what comes with that:** totals, VAT, flash-sale prices, promotions (free delivery, free gifts) and stock are worked out the real way;
+  - **coupons:** about 1 in 8 orders tries EID500; when an order is too small for it, the order is placed without.
+  - **status:** moved along with `OrdersService.transitionStatus`, with customer emails off:
+    - older orders mostly delivered or completed, some cancelled or refunded;
+    - recent ones shipped or out for delivery;
+    - the last few days pending, processing or on hold.
+  - **dates:** each order is back-dated to when it was "placed", and each status step falls a day or so later.
+  - **numbers:** given out again in date order with the shop's own number code, so they carry the day placed (RT-20260729000001 …).
+- **Reviews (about 120):**
+  - from customers who received the product (verified purchase);
+  - half 5★, then fewer down to 1★, written to match the stars;
+  - a few with a photo; about 1 in 10 waiting for moderation;
+  - star ratings recounted with `refreshProductRating`.
+- **Variety between runs:** the catalogue is identical on every run; the order history varies a little (its dates are relative to today).
+
+### 50.11 Bugs the demo showed, fixed
+- **The store admin's sidebar said "Fashion BD Admin" for every store:**
+  - `/auth/me/admin` didn't include the store, and the client also dropped it;
+  - both now pass the store's id and name, so the sidebar says "Rongtuli";
+  - the quotation editor, which also reads the store name, no longer gets a blank one.
+- **The admin login page was branded "Fashion BD"** for every store's admin address: now neutral "Store Admin".
+- **Free gifts topped the dashboard's "Top 5 products":** a promotion's free gift is added to every qualifying order, so the free jute bag was the "best seller".
+  - The dashboard list now leaves out gift lines (`meta.gift`).
+  - The sales reports still count them: they're units out of stock with ৳0 revenue, and their cost matters.
+- **Product pages made fixed promises:** "Free Delivery on orders > ৳1000", "7-day Returns, no questions asked", "Delivery inside Dhaka: 24–48hrs" on every store's product pages, whatever its real terms. Now:
+  - "Nationwide Delivery: All 64 districts";
+  - "Easy Returns: See our return policy";
+  - "Delivery time and charge are shown at checkout".
+
+  The Bangla dictionary was updated to match; its completeness test passes.
+- **Demo descriptions:** they're plain text now. Product pages show descriptions exactly as typed, and the first version's Markdown showed as "##" and "**".
+
+### 50.12 Checked
+- **Demo run:** recreated from scratch in the rehearsal, all three parts together in about 2.5 minutes.
+  - **Order history (that run):** 150 orders, 120 delivered: completed 57, delivered 54, cancelled 13, pending 7, shipped 6, refunded 5, on hold 4, out for delivery 3, processing 1.
+  - **Order numbers:** all 150 match their Dhaka dates (checked in SQL).
+- **Admin dashboard (owner):**
+  - ৳285,689 paid revenue and 74 orders in 30 days, 42 customers, average order ৳5,494;
+  - a filled revenue chart, real top-5 products, and recent orders in mixed states;
+  - the sidebar says "Rongtuli".
+- **Outlet:** shows "Rongtuli Outlet" in teal with its own hero. The same Jamdani saree is ৳9,160 in the shop and ৳7,786 in the Outlet (exactly −15%).
+- **Shop as Nusrat:** "My Orders" lists 3 pages of her orders, with dated numbers and every status.
+- **Product page:** the loafers show 5.0 (2 reviews), the new trust badges, and the plain-text description.
+- **Tests:** API on `ecom_test`, 96 files and 1021 tests pass; storefront-base tests pass.
+- **Typecheck:** API, store admin, storefront and storefront-base pass.
+
+### 50.13 Not done / found
+- **No test for the gift filter:** the dashboard's leave-out-gifts filter is a one-line SQL change, checked against the demo data but not covered by a test.
+- **Payments stay cash on delivery:** bKash and the online gateways wait for your keys.
+- **Cash records are dated today:** the order dates are back-dated, but the cash ledger entries recorded at delivery keep today's date, so the cash report shows them all today.
+- **Fewer reviews than planned:** about 120 rather than the planned 200; enough to fill product pages.

@@ -167,7 +167,7 @@ export default function LoginPage() {
                   <ShoppingBag className="h-7 w-7" />
                 </div>
                 <span className="text-2xl font-bold tracking-tight">
-                  Fashion BD
+                  Store Admin
                 </span>
               </div>
 
@@ -220,7 +220,7 @@ export default function LoginPage() {
               </div>
 
               <p className="text-sm text-white/60">
-                © {new Date().getFullYear()} Fashion BD. All rights reserved.
+                © {new Date().getFullYear()} All rights reserved.
               </p>
             </motion.div>
 
@@ -235,7 +235,7 @@ export default function LoginPage() {
                   <ShoppingBag className="h-7 w-7" />
                 </div>
                 <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  Fashion BD
+                  Store Admin
                 </span>
               </div>
 

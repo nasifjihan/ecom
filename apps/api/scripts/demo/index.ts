@@ -25,6 +25,7 @@ import { CreateShippingMethodDto, CreateShippingZoneDto, CreateTaxRateDto } from
 import { BRANDS, CATEGORIES, SHOP, TOP_CATEGORIES, type CategorySpec } from "./catalog"
 import { PHOTOS, photoOf, photoUrl, type PhotoPool } from "./photos"
 import { look } from "./look"
+import { CUSTOMER_EMAIL, CUSTOMER_PASSWORD, history } from "./history"
 
 /** The demo store's owner login: a made-up local test account, printed at the end. */
 export const OWNER_EMAIL = "owner@rongtuli.test"
@@ -36,6 +37,7 @@ const arg = (name: string, fallback: string) => {
 }
 const SHOP_HOST = arg("shop-host", "shop.ecom.localhost")
 const ADMIN_HOST = arg("admin-host", "admin.ecom.localhost")
+const OUTLET_HOST = arg("outlet-host", "outlet.ecom.localhost")
 const CACHE = path.join(tmpdir(), "ecom-demo-photos")
 
 /** Same numbers on every run, so a second run makes the same shop. */
@@ -69,7 +71,12 @@ async function main() {
   await products(store.id, cats, brands, photo)
   await look({ storeId: store.id, ctx, photo, cats })
   console.log("🏠 Homepage, menus, pages, blog, FAQs, flash sales, coupons, promotions, gift box")
-  console.log(`\n✅ Demo shop ready: http://${SHOP_HOST}  ·  admin http://${ADMIN_HOST}  (${OWNER_EMAIL} / ${OWNER_PASSWORD})`)
+  await history({ storeId: store.id, ctx, photo, outletHost: OUTLET_HOST, rnd: seeded("history") })
+  console.log(`\n✅ Demo shop ready
+   shop    http://${SHOP_HOST}  (customer ${CUSTOMER_EMAIL} / ${CUSTOMER_PASSWORD})
+   outlet  http://${OUTLET_HOST}
+   admin   http://${ADMIN_HOST}  (owner ${OWNER_EMAIL} / ${OWNER_PASSWORD})
+           staff sabbir@, mitu@, jamal@, priya@rongtuli.test / Rongtuli-Staff-2026!`)
 }
 
 /** The demo store and its owner, made through the same code the super admin uses. */
@@ -312,7 +319,8 @@ async function products(storeId: bigint, cats: Map<string, bigint>, brands: Map<
       const stock = roll < 0.06 ? 0 : roll < 0.14 ? 1 + Math.floor(rnd() * 3) : 8 + Math.floor(rnd() * 52)
       const photos = await Promise.all([0, 1, 2].map((k) => photo(cat.pool, n * 2 + k, "portrait")))
       const specs = [...cat.specs, ["Colour", e.color[0]]].map(([label, value]) => ({ group: "Details", label, value }))
-      const description = `${cat.blurb}\n\n## Details\n${specs.map((s) => `- **${s.label}:** ${s.value}`).join("\n")}\n\n## Care\n${cat.care}\n\n## Delivery\nCash on delivery anywhere in Bangladesh. Inside Dhaka in 1–2 days, other districts in 2–4 days.`
+      // Plain text: the product page shows descriptions as typed (the admin edits them in a text box).
+      const description = `${cat.blurb}\n\nDetails\n${specs.map((s) => `• ${s.label}: ${s.value}`).join("\n")}\n\nCare\n${cat.care}\n\nDelivery\nCash on delivery anywhere in Bangladesh. Inside Dhaka in 1–2 days, other districts in 2–4 days.`
 
       const sizes = cat.variants === "size" || cat.variants === "size+color" ? cat.sizes ?? [] : []
       const colors = cat.variants === "size+color" ? [e.color, cat.colors[(e.colorIndex + 1) % cat.colors.length]!] : cat.variants === "color" ? [0, 1, 2].map((k) => cat.colors[(e.colorIndex + k) % cat.colors.length]!) : []

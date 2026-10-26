@@ -59,6 +59,7 @@ interface ApiAdminUser {
   isSalesperson?: boolean;
   roleId?: string;
   role?: { name: string; permissions?: { permission: string }[] } | null;
+  store?: { id: string; name: string } | null;
   twoFactorSetupRequired?: boolean;
 }
 
@@ -102,6 +103,7 @@ export const authApiSlice = api.injectEndpoints({
       transformResponse: (u: ApiAdminUser) => ({
         user: toAuthUser(u),
         storeId: u.storeId,
+        store: u.store ?? undefined,
         permissions: u.role?.permissions?.map((p) => p.permission) ?? [],
         twoFactorSetupRequired: !!u.twoFactorSetupRequired,
       }),

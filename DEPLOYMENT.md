@@ -209,17 +209,22 @@ The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's lo
 - logo, colours and delivery areas;
 - a dressed homepage, menus, pages (About, Contact, Shipping, Returns, Size guide), 6 blog posts and 10 FAQs;
 - a live and an upcoming flash sale, 4 coupons, 4 promotions and an Eid gift box;
-- 23 categories, 10 invented brands and 112 products with sizes, colours and real photos (free Unsplash photos, downloaded once).
+- 23 categories, 10 invented brands and 112 products with sizes, colours and real photos (free Unsplash photos, downloaded once);
+- a second storefront, **Rongtuli Outlet** (15% lower prices, same stock, its own colours);
+- 4 staff, 42 customers, about 150 orders over the last 90 days in every state, and about 120 reviews.
 
-It takes over `shop.ecom.localhost` and `admin.ecom.localhost`:
+It takes over `shop.ecom.localhost` and `admin.ecom.localhost`, and puts the Outlet on `outlet.ecom.localhost`. So that Caddy serves the Outlet, add `http://outlet.ecom.localhost` to `SHOP_DOMAINS` in `.env.rehearsal` (comma separated) and restart Caddy (`$C up -d caddy`).
 
 ```bash
 C="docker compose -p ecom-rehearsal --env-file .env.rehearsal -f docker-compose.prod.yml -f docker-compose.rehearsal.yml"
 $C run --rm api ./node_modules/.bin/tsx scripts/demo/index.ts
 ```
 
-- **Logins:** the shop at http://shop.ecom.localhost; the admin at http://admin.ecom.localhost as `owner@rongtuli.test` / `Rongtuli@123!` (a local test account).
-- **Safe to run again:** it only adds what's missing.
+- **Logins (local test accounts):**
+  - **shop customer:** `nusrat@rongtuli.test` / `Customer@123!` (has an order history);
+  - **admin owner:** `owner@rongtuli.test` / `Rongtuli@123!`;
+  - **staff:** `sabbir@` (Order Manager), `mitu@` (Customer Support), `jamal@` (Shipper), `priya@rongtuli.test` (Product Manager), all `Rongtuli-Staff-2026!`.
+- **Safe to run again:** it only adds what's missing. Orders and reviews are made once, for a store with no orders yet.
 - **Production:** it refuses to run on a production server.
 - **Cached pages:** the storefront caches pages for a minute, so restart it (`$C restart storefront`) to see the changes at once.
 
