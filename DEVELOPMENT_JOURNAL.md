@@ -6456,3 +6456,18 @@ Customers, staff, three months of orders, reviews and a second storefront (`scri
 - **Payments stay cash on delivery:** bKash and the online gateways wait for your keys.
 - **Cash records are dated today:** the order dates are back-dated, but the cash ledger entries recorded at delivery keep today's date, so the cash report shows them all today.
 - **Fewer reviews than planned:** about 120 rather than the planned 200; enough to fill product pages.
+
+---
+
+## ✅ README — setting up on a new computer (2026-10-26)
+- **New `README.md`:** what the four apps are, then setting up on a new computer:
+  - the two settings files git doesn't have (`.env.rehearsal`, `.env`) and how to bring them;
+  - what to install;
+  - **A.** the local production copy with the demo shop: build, start, bootstrap, demo, with a table of addresses and logins;
+  - **B.** development: install, database, seed, `pnpm dev`, dev logins, creating `.env` from the example, the test database.
+- **New `scripts/build-rehearsal-images.sh`:** builds the four rehearsal images one at a time (all at once can run Docker Desktop out of memory), or only the ones named. Checked: the syntax, an unknown name (refused, exit 1) and a cached `api` build.
+- **New `.gitattributes`:** keeps `.sh` files on Unix line endings. Git on Windows (`core.autocrlf=true`) would otherwise give the script Windows line endings and Bash would fail.
+- **Fresh-computer fixes:**
+  - **`pnpm db:up`** no longer starts MinIO: its image can't be pulled any more, which made the command fail. Development stores files on local disk.
+  - **`.env.example`:** `STORAGE_DRIVER=local` and `COOKIE_DOMAIN=localhost`, as development actually runs; the old `.local-ecom.dev` broke sign-in on localhost.
+  - **Encryption key:** the example's placeholder is 39 characters and the API needs exactly 64, so the README gives a one-line command to generate a key.

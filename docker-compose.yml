@@ -2,7 +2,7 @@
 # E-Commerce Platform — Docker Compose
 #
 # Everyday development (apps run with `pnpm dev`, only infrastructure in Docker):
-#   docker compose up -d postgres redis minio mailpit
+#   docker compose up -d postgres redis mailpit
 #
 # Everything in Docker (API + storefront + store admin + super admin):
 #   docker compose --profile full up -d --build

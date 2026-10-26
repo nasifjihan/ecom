@@ -20,7 +20,7 @@
     "prisma:reset": "pnpm --filter @ecom/api exec prisma migrate reset --force",
     "prisma:seed": "pnpm --filter @ecom/api exec tsx prisma/seed.ts",
     "prisma:studio": "pnpm --filter @ecom/api exec prisma studio --port 5555",
-    "db:up": "docker compose up -d postgres redis minio mailpit",
+    "db:up": "docker compose up -d postgres redis mailpit",
     "db:down": "docker compose down",
     "db:ps": "docker compose ps"
   },
