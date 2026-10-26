@@ -18,7 +18,12 @@ services:
       NODE_ENV: production
       PRODUCTION_REHEARSAL: "on"
       EMAIL_WORKER: "off"
-  worker: *rehearsal
+    # Uploaded photos live on local disk here (a real server uses S3): one volume, shared by every
+    # API copy and the worker, and kept when the containers are recreated.
+    volumes: [uploads:/app/apps/api/uploads]
+  worker:
+    <<: *rehearsal
+    volumes: [uploads:/app/apps/api/uploads]
   # Query statistics for the load test (Batch 46 part 4): which queries are slowest.
   postgres:
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all"]
@@ -36,3 +41,6 @@ services:
     ports: ["8026:8025"]
     networks: [ecom]
 
+
+volumes:
+  uploads:

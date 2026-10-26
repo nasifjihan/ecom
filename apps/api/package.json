@@ -27,6 +27,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "two-factor:reset": "tsx scripts/reset-two-factor.ts",
     "ratings:refresh": "tsx scripts/refresh-ratings.ts",
+    "demo:seed": "tsx scripts/demo/index.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",

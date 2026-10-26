@@ -42,7 +42,7 @@ export type FooterProps = {
 };
 
 export const Footer: React.FC<FooterProps> = ({
-  storeName = "Fashion BD",
+  storeName = "",
   storeDescription = "Your trusted destination for the latest fashion trends in Bangladesh. Shop clothing, shoes, accessories and more with free delivery across the country.",
   contactInfo = {
     address: "House 12, Road 5, Dhanmondi, Dhaka 1205, Bangladesh",

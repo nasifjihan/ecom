@@ -6273,3 +6273,59 @@ The API's Sentry catches up with the web apps, the web apps' start-up warning is
 - **Typecheck:** `pnpm typecheck` passes across the repo (11 packages).
 - **Builds:** all three web apps build.
 - **`pnpm audit --prod`:** 0 critical, 0 high, 1 moderate.
+
+---
+
+## ✅ BATCH #50 (part 1) — Demo shop: the catalogue (2026-10-26)
+A made-up but realistic fashion shop, **Rongtuli**, to see how the platform looks and works before real data goes in. It runs in the local production copy (the rehearsal).
+
+### 50.1 `pnpm demo:seed` (`apps/api/scripts/demo/`)
+- **Files:** `index.ts` (the runner), `catalog.ts` (shop, categories, brands, products), `photos.ts` (the photo list) and `assets/` (logo and favicon PNGs, drawn once; the server image has no fonts to render text with).
+- **Makes the store** through the super admin's own code (owner `owner@rongtuli.test` / `Rongtuli@123!`, a local test account). It links `shop.ecom.localhost` and `admin.ecom.localhost` to it (`--shop-host`, `--admin-host` to choose others).
+- **Safe to run again:** found by slug or file name first; a second run adds nothing (checked).
+- **Production:** it refuses to run there unless `PRODUCTION_REHEARSAL=on`.
+- **Identity:**
+  - an invented name and logo (a round thread mark plus the name), a favicon, colours (maroon and amber) and fonts;
+  - made-up contact details and order prefix `RT`;
+  - Bangla as a second language;
+  - the storefront theme: header mark, announcement bar ("Free delivery on orders over ৳3,000 · Cash on delivery across Bangladesh"), footer text and social links (each platform's home page, so no invented accounts).
+- **Delivery and tax:** Inside Dhaka ৳70 (1–2 days), rest of Bangladesh ৳130 (2–4 days); a default "Standard VAT" class at 15%, included in the prices.
+- **Categories (23):** Women (sarees, three-piece, kurtis, hijab & abaya), Men (panjabi, shirts, T-shirts, jeans, polos), Kids (boys, girls), Accessories (bags, watches, jewellery, sunglasses), Footwear (men's, women's, sneakers). Each has a square photo tile and a Bangla name.
+- **Brands (10):** invented (Tantubay, Dhaka Loom, Shapla Studio, Nodi, Urban Kotha, Bunon, Chokro, Pathchola, Kolorob Kids, Jhinuk), with Bangla names. The dev seed's real Bangladeshi company names aren't used here.
+- **Products (112):**
+  - English and Bangla names, prices in Taka typical of each category;
+  - about a third on sale; mostly in stock, some low, a few out of stock; some featured;
+  - fabric/size/origin details, care and delivery notes;
+  - 3 photos each;
+  - sizes (S–XL, 38–46, waist 30–36, kids' ages, shoe sizes) and/or colours as options, each colour option showing its own photo.
+  - Made from a fixed seed, so every run gives the same shop.
+
+### 50.2 Photos
+- **157 free Unsplash photos** (Unsplash License), picked by what they show. Photos with a real brand's logo (Nike, Rolex, Ray-Ban and so on) were left out.
+- **Downloads:** cropped by Unsplash's image service to the shape the shop shows (portrait 4:5, square tiles), downloaded once to a temp folder.
+- **Uploads:** through the admin's own upload code (`CatalogService.uploadMedia`: WebP plus a 480 px thumbnail), once each, then shared by products. 164 files in the media library, including the logo and favicon.
+- **Credits:** each photographer's Unsplash name is kept in `photos.ts` and in each photo's alt text.
+
+### 50.3 Bugs the demo showed, fixed
+- **"Fashion BD" written into the storefront:** every store's product pages were titled "… | Fashion BD | <store>", described as "at Fashion BD", and had `@fashionbd` Twitter tags.
+  - Now the store's own name, from the theme (the layout's title template adds it once).
+  - The layout's fallback titles and the components' default names (cart drawer, footer, social tags) are neutral.
+  - A product with no brand or category no longer shows a "Fashion BD" badge.
+- **The favicon set in Settings → General was never shown:** the storefront always used a fixed `/favicon.ico`. The site data now includes `faviconUrl`, and the layout uses it.
+- **Uploads in the local production copy weren't shared:** with 2 API copies, a photo uploaded through one was missing on the other, and every container recreate lost them all. The rehearsal now mounts one `uploads` volume on every API copy and the worker. Real servers use S3, so they're unaffected.
+
+### 50.4 Checked
+- **Demo run:** in the rehearsal, about 1.5 minutes. It made the store, 23 categories, 10 brands and 112 products, and a second run added nothing.
+- **In the browser (rehearsal):**
+  - **header:** the Rongtuli mark and name, maroon announcement bar, Bangla switch;
+  - **list:** 112 products with real photos and the category tree with counts;
+  - **product page:** a saree with photo, brand and category badges, "Made in Bangladesh", sale price and saving, stock;
+  - **titles and icon:** the tab title is "Handloom Jamdani Saree — Maroon | Rongtuli", and the tab icon is the store's favicon.
+- **Admin:** `owner@rongtuli.test` signs in at admin.ecom.localhost and sees 112 products and 164 media files.
+- **Tests:** API on `ecom_test`, 96 files and 1021 tests pass. A first run, while the ERP's and the rehearsal's 26 containers were all busy, timed out in 6 files' setup; those files then passed together, and so did a full rerun.
+- **Typecheck:** API, storefront and storefront-base pass; the demo scripts pass a separate check (scripts aren't in the API's tsconfig).
+
+### 50.5 Not done / next
+- **Part 2:** homepage (hero, blocks), menus, pages (including replacing the storefront's fixed "About Fashion BD" page with the store's own), blog, FAQs, offers.
+- **Part 3:** customers, order history, reviews, staff and the second storefront.
+- **Docker under load:** Docker Desktop crashed once mid-build while all the containers were running.

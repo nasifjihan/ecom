@@ -42,7 +42,7 @@ export function SocialMeta({
   imageAlt,
   type = "website",
   locale = "en_BD",
-  siteName = "Fashion BD",
+  siteName = "",
   twitterCard = "summary_large_image",
   twitterCreator = "@fashionbd",
   twitterSite = "@fashionbd",

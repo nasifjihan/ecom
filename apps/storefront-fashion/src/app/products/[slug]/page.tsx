@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ProductDetail } from "@ecom/storefront-base";
 import { serverApi, storeOrigin } from "@/lib/server-api";
+import { getSite } from "@/lib/content";
 import ProductDetailClient from "./ProductDetailClient";
 
 
@@ -8,13 +9,13 @@ async function getProduct(slug: string): Promise<ProductDetail | null> {
   return serverApi<ProductDetail>(`/storefront/products/${encodeURIComponent(slug)}`);
 }
 
-function toSeo(p: ProductDetail) {
+function toSeo(p: ProductDetail, shop: string) {
   return {
     slug: p.slug,
     title: p.seo?.title ?? p.title,
-    description: p.seo?.description ?? p.shortDescription ?? `Buy ${p.title} online at Fashion BD. Cash on Delivery available.`,
+    description: p.seo?.description ?? p.shortDescription ?? `Buy ${p.title} online at ${shop}. Cash on Delivery available.`,
     price: p.price,
-    brand: p.brand?.name ?? "Fashion BD",
+    brand: p.brand?.name ?? shop,
     sku: p.sku ?? p.slug,
     rating: p.rating ?? 0,
     reviewCount: p.reviewCount ?? 0,
@@ -35,11 +36,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const SITE_BASE = await storeOrigin();
   const fullCanonical = `${SITE_BASE}/products/${slug}`;
 
-  const product = await getProduct(slug);
+  // The store's own name; the root layout's title template adds " | <store>" to the title.
+  const [product, site] = await Promise.all([getProduct(slug), getSite()]);
+  const shop = site?.theme.brand.storeName ?? "";
   if (!product) {
-    return { title: "Product not found | Fashion BD", robots: { index: false, follow: true } };
+    return { title: "Product not found", robots: { index: false, follow: true } };
   }
-  const sample = toSeo(product);
+  const sample = toSeo(product, shop);
 
   const formattedPrice = new Intl.NumberFormat("en-BD", {
     style: "currency",
@@ -48,18 +51,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const metaDescription = sample.description.includes(sample.title)
     ? sample.description
-    : `Buy ${sample.title} for ${formattedPrice} at Fashion BD — ${sample.description}`;
+    : `Buy ${sample.title} for ${formattedPrice} at ${shop} — ${sample.description}`;
 
   const ogImage = sample.image;
 
   return {
-    title: `${sample.title} | Fashion BD`,
+    title: sample.title,
     description: metaDescription,
     keywords: [
       sample.title.toLowerCase(),
       sample.brand.toLowerCase(),
       "buy online bangladesh",
-      "fashion bd",
+      shop.toLowerCase(),
       sample.category,
       "cod available",
       "best price bd",
@@ -72,26 +75,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       type: "website",
       url: canonical,
-      title: `${sample.title} | Fashion BD`,
+      title: `${sample.title} | ${shop}`,
       description: metaDescription,
-      siteName: "Fashion BD",
+      siteName: shop,
       locale: "en_BD",
       images: [
         {
           url: ogImage,
           width: 1200,
           height: 630,
-          alt: `${sample.title} — Fashion BD`,
+          alt: `${sample.title} — ${shop}`,
           type: "image/jpeg",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${sample.title} | Fashion BD`,
+      title: `${sample.title} | ${shop}`,
       description: metaDescription,
-      site: "@fashionbd",
-      creator: "@fashionbd",
       images: [ogImage],
     },
     robots: {
@@ -111,9 +112,9 @@ export default async function ProductDetailPage({ params }: Props) {
   const resolvedParams = await params;
   const slug = typeof resolvedParams.slug === "string" ? resolvedParams.slug : String(resolvedParams.slug);
 
-  const product = await getProduct(slug);
+  const [product, site] = await Promise.all([getProduct(slug), getSite()]);
   if (!product) return <ProductDetailClient slug={slug} />;
-  const sample = toSeo(product);
+  const sample = toSeo(product, site?.theme.brand.storeName ?? "");
   const SITE_BASE = await storeOrigin();
 
   const fullUrl = `${SITE_BASE}/products/${slug}`;

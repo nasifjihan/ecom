@@ -201,7 +201,27 @@ The same images and compose file run on a developer machine, at `http://*.ecom.l
      -f docker-compose.prod.yml -f docker-compose.rehearsal.yml up -d
    ```
 
-The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's local disk (`STORAGE_DRIVER=local`), and runs under its own project name, so it never touches the dev database. **Never set `PRODUCTION_REHEARSAL` on a real server.**
+The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's local disk (`STORAGE_DRIVER=local`, in the `uploads` volume shared by every API copy), and runs under its own project name, so it never touches the dev database. **Never set `PRODUCTION_REHEARSAL` on a real server.**
+
+### A demo shop to look around
+
+`scripts/demo` fills a store called **Rongtuli** with a complete, made-up fashion shop:
+- logo, colours and delivery areas;
+- 23 categories, 10 invented brands and 112 products with sizes, colours and real photos (free Unsplash photos, downloaded once).
+
+It takes over `shop.ecom.localhost` and `admin.ecom.localhost`:
+
+```bash
+C="docker compose -p ecom-rehearsal --env-file .env.rehearsal -f docker-compose.prod.yml -f docker-compose.rehearsal.yml"
+$C run --rm api ./node_modules/.bin/tsx scripts/demo/index.ts
+```
+
+- **Logins:** the shop at http://shop.ecom.localhost; the admin at http://admin.ecom.localhost as `owner@rongtuli.test` / `Rongtuli@123!` (a local test account).
+- **Safe to run again:** it only adds what's missing.
+- **Production:** it refuses to run on a production server.
+- **Cached pages:** the storefront caches pages for a minute, so restart it (`$C restart storefront`) to see the changes at once.
+
+**Starting clean for real data:** the demo lives only in the rehearsal's database. To empty it, stop the rehearsal and remove its volumes (`$C down -v`). That deletes everything in the rehearsal: database, photos, backups. Then start again, and create the platform owner with `scripts/bootstrap.ts` (section 5). A real server starts empty anyway.
 
 ## 12. Load test
 

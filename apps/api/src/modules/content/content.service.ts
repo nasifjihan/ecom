@@ -645,7 +645,7 @@ export class ContentService {
 
   /** Everything the header and footer need, in one request. */
   async site() {
-    const [theme, allMenus, footerPages, languages, owner] = await Promise.all([
+    const [theme, allMenus, footerPages, languages, owner, general] = await Promise.all([
       this.getTheme(),
       this.listMenus(),
       prisma.cmsPage.findMany({
@@ -655,6 +655,7 @@ export class ContentService {
       }),
       storeLanguages(this.storeId),
       this.ownerOf(),
+      prisma.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { faviconUrl: true } }),
     ])
     // This storefront's own menus for a place (header / footer), else the main ones there.
     const menus = (["header", "footer"] as const).flatMap((loc) => {
@@ -694,6 +695,8 @@ export class ContentService {
         .filter((m) => m.location === "footer" && m.items.length)
         .map((m) => ({ title: m.name, links: m.items })),
       footerPages: footerPages.map((p) => ({ title: p.title, url: `/${p.slug}` })),
+      /** The browser tab icon set in Settings → General (null: the storefront's default). */
+      faviconUrl: general?.faviconUrl || null,
     }
   }
 

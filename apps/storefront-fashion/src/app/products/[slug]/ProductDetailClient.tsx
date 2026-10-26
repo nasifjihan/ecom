@@ -355,9 +355,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
-                {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ") || "Fashion BD"}
-              </Badge>
+              {(product.brand?.name || product.category?.name) && (
+                <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
+                  {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ")}
+                </Badge>
+              )}
               {product.sourcing && (
                 <Badge variant="outline" className="text-[11px] py-1">
                   {product.sourcing === "local"

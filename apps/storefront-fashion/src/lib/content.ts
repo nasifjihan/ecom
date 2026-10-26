@@ -31,6 +31,8 @@ export interface SiteContent {
   headerMenu: MenuLink[] | null;
   footerMenus: { title: string; links: MenuLink[] }[];
   footerPages: { title: string; url: string }[];
+  /** The store's own browser tab icon (Settings → General), when it set one. */
+  faviconUrl?: string | null;
 }
 
 export interface CmsPage {

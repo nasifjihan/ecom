@@ -232,7 +232,7 @@ export function sanitizeSeoText(text: string, maxLength = 160): string {
 export function buildProductPageTitle(
   productName: string,
   brandName?: string,
-  siteName = "Fashion BD",
+  siteName = "",
   maxLength = 70,
 ): string {
   const parts = [productName.trim()];

@@ -10,7 +10,7 @@ import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
 
-const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://fashionbd.example.com";
+const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100";
 
 // Static pages are rebuilt at most once a minute, so theme, menu and homepage edits show up
 // without a redeploy (including pages first built while the API was unreachable, e.g. in Docker).
@@ -19,8 +19,8 @@ export const revalidate = 60;
 const baseMetadata: Metadata = {
   metadataBase: new URL(SITE_BASE),
   title: {
-    default: "Fashion BD — Best Clothing, Shoes & Accessories in Bangladesh",
-    template: "%s | Fashion BD",
+    default: "Online shop",
+    template: "%s",
   },
   description:
     "Shop the latest fashion trends in Bangladesh. Women's clothing, men's fashion, kids wear, shoes, bags, watches and accessories. Free delivery, easy returns, COD available.",
@@ -31,14 +31,9 @@ const baseMetadata: Metadata = {
     "eid collection 2026",
     "womens dresses",
     "mens shirts",
-    "fashion bd",
     "COD Bangladesh",
     "online store BD",
   ],
-  applicationName: "Fashion BD",
-  authors: [{ name: "Fashion BD", url: SITE_BASE }],
-  creator: "Fashion BD",
-  publisher: "Fashion BD",
   alternates: {
     canonical: "/",
     languages: {
@@ -48,9 +43,8 @@ const baseMetadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_BD",
-    siteName: "Fashion BD",
     url: "/",
-    title: "Fashion BD — Best Clothing, Shoes & Accessories in Bangladesh",
+    title: "Online shop",
     description:
       "Shop the latest fashion trends in Bangladesh. Women's clothing, men's fashion, kids wear, shoes, bags, watches and accessories. Free delivery, easy returns, COD available.",
     images: [
@@ -58,16 +52,14 @@ const baseMetadata: Metadata = {
         url: "/og.jpg",
         width: 1200,
         height: 630,
-        alt: "Fashion BD — Shop Clothing, Shoes & Accessories Online in Bangladesh",
+        alt: "Online shop",
         type: "image/jpeg",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    site: "@fashionbd",
-    creator: "@fashionbd",
-    title: "Fashion BD — Best Clothing, Shoes & Accessories in Bangladesh",
+    title: "Online shop",
     description:
       "Shop the latest fashion trends in Bangladesh. COD available across the country. 7-day easy returns.",
     images: [
@@ -75,7 +67,7 @@ const baseMetadata: Metadata = {
         url: "/og.jpg",
         width: 1200,
         height: 630,
-        alt: "Fashion BD — Shop Clothing, Shoes & Accessories",
+        alt: "Online shop",
       },
     ],
   },
@@ -112,6 +104,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: tagline ? `${name} — ${tagline}` : name, template: `%s | ${name}` },
     applicationName: name,
     openGraph: { ...baseMetadata.openGraph, siteName: name },
+    ...(site.faviconUrl ? { icons: { icon: site.faviconUrl, apple: site.faviconUrl } } : {}),
     // "Hide from search engines": robots.txt blocks crawling, this keeps already-known pages out of results.
     ...(site.theme.robots?.blockAll ? { robots: { index: false, follow: false } } : {}),
   };
@@ -132,7 +125,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const t = translatorFor(locale);
   const languages = site?.languages?.enabled ?? ["en"];
   const theme = site?.theme;
-  const storeName = theme?.brand.storeName ?? "Fashion BD";
+  const storeName = theme?.brand.storeName ?? "";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
   const secondary = theme?.colors.secondary ? hexToHslVar(theme.colors.secondary) : null;
   // Only digits, spaces and % come out of these helpers, so they're safe inside <style>.

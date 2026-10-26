@@ -114,7 +114,7 @@ function CartItemRowSkeleton() {
 }
 
 export function CartDrawer({
-  storeName = "Fashion BD",
+  storeName = "",
   currency = "BDT",
   onProceedToCheckout,
   className,
