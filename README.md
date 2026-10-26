@@ -72,7 +72,7 @@ These are made-up local test accounts.
 - **Stop:** `$C stop` stops it without deleting anything.
 
 ### B. Development (changing the code)
-The apps run on your computer and reload as you edit. Docker only holds Postgres (port 5433), Redis (6381) and Mailpit.
+The apps run on your computer and reload as you edit. Docker only holds Postgres (port 5432), Redis (6381) and Mailpit.
 
 ```bash
 corepack enable
@@ -113,7 +113,7 @@ docker exec ecom-postgres createdb -U ecom ecom_test
 Then run the tests from `apps/api`:
 
 ```bash
-export DATABASE_URL="postgresql://ecom:ecom_local_pw@localhost:5433/ecom_test?schema=public" DIRECT_URL="$DATABASE_URL"
+export DATABASE_URL="postgresql://ecom:ecom_local_pw@localhost:5432/ecom_test?schema=public" DIRECT_URL="$DATABASE_URL"
 npx prisma migrate deploy
 NODE_ENV=test RUN_DB_TESTS=1 MAIL_DRIVER=log npx vitest run
 ```

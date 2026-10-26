@@ -109,7 +109,7 @@ services:
       - "1025:1025"
       - "8025:8025"
     healthcheck:
-      test: ["CMD", "/usr/bin/wget", "-qO-", "http://localhost:8025/healthz"]
+      test: ["CMD", "/usr/bin/wget", "-qO-", "http://localhost:8025/livez"]
       interval: 15s
       timeout: 3s
       retries: 5

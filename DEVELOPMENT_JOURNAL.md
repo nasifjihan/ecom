@@ -6471,3 +6471,29 @@ Customers, staff, three months of orders, reviews and a second storefront (`scri
   - **`pnpm db:up`** no longer starts MinIO: its image can't be pulled any more, which made the command fail. Development stores files on local disk.
   - **`.env.example`:** `STORAGE_DRIVER=local` and `COOKIE_DOMAIN=localhost`, as development actually runs; the old `.local-ecom.dev` broke sign-in on localhost.
   - **Encryption key:** the example's placeholder is 39 characters and the API needs exactly 64, so the README gives a one-line command to generate a key.
+
+---
+
+## ✅ SETUP — the README walkthrough on Windows, and the two bugs it found (2026-10-26)
+Following the README's development path (section B) on a second machine, one step at a time. Everything ended up running, but two things in the repo were wrong.
+
+### Two bugs found
+- **`pnpm prisma:*` couldn't see `.env`** (`package.json`):
+  - Prisma looks for `.env` in its **working directory**, and `pnpm --filter @ecom/api exec` runs in `apps/api`, which has no `.env` — the only one is at the root;
+  - so `prisma:migrate:deploy`, `prisma:generate` and `prisma:seed` all stopped with `Environment variable not found: DIRECT_URL`;
+  - the API was never affected: `config/env.ts` loads the root `.env` by path, which is why the bug showed up only in the Prisma commands;
+  - the six `prisma:*` scripts now run through `dotenv -e .env --`, with `dotenv-cli` added to the root dev dependencies. No `export` needed before them, and the README no longer has to mention any.
+  - **Knock-on effect:** `@prisma/client`'s postinstall had skipped for the same reason, so the Prisma Client had never been generated on this machine — the seed would have failed next. `pnpm prisma:generate` generates it now.
+- **Mailpit sat at "unhealthy" forever** (`docker-compose.yml`): the healthcheck asked for `/healthz`, which Mailpit v1.32 doesn't serve. It asks for `/livez` now.
+
+### Also changed
+- **Postgres is on 5432, not 5433:** the override file remapped it to dodge a clash with another Postgres, and there isn't one on this machine. `.env` updated, `docker-compose.override.yml` deleted, and the README's two 5433 mentions corrected.
+  - `.dockerignore` still names `docker-compose.override.yml`: left alone, so an override stays out of the images if one is ever added back.
+- **`corepack enable` failed on Windows** (`EPERM` writing to `C:\Program Files\nodejs`): it needs an administrator shell there. Harmless — `pnpm -v` already answered 9.12.0, the version `package.json` names.
+
+### Checked
+- **Migrations:** 52 applied, 147 tables; a second run reports "No pending migrations to apply".
+- **Seed:** completes with no errors — 616 locations, Fashion BD (id=1), 12 demo products, 20 customers, 10 roles, CMS pages.
+- **All five addresses answer 200:** API `/healthz`, storefront 3100, store admin 3101, super admin 3102, Mailpit 8025.
+- **The Prisma scripts from a shell with nothing exported:** `prisma:generate` and `prisma:migrate:deploy` both work.
+- **Containers:** all three healthy (Postgres, Redis, Mailpit).
