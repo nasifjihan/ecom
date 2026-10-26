@@ -24,6 +24,7 @@ import { ThemeDto } from "../../src/modules/content/content.dto"
 import { CreateShippingMethodDto, CreateShippingZoneDto, CreateTaxRateDto } from "../../src/modules/shipping/shipping.dto"
 import { BRANDS, CATEGORIES, SHOP, TOP_CATEGORIES, type CategorySpec } from "./catalog"
 import { PHOTOS, photoOf, photoUrl, type PhotoPool } from "./photos"
+import { look } from "./look"
 
 /** The demo store's owner login: a made-up local test account, printed at the end. */
 export const OWNER_EMAIL = "owner@rongtuli.test"
@@ -51,6 +52,7 @@ const slugify = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a
 const round10 = (n: number) => Math.round(n / 10) * 10
 
 type Media = { id: bigint; url: string }
+export type PhotoUploader = ReturnType<typeof photoUploader>
 
 async function main() {
   if (env.NODE_ENV === "production" && process.env.PRODUCTION_REHEARSAL !== "on") {
@@ -65,6 +67,8 @@ async function main() {
   const cats = await categories(store.id, photo)
   const brands = await brandRows(store.id)
   await products(store.id, cats, brands, photo)
+  await look({ storeId: store.id, ctx, photo, cats })
+  console.log("🏠 Homepage, menus, pages, blog, FAQs, flash sales, coupons, promotions, gift box")
   console.log(`\n✅ Demo shop ready: http://${SHOP_HOST}  ·  admin http://${ADMIN_HOST}  (${OWNER_EMAIL} / ${OWNER_PASSWORD})`)
 }
 

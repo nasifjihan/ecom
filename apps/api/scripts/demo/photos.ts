@@ -213,5 +213,6 @@ export function photoOf(entry: string): { id: string; author: string } {
 /** The download address: cropped by Unsplash's image service to the shape the shop shows. */
 export function photoUrl(id: string, shape: "portrait" | "wide" | "square"): string {
   const size = { portrait: "w=1000&ar=4:5", wide: "w=1800&ar=16:7", square: "w=800&ar=1:1" }[shape]
-  return `https://images.unsplash.com/photo-${id}?${size}&fit=crop&crop=entropy&q=78&fm=jpg`
+  // faces first: a wide strip of a portrait photo should keep the person, not a close-up of fabric.
+  return `https://images.unsplash.com/photo-${id}?${size}&fit=crop&crop=faces,entropy&q=78&fm=jpg`
 }

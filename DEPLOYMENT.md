@@ -207,6 +207,8 @@ The rehearsal adds Mailpit (http://localhost:8026), stores files on the API's lo
 
 `scripts/demo` fills a store called **Rongtuli** with a complete, made-up fashion shop:
 - logo, colours and delivery areas;
+- a dressed homepage, menus, pages (About, Contact, Shipping, Returns, Size guide), 6 blog posts and 10 FAQs;
+- a live and an upcoming flash sale, 4 coupons, 4 promotions and an Eid gift box;
 - 23 categories, 10 invented brands and 112 products with sizes, colours and real photos (free Unsplash photos, downloaded once).
 
 It takes over `shop.ecom.localhost` and `admin.ecom.localhost`:

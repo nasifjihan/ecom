@@ -6329,3 +6329,60 @@ A made-up but realistic fashion shop, **Rongtuli**, to see how the platform look
 - **Part 2:** homepage (hero, blocks), menus, pages (including replacing the storefront's fixed "About Fashion BD" page with the store's own), blog, FAQs, offers.
 - **Part 3:** customers, order history, reviews, staff and the second storefront.
 - **Docker under load:** Docker Desktop crashed once mid-build while all the containers were running.
+
+---
+
+## ✅ BATCH #50 (part 2) — Demo shop: how it looks (2026-10-26)
+The demo shop gets its homepage, menus, pages, blog, FAQs and offers (`scripts/demo/look.ts`). Everything goes through the admin's own services (`ContentService`, `MarketingService`, `PromotionsService`, `GiftBoxesService`), so it's validated the same way.
+
+### 50.6 What it adds
+- **Homepage, 12 blocks:**
+  - hero with 3 photo slides (sarees, Eid panjabis, the flash sale);
+  - four promises (free delivery over ৳3,000, cash on delivery, 7-day returns, help hours);
+  - 8 category tiles;
+  - "The Eid panjabi edit" rail;
+  - flash-sale banner;
+  - "Handpicked for you";
+  - "From the looms of Tangail" story with a fabric photo;
+  - "Just landed";
+  - an accessories rail;
+  - a customer quote;
+  - an 8-photo gallery;
+  - six FAQs.
+- **Menus:** the header has the five departments, each with its categories, plus Flash Sale, Gift Boxes and Blog; footer menus Shop, Help and Company. Every link has its Bangla title.
+- **Pages:** About (with the Unsplash photographers credited), Contact, Shipping Policy (charges table), Returns & Refunds, Size Guide; plus Privacy and Terms from part 1.
+- **Blog:** 6 posts in 3 categories, each with:
+  - a cover photo;
+  - a publish date over the last 6 weeks;
+  - "shop this" products.
+- **FAQs:** 10, grouped by orders, delivery, payment, returns, sizing, products and gifts.
+- **Offers:**
+  - **flash sales:** "Weekend Flash Sale" (20% off 14 in-stock kurtis, shirts, bags, sneakers and T-shirts, live now, ends in 3 days, with a banner) and "Pohela Falgun Sale" (15% off sarees and three-piece, in 10 days);
+  - **coupons:** WELCOME10 (new customers, 10% over ৳1,500), EID500 (৳500 off over ৳5,000, 30 days), FREESHIP (over ৳2,000), RONGTULI15 (15% over ৳2,500, 100 uses);
+  - **promotions:** free delivery over ৳3,000; buy 2 T-shirts get 1 free; 10% off jewellery; a free jute bag over ৳6,000;
+  - **gift box:** "Eid Gift Box": 2–4 items from jewellery, hijabs, watches and sunglasses, in a ৳290 "Handwoven Gift Box" product.
+- **Department banners:** a wide photo on each of the five department pages.
+- **Photos:** wide banners are cropped around faces (`crop=faces,entropy`), so a strip of a portrait photo keeps the person rather than a close-up of fabric.
+
+### 50.7 Fixed along the way
+- **The storefront's fixed "About Fashion BD" page is removed:** it was the same invented story for every store. `/about` now shows the store's own About page from Content → Pages, like any other page.
+  - A store without one, and without its own menus, gets a dead "About" link in the default header and footer.
+- **The flash-sale page had no title of its own** (it's a client component). A small layout gives it "Flash sale | <store>".
+- **Offers only use products in stock:** the first run put out-of-stock items in the flash sale, and the free-gift jute bag had no stock. The flash-sale picker now skips products with nothing to sell, and the gift option is stocked.
+
+### 50.8 Checked
+- **Demo run:** the store was recreated from scratch in the rehearsal (parts 1 and 2 together, about 3 minutes).
+- **In the browser (rehearsal):**
+  - **header:** the full department menu;
+  - **hero:** shows the model, not a close-up;
+  - **home page:** every block renders;
+  - **About:** the store's own story, titled "About Rongtuli | Rongtuli";
+  - **flash sale:** counts down from 3 days, all 14 items at −20% and in stock;
+  - **gift boxes:** "Eid Gift Box, 2–4 items · Box from BDT 290";
+  - **blog:** 6 posts, with featured posts first.
+- **Cart:** with the ৳9,160 Jamdani saree in it, the summary shows "Free gift: 1 × Jute Shopping Bag (Color: Maroon)" and "Free delivery (Free delivery over ৳3,000)".
+- **Typecheck:** the storefront and the demo scripts pass.
+
+### 50.9 Not done / next
+- **Part 3:** customers, order history, reviews, staff and the second ("Outlet") storefront.
+- **Cart page title:** like the flash-sale page, the cart page still shows the shop's generic title.
