@@ -191,7 +191,8 @@ export class AuthService extends BaseService {
             : UserType.CUSTOMER,
     };
     if (audience === "admin" || audience === "customer") {
-      payload.storeId = String(this.ctx.storeId ?? user.storeId);
+      // The account's own store, never the address it signed in on: a token works for one store.
+      payload.storeId = String(user.storeId ?? this.ctx.storeId);
     }
     if (user.email) payload.email = user.email;
     if (audience === "admin" && user.role) {

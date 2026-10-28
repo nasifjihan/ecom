@@ -91,6 +91,8 @@ export default function authMiddleware(guard: AuthGuardType = "any") {
         } catch {
           continue; // keep trying other audiences
         }
+        // A store's token only works on that store: one store's staff or customer can't reach another.
+        if (aud !== "super" && decoded.storeId && req.ctx.storeId !== undefined && decoded.storeId !== String(req.ctx.storeId)) continue;
         // Outside the try: a refusal here (two-step setup required) must reach the caller.
         await attachToCtx(req, aud, decoded);
         found = true;

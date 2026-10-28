@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { logger, prisma, cacheGet, cacheSet, CACHE_KEYS } from "../config";
+import { logger, prisma, cacheGet, cacheSet, CACHE_KEYS, isProd } from "../config";
 import type { RequestContext } from "../core";
 import { ForbiddenError, UnauthorizedError, normalizeLocale } from "../core";
 import { defaultLocale } from "../modules/settings/languages";
@@ -111,7 +111,10 @@ export default async function tenantMiddleware(
     return;
   }
 
-  let forcedStoreId = req.headers["x-store-id"]
+  // Naming the store outright (header or ?__storeId) is for development and tests only: in
+  // production the store comes from the address, so nobody can point a request at another store.
+  const named = !isProd;
+  let forcedStoreId = named && req.headers["x-store-id"]
     ? BigInt(String(req.headers["x-store-id"]))
     : undefined;
 
@@ -134,7 +137,7 @@ export default async function tenantMiddleware(
     if (resolved?.id) forcedStoreId = BigInt(resolved.id);
   }
 
-  if (!forcedStoreId && req.query.__storeId) {
+  if (named && !forcedStoreId && req.query.__storeId) {
     try { forcedStoreId = BigInt(String(req.query.__storeId)); } catch { /* ignore */ }
   }
 

@@ -6497,3 +6497,20 @@ Following the README's development path (section B) on a second machine, one ste
 - **All five addresses answer 200:** API `/healthz`, storefront 3100, store admin 3101, super admin 3102, Mailpit 8025.
 - **The Prisma scripts from a shell with nothing exported:** `prisma:generate` and `prisma:migrate:deploy` both work.
 - **Containers:** all three healthy (Postgres, Redis, Mailpit).
+
+---
+
+## ✅ SECURITY — one store's token can't reach another store (2026-10-28)
+Found while answering "can store admin ever show another store's data?". Normal use was safe: the address and the login both point to one store. But nothing checked that a token's store matched the request's store, and production still honoured `X-Store-Id` and `?__storeId=`. So store A's owner could keep their own token, add `X-Store-Id: 2`, and read or edit store B's orders, customers and products.
+
+### Changes
+- **`middleware/11-auth.ts`:** a store admin or customer token is used only when its `storeId` matches the request's store. Otherwise it's ignored: a guarded route answers 401, and an optional route (storefront browsing) carries on signed out. Platform (super) tokens still work on any store.
+- **`middleware/10-tenant.ts`:** `X-Store-Id` and `?__storeId=` work only outside production (development and tests). In production the store comes only from the address. "Log in as owner" from the super admin is unaffected: it opens the store's own admin domain.
+- **`auth.service.ts` `issueTokens`:** the token carries the account's own store, not the store of the address it was issued on.
+- **`auth.controller.ts` refresh:** admin and customer refresh refuse a token from another store (`refreshStore`), so the admin signs out instead of looping.
+
+### Checked
+- **`tests/unit/store-isolation.test.ts`:** own-store admin accepted; another store's admin refused; another store's customer treated as signed out; super admin allowed. Two of the four fail on the old code.
+- **API typecheck:** passes.
+- **Tests without a database:** 59 files and 819 tests pass.
+- **Not run:** the database tests. Docker Desktop wouldn't start on the office PC, so run the full suite at home before merging.

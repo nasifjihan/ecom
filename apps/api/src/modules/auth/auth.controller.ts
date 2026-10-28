@@ -36,6 +36,14 @@ import type {
   RefreshTokenDto,
 } from "./auth.dto";
 
+/** The store a refresh token belongs to; refused on another store's address. */
+function refreshStore(payload: TokenPayload, ctx: RequestContext): bigint {
+  const storeId = payload.storeId ? BigInt(payload.storeId) : ctx.storeId;
+  if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+  if (ctx.storeId !== undefined && storeId !== ctx.storeId) throw new UnauthorizedError("Invalid or expired token", "AUTH_INVALID_TOKEN");
+  return storeId;
+}
+
 function omitPasswordHash(obj: any): any {
   if (!obj) return obj;
   const { passwordHash, ...rest } = obj;
@@ -341,8 +349,7 @@ export class AuthController extends BaseController {
     if (!tok) throw new UnauthorizedError("Missing refresh token", "AUTH_MISSING_TOKEN");
     const svc = this.service(req.ctx);
     const payload = await svc.validateRefresh(tok, "admin");
-    const storeId = payload.storeId ? BigInt(payload.storeId) : req.ctx.storeId;
-    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const storeId = refreshStore(payload, req.ctx);
     const user = await svc.getAdminProfile(BigInt(payload.sub), storeId);
     let permissions: string[] = [];
     if (user.roleId) {
@@ -377,8 +384,7 @@ export class AuthController extends BaseController {
     if (!tok) throw new UnauthorizedError("Missing refresh token", "AUTH_MISSING_TOKEN");
     const svc = this.service(req.ctx);
     const payload = await svc.validateRefresh(tok, "customer");
-    const storeId = payload.storeId ? BigInt(payload.storeId) : req.ctx.storeId;
-    if (!storeId) throw new UnauthorizedError("Store not resolved", "TENANT_NOT_RESOLVED");
+    const storeId = refreshStore(payload, req.ctx);
     const user = await svc.getCustomerProfile(BigInt(payload.sub), storeId);
     // A customer banned since signing in loses the session at the next refresh.
     if (isBanned(user.status)) throw new UnauthorizedError("Account suspended", "AUTH_ACCOUNT_SUSPENDED");
