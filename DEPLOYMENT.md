@@ -253,3 +253,47 @@ docker run --rm -i --network ecom-rehearsal_ecom -v "$PWD/loadtest:/t" -e RATE=2
 | 2 API copies | 0.84 s | 0.71 s | 0 | 26 |
 
 The machine was the limit: the storefront used the most CPU, then the API copies. Run it again on the real server before launch.
+
+## 13. Plan: a free live test server (not started yet)
+**Goal:** a real live shop on the internet, with a production database, for testing before launch. You on both computers and the QA team all use the same live data. After testing, the test data is wiped and the same server takes the real shop. Money is spent only at full launch.
+
+### The free setup
+| Need | Free option | Notes |
+|---|---|---|
+| **Server** | **Oracle Cloud "Always Free"**: ARM (Ampere), 4 CPU, 24 GB RAM, 200 GB disk | Above this guide's minimum (2 CPU / 4 GB). Runs `docker-compose.prod.yml` unchanged: API, worker, the four web apps, Postgres, Redis, Caddy with HTTPS. Pick the Singapore or Mumbai region |
+| **Database** | **Postgres on that server**, as in sections 3–5 | A real production database, not a free hosted tier that sleeps or pauses |
+| **Backups** | **Cloudflare R2**: 10 GB free | Section 6's backup service sends to S3-style storage; R2 fits with no code change. Product photos can go there too, or stay on the server's disk |
+| **Email** | **Brevo** SMTP: 300 emails a day free | Order and password-reset emails |
+| **Domain** | **Buy one `.com`** (about 1,200–1,500 BDT a year) | The only cost. It can become the real shop's domain. Free subdomains (DuckDNS and similar) break sign-in: the admin and API addresses can't share cookies on them |
+| **Payment gateways** | Sandbox mode | With live HTTPS, gateway callbacks and webhooks work, which they can't on a local computer |
+
+**Costs a little even while testing:**
+- **SMS:** every message costs a little; the providers charge per SMS.
+- **Courier test bookings:** check with each courier; some have test modes.
+
+**Check before signing up:** Oracle's, Cloudflare's and Brevo's free limits change over time; the numbers above are from October 2026.
+
+### Steps
+1. **Your side:**
+   - create the accounts: Oracle Cloud, Cloudflare (R2), Brevo;
+   - buy the domain;
+   - signups and payments are yours to do; nobody else should enter your card or passwords.
+2. **Code side (one change):** the Oracle server is ARM, and CI builds images only for Intel/AMD servers. Add `linux/arm64` to the image build in `.github/workflows/ci.yml` (`platforms: linux/amd64,linux/arm64`). Builds get slower. Alternative: build on the server with `scripts/build-rehearsal-images.sh`, changed to the real addresses.
+3. **Deploy:** sections 2–7 of this guide, with the domain's addresses, R2 for backups and Brevo for SMTP.
+4. **Test phase:**
+   - run the demo shop (section 11, `scripts/demo/index.ts`, with the real domain's `--shop-host`, `--admin-host` and `--outlet-host`);
+   - hide the site from Google: store admin → robots, "block all";
+   - put the gateways in sandbox mode;
+   - the team works through `TESTING_CHECKLIST.md`.
+5. **Clean up:** `docker compose ... down -v` deletes all test data. Start again, run `bootstrap.ts`, and add the real shop by hand.
+6. **Go live:**
+   - switch the gateways to live keys;
+   - turn off "block all";
+   - move to paid hosting only when traffic needs it. Moving is easy because everything runs in Docker.
+
+### Catches
+- **Oracle signup needs a card** for checking your identity, and it isn't charged. Some cards are refused.
+- **Capacity:** free ARM servers are sometimes "out of capacity" in a region; retry later, or try another region.
+- **Reclaiming:** Oracle may take back a free server that sits almost unused for a week. With testers on it that's unlikely, but keep R2 backups on.
+- **Fallback if Oracle doesn't work out:** a Hetzner ARM server, about 600–700 BDT a month, with the same setup.
+- **Server size:** 4 CPU suits `API_REPLICAS=2` (section 12). Run the load test there before launch.
