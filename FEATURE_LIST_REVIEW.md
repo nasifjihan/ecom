@@ -15,6 +15,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 **Owner review:** went through section by section with the owner. Rows marked *Owner's call* changed after that review. In reviewed sections, every other row stands as written.
 - Round 1 (bugs, Home and navigation, Search and discovery, Filtering and sorting): reviewed.
 - Round 2 (Product page, Cart, Checkout, Payments): reviewed.
+- Round 3 (User account, Marketing, Customer support, Informational pages, Technical): reviewed.
 
 ---
 
@@ -207,8 +208,8 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Feature | Status | What we have | Add? | Why |
 |---|---|---|---|---|
 | About us | ✅ | Page builder | — | |
-| Contact us with map | 🟡 | Contact page ✅; no map block | Later | Small: a map block |
-| Store locator | ❌ | | **No** | Our shops have one or two outlets; a contact page covers it |
+| Contact us with map | 🟡 | Contact page ✅; no map block | **Yes** | *Owner's call:* a map on the contact page and in the footer, set per store |
+| Store locator | ❌ | | **Yes** (small) | *Owner's call:* list the store's one or two pickup points (from store pickup) with address and map. No big locator |
 | Shipping policy | ✅ | | — | |
 | Return and refund policy | ✅ | | — | |
 | Privacy policy | ✅ | Created with every new store | — | |
@@ -225,7 +226,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Fast loading, lazy images | ✅ | WebP, thumbnails, data-saver mode | — | |
 | SEO URLs, meta tags, structured data | ✅ | | — | |
 | Accessibility (WCAG) | 🟡 | Labels, contrast check on brand colours; never audited | Later | An audit pass before launch |
-| Multi-language and RTL | 🟡 | Bangla and English ✅; RTL ❌ | **No** (RTL) | Only for Arabic/Urdu shops |
+| Multi-language and RTL | 🟡 | Bangla and English ✅; RTL ❌ | **No** (RTL, more languages) | *Owner's call:* Bangla and English are enough; no other languages |
 | Multi-currency | ❌ | | **No** | Taka only |
 | Location detection | ❌ | | **No** | Shoppers pick their district at checkout anyway |
 | Cookie consent | ❌ | | Later | See cookie banner |
