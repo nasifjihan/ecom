@@ -14,6 +14,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 
 **Owner review:** went through section by section with the owner. Rows marked *Owner's call* changed after that review. In reviewed sections, every other row stands as written.
 - Round 1 (bugs, Home and navigation, Search and discovery, Filtering and sorting): reviewed.
+- Round 2 (Product page, Cart, Checkout, Payments): reviewed.
 
 ---
 
@@ -76,20 +77,20 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Title, SKU, brand, price | ✅ | | — | |
 | Discounted price, savings %, sale countdown | ✅ | "-n% OFF", "Save ৳X", flash-sale countdown | — | |
 | Variant selection with swatches | ✅ | Colour swatches and size buttons | — | |
-| Stock status (only 3 left, out of stock, pre-order, backorder) | 🟡 | "Only n left", out of stock ✅; backorder can be allowed per product, but no "Pre-order" label | Later | Pre-order matters for made-to-order shops. Small once someone needs it |
+| Stock status (only 3 left, out of stock, pre-order, backorder) | 🟡 | "Only n left", out of stock ✅; backorder can be allowed per product, but no "Pre-order" label | **Yes** | *Owner's call:* a real pre-order system. Pre-order products show a "Pre-order" label and a longer delivery time, and can be ordered with no stock |
 | Quantity selector | ✅ | | — | |
 | Add to cart, Buy now, Add to wishlist | 🟡 | Add to cart ✅, wishlist ✅; **Buy now ❌** | **Yes** | Small, and Bangladeshi shoppers on phones use it a lot |
 | Short and full descriptions, specifications table | ✅ | | — | |
 | Size guide or chart | 🟡 | A size-guide page can be made (the demo has one); no link from the product | **Yes** | Small: a "Size guide" link per category or product. Fewer size returns |
 | Delivery estimate by postcode or area | ❌ | "Delivery time and charge are shown at checkout" | **Yes** | Zones already know days and charges; let the shopper pick a district on the product page |
 | Shipping, return, warranty info | 🟡 | COD line, policy pages; no warranty field | Later | A warranty line per product can go in specifications today |
-| Reviews with photos, helpful votes, verified badge | 🟡 | Reviews ✅, verified purchase ✅, shop replies ✅; **photos ❌**, helpful votes ❌ | **Yes** (photos) · Later (helpful) | Photo reviews build trust for clothes; helpful votes only matter with many reviews |
+| Reviews with photos, helpful votes, verified badge | 🟡 | Reviews ✅, verified purchase ✅, shop replies ✅; **photos ❌**, helpful votes ❌ | **Yes** (photos) · **No** (helpful) | Photo reviews build trust for clothes. *Owner's call:* no helpful votes |
 | Customer Q&A | ✅ | | — | |
 | Related, similar, frequently bought together, customers also viewed | 🟡 | "You May Also Like" (same category) and "More from"; **the admin's related picks are lost (bug B3)**; no "bought together" | **Yes** (fix B3) · Later (bought together) | "Bought together" needs order history to mean anything |
 | Recently viewed products | ❌ | | **Yes** | Small (kept in the browser) |
 | Bundle offers, bulk/tier pricing | 🟡 | Bulk/tier prices ✅; buy X get Y promotions ✅; gift boxes ✅; no fixed "bundle" product | Later | Promotions already cover "buy 2 save 10%" |
 | Social share buttons | 🟡 | One button, and it's broken (bug B1) | **Yes** (fix B1) | |
-| "Notify me when back in stock" | ❌ | | **Yes** | Popular sizes sell out; an SMS/email when stock returns wins the sale back |
+| "Notify me when back in stock" | ❌ | | **Yes** | *Owner's call:* a "Notify me" button on every sold-out product or size; the shopper gets an SMS or email when it is back. Popular sizes sell out, and this wins the sale back |
 | Price drop alerts | ❌ | | **No** | Little use in a small shop; back-in-stock alerts matter more |
 | Product comparison | ❌ | The database has an unused `CompareItem` table | **No** (for fashion) | Comparison helps with electronics specs, not clothes. Revisit for an electronics storefront |
 | Seller info (marketplaces) | ➖ | | **No** | We aren't a marketplace (section 2) |
@@ -121,7 +122,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Address book with saved addresses | ✅ | | — | |
 | Address autocomplete | ❌ | Division → district → thana pickers | **No** | Bangladeshi addresses don't geocode well; the pickers set delivery charges correctly, autocomplete wouldn't |
 | Separate billing and shipping | ✅ | | — | |
-| Delivery method (standard, express, same-day, store pickup) | 🟡 | Standard, express, same-day via delivery options and slots ✅; **store pickup ❌** | Later | Only for shops with a physical store; worth it then |
+| Delivery method (standard, express, same-day, store pickup) | 🟡 | Standard, express, same-day via delivery options and slots ✅; **store pickup ❌** | **Yes** (store pickup) | *Owner's call:* every store has a storage room or office, so pickup from there is a real option. Pickup addresses set in the admin |
 | Delivery date and time slot | ✅ | | — | |
 | Gift wrapping and gift messages | ✅ | Gift orders (recipient, card message), gift boxes | — | |
 | Order notes | 🟡 | The API takes them; no box (bug B8) | **Yes** | Tiny |
@@ -141,7 +142,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Store credit and wallet balance | ✅ | Wallet with cashback, part-pay at checkout | — | |
 | Gift cards | ❌ | | Later | See Marketing |
 | Saved cards (tokenized) | ❌ | | **No** | The gateways handle cards; storing tokens brings card-security rules for little gain |
-| Partial or split payments | 🟡 | Wallet + another method ✅; no "pay the delivery charge in advance, rest on delivery" | **Yes** (advance) | Many BD shops ask for the delivery charge up front on COD orders to cut fake orders |
+| Partial or split payments | 🟡 | Wallet + another method ✅; no "pay the delivery charge in advance, rest on delivery" | Later (advance) | *Owner's call: not now.* Many BD shops ask for the delivery charge up front on COD orders to cut fake orders |
 | 3D Secure and OTP verification | ✅ | Done by the gateways | — | |
 | Multi-currency payments | ❌ | | **No** | Taka only (see currency switcher) |
 
@@ -508,7 +509,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 |---|---|---|
 | **51: Fix and quick wins** | Bugs B1–B6 and B8; Buy now; Reorder; recently viewed; brand pages; "on sale" rail and discount sort; free-delivery progress bar; product duplicate; maintenance mode, Google Analytics and Facebook Pixel screens; account deletion and data download | M |
 | **52: Fashion shopping** | Size, colour, in-stock and on-sale filters (with filter settings); image zoom; product video; review photos; back-in-stock alerts; delivery estimate on the product page and in the cart; size-guide links | L |
-| **53: Win back sales, fewer fake orders** | Server-side cart across devices (B7); abandoned-cart reminders by SMS/WhatsApp with a report; fraud check by courier history; COD call confirmation; advance delivery charge on COD | L |
+| **53: Win back sales, fewer fake orders** | Server-side cart across devices (B7); abandoned-cart reminders by SMS/WhatsApp with a report; fraud check by courier history; COD call confirmation | L |
 | **54: Orders and messages** | Edit orders; exchanges; SMS campaigns; contact form with call-back and order issues, plus an inbox; WhatsApp/Messenger chat button; bulk price and stock edit; Facebook/Google product feed | L |
 | **Later, when a shop needs it** | Gift cards; store pickup; Paperfly; rider assignment; typo-tolerant search; collections; barcodes; digital products; push; email campaigns; affiliates; POS; ERP link; AI descriptions; cookie banner; captcha | — |
 
