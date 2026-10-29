@@ -8,10 +8,13 @@ import { DATE_LOCALES, translatorFor, type Locale, type Translator } from "@ecom
 import { prefersDarkText } from "@ecom/utils";
 
 export interface ThemeSettings {
-  brand: { storeName: string; tagline: string; logoUrl: string | null };
+  brand: { storeName: string; tagline: string; logoUrl: string | null; faviconUrl?: string | null };
+  /** previewHash: SHA-256 of the staff preview key (the preview cookie must match it). */
+  maintenance?: { enabled: boolean; message: string; previewHash: string | null };
   colors: { primary: string; secondary?: string };
-  display?: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number };
+  display?: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number; sizeGuideUrl: string };
   robots?: { blockAll: boolean; extra: string };
+  tracking?: { googleAnalyticsId: string; facebookPixelId: string; googleVerification: string };
   announcement: { enabled: boolean; text: string; link: string | null };
   footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
@@ -99,11 +102,11 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
   | {
       type: "product_rail";
       config: HeadingConfig & {
-        source: "products" | "category" | "tag";
+        source: "products" | "category" | "tag" | "sale";
         products: { id: string; name: string }[];
         categoryId: string | null;
         tag: string;
-        sort: "popular" | "newest" | "price_asc" | "price_desc" | "rating";
+        sort: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount";
       };
     }
   | { type: "category_tiles"; config: { heading: string; categoryIds: string[] } }

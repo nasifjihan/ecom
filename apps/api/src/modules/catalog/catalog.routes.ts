@@ -142,6 +142,17 @@ adminProductsRouter.post(
   }),
 );
 
+adminProductsRouter.post(
+  "/:id/duplicate",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.create"),
+  validate({ params: ProductIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const product = await new CatalogService(req.ctx).duplicateProduct((req.params as unknown as ProductIdParamDto).id);
+    envelope(res, { status: 201, data: product, message: "Copy saved as a draft" });
+  }),
+);
+
 adminProductsRouter.delete(
   "/:id",
   authMiddleware("adminOrSuper"),

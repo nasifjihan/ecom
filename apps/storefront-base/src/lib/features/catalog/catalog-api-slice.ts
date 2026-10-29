@@ -88,6 +88,10 @@ export type ProductDetail = ProductSummary & {
   allowReviews?: boolean;
   /** Answered questions from customers. */
   questions?: { id: string; name: string; question: string; answer: string; askedAt: string }[];
+  /** Picked in the admin to show first under "You may also like". */
+  relatedIds?: string[];
+  /** The main category's size chart link, when it has its own. */
+  sizeGuideUrl?: string | null;
   seo?: { title?: string; description?: string; ogImage?: string };
 };
 
@@ -106,19 +110,25 @@ export type Brand = {
   slug: string;
   name: string;
   logo?: string;
+  banner?: string;
+  description?: string;
+  seoTitle?: string;
+  metaDesc?: string;
   productCount?: number;
 };
 
 export type ProductsQueryArgs = {
   page?: number;
   perPage?: number;
-  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating";
+  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount";
   /** One id or a comma-separated list; descendants of each category are included. */
   categoryId?: string;
   categorySlug?: string;
   /** One id or a comma-separated list. */
   brandId?: string;
   featured?: boolean;
+  /** Only products below their regular price right now. */
+  onSale?: boolean;
   excludeId?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -151,6 +161,7 @@ export const catalogApi = api.injectEndpoints({
         if (args.categoryId) params.set("categoryId", args.categoryId);
         if (args.categorySlug) params.set("categorySlug", args.categorySlug);
         if (args.featured !== undefined) params.set("featured", String(args.featured));
+        if (args.onSale) params.set("onSale", "true");
         if (args.excludeId) params.set("excludeId", args.excludeId);
         if (args.brandId) params.set("brandId", args.brandId);
         if (args.minPrice) params.set("minPrice", String(args.minPrice));

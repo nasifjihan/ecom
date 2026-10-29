@@ -135,3 +135,6 @@ export { toast, Toaster } from "sonner";
 export * from "./i18n";
 export * from "./lib/display";
 export * from "./lib/data-saver";
+
+export { Tracking, track } from "./lib/tracking";
+export type { TrackedItem } from "./lib/tracking";

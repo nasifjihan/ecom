@@ -402,8 +402,6 @@ model StoreGeneralSetting {
   dateFormat       String   @default("DD/MM/YYYY")
   weightUnit       String   @default("kg")
   dimensionUnit    String   @default("cm")
-  maintenanceMode  Boolean  @default(false)
-  maintenanceMsg   String?
   /// The registered business name printed on invoices (when it differs from the store name).
   legalName        String?
   /// VAT registration number (BIN), printed on invoices.
@@ -709,9 +707,6 @@ model StoreSeoSetting {
   enableSchemaOrg       Boolean  @default(true)
   autoGenerateCanonical Boolean  @default(true)
   robotsTxt             String?  @db.Text
-  googleAnalyticsId     String?
-  googleTagManagerId    String?
-  facebookPixelId       String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
@@ -727,7 +722,6 @@ model StoreSecuritySetting {
   passwordRequireSym   Boolean  @default(false)
   loginMaxAttempts     Int      @default(5)
   loginLockMinutes     Int      @default(15)
-  adminIpWhitelist     Json?
   recaptchaEnabled     Boolean  @default(false)
   recaptchaSiteKey     String?
   recaptchaSecret      String?
@@ -1088,6 +1082,8 @@ model Category {
   isActive       Boolean           @default(true)
   menuIncluded   Boolean           @default(true)
   megaMenuConfig Json?
+  /// This category's size chart (a page like /size-guide-men), linked beside product sizes; null: the store's.
+  sizeGuideUrl   String?
   seoTitle       String?
   metaDesc       String?
   canonicalUrl   String?
@@ -1220,8 +1216,9 @@ model Product {
   images                ProductImage[]
   variants              ProductVariant[]
   attributes            ProductAttribute[]
-  upsells               ProductLink[]          @relation("Upsells")
-  crossSells            ProductLink[]          @relation("CrossSells")
+  /// Products this one points to (type "related": shown first under "You may also like").
+  links                 ProductLink[]          @relation("ProductLinks")
+  linkedFrom            ProductLink[]          @relation("ProductLinkedFrom")
   inventoryLogs         InventoryLog[]
   warehouseStock        WarehouseStock[]
   transferItems         StockTransferItem[]
@@ -1387,13 +1384,14 @@ model ProductVariant {
 model ProductLink {
   id              BigInt  @id @default(autoincrement())
   productId       BigInt
-  product         Product @relation("Upsells", fields: [productId], references: [id], onDelete: Cascade)
+  product         Product @relation("ProductLinks", fields: [productId], references: [id], onDelete: Cascade)
   linkedProductId BigInt
-  linkedProduct   Product @relation("CrossSells", fields: [linkedProductId], references: [id])
+  linkedProduct   Product @relation("ProductLinkedFrom", fields: [linkedProductId], references: [id], onDelete: Cascade)
   type            String
   sortOrder       Int     @default(0)
 
-  @@index([productId, type])
+  @@unique([productId, type, linkedProductId])
+  @@index([linkedProductId])
 }
 
 model InventoryLog {

@@ -38,7 +38,7 @@ export interface CartPromotions {
   bxgy: { id: string; name: string; productId: string; productName: string; freeUnits: number; amount: number }[];
   gifts: { promotionId: string; promotionName: string; productId: string; variantId: string | null; title: string; qty: number; imageUrl: string | null }[];
   freeDelivery: { id: string; name: string } | null;
-  nudges: { id: string; name: string; type: string; message: string }[];
+  nudges: { id: string; name: string; type: string; message: string; amountShort?: number; minOrder?: number }[];
   notes: string[];
 }
 

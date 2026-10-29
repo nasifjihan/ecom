@@ -378,9 +378,10 @@ export class StorefrontService {
     }
     where.AND = and;
 
-    if (q.sort === "price_asc" || q.sort === "price_desc" || (priceRange && ownPrices)) {
-      // Sort on the price a shopper pays (sale price inside its window), which Prisma's
-      // orderBy cannot express, so rank the matching ids in memory and load one page.
+    const byPrice = q.sort === "price_asc" || q.sort === "price_desc";
+    if (byPrice || q.sort === "discount" || q.onSale || (priceRange && ownPrices)) {
+      // Sort or filter on the price a shopper pays (sale price inside its window, flash sales),
+      // which Prisma's orderBy cannot express, so rank the matching ids in memory and load one page.
       const candidates = await prisma.product.findMany({
         where,
         select: {
@@ -394,13 +395,17 @@ export class StorefrontService {
         },
       });
       const flash = await FlashSales.load(this.storeId, candidates.map((c) => c.id));
-      const byPrice = q.sort === "price_asc" || q.sort === "price_desc";
       const dir = q.sort === "price_desc" ? -1 : 1;
       const ranked = candidates
-        .map((c) => ({ id: c.id, price: pricedWith(flash, c, null, this.sfRow(sf, c, c)).price }))
-        .filter((r) => (q.minPrice === undefined || r.price >= q.minPrice) && (q.maxPrice === undefined || r.price <= q.maxPrice));
+        .map((c) => {
+          const { price, compareAtPrice } = pricedWith(flash, c, null, this.sfRow(sf, c, c));
+          return { id: c.id, price, off: compareAtPrice && compareAtPrice > price ? (compareAtPrice - price) / compareAtPrice : 0 };
+        })
+        .filter((r) => (q.minPrice === undefined || r.price >= q.minPrice) && (q.maxPrice === undefined || r.price <= q.maxPrice))
+        .filter((r) => !q.onSale || r.off > 0);
       if (byPrice) ranked.sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
-      const kept = byPrice
+      if (q.sort === "discount") ranked.sort((a, b) => b.off - a.off || Number(b.id - a.id));
+      const kept = byPrice || q.sort === "discount"
         ? ranked.map((r) => r.id)
         : (
             await prisma.product.findMany({
@@ -466,9 +471,10 @@ export class StorefrontService {
         storefronts: ownRow(sf.id),
         brand: { select: { id: true, name: true, slug: true, translations: true } },
         categories: {
-          include: { category: { select: { id: true, name: true, slug: true, parentId: true, translations: true } } },
+          include: { category: { select: { id: true, name: true, slug: true, parentId: true, translations: true, sizeGuideUrl: true } } },
         },
         images: { orderBy: { sortOrder: "asc" }, include: { media: { select: { thumbUrl: true } } } },
+        links: { where: { type: "related" }, orderBy: { sortOrder: "asc" }, select: { linkedProductId: true } },
         variants: { where: { status: "active" }, orderBy: { id: "asc" } },
         attributes: { include: { attribute: true, terms: { include: { term: true } } } },
         reviews: {
@@ -528,6 +534,10 @@ export class StorefrontService {
       /** Orders that included it (shown as "N sold" once it's worth showing). */
       saleCount: p.saleCount,
       lowStockThreshold: p.lowStockThreshold ?? 5,
+      /** Picked in the admin to show first under "You may also like". */
+      relatedIds: p.links.map((l) => String(l.linkedProductId)),
+      /** The main category's size chart, when it has its own (else the store-wide one from the theme). */
+      sizeGuideUrl: primary?.category.sizeGuideUrl ?? null,
       allowReviews: p.allowReviews,
       questions: p.questions.map((q) => ({
         id: String(q.id),
@@ -607,6 +617,11 @@ export class StorefrontService {
       slug: b.slug,
       name: tr(b, this.locale, "name"),
       logo: b.logoUrl ?? undefined,
+      // For the brand's own page (/brands/{slug}).
+      banner: b.bannerUrl ?? undefined,
+      description: tr(b, this.locale, "description") || undefined,
+      seoTitle: b.seoTitle ?? undefined,
+      metaDesc: b.metaDesc ?? undefined,
       productCount: b._count.products,
     }));
   }
@@ -1821,6 +1836,7 @@ function orderView(o: OrderWithItems) {
     items: o.items.map((i) => ({
       id: String(i.id),
       productId: i.productId ? String(i.productId) : null,
+      variantId: i.variantId ? String(i.variantId) : null,
       title: i.productName,
       variantLabel: variantLabel(i.variantValues),
       image: i.imageUrl ?? "",

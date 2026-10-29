@@ -6514,3 +6514,75 @@ Found while answering "can store admin ever show another store's data?". Normal 
 - **API typecheck:** passes.
 - **Tests without a database:** 59 files and 819 tests pass.
 - **Not run:** the database tests. Docker Desktop wouldn't start on the office PC, so run the full suite at home before merging.
+
+---
+
+## ✅ BATCH #51 — Phase 1: fix what's broken, quick wins (2026-10-29)
+Phase 1 of the plan in `FEATURE_LIST_REVIEW.md` (section 3): the bugs found in the feature-list review, plus small features shoppers and staff use every day.
+
+### Bugs fixed
+- **B1 Share:** opens the phone's share menu (WhatsApp, Messenger…); on a computer it really copies the link, or says it couldn't.
+- **B2 fake installments line:** removed from every product page.
+- **B3 related products:** the picks in the product editor are saved (`ProductLink`, type `related`, in order, this store's only, never the product itself) and come back when the editor reopens. The product page shows them first under "You may also like", filled up with best sellers from the same category. The picker now searches all products on the server, not just the first 50, and is one shared component (`related-products-picker.tsx`) used by the new and edit pages. A linked product deleted for good removes the link instead of failing.
+- **B4 product types:** Digital, Subscription and Made to order are no longer offered. A product that already has one keeps it.
+- **B5 settings that did nothing:**
+  - Facebook Pixel, Google Analytics 4 and the Search Console code are now on **Online store → Theme → Tracking**, per storefront, checked in the admin and the API.
+  - Shop events go to whichever is loaded: page view, product view, add to cart, checkout start, and purchase. The purchase carries the order number, so a reload isn't counted twice. This lives in `storefront-base/lib/tracking.tsx`, and add to cart is sent from the shared cart.
+  - The unused database columns are dropped (IP allow-list, the old tracking IDs, the old maintenance fields).
+- **Maintenance mode** is on Theme → Store status rather than Settings → General, because it belongs to each storefront.
+  - Shoppers see "We'll be back soon" and the shop's message, and search engines are told not to index.
+  - The first save makes a preview key. Staff open `/preview?key=…`, which sets a cookie, and see the shop with an amber "Preview" strip.
+  - Shoppers only ever get a SHA-256 hash of the key (`shopperTheme`), enough to check the cookie but not to make one.
+- **B6 icons and manifest:**
+  - `/app-icon/{32,180,192,512}` serves the browser icon picked on Theme → Brand. Without one, it draws the store's initial on its main colour.
+  - `/favicon.ico` redirects there.
+  - `/manifest.webmanifest` lets shoppers add the shop to a phone's home screen.
+  - The Google verification code comes from Tracking, not a placeholder.
+- **B8 order note:** checkout has a "Note for the shop" box. The API already stored it, and staff see it on the order.
+- **B9, found while building:** checkout showed "Add ৳X more for FREE Delivery!" against a hard-coded ৳1000. Now the bar is drawn only from a real free-delivery promotion: the nudge carries `minOrder`, and the bar shows in the cart and at checkout.
+
+### Quick wins
+- **Buy now** on the product page: it adds to the cart and goes to checkout.
+- **Order again** on a past order: today's items and prices go into the cart. Free gifts, gift-box lines and products no longer sold are left out. Order lines now carry `variantId`.
+- **Recently viewed** under the product page: the last 4 products, kept in the browser.
+- **Brand pages:**
+  - `/brands` shows the brands with products.
+  - `/brands/{slug}` shows the logo, banner and description, and the first 24 products rendered on the server so search engines see them, with breadcrumbs and canonical tags.
+  - Both are in the sitemap, and the brand name on a product links to its page.
+  - The product list understands `?brand=slug`.
+- **On sale:**
+  - "On sale now" is a new source for the home-page Product row.
+  - The product list has an "On sale only" filter (`?sale=true`) and a "Biggest Discount" sort, in the API (`onSale`, `sort=discount`) and in the rail.
+  - Both use the price a shopper pays (sale price inside its window, flash sales).
+- **Size guide link** beside the size options. The store-wide one is on Theme → Product display, and a category can have its own (new `Category.sizeGuideUrl`).
+- **Duplicate product** in the product list:
+  - It makes a draft copy, with texts, prices, options, photos, categories, tags and related picks.
+  - Not copied: stock (starts at 0), SKUs and barcodes (they're unique), SEO title and link, storefront prices and bulk prices.
+- **Account → Your data:**
+  - Download everything as JSON (`GET /storefront/account/me/export`).
+  - Delete the account (`POST /me/delete`, typing DELETE to confirm). This is refused while an order is on its way.
+  - Deleting wipes name, email (freed for a new account), phone, password, sign-ins, addresses, wishlist and newsletter, sets the status to `deleted`, and signs out everywhere.
+  - Orders stay for the shop's accounts and VAT.
+  - Facebook and Google sign-in need this before they approve the app.
+
+### Migration
+- `20261029120000_shop_quick_wins` changes the `ProductLink` table:
+  - duplicates removed, and one link per (product, type, linked product);
+  - an index on the linked product;
+  - the link is removed when either product is deleted.
+- It adds `Category.sizeGuideUrl`.
+- It drops the unused settings columns.
+- Prisma's own `migrate diff` between the old and new schema gives the same statements.
+
+### Checked
+- **Typecheck:** passes in every package.
+- **Builds:** the storefront and store-admin production builds pass, and the new routes are listed.
+- **Tests without a database:** 60 files and 822 tests pass. New: `account-deletion.test.ts`, plus tracking and maintenance cases in `theme-settings.test.ts`.
+- **Bangla check:** passes, so every new shop text has Bangla.
+- **Not run:**
+  - The new database test `phase1-shop.db.test.ts` (related picks, duplicate, on-sale and discount sort, account deletion) and the rest of the DB suite. Docker doesn't run on the office PC; run them at home.
+  - The browser check. The project isn't run on the office PC; `TESTING_CHECKLIST.md` section E lists what to try.
+  - Lint: CI's lint is non-blocking with existing errors, and store-admin's ESLint isn't installed on this PC.
+
+### Found, not fixed
+- **B10:** in Settings → General, the Media and Legal tabs can't save (no storage behind them). It's recorded in `FEATURE_LIST_REVIEW.md`.

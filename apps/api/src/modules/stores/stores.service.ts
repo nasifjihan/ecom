@@ -83,8 +83,6 @@ export class StoresService extends BaseService {
           state: "",
           postalCode: "",
           countryCode: "",
-          maintenanceMode: false,
-          maintenanceMsg: "",
         },
       });
 
@@ -124,16 +122,12 @@ export class StoresService extends BaseService {
           homeMetaDescription: "",
           ogImageUrl: "",
           robotsTxt: "",
-          googleAnalyticsId: "",
-          googleTagManagerId: "",
-          facebookPixelId: "",
         },
       });
 
       await tx.storeSecuritySetting.create({
         data: {
           storeId: store.id,
-          adminIpWhitelist: [],
           recaptchaSiteKey: "",
           recaptchaSecret: "",
         },

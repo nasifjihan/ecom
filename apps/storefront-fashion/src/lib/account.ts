@@ -72,7 +72,19 @@ export interface MyOrder {
   phone: string | null;
   shippingMethodName: string | null;
   shipping: { name: string; address: string; city: string | null; upazila?: string | null; division: string | null; postcode: string | null; country: string | null };
-  items: { id: string; title: string; variantLabel: string; image: string; qty: number; price: number; lineTotal: number; giftFrom?: string | null }[];
+  items: {
+    id: string;
+    productId: string | null;
+    variantId: string | null;
+    title: string;
+    variantLabel: string;
+    image: string;
+    qty: number;
+    price: number;
+    lineTotal: number;
+    giftFrom?: string | null;
+    giftBox?: { key: string } | null;
+  }[];
   itemsSubtotal: number;
   discountTotal: number;
   promotionDiscount?: number;
@@ -301,6 +313,13 @@ export const accountApi = api.injectEndpoints({
     changeMyPassword: builder.mutation<void, { currentPassword: string; newPassword: string }>({
       query: (body) => ({ url: "/storefront/account/me/password", method: "POST", body }),
     }),
+    /** Everything the shop holds about the shopper (a JSON file to save). */
+    exportMyData: builder.mutation<unknown, void>({
+      query: () => ({ url: "/storefront/account/me/export" }),
+    }),
+    deleteMyAccount: builder.mutation<{ deleted: boolean }, void>({
+      query: () => ({ url: "/storefront/account/me/delete", method: "POST", body: { confirm: "DELETE" } }),
+    }),
     getMyAddresses: builder.query<CustomerAddress[], void>({
       query: () => "/storefront/account/me/addresses",
       providesTags: ["Customer"],
@@ -377,6 +396,8 @@ export const {
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
   useChangeMyPasswordMutation,
+  useExportMyDataMutation,
+  useDeleteMyAccountMutation,
   useGetMyAddressesQuery,
   useAddMyAddressMutation,
   useUpdateMyAddressMutation,

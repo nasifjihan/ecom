@@ -32,6 +32,9 @@ export interface Product {
   deletedAt?: string | null;
   /** Who made, last changed and deleted it (product page only). */
   audit?: { createdBy: string | null; updatedBy: string | null; deletedBy: string | null };
+  /** Products picked for "You may also like", in order (product page only). */
+  related?: { id: string; name: string; sku: string | null }[];
+  relatedProductIds?: (string | number)[];
   /** Lower-case search and filter words. */
   tags?: string[];
   /** Rows of the product page's specifications table. */
@@ -127,6 +130,8 @@ export interface Category {
   slug: string;
   imageUrl?: string | null;
   bannerUrl?: string | null;
+  /** This category's size chart link (null: the store's). */
+  sizeGuideUrl?: string | null;
   description?: string | null;
   /** Other languages: `{ bn: { name, description } }`. */
   translations?: { bn?: Record<string, string | null> } | null;
@@ -385,6 +390,12 @@ export const catalogApiSlice = api.injectEndpoints({
         method: "POST",
         body: toApiProductBody(body),
       }),
+      invalidatesTags: [{ type: "Product", id: "LIST" }],
+    }),
+
+    /** A draft copy (no stock, SKUs or barcodes). */
+    duplicateProduct: builder.mutation<Product, string | number>({
+      query: (id) => ({ url: `/admin/products/${id}/duplicate`, method: "POST" }),
       invalidatesTags: [{ type: "Product", id: "LIST" }],
     }),
 
@@ -715,6 +726,7 @@ export const {
   useGetProductsQuery,
   useGetProductQuery,
   useCreateProductMutation,
+  useDuplicateProductMutation,
   useUpdateProductMutation,
   useDeleteProductMutation,
   useBulkDeleteProductsMutation,

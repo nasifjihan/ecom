@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { BadRequestError, ctrl, envelope, type RequestContext } from "../../core";
 import { banCustomer, unbanCustomer } from "./customer-ban";
+import { deleteMyAccount, exportMyData } from "./account-deletion";
 import { customersController } from "./customers.controller";
 import {
   CustomerSearchQueryDto,
@@ -211,4 +212,26 @@ customerSelfRouter.post(
   authMiddleware("customer"),
   validate({ params: AddressIdParamDto, body: SetDefaultAddressDto }),
   customersController.setMyDefaultAddress,
+);
+
+/** Everything the shop holds about the signed-in shopper, as a JSON download. */
+customerSelfRouter.get(
+  "/me/export",
+  authMiddleware("customer"),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const data = await exportMyData(storeOf(req), req.ctx.customer!.id);
+    res.setHeader("Content-Disposition", 'attachment; filename="my-data.json"');
+    envelope(res, { status: 200, data });
+  }),
+);
+
+/** The shopper deletes their own account (orders are kept, the account is emptied). */
+customerSelfRouter.post(
+  "/me/delete",
+  authMiddleware("customer"),
+  validate({ body: z.object({ confirm: z.literal("DELETE", { message: "Type DELETE to confirm" }) }) }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    await deleteMyAccount(storeOf(req), req.ctx.customer!.id);
+    envelope(res, { status: 200, data: { deleted: true }, message: "Your account has been deleted" });
+  }),
 );

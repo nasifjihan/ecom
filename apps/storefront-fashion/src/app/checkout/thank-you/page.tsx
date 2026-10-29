@@ -47,6 +47,7 @@ import {
   orderStatusWord,
   msg,
   type OrderAddressSummary,
+  track,
 } from "@ecom/storefront-base";
 import { useOrderInvoiceByKeyMutation } from "@/lib/account";
 import { slotText } from "../_delivery-choices";
@@ -85,6 +86,11 @@ export default function ThankYouPage() {
 
   const orderKey = searchParams.get("key") ?? "";
   const { data: order, isLoading, isError } = useGetOrderByKeyQuery(orderKey, { skip: !orderKey });
+  React.useEffect(() => {
+    if (!order) return;
+    const items = order.items.filter((i) => i.productId).map((i) => ({ id: i.productId!, name: i.title, price: i.price, qty: i.qty }));
+    track({ name: "purchase", items, value: order.grandTotal, orderRef: order.orderRef });
+  }, [order]);
   const [submitPayment] = useSubmitOrderPaymentMutation();
   const { data: suggestions } = useGetProductsQuery({ featured: true, perPage: 3, sort: "popular" });
   const crossSell: ProductCardData[] = suggestions?.items ?? [];

@@ -57,6 +57,7 @@ const SORT_OPTIONS = [
   { value: "price_asc", label: msg("Price: Low to High") },
   { value: "price_desc", label: msg("Price: High to Low") },
   { value: "rating", label: msg("Top Rated") },
+  { value: "discount", label: msg("Biggest Discount") },
 ] as const;
 
 const PRICE_MAX = 20000;
@@ -79,7 +80,10 @@ export default function ProductsPage() {
   const [priceRange, setPriceRange] = React.useState<number[]>([0, PRICE_MAX]);
   const [selectedCats, setSelectedCats] = React.useState<Set<string>>(new Set());
   const [selectedBrands, setSelectedBrands] = React.useState<Set<string>>(new Set());
+  // Brand pages link here with ?brand=slug ("all products, with filters").
+  const brandSlug = searchParams.get("brand");
   const [minRating, setMinRating] = React.useState<number>(0);
+  const [onSale, setOnSale] = React.useState(() => searchParams.get("sale") === "true");
   const [sort, setSort] = React.useState<(typeof SORT_OPTIONS)[number]["value"]>(() => {
     const fromUrl = searchParams.get("sort");
     return SORT_OPTIONS.find((o) => o.value === fromUrl)?.value ?? "popular";
@@ -99,6 +103,10 @@ export default function ProductsPage() {
 
   const { data: categoryTree = [] } = useGetCategoriesTreeQuery();
   const { data: brands = [] } = useGetBrandsQuery();
+  React.useEffect(() => {
+    const match = brandSlug ? brands.find((b) => b.slug === brandSlug) : undefined;
+    if (match) setSelectedBrands(new Set([match.id]));
+  }, [brandSlug, brands]);
   const { data, isFetching, isError } = useGetProductsQuery({
     page,
     perPage,
@@ -111,6 +119,7 @@ export default function ProductsPage() {
     maxPrice: debouncedPrice[1]! < PRICE_MAX ? debouncedPrice[1] : undefined,
     rating: minRating || undefined,
     tag,
+    onSale: onSale || undefined,
   });
 
   const paged: ProductCardData[] = data?.items ?? [];
@@ -120,7 +129,7 @@ export default function ProductsPage() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, debouncedPrice, selectedCats, selectedBrands, minRating, sort]);
+  }, [debouncedSearch, debouncedPrice, selectedCats, selectedBrands, minRating, onSale, sort]);
 
   const handleAddToCart = React.useCallback(
     (p: ProductCardData) => {
@@ -145,13 +154,15 @@ export default function ProductsPage() {
     (priceRange[0] !== 0 || priceRange[1] !== PRICE_MAX ? 1 : 0) +
     selectedCats.size +
     selectedBrands.size +
-    (minRating > 0 ? 1 : 0);
+    (minRating > 0 ? 1 : 0) +
+    (onSale ? 1 : 0);
 
   const clearAll = () => {
     setPriceRange([0, PRICE_MAX]);
     setSelectedCats(new Set());
     setSelectedBrands(new Set());
     setMinRating(0);
+    setOnSale(false);
   };
 
   const FiltersSidebar = (
@@ -240,6 +251,13 @@ export default function ProductsPage() {
           </div>
         </ScrollArea>
       </div>
+
+      <Separator />
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+        <input type="checkbox" className="h-4 w-4 accent-primary" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} />
+        {t("On sale only")}
+      </label>
 
       <Separator />
 
@@ -370,6 +388,11 @@ export default function ProductsPage() {
                     ৳{priceRange[0]}–{priceRange[1]} <X className="h-3 w-3" />
                   </Badge>
                 ) : null}
+                {onSale && (
+                  <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setOnSale(false)}>
+                    {t("On sale")} <X className="h-3 w-3" />
+                  </Badge>
+                )}
                 {minRating > 0 && (
                   <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setMinRating(0)}>
                     ⭐ {minRating}+ <X className="h-3 w-3" />

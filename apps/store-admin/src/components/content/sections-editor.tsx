@@ -67,7 +67,7 @@ export const SECTION_INFO: Record<HomepageSectionType, { label: string; text: st
   columns: { label: "Columns", text: "Two to four columns of text.", icon: LayoutPanelTop },
   button: { label: "Button", text: "A single button with a link.", icon: MousePointerClick },
   quote: { label: "Quote", text: "A customer's words or a testimonial.", icon: Quote },
-  product_rail: { label: "Product row", text: "Products you pick, or from a category or tag.", icon: Rows3 },
+  product_rail: { label: "Product row", text: "Products you pick, from a category or tag, or on sale.", icon: Rows3 },
   category_tiles: { label: "Category tiles", text: "Categories you pick, with their pictures.", icon: LayoutGrid },
 };
 const PALETTE_ORDER: HomepageSectionType[] = [
@@ -1084,6 +1084,7 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
             <option value="products">Ones I pick</option>
             <option value="category">From a category</option>
             <option value="tag">With a tag</option>
+            <option value="sale">On sale now</option>
           </select>
         </Field>
         {c.source !== "products" && (
@@ -1091,7 +1092,7 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
             <select id={id("sort")} value={c.sort} onChange={(e) => set({ sort: e.target.value as ProductRailConfig["sort"] })} className={SELECT}>
               {RAIL_SORTS.map((s) => (
                 <option key={s} value={s}>
-                  {{ popular: "Best selling", newest: "Newest", price_asc: "Price: low to high", price_desc: "Price: high to low", rating: "Best rated" }[s]}
+                  {{ popular: "Best selling", newest: "Newest", price_asc: "Price: low to high", price_desc: "Price: high to low", rating: "Best rated", discount: "Biggest discount" }[s]}
                 </option>
               ))}
             </select>

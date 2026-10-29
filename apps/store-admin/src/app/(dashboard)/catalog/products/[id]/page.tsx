@@ -17,7 +17,6 @@ import {
   Upload,
   Tag,
   PlusCircle,
-  Search,
   Check,
   ArrowLeft,
   Package,
@@ -52,7 +51,6 @@ import {
   TabsTrigger,
   TabsContent,
   Separator,
-  ScrollArea,
   Skeleton,
   cn,
 } from "@/components/ui";
@@ -62,7 +60,6 @@ import {
   useUpdateProductMutation,
   useGetCategoriesQuery,
   useGetBrandsQuery,
-  useGetProductsQuery,
   useUploadMediaMutation,
   type ProductVariant,
 } from "@/lib/features/catalog/catalog-api-slice";
@@ -72,6 +69,7 @@ import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTex
 import { ProductStorefronts } from "@/components/catalog/product-storefronts";
 import { ProductBulkPrices } from "@/components/catalog/product-bulk-prices";
 import { VariantsEditor, withKeys, type EditableVariant } from "@/components/products/variants-editor";
+import { RelatedProductsPicker } from "@/components/catalog/related-products-picker";
 
 const BANGLA_FIELDS: BanglaField[] = [
   { key: "name", label: "Name" },
@@ -79,6 +77,8 @@ const BANGLA_FIELDS: BanglaField[] = [
   { key: "description", label: "Long description", rows: 6 },
 ];
 
+// Digital, Subscription and Made to order do nothing different yet: offered only to products that already have them.
+const UNBUILT_TYPES: string[] = [ProductType.DIGITAL, "SUBSCRIPTION", "MADE_TO_ORDER"];
 const ProductTypeValues = [
   { value: ProductType.SIMPLE, label: "Simple Product" },
   { value: ProductType.VARIABLE, label: "Variable Product" },
@@ -183,12 +183,10 @@ export default function EditProductPage() {
   const { data: brandsData } = useGetBrandsQuery({ page: 1, perPage: 100 });
   const { data: taxClasses = [] } = useGetTaxClassesQuery();
   const defaultClass = taxClasses.find((c) => c.isDefault);
-  const { data: relatedProducts } = useGetProductsQuery({ page: 1, perPage: 50 });
 
   const [gallery, setGallery] = useState<MediaImage[]>([]);
   const [variants, setVariants] = useState<EditableVariant[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [relatedSearch, setRelatedSearch] = useState("");
   const [activeTab, setActiveTab] = useState("basic");
 
   const methods = useForm<z.input<typeof productEditSchema>, unknown, ProductEditFormValues>({
@@ -262,7 +260,7 @@ export default function EditProductPage() {
         brandId: (product.brandId as any) || null,
         taxClassId: product.taxClassId ? String(product.taxClassId) : "",
         tagNames: product.tags ?? [],
-        relatedProductIds: [],
+        relatedProductIds: (product.relatedProductIds ?? []) as any,
         seoTitle: product.seoTitle || "",
         metaDesc: product.metaDesc || "",
       });
@@ -359,18 +357,6 @@ export default function EditProductPage() {
     );
   };
 
-  const toggleRelated = (id: bigint) => {
-    const idStr = String(id);
-    const current = relatedIds.map((x) => String(x));
-    if (current.includes(idStr)) {
-      setValue(
-        "relatedProductIds",
-        relatedIds.filter((x) => String(x) !== idStr) as any
-      );
-    } else {
-      setValue("relatedProductIds", [...relatedIds, id as any]);
-    }
-  };
 
 
   // Surface the first failing field instead of silently doing nothing.
@@ -422,6 +408,7 @@ export default function EditProductPage() {
           categoryIds: values.categoryIds as any,
           brandId: values.brandId as any,
           taxClassId: values.taxClassId === "" ? null : (values.taxClassId ?? null),
+          relatedProductIds: values.relatedProductIds as any,
           featured: values.isFeatured,
           imageUrls,
           thumbnailUrl,
@@ -450,10 +437,6 @@ export default function EditProductPage() {
 
   const categories = categoriesData || [];
   const brands = brandsData?.items || [];
-  const products = relatedProducts?.items || [];
-  const filteredProducts = relatedSearch
-    ? products.filter((p) => p.name.toLowerCase().includes(relatedSearch.toLowerCase()))
-    : products;
 
   if (isProductLoading) {
     return (
@@ -635,7 +618,7 @@ export default function EditProductPage() {
                               <FormLabel>Product Type</FormLabel>
                               <FormControl>
                                 <Select value={field.value} onValueChange={field.onChange}>
-                                  {ProductTypeValues.map((v) => (
+                                  {ProductTypeValues.filter((v) => !UNBUILT_TYPES.includes(v.value) || v.value === product?.type).map((v) => (
                                     <SelectItem key={v.value} value={v.value}>
                                       {v.label}
                                     </SelectItem>
@@ -1239,68 +1222,12 @@ export default function EditProductPage() {
                 </TabsContent>
 
                 <TabsContent value="related">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Related Products</CardTitle>
-                      <CardDescription>Upsell and cross-sell product suggestions.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          className="pl-9"
-                          placeholder="Search products to link..."
-                          value={relatedSearch}
-                          onChange={(e) => setRelatedSearch(e.target.value)}
-                        />
-                      </div>
-                      <ScrollArea className="h-64 border rounded-md p-2">
-                        {filteredProducts.length === 0 ? (
-                          <p className="text-center text-muted-foreground py-8">No products found.</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {filteredProducts.map((p) => {
-                              if (String(p.id) === String(productId)) return null;
-                              const isSelected = relatedIds.map((x) => String(x)).includes(String(p.id));
-                              return (
-                                <div
-                                  key={String(p.id)}
-                                  onClick={() => toggleRelated(BigInt(String(p.id)))}
-                                  className={cn(
-                                    "flex items-center gap-3 p-2 rounded cursor-pointer",
-                                    isSelected ? "bg-primary/10" : "hover:bg-slate-50 dark:hover:bg-slate-800"
-                                  )}
-                                >
-                                  <Checkbox checked={isSelected} onCheckedChange={() => {}} />
-                                  <div className="h-9 w-9 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                                    {p.thumbnailUrl || p.imageUrls?.[0] ? (
-                                      <img
-                                        src={p.thumbnailUrl || p.imageUrls?.[0] || ""}
-                                        className="w-full h-full object-cover"
-                                        alt=""
-                                      />
-                                    ) : (
-                                      <Package className="h-4 w-4 text-slate-400" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium truncate">{p.name}</div>
-                                    <div className="text-xs text-muted-foreground truncate">SKU: {p.sku || "—"}</div>
-                                  </div>
-                                  <span className="text-sm font-medium whitespace-nowrap">
-                                    {p.regularPrice != null ? `৳${p.regularPrice}` : "—"}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </ScrollArea>
-                      {relatedIds.length > 0 && (
-                        <p className="text-xs text-muted-foreground">{relatedIds.length} product(s) selected</p>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <RelatedProductsPicker
+                    value={relatedIds as (string | bigint)[]}
+                    onChange={(ids) => setValue("relatedProductIds", ids as any)}
+                    initial={product?.related}
+                    excludeId={productId}
+                  />
                 </TabsContent>
 
                 <TabsContent value="seo">

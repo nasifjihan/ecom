@@ -31,6 +31,7 @@ import {
   CardTitle,
   Input,
   Label,
+  track,
   Checkbox,
   Badge,
   Separator,
@@ -93,6 +94,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const t = useT();
   const { items, boxes, subtotal, itemCount, totalWeightKG, clearCart } = useCart();
+  // Once per visit to checkout, when the cart has loaded.
+  const checkoutTracked = React.useRef(false);
+  React.useEffect(() => {
+    if (checkoutTracked.current || !items.length) return;
+    checkoutTracked.current = true;
+    track({ name: "begin_checkout", items: items.map((i) => ({ id: i.productId, name: i.title, price: i.price, qty: i.qty })), value: subtotal });
+  }, [items, subtotal]);
   // Gift boxes go to the server as their lines, tagged with the box.
   const boxLines = React.useMemo(
     () =>
@@ -120,6 +128,7 @@ export default function CheckoutPage() {
 
   const [contactEmail, setContactEmail] = React.useState(customerEmail ?? "");
   const [subscribeNewsletter, setSubscribeNewsletter] = React.useState(false);
+  const [customerNote, setCustomerNote] = React.useState("");
   // Not pre-ticked: WhatsApp (Meta) needs the customer's clear yes.
   const [whatsappOptIn, setWhatsappOptIn] = React.useState(false);
   const [createAccount, setCreateAccount] = React.useState(false);
@@ -632,6 +641,7 @@ export default function CheckoutPage() {
         currency: CURRENCY,
         termsAgreed: true,
         useWallet: walletUsed > 0,
+        customerNote: customerNote.trim() || undefined,
         salesCode: salesCode(),
       })).unwrap();
 
@@ -1258,6 +1268,18 @@ export default function CheckoutPage() {
                     currency={CURRENCY}
                     amount={grandTotal}
                   />
+                  <div className="mt-5 space-y-1.5">
+                    <Label htmlFor="order-note">{t("Note for the shop (optional)")}</Label>
+                    <textarea
+                      id="order-note"
+                      rows={3}
+                      maxLength={2000}
+                      value={customerNote}
+                      onChange={(e) => setCustomerNote(e.target.value)}
+                      placeholder={t("e.g. Call before coming, leave it at the gate")}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
                 </CardContent>
               </Card>
               )}

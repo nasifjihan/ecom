@@ -5,6 +5,7 @@
  * admin session) and the public storefront reads (ctx.storeId from the Origin),
  * where only published content is returned.
  */
+import { randomBytes } from "node:crypto"
 import { Prisma } from "@prisma/client"
 import { slugify } from "@ecom/utils"
 import { prisma } from "../../config"
@@ -19,7 +20,7 @@ import {
 import { storeLanguages } from "../settings/languages"
 import { recordMove } from "../redirects"
 import { assertStaffStorefront, defaultStorefrontId } from "../storefronts/storefronts.context"
-import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme } from "./content.defaults"
+import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme, shopperTheme } from "./content.defaults"
 import { withSliders } from "./sliders"
 import {
   HomepageSectionDto,
@@ -563,6 +564,9 @@ export class ContentService {
 
   async saveTheme(theme: ThemeSettings, storefrontId?: bigint) {
     const owner = await this.ownerOf(storefrontId)
+    // The preview link stays the same while maintenance is switched on and off.
+    if (theme.maintenance.enabled && !theme.maintenance.previewKey)
+      theme = { ...theme, maintenance: { ...theme.maintenance, previewKey: randomBytes(24).toString("base64url") } }
     const slug = owner === null ? THEME_SLUG : storefrontThemeSlug(owner)
     await prisma.themeConfig.upsert({
       where: { storeId_slug: { storeId: this.storeId, slug } },
@@ -687,7 +691,7 @@ export class ContentService {
     for (const m of menus) m.items = m.items.map(inLocale) as typeof m.items
     const header = menus.find((m) => m.location === "header")
     return {
-      theme,
+      theme: shopperTheme(theme),
       /** Languages the storefront offers; the switcher shows when there's more than one. */
       languages,
       headerMenu: header?.items.length ? header.items : null,
@@ -696,7 +700,7 @@ export class ContentService {
         .map((m) => ({ title: m.name, links: m.items })),
       footerPages: footerPages.map((p) => ({ title: p.title, url: `/${p.slug}` })),
       /** The browser tab icon set in Settings → General (null: the storefront's default). */
-      faviconUrl: general?.faviconUrl || null,
+      faviconUrl: theme.brand.faviconUrl || general?.faviconUrl || null,
     }
   }
 

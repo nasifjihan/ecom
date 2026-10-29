@@ -78,6 +78,8 @@ export interface PromoResult {
     type: PromotionType
     message: string
     amountShort?: number
+    /** The minimum the shortfall is measured against (drawn as a progress bar). */
+    minOrder?: number
     qtyShort?: number
   }[]
 }
@@ -186,7 +188,7 @@ export function evaluatePromotions(lines: PromoLine[], promos: PromoRule[]): Pro
       name: p.name,
       type: p.type,
       message,
-      ...(c.amountShort ? { amountShort: c.amountShort } : {}),
+      ...(c.amountShort ? { amountShort: c.amountShort, minOrder: p.minOrder! } : {}),
       ...(c.qtyShort ? { qtyShort: c.qtyShort } : {}),
     })
   }

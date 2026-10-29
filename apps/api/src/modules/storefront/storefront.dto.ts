@@ -4,7 +4,7 @@ const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
 const noXss = (v: string | null | undefined): boolean => !v || !XSS_RE.test(v);
 const safeText = (max: number) => z.string().trim().max(max).refine(noXss, "No JavaScript injection allowed");
 
-const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating"] as const;
+const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount"] as const;
 
 export const StorefrontProductsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -22,6 +22,8 @@ export const StorefrontProductsQueryDto = z.object({
   /** These products only (e.g. a guest's wishlist), comma-separated. */
   ids: z.string().regex(/^\d+(,\d+){0,99}$/, "ids must be comma-separated product ids").optional(),
   featured: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  /** Only products sold below their regular price right now (sale price or flash sale). */
+  onSale: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   excludeId: z.coerce.bigint().positive().optional(),
 });
 export type StorefrontProductsQueryDto = z.infer<typeof StorefrontProductsQueryDto>;

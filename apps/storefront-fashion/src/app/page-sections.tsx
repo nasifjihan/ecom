@@ -552,7 +552,13 @@ function ProductRail({
     {
       perPage: c.source === "products" ? picked.length : c.limit,
       sort: c.sort,
-      ...(c.source === "products" ? { ids: picked.join(",") } : c.source === "category" ? { categoryId: c.categoryId ?? undefined } : { tag: c.tag }),
+      ...(c.source === "products"
+        ? { ids: picked.join(",") }
+        : c.source === "category"
+          ? { categoryId: c.categoryId ?? undefined }
+          : c.source === "sale"
+            ? { onSale: true }
+            : { tag: c.tag }),
     },
     { skip },
   );
@@ -566,7 +572,13 @@ function ProductRail({
   const { data: tree = [] } = useGetCategoriesTreeQuery(undefined, { skip: c.source !== "category" });
   if (skip || (!isLoading && !items.length)) return null;
   const slug = c.source === "category" ? findCategory(tree, c.categoryId)?.slug : undefined;
-  const more = slug ? `/products?category=${encodeURIComponent(slug)}` : c.source === "tag" ? `/products?tag=${encodeURIComponent(c.tag)}` : null;
+  const more = slug
+    ? `/products?category=${encodeURIComponent(slug)}`
+    : c.source === "tag"
+      ? `/products?tag=${encodeURIComponent(c.tag)}`
+      : c.source === "sale"
+        ? `/products?sale=true&sort=${c.sort}`
+        : null;
   return (
     <section className="container">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">

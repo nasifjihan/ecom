@@ -9,9 +9,11 @@ export interface DisplaySettings {
   showLowStock: boolean;
   /** "Only a few left" below this many, for products without their own level. */
   lowStockThreshold: number;
+  /** The store-wide size chart link ("" when there is none). */
+  sizeGuideUrl: string;
 }
 
-export const DEFAULT_DISPLAY: DisplaySettings = { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5 };
+export const DEFAULT_DISPLAY: DisplaySettings = { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" };
 
 const DisplayContext = React.createContext<DisplaySettings>(DEFAULT_DISPLAY);
 

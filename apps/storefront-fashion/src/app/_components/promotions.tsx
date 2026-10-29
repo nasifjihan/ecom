@@ -7,7 +7,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Gift, Sparkles, Tag, Truck, X } from "lucide-react";
-import { Button, cn, useT } from "@ecom/storefront-base";
+import { Button, cn, formatMoney, useT } from "@ecom/storefront-base";
 import { useSlotPromotionsQuery, type CartPromotions, type PromoSlot, type SlotPromotion } from "@/lib/promotions";
 
 const ICONS = { discount: Tag, free_gift: Gift, bxgy: Sparkles, free_delivery: Truck } as const;
@@ -227,11 +227,29 @@ export function CartPromotionSummary({ promotions, className }: { promotions: Ca
           <Truck className="h-4 w-4" /> {t("Free delivery ({name})", { name: freeDelivery.name })}
         </p>
       )}
-      {nudges.map((n) => (
-        <p key={`${n.id}-${n.message}`} className="flex items-start gap-2 rounded-lg border border-dashed border-primary/40 px-3 py-2 text-xs">
-          <Sparkles className="mt-px h-3.5 w-3.5 flex-shrink-0 text-primary" /> {n.message}
-        </p>
-      ))}
+      {nudges.map((n) =>
+        n.type === "free_delivery" && n.amountShort && n.minOrder ? (
+          <div key={`${n.id}-${n.message}`} className="rounded-lg border border-dashed border-emerald-500/50 px-3 py-2 text-xs">
+            <p className="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-400">
+              <Truck className="h-4 w-4 flex-shrink-0" /> {t("Add {amount} more for free delivery", { amount: formatMoney(n.amountShort) })}
+            </p>
+            <div
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-500/20"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={n.minOrder}
+              aria-valuenow={n.minOrder - n.amountShort}
+              aria-label={t("Progress to free delivery")}
+            >
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.max(4, ((n.minOrder - n.amountShort) / n.minOrder) * 100)}%` }} />
+            </div>
+          </div>
+        ) : (
+          <p key={`${n.id}-${n.message}`} className="flex items-start gap-2 rounded-lg border border-dashed border-primary/40 px-3 py-2 text-xs">
+            <Sparkles className="mt-px h-3.5 w-3.5 flex-shrink-0 text-primary" /> {n.message}
+          </p>
+        ),
+      )}
       {notes.map((n) => (
         <p key={n} className="text-xs text-muted-foreground">
           {n}

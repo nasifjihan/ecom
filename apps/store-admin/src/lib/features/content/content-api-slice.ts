@@ -105,12 +105,16 @@ export interface Menu {
 }
 
 export interface ThemeSettings {
-  brand: { storeName: string; tagline: string; logoUrl: string | null };
+  brand: { storeName: string; tagline: string; logoUrl: string | null; faviconUrl?: string | null };
+  /** previewKey: made by the API when maintenance is first turned on. */
+  maintenance: { enabled: boolean; message: string; previewKey?: string };
   colors: { primary: string; secondary: string };
   announcement: { enabled: boolean; text: string; link: string | null };
   footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
-  display: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number };
+  display: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number; sizeGuideUrl: string };
+  /** Facebook Pixel, Google Analytics 4 and the Search Console code; empty loads nothing. */
+  tracking: { googleAnalyticsId: string; facebookPixelId: string; googleVerification: string };
   /** blockAll: hide from search engines; extra: lines added to robots.txt. */
   robots: { blockAll: boolean; extra: string };
 }
@@ -151,9 +155,9 @@ export interface TextColumn {
   heading: string;
   text: string;
 }
-export const RAIL_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating"] as const;
+export const RAIL_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount"] as const;
 export interface ProductRailConfig extends HeadingConfig {
-  source: "products" | "category" | "tag";
+  source: "products" | "category" | "tag" | "sale";
   /** Names are only for showing what was picked; the storefront loads the live products. */
   products: { id: string; name: string }[];
   categoryId: string | null;

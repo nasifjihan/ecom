@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import type { CategoryNode, Paginated, ProductSummary } from "@ecom/storefront-base";
+import type { Brand, CategoryNode, Paginated, ProductSummary } from "@ecom/storefront-base";
 import { serverApi, storeOrigin } from "@/lib/server-api";
 import { getBlogPosts, getCmsPages } from "@/lib/content";
 
@@ -72,6 +72,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.8,
     });
+  }
+
+  const brands = (await serverApi<Brand[]>("/storefront/brands", 3600)) ?? [];
+  if (brands.length) entries.push({ url: buildUrl(base, "/brands"), lastModified: nowDate(), changeFrequency: "weekly", priority: 0.6 });
+  for (const b of brands.filter((x) => (x.productCount ?? 0) > 0)) {
+    entries.push({ url: buildUrl(base, `/brands/${b.slug}`), lastModified: nowDate(), changeFrequency: "weekly", priority: 0.7 });
   }
 
   // Walk the public catalog page by page (60 is the API's perPage cap).

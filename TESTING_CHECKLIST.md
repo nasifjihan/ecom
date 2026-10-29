@@ -64,6 +64,21 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Google and Facebook sign-in on the shop
 - [ ] WhatsApp order messages (optional)
 
+### E. Batch 51 (bugs and quick wins), no keys needed
+- [ ] Product page: Share opens the phone's share menu (or copies the link on a computer); no "4 installments" line; Buy now goes straight to checkout
+- [ ] Related products: pick 2–3 in the product editor's Related tab, save, reopen (still there), and see them first under "You may also like"
+- [ ] Product list: Duplicate a product; the copy is a draft with stock 0 and no SKUs
+- [ ] Product editor: only Simple and Variable types are offered
+- [ ] Checkout: the note box; the note shows on the order in admin. Below the free-delivery amount, the bar appears only if a free-delivery offer exists (Marketing → Promotions)
+- [ ] Theme → Tracking: enter a Pixel ID and check with the Meta Pixel Helper browser extension (PageView, ViewContent, AddToCart, InitiateCheckout, Purchase)
+- [ ] Theme → Store status: maintenance on → the shop shows the message; the preview link opens it for you; off → open again
+- [ ] Theme → Browser icon: the tab icon changes; without one, your initial on the main colour. On a phone, "Add to home screen"
+- [ ] Home page block "Product row" → "On sale now"; product list "On sale only" and "Biggest Discount"
+- [ ] /brands and a brand page; the brand name on a product links there
+- [ ] Size guide link beside sizes (Theme → Product display, or per category)
+- [ ] Recently viewed under a product after opening a few; "Order again" on an old order
+- [ ] Account → Your data: download the file; delete a test account (refused while an order is on its way)
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

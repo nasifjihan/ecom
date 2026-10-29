@@ -19,25 +19,39 @@ import {
   AttributeRepository,
   ProductImageRepository,
 } from "./catalog.repository";
-import type {
+import {
   CreateProductDto,
-  UpdateProductDto,
-  ProductSearchQueryDto,
-  CreateCategoryDto,
-  UpdateCategoryDto,
-  CreateBrandDto,
-  UpdateBrandDto,
-  CreateAttributeDto,
-  UpdateAttributeDto,
-  CreateAttributeTermDto,
-  CreateProductVariantDto,
-  UpdateProductVariantDto,
+  type UpdateProductDto,
+  type ProductSearchQueryDto,
+  type CreateCategoryDto,
+  type UpdateCategoryDto,
+  type CreateBrandDto,
+  type UpdateBrandDto,
+  type CreateAttributeDto,
+  type UpdateAttributeDto,
+  type CreateAttributeTermDto,
+  type CreateProductVariantDto,
+  type UpdateProductVariantDto,
 } from "./catalog.dto";
 import type { Prisma } from "@prisma/client";
 import { slugify } from "@ecom/utils";
 import { resyncProductTotals, setStockTotal } from "../stock";
 import { optimizeImage } from "../../services/images/optimize";
 import { assertStoreTaxClass } from "../shipping/shipping.repository";
+
+/** Replaces a product's picked related products (only this store's, never itself), keeping the order given. */
+async function setRelated(db: Prisma.TransactionClient, storeId: bigint, productId: bigint, ids: bigint[]) {
+  const wanted = [...new Set(ids.map(String))].map(BigInt).filter((id) => id !== productId);
+  const found = wanted.length
+    ? new Set((await db.product.findMany({ where: { storeId, id: { in: wanted } }, select: { id: true } })).map((p) => p.id))
+    : new Set<bigint>();
+  await db.productLink.deleteMany({ where: { productId, type: "related" } });
+  const kept = wanted.filter((id) => found.has(id));
+  if (kept.length)
+    await db.productLink.createMany({
+      data: kept.map((linkedProductId, sortOrder) => ({ productId, linkedProductId, type: "related", sortOrder })),
+    });
+}
 
 function randomAlphanum(length: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -228,6 +242,8 @@ export class CatalogService extends BaseService {
         await setStockTotal(db, storeId, { productId: product.id, variantId: null }, dto.stockQty, dto.name);
       }
 
+      await setRelated(db, storeId, product.id, dto.relatedProductIds);
+
       if (dto.imageUrls && dto.imageUrls.length > 0) {
         await t.productImage.createMany({
           data: dto.imageUrls.map((url: string, idx: number) => ({
@@ -280,7 +296,7 @@ export class CatalogService extends BaseService {
       const db = t as Prisma.TransactionClient;
       const updateData: Record<string, unknown> = {};
       for (const key of Object.keys(dto)) {
-        if (key === "categoryIds" || key === "variants" || key === "imageUrls" || key === "slug") continue;
+        if (key === "categoryIds" || key === "variants" || key === "imageUrls" || key === "slug" || key === "relatedProductIds") continue;
         // Stock only changes through the ledger (below), and holds only through orders.
         if (key === "stockQty" || key === "reservedStock") continue;
         if (key === "translations") {
@@ -295,6 +311,8 @@ export class CatalogService extends BaseService {
       if (Object.keys(updateData).length > 0) {
         await t.product.update({ where: { id: productId }, data: updateData });
       }
+
+      if (dto.relatedProductIds !== undefined) await setRelated(db, storeId, productId, dto.relatedProductIds);
 
       if (dto.categoryIds !== undefined) {
         await t.productCategory.deleteMany({ where: { productId } });
@@ -422,6 +440,40 @@ export class CatalogService extends BaseService {
     const existing = await prisma.product.findFirst({ where: { id: productId, storeId } });
     if (!existing) throw new NotFoundError("product", id);
     return this.trashProducts([productId]);
+  }
+
+  /**
+   * A draft copy of a product: texts, prices, options, photos, categories and related picks.
+   * Not copied: stock (starts at 0), SKUs and barcodes (they must be unique), SEO title and
+   * link (one page per search result), storefront prices and bulk prices.
+   */
+  async duplicateProduct(id: bigint) {
+    const src = (await this.products.findFull(this.ctx, id)) as any;
+    const copy = CreateProductDto.parse({
+      ...src,
+      name: `${src.name} (copy)`.slice(0, 255),
+      slug: undefined,
+      sku: null,
+      barcode: null,
+      status: "draft",
+      stockQty: src.manageStock ? 0 : null,
+      seoTitle: null,
+      canonicalUrl: null,
+      categoryIds: src.categories.map((c: any) => c.categoryId),
+      imageUrls: src.images.map((i: any) => i.imageUrl),
+      relatedProductIds: src.relatedProductIds,
+      specifications: src.specifications ?? [],
+      translations: src.translations ?? undefined,
+      variants: src.variants.map((v: any) => ({
+        ...v,
+        id: undefined,
+        sku: null,
+        barcode: null,
+        stockQty: v.manageStock ? 0 : null,
+        attributeValues: v.attributeValues ?? {},
+      })),
+    });
+    return this.createProduct(copy);
   }
 
   /** Takes products out of the Trash, back to the status they had. */
@@ -602,6 +654,7 @@ export class CatalogService extends BaseService {
       parentId: parentId === null ? null : BigInt(parentId),
       imageUrl: dto.imageUrl ?? null,
       bannerUrl: dto.bannerUrl ?? null,
+      sizeGuideUrl: dto.sizeGuideUrl ?? null,
       description: dto.description ?? null,
       translations: mergeTranslations(null, dto.translations ?? {}),
       displayMode: dto.displayMode,

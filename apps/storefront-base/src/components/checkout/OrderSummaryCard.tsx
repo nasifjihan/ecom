@@ -63,7 +63,6 @@ export type OrderSummaryCardProps = {
   items?: CartItem[];
   itemCount?: number;
   currency?: string;
-  freeShippingFrom?: number;
   showItemsPreview?: boolean;
   sticky?: boolean;
   className?: string;
@@ -100,7 +99,6 @@ export function OrderSummaryCard({
   items,
   itemCount,
   currency = "BDT",
-  freeShippingFrom = 1000,
   showItemsPreview = true,
   sticky = true,
   className,
@@ -112,12 +110,6 @@ export function OrderSummaryCard({
   const displayItemCount = itemCount ?? cart.itemCount;
 
   const totalDiscount = discounts.reduce((sum, d) => sum + (d.isDiscount ? d.amount : 0), 0);
-
-  const progressTowardFreeShipping = React.useMemo(
-    () => Math.min(100, Math.max(0, (subtotal / (freeShippingFrom || 1000)) * 100)),
-    [subtotal, freeShippingFrom],
-  );
-  const shippingDelta = Math.max(0, (freeShippingFrom || 0) - subtotal);
 
   return (
     <Card
@@ -182,23 +174,6 @@ export function OrderSummaryCard({
             {boxes.map((b) => (
               <GiftBoxCartCard key={b.key} box={b} currency={currency} compact />
             ))}
-          </div>
-        )}
-
-        {subtotal > 0 && shippingDelta > 0 && (freeShippingFrom ?? 0) > 0 && (
-          <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-            <div className="flex items-start gap-2 mb-2">
-              <Gift className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800">
-                {t("Add {amount} more for FREE Delivery!", { amount: formatMoney(shippingDelta, currency) })}
-              </p>
-            </div>
-            <div className="h-2 w-full bg-amber-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-500"
-                style={{ width: `${progressTowardFreeShipping}%` }}
-              />
-            </div>
           </div>
         )}
 

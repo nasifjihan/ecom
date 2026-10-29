@@ -128,6 +128,7 @@ describe("evaluatePromotions: discounts", () => {
         name: "Promo p",
         type: "discount",
         amountShort: 500,
+        minOrder: 2000,
         message: "Add ৳500 more to get 10% off",
       },
     ])

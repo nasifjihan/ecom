@@ -95,6 +95,7 @@ const categorySchema = z.object({
   nameBn: z.string().max(255).optional().or(z.literal("")),
   descriptionBn: z.string().max(5000).optional().or(z.literal("")),
   imageUrl: z.string().max(500).optional().or(z.literal("")),
+  sizeGuideUrl: z.string().max(500).optional().or(z.literal("")),
   displayMode: z.enum(["products", "children", "both"]).default("products"),
   commissionRate: z.string().regex(/^(\d{1,2}(\.\d{1,2})?|100)?$/, "0–100").optional().or(z.literal("")),
   sortOrder: z.coerce.number<number>().int().default(0),
@@ -213,6 +214,7 @@ export default function CategoriesPage() {
     nameBn: "",
     descriptionBn: "",
     imageUrl: "",
+    sizeGuideUrl: "",
     displayMode: "products",
     commissionRate: "",
     sortOrder: 0,
@@ -248,6 +250,7 @@ export default function CategoriesPage() {
           nameBn: banglaOf(editing).name ?? "",
           descriptionBn: banglaOf(editing).description ?? "",
           imageUrl: editing.imageUrl || "",
+          sizeGuideUrl: editing.sizeGuideUrl || "",
           displayMode: (editing.displayMode as any) || "products",
           commissionRate: editing.commissionRate == null ? "" : String(Number(editing.commissionRate)),
           sortOrder: editing.sortOrder ?? 0,
@@ -270,6 +273,7 @@ export default function CategoriesPage() {
         description: values.description || null,
         translations: bnTexts({ name: values.nameBn, description: values.descriptionBn }),
         imageUrl: values.imageUrl || null,
+        sizeGuideUrl: values.sizeGuideUrl?.trim() || null,
         displayMode: values.displayMode,
         commissionRate: values.commissionRate ? Number(values.commissionRate) : null,
         sortOrder: values.sortOrder,
@@ -643,6 +647,20 @@ export default function CategoriesPage() {
                         <FormControl>
                           <Input placeholder="https://..." {...field} />
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={control}
+                    name="sizeGuideUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Size guide link (optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="/size-guide-men" {...field} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Shown beside the sizes on this category's products. Empty: the store's size guide (Online Store → Theme).</p>
                       </FormItem>
                     )}
                   />

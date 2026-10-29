@@ -6,7 +6,9 @@ import { useWishlist } from "@/lib/engagement";
 import { BulkPrices, bulkUnitPrice } from "./bulk-prices";
 import { tiersForOption, useProductBulkPrices } from "@/lib/wholesale";
 import { QuestionsSection, ReviewForm } from "./engagement-sections";
+import { RecentlyViewed } from "./recently-viewed";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Thumbs, FreeMode, Navigation } from "swiper/modules";
 import { motion } from "framer-motion";
@@ -51,6 +53,7 @@ import {
   cn,
   formatMoney,
   toast,
+  track,
 } from "@ecom/storefront-base";
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -122,10 +125,19 @@ type Props = {
 
 export default function ProductDetailClient({ slug }: Props) {
   const { data: product, isLoading, isError } = useGetProductBySlugQuery(slug);
-  const { data: related } = useGetProductsQuery(
-    { categoryId: product?.categoryId, excludeId: product?.id, perPage: 4, sort: "popular" },
+  const { data: sameCategory } = useGetProductsQuery(
+    { categoryId: product?.categoryId, excludeId: product?.id, perPage: 8, sort: "popular" },
     { skip: !product?.categoryId },
   );
+  // The shop's own picks first (in their order), then best sellers from the same category.
+  const picks = (product?.relatedIds ?? []).join(",");
+  const { data: picked } = useGetProductsQuery({ ids: picks, perPage: 12 }, { skip: !picks });
+  const related = React.useMemo(() => {
+    const order = picks.split(",");
+    const first = [...(picked?.items ?? [])].sort((a, b) => order.indexOf(String(a.id)) - order.indexOf(String(b.id)));
+    const fill = (sameCategory?.items ?? []).filter((p) => !order.includes(String(p.id)));
+    return [...first, ...fill].slice(0, Math.max(4, first.length));
+  }, [picks, picked, sameCategory]);
   const t = useT();
 
   if (isLoading) {
@@ -152,12 +164,13 @@ export default function ProductDetailClient({ slug }: Props) {
       </div>
     );
   }
-  return <ProductDetailView product={product} related={related?.items ?? []} />;
+  return <ProductDetailView product={product} related={related} />;
 }
 
 function ProductDetailView({ product, related }: { product: ProductDetail; related: ProductCardData[] }) {
   const { addItem } = useCart();
   const t = useT();
+  const router = useRouter();
 
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
   const [qty, setQty] = React.useState(1);
@@ -165,6 +178,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const wishlisted = wishlist.has(product.id);
   const toggleWishlist = () => void wishlist.toggle(product.id, product.title);
   const [reviewSort, setReviewSort] = React.useState<"latest" | "top">("latest");
+  React.useEffect(() => {
+    track({ name: "view_item", item: { id: product.id, name: product.title, price: product.price, qty: 1 } });
+  }, [product.id, product.title, product.price]);
 
   // Option axes (e.g. size, color) derived from the variants' attribute values.
   const optionAxes = React.useMemo(() => {
@@ -211,14 +227,29 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const cap = bulkTiers.length ? 9999 : 99;
   const maxQty = Math.min(stockLeft ?? cap, flashSale?.remaining ?? cap);
 
-  const handleAddToCart = () => {
+  const share = async () => {
+    const url = window.location.href;
+    // The phone's own share sheet (WhatsApp, Messenger…); copying the link where there is none.
+    if (navigator.share) {
+      await navigator.share({ title: product.title, url }).catch(() => undefined);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t("Link copied to clipboard!"));
+    } catch {
+      toast.error(t("Couldn't copy the link"));
+    }
+  };
+
+  const addToCart = (): boolean => {
     if (hasVariants && !selectedVariant) {
       toast.error(t("Choose an option"), { description: t("Please pick a size/colour that is available") });
-      return;
+      return false;
     }
     if (!inStock) {
       toast.error(t("Out of stock"));
-      return;
+      return false;
     }
     addItem({
       productId: product.id,
@@ -233,6 +264,11 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       weightKG: product.weightKG,
       variantLabel: selectedVariant?.label,
     });
+    return true;
+  };
+
+  const handleAddToCart = () => {
+    if (!addToCart()) return;
     toast.success(t("Added to cart"), {
       description: `${product.title.slice(0, 40)} × ${qty}`,
       action: { label: t("View Cart"), onClick: () => (window.location.href = "/cart") },
@@ -247,6 +283,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
   const averageRating = product.rating ?? 0;
   const display = useDisplay();
+  const sizeGuide = product.sizeGuideUrl || display.sizeGuideUrl;
   const ratingCounts = React.useMemo(() => {
     const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
     product.reviews.forEach((r) => {
@@ -325,7 +362,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   <Heart className={cn("h-5 w-5", wishlisted && "fill-current")} />
                 </button>
                 <button
-                  onClick={() => toast.success(t("Link copied to clipboard!"))}
+                  onClick={share}
                   className="h-10 w-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-accent text-slate-600"
                   aria-label={t("Share")}
                 >
@@ -355,9 +392,16 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex flex-wrap items-center gap-2">
-              {(product.brand?.name || product.category?.name) && (
+              {product.brand && (
+                <Link href={`/brands/${product.brand.slug}`}>
+                  <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1 hover:bg-primary/10">
+                    {product.brand.name}
+                  </Badge>
+                </Link>
+              )}
+              {product.category?.name && (
                 <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
-                  {[product.brand?.name, product.category?.name].filter(Boolean).join(" • ")}
+                  {product.category.name}
                 </Badge>
               )}
               {product.sourcing && (
@@ -409,10 +453,6 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 <Badge variant="destructive" className="text-xs px-2 py-0.5">{t("Save {amount}", { amount: formatMoney(compareAtPrice - price) })}</Badge>
               </>
             )}
-            <div className="ml-auto text-right">
-              <div className="text-xs text-muted-foreground">{t("or 4 installments")}</div>
-              <div className="text-sm font-semibold">{t("৳{amount}/month • bKash Nagad", { amount: Math.round(price / 4) })}</div>
-            </div>
           </div>
           {bulk && <BulkPrices data={bulk} tiers={bulkTiers} listPrice={listPrice} qty={qty} onPick={(n) => setQty(Math.min(maxQty, n))} />}
 
@@ -421,9 +461,16 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
           <div className="space-y-5">
             {optionAxes.map(([axis, values]) => (
               <div key={axis}>
-                <Label className="text-sm font-semibold mb-2.5 block capitalize">
-                  {t(axis)}: <span className="font-normal text-muted-foreground">{selected[axis] ?? "—"}</span>
-                </Label>
+                <div className="mb-2.5 flex items-center justify-between gap-3">
+                  <Label className="text-sm font-semibold block capitalize">
+                    {t(axis)}: <span className="font-normal text-muted-foreground">{selected[axis] ?? "—"}</span>
+                  </Label>
+                  {sizeGuide && axis.toLowerCase() === "size" && (
+                    <Link href={sizeGuide} target={/^https?:/i.test(sizeGuide) ? "_blank" : undefined} className="text-xs font-medium text-primary hover:underline">
+                      {t("Size guide")}
+                    </Link>
+                  )}
+                </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   {values.map((val) => {
                     const candidate = { ...selected, [axis]: val };
@@ -501,6 +548,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 <ShoppingCart className="h-5 w-5 mr-2" />
                 {inStock ? `${t("Add to Cart")} — ${formatMoney(price * qty)}` : t("Out of Stock")}
               </Button>
+              {inStock && (
+                <Button size="lg" variant="secondary" className="h-12 min-w-[130px]" onClick={() => addToCart() && router.push("/checkout")}>
+                  <Zap className="h-5 w-5 mr-2" />
+                  {t("Buy now")}
+                </Button>
+              )}
               <Button
                 size="lg"
                 variant="outline"
@@ -688,6 +741,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
         <ProductGrid products={related} />
       </section>
       )}
+      <RecentlyViewed productId={product.id} />
     </div>
   );
 }

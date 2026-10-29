@@ -3,12 +3,13 @@ import { SentryInit } from "@/components/sentry-init";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Footer, translatorFor } from "@ecom/storefront-base";
+import { Footer, Tracking, translatorFor } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
 import { getSite, getSlotPromotions, hexToHslVar, pageLocale, readableOn } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
+import { shopClosed } from "@/lib/maintenance";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100";
 
@@ -83,14 +84,8 @@ const baseMetadata: Metadata = {
     },
   },
   category: "ecommerce",
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
-  },
-  manifest: "/site.webmanifest",
-  verification: {
-    google: "google-site-verification-code",
-  },
+  // From the store's browser icon, or its initial on the main colour (app-icon/[size]).
+  icons: { icon: "/app-icon/32", apple: "/app-icon/180" },
 };
 
 /** Title and site name follow the store name set in the admin (Online Store > Theme). */
@@ -104,9 +99,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: tagline ? `${name} — ${tagline}` : name, template: `%s | ${name}` },
     applicationName: name,
     openGraph: { ...baseMetadata.openGraph, siteName: name },
-    ...(site.faviconUrl ? { icons: { icon: site.faviconUrl, apple: site.faviconUrl } } : {}),
     // "Hide from search engines": robots.txt blocks crawling, this keeps already-known pages out of results.
-    ...(site.theme.robots?.blockAll ? { robots: { index: false, follow: false } } : {}),
+    ...(site.theme.robots?.blockAll || site.theme.maintenance?.enabled ? { robots: { index: false, follow: false } } : {}),
+    ...(site.theme.tracking?.googleVerification ? { verification: { google: site.theme.tracking.googleVerification } } : {}),
   };
 }
 
@@ -128,6 +123,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const storeName = theme?.brand.storeName ?? "";
   const primary = theme ? hexToHslVar(theme.colors.primary) : null;
   const secondary = theme?.colors.secondary ? hexToHslVar(theme.colors.secondary) : null;
+  const closed = await shopClosed(theme);
   // Only digits, spaces and % come out of these helpers, so they're safe inside <style>.
   const colorVars = [
     primary && `--primary:${primary};--ring:${primary};--primary-foreground:${readableOn(theme!.colors.primary)}`,
@@ -165,8 +161,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {colorVars && <style>{`:root{${colorVars}}`}</style>}
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
+        {closed ? (
+          <main className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-24 text-center">
+            {theme?.brand.logoUrl ? (
+              <img src={theme.brand.logoUrl} alt={storeName} className="h-16 w-auto" />
+            ) : (
+              <p className="text-2xl font-bold">{storeName}</p>
+            )}
+            <h1 className="text-xl font-semibold">{t("We'll be back soon")}</h1>
+            {theme?.maintenance?.message && <p className="max-w-md text-muted-foreground">{theme.maintenance.message}</p>}
+          </main>
+        ) : (
+        <>
         <SentryInit />
+        <Tracking facebookPixelId={theme?.tracking?.facebookPixelId} googleAnalyticsId={theme?.tracking?.googleAnalyticsId} />
         <Providers locale={locale} languages={languages} display={theme?.display}>
+          {theme?.maintenance?.enabled && (
+            <div className="bg-amber-500 text-black text-center text-xs font-medium px-4 py-1.5">
+              {t("Preview: the shop is closed to shoppers (maintenance mode).")}
+            </div>
+          )}
           {announcement && (
             <div className="bg-primary text-primary-foreground text-center text-xs sm:text-sm font-medium px-4 py-2">
               {announcement.link ? (
@@ -213,6 +227,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ReferralCapture />
           <SalesCodeCapture />
         </Providers>
+        </>
+        )}
       </body>
     </html>
   );

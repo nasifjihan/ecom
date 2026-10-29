@@ -2,6 +2,7 @@
  * What a store shows before its owner customises anything. The storefront always
  * gets a complete theme and homepage: saved values are merged over these.
  */
+import { createHash } from "node:crypto"
 import type { HomepageSection, ThemeSettings } from "./content.dto"
 
 export function defaultTheme(store: {
@@ -12,7 +13,8 @@ export function defaultTheme(store: {
   address?: string | null
 }): ThemeSettings {
   return {
-    brand: { storeName: store.name, tagline: store.tagline ?? "", logoUrl: null },
+    brand: { storeName: store.name, tagline: store.tagline ?? "", logoUrl: null, faviconUrl: null },
+    maintenance: { enabled: false, message: "" },
     colors: { primary: "#7c3aed", secondary: "#f59e0b" },
     announcement: {
       enabled: false,
@@ -29,8 +31,9 @@ export function defaultTheme(store: {
       showNewsletter: true,
     },
     social: { facebook: "", instagram: "", youtube: "", twitter: "" },
-    display: { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5 },
+    display: { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" },
     robots: { blockAll: false, extra: "" },
+    tracking: { googleAnalyticsId: "", facebookPixelId: "", googleVerification: "" },
   }
 }
 
@@ -120,5 +123,19 @@ export function mergeTheme(base: ThemeSettings, saved: unknown): ThemeSettings {
     social: { ...base.social, ...(s.social ?? {}) },
     display: { ...base.display, ...(s.display ?? {}) },
     robots: { ...base.robots, ...(s.robots ?? {}) },
+    tracking: { ...base.tracking, ...(s.tracking ?? {}) },
+    maintenance: { ...base.maintenance, ...(s.maintenance ?? {}) },
+  }
+}
+
+/**
+ * The theme as shoppers get it: the maintenance preview key becomes its SHA-256 hash, enough for the
+ * storefront to check a preview cookie but not to make one.
+ */
+export function shopperTheme(theme: ThemeSettings) {
+  const { previewKey, ...maintenance } = theme.maintenance
+  return {
+    ...theme,
+    maintenance: { ...maintenance, previewHash: previewKey ? createHash("sha256").update(previewKey).digest("hex") : null },
   }
 }

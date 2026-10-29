@@ -159,6 +159,8 @@ const BaseCreateProductDto = z.object({
   brandId: z.coerce.bigint().optional().nullable(),
   taxClassId: z.coerce.bigint().optional().nullable(),
   categoryIds: z.array(z.coerce.bigint()).default([]),
+  /** Products picked to show first under "You may also like", in this order. */
+  relatedProductIds: z.array(z.coerce.bigint()).max(12).default([]),
   variants: z.array(CreateProductVariantDto).default([]),
   imageUrls: z.array(z.string()).default([]),
   isDigital: z.boolean().default(false),
@@ -201,6 +203,15 @@ export const CreateCategoryDto = z.object({
   parentId: z.coerce.bigint().optional().nullable(),
   imageUrl: z.string().max(500).optional().nullable(),
   bannerUrl: z.string().max(500).optional().nullable(),
+  /** This category's size chart (a page like /size-guide-men or a full link); empty: the store's. */
+  sizeGuideUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || /^\/(?!\/)/.test(v) || /^https?:\/\//i.test(v), "Use a page like /size-guide or a link starting with https://")
+    .transform((v) => v || null)
+    .optional()
+    .nullable(),
   description: z.string().max(5000).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   displayMode: z.string().default("products"),
   /** Sales commission on products in this category, in % (empty: the store's default). */

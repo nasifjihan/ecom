@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { moneyAdd, moneyMul, cn } from "@ecom/utils";
+import { track } from "../../lib/tracking";
 
 export type CartItem = {
   productId: string;
@@ -263,6 +264,7 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
 
   const addItem: CartContextValue["addItem"] = React.useCallback((raw) => {
     const incoming: CartItem = { qty: 1, weightKG: 0, ...raw };
+    track({ name: "add_to_cart", item: { id: incoming.productId, name: incoming.title, price: incoming.price, qty: incoming.qty } });
     setItems((prev) => {
       const idx = prev.findIndex(
         (it) => it.productId === incoming.productId && (it.variantId ?? "__none__") === (incoming.variantId ?? "__none__"),

@@ -16,6 +16,11 @@ export class ProductRepository extends BaseRepository<"product"> {
         images: { orderBy: { sortOrder: "asc" } },
         variants: { orderBy: { createdAt: "asc" } },
         attributes: { include: { attribute: true, terms: { include: { term: true } } } },
+        links: {
+          where: { type: "related" },
+          orderBy: { sortOrder: "asc" },
+          select: { linkedProduct: { select: { id: true, name: true, sku: true } } },
+        },
       },
     });
     if (!row) throw new NotFoundError("product", id);
@@ -24,7 +29,13 @@ export class ProductRepository extends BaseRepository<"product"> {
     const ids = [r.createdById, r.updatedById, r.deletedById].filter((x): x is bigint => x !== null);
     const people = ids.length ? await prisma.adminUser.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
     const name = (x: bigint | null) => (x === null ? null : (people.find((p) => p.id === x)?.name ?? "A former team member"));
-    return { ...row, audit: { createdBy: name(r.createdById), updatedBy: name(r.updatedById), deletedBy: name(r.deletedById) } };
+    const { links, ...rest } = row as { links: { linkedProduct: { id: bigint; name: string; sku: string | null } }[] };
+    return {
+      ...rest,
+      related: links.map((l) => l.linkedProduct),
+      relatedProductIds: links.map((l) => l.linkedProduct.id),
+      audit: { createdBy: name(r.createdById), updatedBy: name(r.updatedById), deletedBy: name(r.deletedById) },
+    };
   }
 
   async findBySlug(ctx: RequestContext, slug: string, include?: unknown): Promise<unknown | null> {

@@ -22,6 +22,12 @@ const isLink = (v: string) => v === "" || v.startsWith("/") || /^https?:\/\//i.t
 const textOn = (hex: string) => (prefersDarkText(hex) ? "#0a0a0b" : "#ffffff");
 /** The same lines the API accepts in robots.txt. */
 const ROBOTS_LINE = /^\s*(#.*|(user-agent|allow|disallow|crawl-delay|sitemap)\s*:.*)?\s*$/i;
+// The same checks the API makes on the tracking IDs.
+const isGa = (v: string) => /^(G-[A-Z0-9]{4,20})?$/i.test(v.trim());
+const isPixel = (v: string) => /^(\d{8,20})?$/.test(v.trim());
+/** Search Console's HTML tag, or just its content. */
+const verificationCode = (v: string) => (/content=["']([^"']*)["']/i.exec(v)?.[1] ?? v).trim();
+const isVerification = (v: string) => /^[\w-]*$/.test(verificationCode(v));
 
 function ColorField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
@@ -60,8 +66,9 @@ export default function ThemePage() {
   const socialOk = Object.values(t.social).every(isLink);
   const badRobotsLine = t.robots.extra.split(/\r?\n/).find((l) => !ROBOTS_LINE.test(l));
   const robotsOk = badRobotsLine === undefined;
+  const trackingOk = isGa(t.tracking.googleAnalyticsId) && isPixel(t.tracking.facebookPixelId) && isVerification(t.tracking.googleVerification);
   const valid =
-    t.brand.storeName.trim() && isHex(t.colors.primary) && isHex(t.colors.secondary) && socialOk && robotsOk && isLink(t.brand.logoUrl ?? "") && isLink(t.announcement.link ?? "");
+    t.brand.storeName.trim() && isHex(t.colors.primary) && isHex(t.colors.secondary) && socialOk && robotsOk && trackingOk && isLink(t.display.sizeGuideUrl) && isLink(t.brand.logoUrl ?? "") && isLink(t.brand.faviconUrl ?? "") && isLink(t.announcement.link ?? "");
   const dirty = JSON.stringify(t) !== JSON.stringify(data);
 
   const onSave = async (e: React.FormEvent) => {
@@ -86,7 +93,7 @@ export default function ThemePage() {
       <PageTitle
         icon={Palette}
         title="Theme"
-        description="Your store's name, colours, product display, search engine rules, announcement bar and footer."
+        description="Your store's name, colours, product display, search engine rules, tracking, announcement bar and footer."
         actions={
           <>
             <Button type="button" variant="outline" asChild>
@@ -146,6 +153,14 @@ export default function ThemePage() {
             </Field>
             <Field label="Logo" htmlFor="logo" hint="Square image works best. Without one, the first letter of your name is shown." error={isLink(t.brand.logoUrl ?? "") ? null : "Use a link starting with https://"}>
               <ImageField id="logo" aspect="square" value={t.brand.logoUrl} onChange={(url) => set("brand", { logoUrl: url })} />
+            </Field>
+            <Field
+              label="Browser icon"
+              htmlFor="favicon"
+              hint="The small icon in the browser tab and on a phone's home screen. A square image, at least 512×512. Without one, your initial on the main colour is used."
+              error={isLink(t.brand.faviconUrl ?? "") ? null : "Use a link starting with https://"}
+            >
+              <ImageField id="favicon" aspect="square" value={t.brand.faviconUrl ?? null} onChange={(url) => set("brand", { faviconUrl: url })} />
             </Field>
           </CardContent>
         </Card>
@@ -221,6 +236,58 @@ export default function ThemePage() {
                 />
               </Field>
             )}
+            <Field
+              label="Size guide link (optional)"
+              htmlFor="sizeGuide"
+              hint="Shown beside the size options, e.g. /size-guide. A category can have its own (Catalog → Categories)."
+              error={isLink(t.display.sizeGuideUrl) ? null : "Use a page like /size-guide or a link starting with https://"}
+            >
+              <Input id="sizeGuide" placeholder="/size-guide" value={t.display.sizeGuideUrl} onChange={(e) => set("display", { sizeGuideUrl: e.target.value })} />
+            </Field>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Store status</CardTitle>
+            <CardDescription>Close the shop for a while, e.g. while you set it up or count stock.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle
+              id="maintenance"
+              checked={t.maintenance.enabled}
+              onChange={(v) => set("maintenance", { enabled: v })}
+              label="Maintenance mode"
+              hint="Shoppers see a short message instead of the shop. Your team can still look around with the preview link."
+            />
+            {t.maintenance.enabled && (
+              <Field label="Message for shoppers" htmlFor="maintenanceMsg" hint="Empty: “We'll be back soon.”">
+                <Textarea
+                  id="maintenanceMsg"
+                  rows={2}
+                  maxLength={300}
+                  placeholder="We're adding new stock. Back on Friday!"
+                  value={t.maintenance.message}
+                  onChange={(e) => set("maintenance", { message: e.target.value })}
+                />
+              </Field>
+            )}
+            {t.maintenance.enabled &&
+              (data.maintenance.previewKey ? (
+                <p className="text-sm">
+                  <a
+                    href={`${sf.viewUrl.replace(/\/$/, "")}/preview?key=${encodeURIComponent(data.maintenance.previewKey)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center text-blue-600 hover:underline"
+                  >
+                    Open the shop anyway (preview link) <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                  </a>
+                  <span className="block text-xs text-muted-foreground">Share it only with your team: anyone with it can see the shop.</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Save to get the preview link for your team.</p>
+              ))}
           </CardContent>
         </Card>
 
@@ -250,6 +317,44 @@ export default function ThemePage() {
             <a href={`${sf.viewUrl.replace(/\/$/, "")}/robots.txt`} target="_blank" rel="noreferrer" className="inline-flex items-center text-sm text-blue-600 hover:underline">
               See robots.txt <ExternalLink className="ml-1 h-3.5 w-3.5" />
             </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Tracking</CardTitle>
+            <CardDescription>Measure visits and Facebook ads. Leave a box empty to load nothing.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field
+              label="Facebook Pixel ID"
+              htmlFor="pixelId"
+              hint="Events Manager → Data sources. Records page views, product views, add to cart, checkout and purchases."
+              error={isPixel(t.tracking.facebookPixelId) ? null : "A Pixel ID is a number of 8 to 20 digits"}
+            >
+              <Input id="pixelId" inputMode="numeric" className="font-mono" placeholder="123456789012345" value={t.tracking.facebookPixelId} onChange={(e) => set("tracking", { facebookPixelId: e.target.value.trim() })} />
+            </Field>
+            <Field
+              label="Google Analytics 4 ID"
+              htmlFor="gaId"
+              hint="Admin → Data streams → your web stream → Measurement ID."
+              error={isGa(t.tracking.googleAnalyticsId) ? null : "It looks like G-XXXXXXXXXX"}
+            >
+              <Input id="gaId" className="font-mono" placeholder="G-XXXXXXXXXX" value={t.tracking.googleAnalyticsId} onChange={(e) => set("tracking", { googleAnalyticsId: e.target.value.trim().toUpperCase() })} />
+            </Field>
+            <Field
+              label="Google Search Console code"
+              htmlFor="gsc"
+              hint="To prove the site is yours: choose the HTML tag method and paste the whole tag or just its code."
+              error={isVerification(t.tracking.googleVerification) ? null : "Paste the HTML tag Google gives you"}
+            >
+              <Input
+                id="gsc"
+                className="font-mono"
+                value={t.tracking.googleVerification}
+                onChange={(e) => set("tracking", { googleVerification: verificationCode(e.target.value) })}
+              />
+            </Field>
           </CardContent>
         </Card>
 

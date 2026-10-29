@@ -34,6 +34,8 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | B6 | **Missing site files:** the storefront points to `/site.webmanifest`, `/favicon.ico` and `/apple-touch-icon.png`, which don't exist. Every page also carries a placeholder Google verification tag (`google-site-verification-code`) | `storefront-fashion/src/app/layout.tsx:86-92` | Generate the manifest and icons from the store's logo and favicon; take the Google code from settings |
 | B7 | **Abandoned carts are counted but never recorded:** the dashboard code counts abandoned carts, but carts live only in the browser, so the number is always 0 | `dashboard.repository.ts:367` | Comes with the server-side cart (section 3, Batch 53) |
 | B8 | **No order-note box at checkout:** the API accepts a customer note ("call before coming", "leave at the gate") and staff can see it, but checkout has no box for it | `checkout/page.tsx` | Add the box |
+| B9 | **Fake free-delivery bar at checkout** (found while building Batch 51): "Add ৳X more for FREE Delivery!" with a progress bar towards a hard-coded ৳1000, whatever the shop's offers | `OrderSummaryCard.tsx` | Fixed in Batch 51: the bar now follows the shop's real free-delivery promotion, in the cart and at checkout |
+| B10 | **Settings → General: the Media and Legal tabs can't save** (found while building Batch 51): image sizes, watermark, policy texts and the cookie notice have no storage, and saving shows "not stored yet" | `settings.routes.ts` | Not fixed yet: hide the two tabs, or store them (policies already work as pages) |
 
 ---
 

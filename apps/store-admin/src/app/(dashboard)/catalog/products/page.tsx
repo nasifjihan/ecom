@@ -75,6 +75,7 @@ import {
   useBulkDeleteProductsMutation,
   useBulkUpdateProductsMutation,
   useRestoreProductsMutation,
+  useDuplicateProductMutation,
   usePurgeProductsMutation,
   useExportProductsMutation,
   useGetCategoriesQuery,
@@ -414,6 +415,19 @@ export default function ProductsPage() {
 
   const [deleteProduct] = useDeleteProductMutation();
   const [restoreMut] = useRestoreProductsMutation();
+  const [duplicateMut] = useDuplicateProductMutation();
+  const duplicate = useCallback(
+    async (id: string | number) => {
+      try {
+        const copy = await duplicateMut(id).unwrap();
+        toast.success("Copy saved as a draft", { description: "Stock starts at 0. Set its SKUs and stock, then publish." });
+        router.push(`/catalog/products/${copy.id}`);
+      } catch {
+        toast.error("Couldn't copy the product");
+      }
+    },
+    [duplicateMut, router],
+  );
   const [purge, { isLoading: purging }] = usePurgeProductsMutation();
   const [purgeIds, setPurgeIds] = useState<(string | number)[]>([]);
   const isTrash = appliedFilters.status === "deleted";
@@ -623,6 +637,9 @@ export default function ProductsPage() {
               >
                 <Eye className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               </Button>
+              <Button variant="ghost" size="icon" onClick={() => void duplicate(p.id)} title="Duplicate" aria-label={`Duplicate ${p.name}`}>
+                <Copy className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -636,7 +653,7 @@ export default function ProductsPage() {
         },
       },
     ],
-    [router, isTrash, restore]
+    [router, isTrash, restore, duplicate]
   );
 
   const table = useReactTable({

@@ -135,7 +135,22 @@ const hex = z
 const ROBOTS_LINE = /^\s*(#.*|(user-agent|allow|disallow|crawl-delay|sitemap)\s*:.*)?\s*$/i
 
 export const ThemeDto = z.object({
-  brand: z.object({ storeName: text(80).min(1), tagline: text(160), logoUrl: optLink }),
+  brand: z.object({
+    storeName: text(80).min(1),
+    tagline: text(160),
+    logoUrl: optLink,
+    /** The browser tab and home-screen icon (a square image); the store's initial when empty. */
+    faviconUrl: optLink,
+  }),
+  /** "We'll be back soon" for every shopper, while staff look around with the preview link. */
+  maintenance: z
+    .object({
+      enabled: z.boolean(),
+      message: text(300),
+      /** Made by the API when maintenance is first turned on; opens the shop for whoever has it. */
+      previewKey: z.string().regex(/^[\w-]{20,64}$/).optional(),
+    })
+    .default({ enabled: false, message: "" }),
   colors: z.object({ primary: hex, secondary: hex.default("#f59e0b") }),
   /** What product cards and pages show. */
   display: z
@@ -145,8 +160,10 @@ export const ThemeDto = z.object({
       showLowStock: z.boolean(),
       /** "Only a few left" below this many, for products without their own level. */
       lowStockThreshold: z.coerce.number().int().min(1).max(100),
+      /** The size chart linked beside the size options (a category can name its own); empty: none. */
+      sizeGuideUrl: link.default(""),
     })
-    .default({ showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5 }),
+    .default({ showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" }),
   robots: z
     .object({
       /** Ask every search engine to stay away (a test or unfinished storefront). */
@@ -158,6 +175,18 @@ export const ThemeDto = z.object({
       ),
     })
     .default({ blockAll: false, extra: "" }),
+  /** Measuring visits and ads; empty values load nothing. */
+  tracking: z
+    .object({
+      googleAnalyticsId: text(30).regex(/^(G-[A-Z0-9]{4,20})?$/i, "A Google Analytics 4 ID looks like G-XXXXXXXXXX").transform((v) => v.toUpperCase()),
+      facebookPixelId: text(30).regex(/^(\d{8,20})?$/, "A Facebook Pixel ID is a number of 8 to 20 digits"),
+      /** Search Console's HTML-tag check: the whole <meta> tag or just its content. */
+      googleVerification: z.preprocess(
+        (v) => (typeof v === "string" ? (/content=["']([^"']*)["']/i.exec(v)?.[1] ?? v).trim() : v),
+        text(100).regex(/^[\w-]*$/, "Paste the code from Google Search Console's HTML tag"),
+      ),
+    })
+    .default({ googleAnalyticsId: "", facebookPixelId: "", googleVerification: "" }),
   announcement: z.object({ enabled: z.boolean(), text: text(200), link: optLink }),
   footer: z.object({
     about: text(500),
@@ -318,13 +347,13 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
     enabled: z.boolean(),
     config: z.object({
       ...Heading,
-      /** products: the ones picked, in that order; category / tag: the best of those by `sort`. */
-      source: z.enum(["products", "category", "tag"]),
+      /** products: the ones picked, in that order; category / tag / sale: the best of those by `sort`. */
+      source: z.enum(["products", "category", "tag", "sale"]),
       /** Names are kept only so the editor can show what was picked; the storefront loads live products. */
       products: z.array(z.object({ id: z.string().regex(/^\d+$/), name: text(200) })).max(24),
       categoryId: z.string().regex(/^\d+$/).nullable(),
       tag: text(40),
-      sort: z.enum(["popular", "newest", "price_asc", "price_desc", "rating"]),
+      sort: z.enum(["popular", "newest", "price_asc", "price_desc", "rating", "discount"]),
       limit: Count,
     }),
   }),

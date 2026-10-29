@@ -6,6 +6,9 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton, apiErrorMes
 import { useAppDispatch } from "@/lib/store";
 import {
   useChangeMyPasswordMutation,
+  useDeleteMyAccountMutation,
+  useExportMyDataMutation,
+  signOutAndLeave,
   useGetMyOrdersQuery,
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
@@ -85,6 +88,14 @@ function AccountOverview() {
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{t("Your data")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <YourData />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -179,5 +190,68 @@ function PasswordForm() {
         {isLoading ? t("Changing...") : t("Change password")}
       </Button>
     </form>
+  );
+}
+
+/** Download what the shop holds about you, or delete the account (orders are kept for the shop's accounts). */
+function YourData() {
+  const t = useT();
+  const [exportData, { isLoading: exporting }] = useExportMyDataMutation();
+  const [remove, { isLoading: deleting }] = useDeleteMyAccountMutation();
+  const [confirm, setConfirm] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+
+  const download = async () => {
+    try {
+      const data = await exportData().unwrap();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: "my-data.json" });
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(t("Couldn't download your data"), { description: apiErrorMessage(err) });
+    }
+  };
+
+  const onDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await remove().unwrap();
+      toast.success(t("Your account has been deleted"));
+      signOutAndLeave("/");
+    } catch (err) {
+      toast.error(t("Couldn't delete your account"), { description: apiErrorMessage(err) });
+    }
+  };
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground">{t("Your profile, addresses, orders, reviews and wallet history in one file.")}</p>
+        <Button variant="outline" size="sm" disabled={exporting} onClick={download}>
+          {exporting ? t("Preparing...") : t("Download my data")}
+        </Button>
+      </div>
+      {!open ? (
+        <button type="button" className="text-destructive hover:underline" onClick={() => setOpen(true)}>
+          {t("Delete my account")}
+        </button>
+      ) : (
+        <form onSubmit={onDelete} className="space-y-3 rounded-lg border border-destructive/40 p-4">
+          <p>
+            {t("Your name, email, phone, password, addresses and wishlist are removed and you are signed out. Your orders are kept for the shop's accounts, and any wallet balance is lost. This can't be undone.")}
+          </p>
+          <Field id="confirm-delete" label={msg("Type DELETE to confirm")} autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <div className="flex gap-2">
+            <Button type="submit" variant="destructive" size="sm" disabled={confirm !== "DELETE" || deleting}>
+              {deleting ? t("Deleting...") : t("Delete my account")}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              {t("Cancel")}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

@@ -2,10 +2,30 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { ArrowLeft, ExternalLink, FileDown, Truck, Undo2 } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, ExternalLink, FileDown, RotateCcw, Truck, Undo2 } from "lucide-react";
 import { openFile } from "@ecom/api-client";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Separator, Skeleton, apiErrorMessage, cn, msg, orderStatusWord, toast, useLocale, useT } from "@ecom/storefront-base";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Separator,
+  Skeleton,
+  apiErrorMessage,
+  cn,
+  msg,
+  orderStatusWord,
+  toast,
+  useCart,
+  useGetProductsQuery,
+  useLocale,
+  useT,
+} from "@ecom/storefront-base";
 import {
   RETURN_REASONS,
   useCancelMyOrderMutation,
@@ -88,6 +108,7 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         </Link>
         <div className="flex items-center gap-3">
           <OrderStatusBadge status={o.status} />
+          <OrderAgain order={o} />
           <Button variant="outline" size="sm" disabled={loadingInvoice} onClick={onInvoice}>
             <FileDown className="h-4 w-4 mr-1.5" /> {loadingInvoice ? t("Preparing...") : t("Invoice")}
           </Button>
@@ -407,5 +428,39 @@ function Returns({ order: o }: { order: MyOrder }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** "Order again": the same items, at today's prices, into the cart (ones no longer sold are left out). */
+function OrderAgain({ order }: { order: MyOrder }) {
+  const t = useT();
+  const router = useRouter();
+  const { addItem } = useCart();
+  // Free gifts and gift-box lines come from offers, not from the shopper's picks.
+  const lines = order.items.filter((i) => i.productId && !i.giftFrom && !i.giftBox && i.price > 0);
+  const ids = [...new Set(lines.map((i) => i.productId!))].join(",");
+  const { data, isLoading } = useGetProductsQuery({ ids, perPage: 60 }, { skip: !ids });
+  if (!lines.length) return null;
+  const onClick = () => {
+    const live = new Map((data?.items ?? []).map((p) => [String(p.id), p]));
+    let added = 0;
+    for (const i of lines) {
+      const p = live.get(i.productId!);
+      if (!p || p.isOutOfStock) continue;
+      // The cart checks prices with the shop, so a variant line starts at its old price and is corrected there.
+      addItem({ productId: p.id, variantId: i.variantId ?? undefined, title: p.title, slug: p.slug, image: i.image || p.image, price: i.variantId ? i.price : p.price, qty: i.qty, variantLabel: i.variantLabel || undefined });
+      added++;
+    }
+    if (!added) {
+      toast.error(t("These items aren't available any more"));
+      return;
+    }
+    if (added < lines.length) toast.info(t("Some items aren't available any more, so they were left out"));
+    router.push("/cart");
+  };
+  return (
+    <Button variant="outline" size="sm" disabled={isLoading} onClick={onClick}>
+      <RotateCcw className="h-4 w-4 mr-1.5" /> {t("Order again")}
+    </Button>
   );
 }
