@@ -10,7 +10,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - We have nearly everything a Bangladeshi fashion shop needs to run day to day, plus a lot the list doesn't mention (purchasing, warehouses, couriers, COD settlement, sales commission, festivals, multi-storefront, B2B).
 - **The checking found 8 bugs**, things that look like features but don't work. They come first (section 0).
 - The real gaps are on the shopper side: size/colour filters, image zoom, back-in-stock alerts, abandoned-cart reminders, Buy now, Facebook Pixel. And on the order side: editing an order, exchanges, fraud check.
-- The proposed batches are at the end (section 3).
+- The build plan, phase by phase, is at the end (section 3).
 
 **Owner review:** went through section by section with the owner. Rows marked *Owner's call* changed after that review. In reviewed sections, every other row stands as written.
 - Round 1 (bugs, Home and navigation, Search and discovery, Filtering and sorting): reviewed.
@@ -18,6 +18,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - Round 3 (User account, Marketing, Customer support, Informational pages, Technical): reviewed.
 - Round 4 (Dashboard, Product management, Category and catalog, Inventory, Order management): reviewed.
 - Round 5 (Returns, Shipping, Customers, Marketing, CMS, SEO, Reports): reviewed, no changes.
+- Round 6 (Payments and finance, Reviews and support, Users and security, Notifications, Settings, Marketplace, Advanced): reviewed. **Review complete.**
 
 ---
 
@@ -29,7 +30,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | B2 | **Fake installment offer on every product:** "or 4 installments, ৳X/month • bKash Nagad". There is no installment feature, so shoppers are promised something the shop can't give | Product page, `ProductDetailClient.tsx:413` | Remove it. Show EMI only when a gateway really offers it (section 1, Payments) |
 | B3 | **"Related products" in the product editor is never saved:** the picker exists, but the API has no such field, so the choice is silently lost. The product page shows same-category products instead | Admin product editor; API `catalog.dto.ts` | Save the picks (the database already has a `ProductLink` table) and show them first on the product page |
 | B4 | **Product types that do nothing:** Digital, Subscription and Made-to-order can be chosen, but nothing behaves differently (no download, no repeat orders) | Admin product editor | Hide those three types until they're built |
-| B5 | **Settings that exist only in the database:** maintenance mode, admin IP allow-list, Google Analytics ID, Facebook Pixel ID. Each store gets them, but there's no screen and nothing reads them | `stores.service.ts` | Build the screens and make them work (section 3, Batch 51), or delete them |
+| B5 | **Settings that exist only in the database:** maintenance mode, admin IP allow-list, Google Analytics ID, Facebook Pixel ID. Each store gets them, but there's no screen and nothing reads them | `stores.service.ts` | Build working screens for maintenance mode, Google Analytics and the Pixel (Phase 1); delete the IP allow-list field (owner agreed: two-step sign-in protects better) |
 | B6 | **Missing site files:** the storefront points to `/site.webmanifest`, `/favicon.ico` and `/apple-touch-icon.png`, which don't exist. Every page also carries a placeholder Google verification tag (`google-site-verification-code`) | `storefront-fashion/src/app/layout.tsx:86-92` | Generate the manifest and icons from the store's logo and favicon; take the Google code from settings |
 | B7 | **Abandoned carts are counted but never recorded:** the dashboard code counts abandoned carts, but carts live only in the browser, so the number is always 0 | `dashboard.repository.ts:367` | Comes with the server-side cart (section 3, Batch 53) |
 | B8 | **No order-note box at checkout:** the API accepts a customer note ("call before coming", "leave at the gate") and staff can see it, but checkout has no box for it | `checkout/page.tsx` | Add the box |
@@ -448,7 +449,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Roles and permissions | ✅ | 10 default roles plus a custom role editor | — | |
 | Activity and audit logs | ✅ | | — | |
 | Two-factor for admins | ✅ | Can be required for all staff | — | |
-| IP whitelisting | 🟡 | A field nobody reads (bug B5) | Later | Staff on mobile data change IPs all the time; two-step sign-in protects better |
+| IP whitelisting | 🟡 | A field nobody reads (bug B5) | **No** (delete the field) | Staff on mobile data change IPs all the time; two-step sign-in protects better. Remove the unused field (bug B5) |
 | Login attempt limits | ✅ | | — | |
 | Session management | 🟡 | Sign out everywhere ✅; no list of devices | Later | Small |
 | Backups and restore | ✅ | Nightly, tested restores | — | |
@@ -497,23 +498,32 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | B2B: wholesale, quotes, company accounts, purchase approvals | 🟡 | Wholesale prices, quotations, business accounts ✅; purchase approvals ❌ | **No** (approvals) | Only big corporate buyers need approval chains |
 | Subscription and recurring orders | ❌ | | Later | For grocery or cosmetics shops |
 | POS for physical stores | 🟡 | Manual orders with source "walk-in" | Later | A real POS screen if a shop has a counter |
-| ERP and accounting integration | 🟡 | Our own purchasing, accounts and profit reports | Later | Connect to mbw-erp if a shop runs it |
-| Omnichannel (Facebook Shop, Instagram, Google Shopping, Daraz) | 🟡 | Order source per channel ✅; no product feeds | **Yes** (feeds) | A Facebook/Google product feed is small and powers catalogue ads. Daraz sync later |
+| ERP and accounting integration | 🟡 | Our own purchasing, accounts and profit reports | **No** | *Owner's call:* not needed; our own purchasing and accounts are enough |
+| Omnichannel (Facebook Shop, Instagram, Google Shopping, Daraz) | 🟡 | Order source per channel ✅; no product feeds | **Yes** (feeds) | A Facebook/Google product feed is small and powers catalogue ads. Daraz sync later. *Owner's call:* orders taken on these channels are entered as manual orders: the manual-order screen already offers Facebook, Instagram, WhatsApp, Messenger, phone and walk-in; add Daraz |
 | AI product descriptions and recommendations | ❌ | | Later | Writing descriptions with AI saves owners time; easy to add with an API key |
 | A/B testing | ❌ | | **No** | Needs more traffic than our shops have to give real answers |
 | Headless API for mobile apps | ✅ | OpenAPI docs, 545 operations | — | |
-| Mobile admin app | 🟡 | The admin works on phones | Later | A home-screen version (PWA) is enough |
+| Mobile admin app | 🟡 | The admin works on phones | **No** | *Owner's call:* no mobile app, and the store admin and super admin only need to fit laptop screens, not phones |
 
 ---
+## 3. Build plan, phase by phase (after the owner's review)
 
-## 3. Proposed batches
+Every **Yes** above is in exactly one phase. Each phase is one batch: its own branch, a plan for approval, then build, verify and journal. The order puts broken things first, then what helps shoppers find and buy, then what cuts fake orders and wins back sales.
 
-| Batch | What | Size |
+| Phase | What | Size |
 |---|---|---|
-| **51: Fix and quick wins** | Bugs B1–B6 and B8; Buy now; Reorder; recently viewed; brand pages; "on sale" rail and discount sort; free-delivery progress bar; product duplicate; maintenance mode, Google Analytics and Facebook Pixel screens; account deletion and data download | M |
-| **52: Fashion shopping** | Size, colour, in-stock and on-sale filters (with filter settings); image zoom; product video; review photos; back-in-stock alerts; delivery estimate on the product page and in the cart; size-guide links | L |
-| **53: Win back sales, fewer fake orders** | Server-side cart across devices (B7); abandoned-cart reminders by SMS/WhatsApp with a report; fraud check by courier history; COD call confirmation | L |
-| **54: Orders and messages** | Edit orders; exchanges; SMS campaigns; contact form with call-back and order issues, plus an inbox; WhatsApp/Messenger chat button; Facebook/Google product feed | L |
-| **Later, when a shop needs it** | Gift cards; store pickup; Paperfly; rider assignment; typo-tolerant search; collections; barcodes; digital products; push; email campaigns; affiliates; POS; ERP link; AI descriptions; cookie banner; captcha | — |
+| **1 (Batch 51): Fix what's broken, quick wins** | Bugs B1 Share, B2 fake EMI line, B3 related products saved and shown first, B4 hide unbuilt product types, B5 maintenance mode + Google Analytics + Facebook Pixel screens (delete the IP allow-list field), B6 icons, manifest (add to home screen) and Google code from settings, B8 order-note box. Plus: Buy now; Reorder; recently viewed; brand pages; "on sale" rail; sort by discount; size-guide link; free-delivery progress bar in the cart; duplicate product; account deletion and data download | M |
+| **2 (Batch 52): Finding products** | Typo and synonym search on Postgres (`pg_trgm`); size, colour, in-stock and on-sale filters with filter settings in the admin; category menu several levels deep, with an icon on each item | L |
+| **3 (Batch 53): Themes and product looks** | Ready-made themes per storefront, each with a light and a dark version, picked in the store admin (with a shopper switch if the shop allows it); image zoom; one video per product; photos in reviews | L |
+| **4 (Batch 54): Stock and delivery** | Pre-order products (label, longer delivery time, order with no stock); "Notify me" on sold-out products and sizes, by SMS or email; delivery estimate by district on the product page and in the cart; store pickup from the store's storage or office (pickup points in the admin, shown at checkout and on the contact page); map on the contact page and in the footer | L |
+| **5 (Batch 55): Win back lost carts** | Server-side cart for signed-in shoppers, the same on every device (fixes B7); abandoned-cart reminders by SMS/WhatsApp with settings and a report | L |
+| **6 (Batch 56): COD and order work** | Fraud check by the phone number's courier history; COD call confirmation (confirmed, no answer, fake) with a retry list; edit an order (items, size, address); exchanges | L |
+| **7 (Batch 57): Talking to customers** | SMS campaigns; floating WhatsApp/Messenger chat button; contact form with "call me back" and "problem with my order", plus an inbox in the admin; Facebook/Google product feed; Daraz as a manual-order source | L |
 
-**Not planned, with reasons above:** marketplace features, foreign payments (Apple/Google Pay, PayPal, Stripe, Razorpay), multi-currency, RTL, voice and image search, AR, 360° photos, spin wheel, fake social proof, blog comments, custom order statuses, A/B testing, plugins, own live chat and ticket system.
+Sizes: **M** about one batch of normal work, **L** a large batch. A phase can be split if it grows.
+
+**Admin and super admin screens:** built for laptop screens only (owner's call); phone layouts are not a goal.
+
+**Later, when a shop needs it:** countdown in the announcement bar; recent searches; rule-based collections; warranty field; "frequently bought together"; bundle products; real EMI; save for later; gift cards; advance payment on COD; "My reviews"; notification settings; exit-intent pop-up; push; affiliates; personalised recommendations; cookie banner; accessibility audit; captcha; conversion rate and a "to do" card on the dashboard; digital products; barcodes; custom labels; bulk price and stock edit; category banner and drag-and-drop order; hide-when-out-of-stock; return pickup booking; editable return reasons; Paperfly; own riders; customer notes; email campaigns; recommendation rules; device list; required checkout fields; webhooks; subscriptions; POS; AI descriptions.
+
+**Not planned, with reasons above:** marketplace features, foreign payments (Apple/Google Pay, PayPal, Stripe, Razorpay), BNPL, saved cards, multi-currency, languages beyond Bangla and English, RTL, voice and image search, AR, 360° photos, price-drop alerts, product comparison, spin wheel, fake social proof, Instagram feed, blog comments, helpful votes, multiple wishlists, Apple sign-in, customer 2FA, address autocomplete, custom order statuses, attribute sets, batch/expiry tracking, A/B testing, plugins, cache button, invoice designer, own live chat and ticket system, IP allow-list, ERP link, mobile admin app.
