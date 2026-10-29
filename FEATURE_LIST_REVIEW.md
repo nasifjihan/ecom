@@ -12,6 +12,9 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - The real gaps are on the shopper side: size/colour filters, image zoom, back-in-stock alerts, abandoned-cart reminders, Buy now, Facebook Pixel. And on the order side: editing an order, exchanges, fraud check.
 - The proposed batches are at the end (section 3).
 
+**Owner review:** went through section by section with the owner. Rows marked *Owner's call* changed after that review. In reviewed sections, every other row stands as written.
+- Round 1 (bugs, Home and navigation, Search and discovery, Filtering and sorting): reviewed.
+
 ---
 
 ## 0. Bugs found while checking (fix first)
@@ -36,19 +39,19 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 |---|---|---|---|---|
 | Home page with hero banners, sliders, promo sections | ✅ | Block builder: hero slider, promo banner, image + text, 20 block types, saved sliders | — | |
 | Featured, new arrival, best seller, trending, on-sale sections | 🟡 | Featured and new-arrival blocks; product rail sorted by popular (best seller) or rating; no "on sale" or "trending" rail | **Yes** (on sale) | An "on sale" rail is a few lines (the rail already filters by category or tag) and every sale needs it. "Trending" is the same as popular for a small shop |
-| Mega menu or multi-level category navigation | 🟡 | Menus with sub-items (dropdowns); no wide mega menu with pictures | Later | Dropdowns are enough for a few dozen categories. A mega menu helps only with 50+ categories |
+| Mega menu or multi-level category navigation | 🟡 | Menus go one dropdown level deep; the menu item's `icon` field is stored but never shown; no mega menu | **Yes** (multi-level + icons) · **No** (mega menu) | *Owner's call:* categories nested several levels in the menu, each with an icon. A wide mega menu isn't needed |
 | Sticky header with search, cart, account | ✅ | | — | |
 | Breadcrumbs | ✅ | Product and category pages, plus breadcrumb data for Google | — | |
 | Footer: links, policies, contact, social, newsletter | ✅ | | — | |
 | Announcement bar (free shipping notice, sale countdown) | 🟡 | Announcement bar and promotion slots; the countdown is on the flash-sale page and the product page, not in the bar | Later | Small; a countdown in the bar is nice for Eid sales |
 | Language and currency switcher | 🟡 | Bangla ⇄ English ✅; currency ❌ (taka only) | **No** (currency) | Our shops sell in Bangladesh and every gateway settles in taka. Showing dollars would confuse more than help |
-| Dark/light mode (optional) | ❌ | Admin has it; storefront doesn't | **No** | Each shop has its own brand colours; a dark version doubles the design work for little gain |
+| Dark/light mode (optional) | ❌ | Admin has it; storefront doesn't. The theme screen has light colour presets; `darkModeEnabled`/`defaultMode` are stored but unused | **Yes** | *Owner's call:* every storefront gets ready-made themes, each with a light and a dark version. The store admin picks the theme and whether shoppers can switch |
 
 ### Search and discovery
 | Feature | Status | What we have | Add? | Why |
 |---|---|---|---|---|
 | Search bar with autocomplete and suggestions | ✅ | Products, categories and other people's searches as you type | — | |
-| Typo tolerance and synonym handling | ❌ | Plain "contains" search | Later | Worth it: shoppers type "panjabi/punjabi", "saree/sari". Postgres can do this (`pg_trgm`) without a new service |
+| Typo tolerance and synonym handling | ❌ | Plain "contains" search | **Yes** (now) | *Owner's call: now.* Worth it: shoppers type "panjabi/punjabi", "saree/sari". Postgres can do this (`pg_trgm`) without a new service |
 | Voice search, image/visual search | ❌ | | **No** | Voice works badly for Bangla in browsers; image search needs a machine-learning service. Both cost a lot for rare use |
 | Recent and popular searches | 🟡 | Popular ✅ (search page and suggestions); recent ❌ | Later | Small (kept in the browser) |
 | Search results with filters and sorting | ✅ | | — | |
