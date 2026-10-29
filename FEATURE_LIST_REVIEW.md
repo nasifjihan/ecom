@@ -17,6 +17,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - Round 2 (Product page, Cart, Checkout, Payments): reviewed.
 - Round 3 (User account, Marketing, Customer support, Informational pages, Technical): reviewed.
 - Round 4 (Dashboard, Product management, Category and catalog, Inventory, Order management): reviewed.
+- Round 5 (Returns, Shipping, Customers, Marketing, CMS, SEO, Reports): reviewed, no changes.
 
 ---
 
