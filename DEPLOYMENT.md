@@ -282,7 +282,7 @@ The machine was the limit: the storefront used the most CPU, then the API copies
 3. **Deploy:** sections 2–7 of this guide, with the domain's addresses, R2 for backups and Brevo for SMTP.
 4. **Test phase:**
    - run the demo shop (section 11, `scripts/demo/index.ts`, with the real domain's `--shop-host`, `--admin-host` and `--outlet-host`);
-   - hide the site from Google: store admin → robots, "block all";
+   - hide the site from Google: store admin → Online store → Theme, "block all" search engines;
    - put the gateways in sandbox mode;
    - the team works through `TESTING_CHECKLIST.md`.
 5. **Clean up:** `docker compose ... down -v` deletes all test data. Start again, run `bootstrap.ts`, and add the real shop by hand.
