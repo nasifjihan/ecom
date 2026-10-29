@@ -16,6 +16,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - Round 1 (bugs, Home and navigation, Search and discovery, Filtering and sorting): reviewed.
 - Round 2 (Product page, Cart, Checkout, Payments): reviewed.
 - Round 3 (User account, Marketing, Customer support, Informational pages, Technical): reviewed.
+- Round 4 (Dashboard, Product management, Category and catalog, Inventory, Order management): reviewed.
 
 ---
 
@@ -271,7 +272,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Featured flag | ✅ | | — | |
 | Related, upsell, cross-sell linking | 🟡 | Picker exists but isn't saved (bug B3) | **Yes** | |
 | Bulk import/export (CSV/Excel) | ✅ | | — | |
-| Bulk edit | 🟡 | Bulk publish, unpublish, archive, delete; no bulk price or stock edit | **Yes** | Before Eid, shops change prices on dozens of products |
+| Bulk edit | 🟡 | Bulk publish, unpublish, archive, delete; no bulk price or stock edit | Later | *Owner's call: not now.* Before Eid, shops change prices on dozens of products |
 | Reviews and Q&A moderation | ✅ | | — | |
 | Labels/badges (New, Hot, Sale) | 🟡 | New, sale % and Made in BD are automatic; no custom label | Later | Small |
 
@@ -338,7 +339,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Couriers: Pathao, Steadfast, RedX, Paperfly; DHL, FedEx, UPS | 🟡 | Pathao ✅ Steadfast ✅ RedX ✅; Paperfly ❌; international ❌ | Later (Paperfly) · **No** (international) | Paperfly when a shop uses it; our shops don't ship abroad |
 | Automatic tracking sync | ✅ | | — | |
 | Delivery slot configuration | ✅ | | — | |
-| Store pickup locations | ❌ | | Later | With store pickup at checkout |
+| Store pickup locations | ❌ | | **Yes** | *Owner's call (with store pickup):* the store's storage or office addresses, shown at checkout and on the contact page |
 | Shipping label generation | ✅ | | — | |
 | Rider assignment | ❌ | | Later | For shops with their own Dhaka riders |
 | COD settlement tracking | ✅ | | — | |
@@ -511,7 +512,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | **51: Fix and quick wins** | Bugs B1–B6 and B8; Buy now; Reorder; recently viewed; brand pages; "on sale" rail and discount sort; free-delivery progress bar; product duplicate; maintenance mode, Google Analytics and Facebook Pixel screens; account deletion and data download | M |
 | **52: Fashion shopping** | Size, colour, in-stock and on-sale filters (with filter settings); image zoom; product video; review photos; back-in-stock alerts; delivery estimate on the product page and in the cart; size-guide links | L |
 | **53: Win back sales, fewer fake orders** | Server-side cart across devices (B7); abandoned-cart reminders by SMS/WhatsApp with a report; fraud check by courier history; COD call confirmation | L |
-| **54: Orders and messages** | Edit orders; exchanges; SMS campaigns; contact form with call-back and order issues, plus an inbox; WhatsApp/Messenger chat button; bulk price and stock edit; Facebook/Google product feed | L |
+| **54: Orders and messages** | Edit orders; exchanges; SMS campaigns; contact form with call-back and order issues, plus an inbox; WhatsApp/Messenger chat button; Facebook/Google product feed | L |
 | **Later, when a shop needs it** | Gift cards; store pickup; Paperfly; rider assignment; typo-tolerant search; collections; barcodes; digital products; push; email campaigns; affiliates; POS; ERP link; AI descriptions; cookie banner; captcha | — |
 
 **Not planned, with reasons above:** marketplace features, foreign payments (Apple/Google Pay, PayPal, Stripe, Razorpay), multi-currency, RTL, voice and image search, AR, 360° photos, spin wheel, fake social proof, blog comments, custom order statuses, A/B testing, plugins, own live chat and ticket system.
