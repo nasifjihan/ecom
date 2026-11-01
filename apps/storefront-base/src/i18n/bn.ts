@@ -1014,4 +1014,11 @@ export const BN: Record<string, string> = {
   "Type DELETE to confirm": "নিশ্চিত করতে DELETE লিখুন",
   "Deleting...": "মুছে ফেলা হচ্ছে...",
   "Your name, email, phone, password, addresses and wishlist are removed and you are signed out. Your orders are kept for the shop's accounts, and any wallet balance is lost. This can't be undone.": "আপনার নাম, ইমেইল, ফোন, পাসওয়ার্ড, ঠিকানা ও উইশলিস্ট মুছে যাবে এবং আপনি সাইন আউট হয়ে যাবেন। দোকানের হিসাবের জন্য আপনার অর্ডারগুলো থেকে যাবে, আর ওয়ালেটের ব্যালেন্স থাকবে না। এটি আর ফেরানো যাবে না।",
+  "Best Match": "সবচেয়ে মিল",
+  "In stock only": "শুধু স্টকে আছে এমন",
+  "In stock": "স্টকে আছে",
+  "Size": "সাইজ",
+  "Color": "রং",
+  "Colour": "রং",
+  "Filter by size, colour and more": "সাইজ, রং ও আরও দিয়ে ফিল্টার করুন",
 };

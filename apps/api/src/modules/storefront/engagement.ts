@@ -18,6 +18,7 @@ import { bdMobile, phoneVariants } from "../sms/sms.rules"
 import { flashRules } from "./flash-pricing"
 import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import { StorefrontService } from "./storefront.service"
+import { searchMatches } from "../search/shop-search"
 import {
   publicName,
   searchTerm,
@@ -89,22 +90,10 @@ export class StorefrontEngagement {
     const q = raw.trim()
     if (q.length < 2) return { products: [], categories: [], terms: [] }
     const lower = q.toLowerCase()
-    const [products, categories, terms] = await Promise.all([
-      prisma.product.findMany({
-        where: {
-          storeId: this.storeId,
-          status: "published",
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { translations: { path: ["bn", "name"], string_contains: q } },
-            { sku: { equals: q, mode: "insensitive" } },
-            { tags: { has: lower } },
-          ],
-        },
-        orderBy: [{ saleCount: "desc" }, { id: "desc" }],
-        take: 6,
-        select: { id: true },
-      }),
+    // The same spelling-tolerant search as the product list: best match first, then best sellers.
+    const matches = await searchMatches(this.storeId, q)
+    const [ranked, categories, terms] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: [...matches.keys()] } }, select: { id: true, saleCount: true } }),
       prisma.category.findMany({
         where: {
           storeId: this.storeId,
@@ -129,7 +118,10 @@ export class StorefrontEngagement {
         select: { term: true },
       }),
     ])
-    const cards = await this.catalog().productSummaries(products.map((p) => p.id))
+    const top = ranked
+      .sort((a, b) => matches.get(b.id)! - matches.get(a.id)! || b.saleCount - a.saleCount || Number(b.id - a.id))
+      .slice(0, 6)
+    const cards = await this.catalog().productSummaries(top.map((p) => p.id))
     return {
       products: cards.map((c) => ({
         id: c.id,

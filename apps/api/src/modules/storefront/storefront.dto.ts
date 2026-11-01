@@ -4,7 +4,8 @@ const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
 const noXss = (v: string | null | undefined): boolean => !v || !XSS_RE.test(v);
 const safeText = (max: number) => z.string().trim().max(max).refine(noXss, "No JavaScript injection allowed");
 
-const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount"] as const;
+// relevance: best match first when searching (popular otherwise).
+const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount", "relevance"] as const;
 
 export const StorefrontProductsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -24,6 +25,10 @@ export const StorefrontProductsQueryDto = z.object({
   featured: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   /** Only products sold below their regular price right now (sale price or flash sale). */
   onSale: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  /** Size, colour… as `size:M|L;color:Red` (attribute slugs from Catalog > Attributes). */
+  options: z.string().trim().max(500).optional(),
+  /** Only products that can be bought now. */
+  inStock: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   excludeId: z.coerce.bigint().positive().optional(),
 });
 export type StorefrontProductsQueryDto = z.infer<typeof StorefrontProductsQueryDto>;

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isMenuIcon } from "@ecom/shared-types"
 import { patchOf } from "../../core/patch-schema"
 import { videoEmbed } from "@ecom/utils"
 
@@ -118,9 +119,23 @@ const MenuLeaf = z.object({
   titleBn: text(80).optional(),
   url: link.refine((v) => v !== "", "Link is required"),
   openInNewTab: z.boolean().default(false),
+  /** One of the menu icons (MENU_ICONS), or a small image's link; empty for none. */
+  icon: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || isMenuIcon(v) || /^\/(?!\/)/.test(v) || /^https?:\/\//i.test(v), "Pick an icon from the list or use an image link")
+    .default(""),
 })
+/** Up to three levels: Men → Panjabi → Cotton panjabi. */
 export const MenuItemsDto = z.object({
-  items: z.array(MenuLeaf.extend({ children: z.array(MenuLeaf).max(30).default([]) })).max(30),
+  items: z
+    .array(
+      MenuLeaf.extend({
+        children: z.array(MenuLeaf.extend({ children: z.array(MenuLeaf).max(30).default([]) })).max(30).default([]),
+      }),
+    )
+    .max(30),
 })
 export type MenuItemsDto = z.infer<typeof MenuItemsDto>
 

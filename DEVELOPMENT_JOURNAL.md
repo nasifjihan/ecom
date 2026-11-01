@@ -6586,3 +6586,54 @@ Phase 1 of the plan in `FEATURE_LIST_REVIEW.md` (section 3): the bugs found in t
 
 ### Found, not fixed
 - **B10:** in Settings → General, the Media and Legal tabs can't save (no storage behind them). It's recorded in `FEATURE_LIST_REVIEW.md`.
+
+---
+
+## ✅ BATCH #52 — Phase 2: finding products (2026-11-01)
+Phase 2 of `FEATURE_LIST_REVIEW.md` section 3: search that forgives spelling, size/colour/in-stock filters, and a category menu three levels deep with icons.
+
+### Search
+- **Spelling (pg_trgm):** search now runs through one SQL query, `search/shop-search.ts` `searchMatches`. A product matches when its name, SKU, short description, brand or Bangla name contains the words, or it has the word as a tag, or its name is spelt close enough. The close-spelling rule needs a word of at least 4 letters ("panjbi" → "Panjabi").
+- **Score:** 2 when the name contains the words; otherwise how close the spelling is.
+- **Index:** a GIN trigram index on `Product.name` (`Product_name_trgm_idx`) keeps it fast.
+- **Bangla:** Bangla names keep exact "contains" matching, because trigram matching on Bangla letters isn't reliable.
+- **Search words:**
+  - A new `SearchSynonym` table holds groups of words. `expandQuery` tries the whole search and each word swapped for the other words in its group, up to 12 versions ("red punjabi" → "red panjabi").
+  - Edited on **Online store → Search words**: one group per line, "Add common words" for a starter list (panjabi/punjabi, saree/sari/শাড়ি, salwar kameez/three piece…).
+  - The API is `GET`/`PUT /api/admin/content/search-words`, under the online-store permissions.
+- **Best match:** a new `sort=relevance` ranks by score, then sales. It's the default on the search page and when the product list opens with a search. The as-you-type suggestions use the same matching.
+
+### Filters
+- **Which filters show:** Catalog → Attributes with "show in filters" on (the switch already existed but nothing used it).
+- **Matching variants:** an attribute matches a variant's option by its slug or name, in either case ("Size", "size").
+- **Query param:** `options=size:M|L;color:Red`. A value only counts when a variant with it can be sold now (in stock, not tracked, or backorder allowed), and with several groups the same variant must fit all of them. `inStock=true` keeps only products that can be bought.
+- **Counts:** `GET /api/storefront/product-options` gives each value with its product count. A group's own choice is left out of its counts, so shoppers can add a second size. Colour codes come from the attribute's terms. Logic is in `storefront/product-options.ts`.
+  - Shortcut, noted in code: counts read the listed products' sellable variants in memory, fine for a few thousand products.
+- **Refactor:** `listProducts` is split into `productFilter` (the shared query, also used for the counts) and `rankedPage` (the in-memory sorts), with no change in behaviour.
+- **Product list page:**
+  - Size buttons with counts, colour swatches, "In stock only" and chips.
+  - Size, colour, stock and sale are kept in the address (`options`, `stock`, `sale`), so a filtered link can be shared.
+  - Search results and brand pages link to the filtered list ("Filter by size, colour and more").
+
+### Menu
+- **Three levels:** menus go three levels deep (Men → Panjabi → Cotton), saved as a tree.
+- **Icons:** each item can have an icon from `MENU_ICONS`, 40 shop icons kept in `shared-types`. The API refuses others, but takes an image link instead.
+- **Drawing:** `@ecom/ui` `MenuIcon` draws the icon in both the storefront and the admin.
+- **Storefront:** the desktop dropdown opens a side list for the third level (also on keyboard focus), and the phone menu shows it indented. A bare `/categories` link now lists the category tree three levels deep.
+- **Menu editor:**
+  - "+" works on the first two levels, and an icon picker sits on header menus.
+  - "Fill from categories" builds the menu from the category tree; it asks before replacing existing links.
+
+### Migration
+- `20261101090000_search_and_filters` turns on `pg_trgm` (`CREATE EXTENSION IF NOT EXISTS`, which needs the database owner) and adds the trigram index and `SearchSynonym`.
+- Prisma's `migrate diff` gives the same statements as the migration, except the extension line.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 62 files and 829 tests pass. New: `shop-search.test.ts` and `product-options.test.ts`.
+  - `translations.test.ts` failed once in the first full run and passed alone and in the rerun, so it looks like a timing flake.
+- **Bangla check:** passes.
+- **Not run:**
+  - The new `phase2-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers spelling, search words, best match, size-in-stock filters, counts and the 3-level menu.
+  - The browser check: `TESTING_CHECKLIST.md` section F lists what to try.

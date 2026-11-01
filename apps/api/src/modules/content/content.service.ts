@@ -386,18 +386,20 @@ export class ContentService {
     title: true,
     url: true,
     openInNewTab: true,
+    icon: true,
     sortOrder: true,
     parentId: true,
     translations: true,
   } as const
 
-  /** Items come back as a two-level tree in display order. */
+  /** Items come back as a tree (up to three levels) in display order. */
   private toTree(
     items: {
       id: bigint
       title: string
       url: string | null
       openInNewTab: boolean
+      icon: string | null
       sortOrder: number
       parentId: bigint | null
       translations: Prisma.JsonValue
@@ -409,13 +411,13 @@ export class ContentService {
       titleBn: translationsFor(i.translations, "bn").title ?? "",
       url: i.url ?? "/",
       openInNewTab: i.openInNewTab,
+      icon: i.icon ?? "",
     })
-    return byOrder
-      .filter((i) => i.parentId === null)
-      .map((root) => ({
-        ...leaf(root),
-        children: byOrder.filter((c) => c.parentId === root.id).map(leaf),
-      }))
+    const under = (id: bigint | null) => byOrder.filter((c) => c.parentId === id)
+    return under(null).map((top) => ({
+      ...leaf(top),
+      children: under(top.id).map((sub) => ({ ...leaf(sub), children: under(sub.id).map(leaf) })),
+    }))
   }
 
   /** All menus (admin), or with `storefrontId`, that storefront's own (the default's: the shared ones). */
@@ -494,31 +496,26 @@ export class ContentService {
     await this.editableMenu(id)
     await prisma.$transaction(async (tx) => {
       await tx.menuItem.deleteMany({ where: { menuId: id } })
-      for (const [i, item] of d.items.entries()) {
-        const root = await tx.menuItem.create({
+      type Leaf = MenuItemsDto["items"][number]["children"][number]["children"][number]
+      const add = (item: Leaf, sortOrder: number, parentId: bigint | null) =>
+        tx.menuItem.create({
           data: {
             menuId: id,
+            parentId,
             type: "link",
             title: item.title,
             translations: mergeTranslations(null, { bn: { title: item.titleBn } }),
             url: item.url,
             openInNewTab: item.openInNewTab,
-            sortOrder: i,
+            icon: item.icon || null,
+            sortOrder,
           },
         })
-        if (item.children.length) {
-          await tx.menuItem.createMany({
-            data: item.children.map((c, j) => ({
-              menuId: id,
-              parentId: root.id,
-              type: "link",
-              title: c.title,
-              translations: mergeTranslations(null, { bn: { title: c.titleBn } }),
-              url: c.url,
-              openInNewTab: c.openInNewTab,
-              sortOrder: j,
-            })),
-          })
+      for (const [i, top] of d.items.entries()) {
+        const a = await add(top, i, null)
+        for (const [j, sub] of top.children.entries()) {
+          const b = await add(sub, j, a.id)
+          if (sub.children.length) await Promise.all(sub.children.map((c, k) => add(c, k, b.id)))
         }
       }
     })
@@ -672,12 +669,14 @@ export class ContentService {
       titleBn: string
       url: string
       openInNewTab: boolean
+      icon?: string
       children?: Link[]
     }
     interface Shown {
       title: string
       url: string
       openInNewTab: boolean
+      icon?: string
       children?: Shown[]
     }
     const inLocale = (l: Link): Shown => {

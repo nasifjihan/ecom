@@ -12,13 +12,13 @@ export function BrandProducts({ slug, items, total }: { slug: string; items: Pro
   return (
     <>
       <ProductGrid products={items} loading={false} cols={4} {...actions} />
-      {total > items.length && (
-        <div className="mt-8 text-center">
-          <Button variant="outline" asChild>
-            <Link href={`/products?brand=${encodeURIComponent(slug)}`}>{t("See all {n} products", { n: total })}</Link>
-          </Button>
-        </div>
-      )}
+      <div className="mt-8 text-center">
+        <Button variant="outline" asChild>
+          <Link href={`/products?brand=${encodeURIComponent(slug)}`}>
+            {total > items.length ? t("See all {n} products", { n: total }) : t("Filter by size, colour and more")}
+          </Link>
+        </Button>
+      </div>
     </>
   );
 }

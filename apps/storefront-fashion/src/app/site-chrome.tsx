@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Navbar, CartDrawer, useCart, useGetCategoriesTreeQuery, useT, msg } from "@ecom/storefront-base";
+import { Navbar, CartDrawer, useCart, useGetCategoriesTreeQuery, useT, msg, type MenuLink as NavLink } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import { signOutAndLeave, useCustomerLogoutMutation } from "@/lib/account";
 import type { MenuLink } from "@/lib/content";
@@ -40,15 +40,23 @@ export function NavbarWithCartState({
 
   // A "/categories" link with no dropdown of its own lists the live categories. Titles the shop
   // left in English that we have words for ("Home", "Shop"…) show in the shopper's language.
-  const menuLinks = (menu?.length ? menu : DEFAULT_MENU).map((item) => ({
+  type Node = (typeof categories)[number];
+  const fromCategory = (c: Node, depth: number): NavLink => ({
+    label: c.name,
+    href: `/products?category=${c.slug}`,
+    children: depth < 3 && c.children?.length ? c.children.map((x) => fromCategory(x, depth + 1)) : undefined,
+  });
+  const toLink = (item: MenuLink): NavLink => ({
     label: t(item.title),
     href: item.url,
+    icon: item.icon || undefined,
     children: item.children?.length
-      ? item.children.map((c) => ({ label: t(c.title), href: c.url }))
+      ? item.children.map(toLink)
       : item.url === "/categories"
-        ? categories.map((c) => ({ label: c.name, href: `/products?category=${c.slug}` }))
+        ? categories.map((c) => fromCategory(c, 2))
         : undefined,
-  }));
+  });
+  const menuLinks = (menu?.length ? menu : DEFAULT_MENU).map(toLink);
 
   return (
     <Navbar

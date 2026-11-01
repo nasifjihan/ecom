@@ -44,6 +44,9 @@ import {
   useT,
   msg,
   useGetProductsQuery,
+  useGetProductOptionsQuery,
+  optionsParam,
+  parseOptions,
   useGetCategoriesTreeQuery,
   useGetBrandsQuery,
   type ProductSummary,
@@ -52,6 +55,7 @@ import { cn, formatMoney } from "@ecom/utils";
 import { toast } from "sonner";
 
 const SORT_OPTIONS = [
+  { value: "relevance", label: msg("Best Match") },
   { value: "popular", label: msg("Most Popular") },
   { value: "newest", label: msg("Newest First") },
   { value: "price_asc", label: msg("Price: Low to High") },
@@ -84,9 +88,11 @@ export default function ProductsPage() {
   const brandSlug = searchParams.get("brand");
   const [minRating, setMinRating] = React.useState<number>(0);
   const [onSale, setOnSale] = React.useState(() => searchParams.get("sale") === "true");
+  const [inStock, setInStock] = React.useState(() => searchParams.get("stock") === "1");
+  const [chosen, setChosen] = React.useState<Record<string, string[]>>(() => parseOptions(searchParams.get("options")));
   const [sort, setSort] = React.useState<(typeof SORT_OPTIONS)[number]["value"]>(() => {
     const fromUrl = searchParams.get("sort");
-    return SORT_OPTIONS.find((o) => o.value === fromUrl)?.value ?? "popular";
+    return SORT_OPTIONS.find((o) => o.value === fromUrl)?.value ?? (searchParams.get("search") ? "relevance" : "popular");
   });
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [search, setSearch] = React.useState(searchParams.get("search") ?? "");
@@ -107,10 +113,7 @@ export default function ProductsPage() {
     const match = brandSlug ? brands.find((b) => b.slug === brandSlug) : undefined;
     if (match) setSelectedBrands(new Set([match.id]));
   }, [brandSlug, brands]);
-  const { data, isFetching, isError } = useGetProductsQuery({
-    page,
-    perPage,
-    sort,
+  const filters = {
     search: debouncedSearch || undefined,
     categoryId: selectedCats.size ? [...selectedCats].join(",") : undefined,
     categorySlug: selectedCats.size ? undefined : categorySlug,
@@ -120,7 +123,27 @@ export default function ProductsPage() {
     rating: minRating || undefined,
     tag,
     onSale: onSale || undefined,
-  });
+    options: optionsParam(chosen),
+    inStock: inStock || undefined,
+  };
+  const { data, isFetching, isError } = useGetProductsQuery({ ...filters, page, perPage, sort });
+  const { data: facets = [] } = useGetProductOptionsQuery(filters);
+  const toggleOption = (slug: string, value: string) =>
+    setChosen((c) => {
+      const cur = c[slug] ?? [];
+      return { ...c, [slug]: cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value] };
+    });
+
+  // Size, colour, in stock and on sale stay in the address, so a filtered list can be shared.
+  React.useEffect(() => {
+    const next = new URLSearchParams(window.location.search);
+    const set = (k: string, v: string | undefined) => (v ? next.set(k, v) : next.delete(k));
+    set("options", optionsParam(chosen));
+    set("stock", inStock ? "1" : undefined);
+    set("sale", onSale ? "true" : undefined);
+    const qs = next.toString();
+    if (qs !== window.location.search.replace(/^\?/, "")) router.replace(`${window.location.pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [chosen, inStock, onSale, router]);
 
   const paged: ProductCardData[] = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -129,7 +152,7 @@ export default function ProductsPage() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, debouncedPrice, selectedCats, selectedBrands, minRating, onSale, sort]);
+  }, [debouncedSearch, debouncedPrice, selectedCats, selectedBrands, minRating, onSale, inStock, chosen, sort]);
 
   const handleAddToCart = React.useCallback(
     (p: ProductCardData) => {
@@ -155,7 +178,9 @@ export default function ProductsPage() {
     selectedCats.size +
     selectedBrands.size +
     (minRating > 0 ? 1 : 0) +
-    (onSale ? 1 : 0);
+    (onSale ? 1 : 0) +
+    (inStock ? 1 : 0) +
+    Object.values(chosen).reduce((n, v) => n + v.length, 0);
 
   const clearAll = () => {
     setPriceRange([0, PRICE_MAX]);
@@ -163,6 +188,8 @@ export default function ProductsPage() {
     setSelectedBrands(new Set());
     setMinRating(0);
     setOnSale(false);
+    setInStock(false);
+    setChosen({});
   };
 
   const FiltersSidebar = (
@@ -254,6 +281,46 @@ export default function ProductsPage() {
 
       <Separator />
 
+      {facets.map((f) => (
+        <React.Fragment key={f.slug}>
+          <div>
+            <h4 className="font-medium text-sm mb-3">{t(f.name)}</h4>
+            <div className="flex flex-wrap gap-2">
+              {f.values.map((v) => {
+                const on = (chosen[f.slug.toLowerCase()] ?? []).includes(v.value);
+                return v.color ? (
+                  <button
+                    key={v.value}
+                    type="button"
+                    onClick={() => toggleOption(f.slug.toLowerCase(), v.value)}
+                    aria-pressed={on}
+                    title={`${v.value} (${v.count})`}
+                    aria-label={`${v.value} (${v.count})`}
+                    className={cn("h-8 w-8 rounded-full border shadow-inner transition", on ? "ring-2 ring-primary ring-offset-2" : "hover:scale-110")}
+                    style={{ backgroundColor: v.color }}
+                  />
+                ) : (
+                  <button
+                    key={v.value}
+                    type="button"
+                    onClick={() => toggleOption(f.slug.toLowerCase(), v.value)}
+                    aria-pressed={on}
+                    className={cn("rounded-md border px-2.5 py-1 text-xs transition-colors", on ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary")}
+                  >
+                    {v.value} <span className={cn(on ? "opacity-80" : "text-muted-foreground")}>({v.count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <Separator />
+        </React.Fragment>
+      ))}
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+        <input type="checkbox" className="h-4 w-4 accent-primary" checked={inStock} onChange={(e) => setInStock(e.target.checked)} />
+        {t("In stock only")}
+      </label>
       <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
         <input type="checkbox" className="h-4 w-4 accent-primary" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} />
         {t("On sale only")}
@@ -392,6 +459,18 @@ export default function ProductsPage() {
                   <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setOnSale(false)}>
                     {t("On sale")} <X className="h-3 w-3" />
                   </Badge>
+                )}
+                {inStock && (
+                  <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setInStock(false)}>
+                    {t("In stock")} <X className="h-3 w-3" />
+                  </Badge>
+                )}
+                {Object.entries(chosen).flatMap(([slug, values]) =>
+                  values.map((v) => (
+                    <Badge key={`${slug}:${v}`} variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => toggleOption(slug, v)}>
+                      {t(facets.find((f) => f.slug.toLowerCase() === slug)?.name ?? slug)}: {v} <X className="h-3 w-3" />
+                    </Badge>
+                  )),
                 )}
                 {minRating > 0 && (
                   <Badge variant="secondary" className="gap-1 pr-1.5 cursor-pointer" onClick={() => setMinRating(0)}>

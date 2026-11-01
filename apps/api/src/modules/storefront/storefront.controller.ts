@@ -15,6 +15,9 @@ export const storefrontController = {
     if (q.search && q.page === 1) await new StorefrontEngagement(req.ctx).recordSearch(q.search, data.total);
     envelope(res, { data });
   }),
+  productOptions: ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).productOptions(req.query as unknown as StorefrontProductsQueryDto) });
+  }),
 
   getProductBySlug: ctrl(async (req: Req, res: Response) => {
     envelope(res, { data: await svc(req).getProductBySlug(String(req.params.slug)) });

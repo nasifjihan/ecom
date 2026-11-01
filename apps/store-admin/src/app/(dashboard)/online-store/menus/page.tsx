@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, CornerDownRight, ListTree, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CornerDownRight, FolderTree, ImagePlus, ListTree, Loader2, Plus, Trash2, X } from "lucide-react";
+import { MENU_ICONS } from "@ecom/shared-types";
+import { MenuIcon } from "@ecom/ui";
+import { useGetCategoryTreeQuery, type Category } from "@/lib/features/catalog/catalog-api-slice";
 import {
   Badge,
   Button,
@@ -209,44 +212,51 @@ function NewMenuDialog({
 
 function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) {
   const [name, setName] = useState(menu.name);
-  const [items, setItems] = useState<MenuItem[]>(menu.items);
+  const original = useMemo(() => normalize(menu.items), [menu.items]);
+  const [items, setItems] = useState<MenuItem[]>(original);
   const [updateMenu, { isLoading: savingMenu }] = useUpdateMenuMutation();
   const [saveItems, { isLoading: savingItems }] = useSaveMenuItemsMutation();
   const [remove] = useDeleteMenuMutation();
   const { data: pages } = useGetCmsPagesQuery({ perPage: 100 });
-  const dirty = name !== menu.name || JSON.stringify(items) !== JSON.stringify(menu.items);
+  const dirty = name !== menu.name || JSON.stringify(items) !== JSON.stringify(original);
 
   const quickLinks = useMemo(
     () => [...QUICK_LINKS, ...(pages?.items ?? []).filter((p) => p.isPublished).map((p) => ({ title: p.title, url: `/${p.slug}`, openInNewTab: false }))],
     [pages],
   );
 
-  const problems = items.flatMap((it, i) =>
-    [it, ...it.children].filter((l) => !l.title.trim() || !validUrl(l.url.trim())).map(() => i),
-  );
+  const problems = flatten(items).filter((l) => !l.title.trim() || !validUrl(l.url.trim()));
 
-  /** Edit helpers work on a path: [rootIndex] or [rootIndex, childIndex]. */
-  const patch = (path: number[], p: Partial<MenuLink>) =>
-    setItems((list) =>
-      list.map((it, i) =>
-        i !== path[0] ? it : path.length === 1 ? { ...it, ...p } : { ...it, children: it.children.map((c, j) => (j === path[1] ? { ...c, ...p } : c)) },
-      ),
-    );
+  /** Edit helpers work on a path: [top], [top, sub] or [top, sub, third]; `fn` changes that item's siblings. */
+  const at = (list: MenuItem[], path: number[], fn: (siblings: MenuItem[], i: number) => MenuItem[]): MenuItem[] =>
+    path.length === 1 ? fn(list, path[0]!) : list.map((it, i) => (i === path[0] ? { ...it, children: at(it.children, path.slice(1), fn) } : it));
+  const patch = (path: number[], p: Partial<MenuLink>) => setItems((list) => at(list, path, (s, i) => s.map((x, j) => (j === i ? { ...x, ...p } : x))));
   const moveIn = <T,>(arr: T[], i: number, d: number) => {
     const next = [...arr];
     const [x] = next.splice(i, 1);
     next.splice(i + d, 0, x!);
     return next;
   };
-  const move = (path: number[], d: -1 | 1) =>
-    setItems((list) =>
-      path.length === 1 ? moveIn(list, path[0]!, d) : list.map((it, i) => (i === path[0] ? { ...it, children: moveIn(it.children, path[1]!, d) } : it)),
-    );
-  const drop = (path: number[]) =>
-    setItems((list) => (path.length === 1 ? list.filter((_, i) => i !== path[0]) : list.map((it, i) => (i === path[0] ? { ...it, children: it.children.filter((_, j) => j !== path[1]) } : it))));
-  const addChild = (i: number) =>
-    setItems((list) => list.map((it, j) => (j === i ? { ...it, children: [...it.children, { title: "", url: "/", openInNewTab: false }] } : it)));
-  const addLink = (l: MenuLink = { title: "", url: "/", openInNewTab: false }) => setItems((list) => [...list, { ...l, children: [] }]);
+  const move = (path: number[], d: -1 | 1) => setItems((list) => at(list, path, (s, i) => moveIn(s, i, d)));
+  const drop = (path: number[]) => setItems((list) => at(list, path, (s, i) => s.filter((_, j) => j !== i)));
+  const addChild = (path: number[]) =>
+    setItems((list) => at(list, path, (s, i) => s.map((x, j) => (j === i ? { ...x, children: [...x.children, blank()] } : x))));
+  const addLink = (l: MenuLink = blank()) => setItems((list) => [...list, { ...l, children: [] }]);
+  const [iconFor, setIconFor] = useState<number[] | null>(null);
+  const iconOf = (path: number[]) => path.reduce<MenuItem | undefined>((node, i, k) => (k === 0 ? items[i] : node?.children[i]), undefined)?.icon ?? "";
+  const { data: categories = [] } = useGetCategoryTreeQuery(undefined, { skip: menu.location !== "header" });
+  const fillFromCategories = () => {
+    if (items.length && !window.confirm("Replace the links in this menu with your categories? You can still change them before saving.")) return;
+    const fromCategory = (c: Category, depth: number): MenuItem => ({
+      title: c.name,
+      titleBn: (c.translations?.bn?.name as string | undefined) ?? "",
+      url: `/products?category=${c.slug}`,
+      openInNewTab: false,
+      icon: "",
+      children: depth < 3 ? (c.children ?? []).filter((x) => x.isActive !== false).map((x) => fromCategory(x, depth + 1)) : [],
+    });
+    setItems(categories.filter((c) => c.isActive !== false && c.menuIncluded !== false).slice(0, 30).map((c) => fromCategory(c, 1)));
+  };
 
   const save = async () => {
     if (problems.length) {
@@ -255,16 +265,15 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
     }
     try {
       if (name.trim() !== menu.name) await updateMenu({ id: menu.id, name: name.trim() }).unwrap();
-      await saveItems({
-        id: menu.id,
-        items: items.map((it) => ({
-          title: it.title.trim(),
-          titleBn: it.titleBn?.trim() ?? "",
-          url: it.url.trim(),
-          openInNewTab: it.openInNewTab,
-          children: it.children.map((c) => ({ title: c.title.trim(), titleBn: c.titleBn?.trim() ?? "", url: c.url.trim(), openInNewTab: c.openInNewTab })),
-        })),
-      }).unwrap();
+      const clean = (it: MenuItem, depth: number): MenuItem => ({
+        title: it.title.trim(),
+        titleBn: it.titleBn?.trim() ?? "",
+        url: it.url.trim(),
+        openInNewTab: it.openInNewTab,
+        icon: it.icon?.trim() ?? "",
+        children: depth < 3 ? it.children.map((c) => clean(c, depth + 1)) : [],
+      });
+      await saveItems({ id: menu.id, items: items.map((it) => clean(it, 1)) }).unwrap();
       toast.success("Menu saved");
     } catch (err) {
       toast.error(errorText(err, "Couldn't save the menu."));
@@ -285,8 +294,13 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
   const row = (l: MenuLink, path: number[], count: number) => {
     const bad = !l.title.trim() || !validUrl(l.url.trim());
     return (
-      <div className={cn("flex flex-wrap items-center gap-2 rounded-md border bg-background p-2", path.length === 2 && "ml-8", bad && "border-rose-300")}>
-        {path.length === 2 && <CornerDownRight className="h-4 w-4 text-slate-400" />}
+      <div className={cn("flex flex-wrap items-center gap-2 rounded-md border bg-background p-2", path.length === 2 && "ml-8", path.length === 3 && "ml-16", bad && "border-rose-300")}>
+        {path.length > 1 && <CornerDownRight className="h-4 w-4 text-slate-400" />}
+        {menu.location === "header" && (
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setIconFor(path)} title="Icon" aria-label={l.icon ? `Icon: ${l.icon}` : "Add an icon"}>
+            {l.icon ? <MenuIcon icon={l.icon} /> : <ImagePlus className="h-4 w-4 text-slate-400" />}
+          </Button>
+        )}
         <Input aria-label="Label" className="h-9 w-40 flex-1 min-w-[8rem]" placeholder="Label" value={l.title} onChange={(e) => patch(path, { title: e.target.value })} />
         <Input
           aria-label="Label in Bangla"
@@ -307,8 +321,8 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={path[path.length - 1] === count - 1} onClick={() => move(path, 1)} aria-label="Move down">
             <ArrowDown className="h-4 w-4" />
           </Button>
-          {path.length === 1 && menu.location === "header" && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => addChild(path[0]!)} title="Add a dropdown link under this one">
+          {path.length < 3 && menu.location === "header" && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => addChild(path)} title="Add a link under this one">
               <Plus className="h-4 w-4" />
             </Button>
           )}
@@ -345,7 +359,12 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
             <div key={i} className="space-y-2">
               {row(it, [i], items.length)}
               {it.children.map((c, j) => (
-                <div key={j}>{row(c, [i, j], it.children.length)}</div>
+                <div key={j} className="space-y-2">
+                  {row(c, [i, j], it.children.length)}
+                  {c.children.map((g, k) => (
+                    <div key={k}>{row(g, [i, j, k], c.children.length)}</div>
+                  ))}
+                </div>
               ))}
             </div>
           ))}
@@ -355,6 +374,11 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
           <Button variant="outline" size="sm" onClick={() => addLink()}>
             <Plus className="mr-1 h-4 w-4" /> Add link
           </Button>
+          {menu.location === "header" && (
+            <Button variant="outline" size="sm" onClick={fillFromCategories} disabled={!categories.length}>
+              <FolderTree className="mr-1 h-4 w-4" /> Fill from categories
+            </Button>
+          )}
           <select
             aria-label="Add a page or common link"
             value=""
@@ -374,10 +398,73 @@ function MenuEditor({ menu, onDeleted }: { menu: Menu; onDeleted: () => void }) 
         </div>
         {menu.location === "header" && (
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Tip: a link to /categories with no dropdown links of its own shows your product categories as a dropdown.
+            Up to three levels: use + on a link to add links under it. Tip: a link to /categories with no links of its own shows your product categories.
           </p>
         )}
       </CardContent>
+      <IconDialog
+        open={iconFor !== null}
+        value={iconFor ? iconOf(iconFor) : ""}
+        onClose={() => setIconFor(null)}
+        onPick={(icon) => {
+          if (iconFor) patch(iconFor, { icon });
+          setIconFor(null);
+        }}
+      />
     </Card>
+  );
+}
+
+/** Every link in the tree, for checking them all. */
+const flatten = (list: MenuItem[]): MenuItem[] => list.flatMap((it) => [it, ...flatten(it.children)]);
+const blank = (): MenuItem => ({ title: "", url: "/", openInNewTab: false, icon: "", children: [] });
+/** The API leaves `children` out at the third level; the editor always has an array. */
+const normalize = (list: (MenuLink & { children?: MenuItem[] })[]): MenuItem[] =>
+  list.map((it) => ({ ...it, icon: it.icon ?? "", children: normalize(it.children ?? []) }));
+
+function IconDialog({ open, value, onClose, onPick }: { open: boolean; value: string; onClose: () => void; onPick: (icon: string) => void }) {
+  const [link, setLink] = useState("");
+  useEffect(() => {
+    if (open) setLink(value && !(MENU_ICONS as readonly string[]).includes(value) ? value : "");
+  }, [open, value]);
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Menu icon</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-8 gap-1.5">
+          {MENU_ICONS.map((name) => (
+            <button
+              key={name}
+              type="button"
+              title={name}
+              aria-label={name}
+              aria-pressed={value === name}
+              onClick={() => onPick(name)}
+              className={cn("flex h-10 items-center justify-center rounded-md border hover:border-blue-500", value === name && "border-blue-600 bg-blue-50 dark:bg-blue-500/10")}
+            >
+              <MenuIcon icon={name} className="h-5 w-5" />
+            </button>
+          ))}
+        </div>
+        <Field label="Or a small image (link)" htmlFor="icon-link" hint="A square image, e.g. from the media library. Starts with / or https://">
+          <div className="flex gap-2">
+            <Input id="icon-link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..." />
+            <Button type="button" variant="outline" disabled={!validUrl(link.trim())} onClick={() => onPick(link.trim())}>
+              Use
+            </Button>
+          </div>
+        </Field>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onPick("")}>
+            No icon
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

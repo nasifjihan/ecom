@@ -91,9 +91,12 @@ export interface MenuLink {
   titleBn?: string;
   url: string;
   openInNewTab: boolean;
+  /** One of MENU_ICONS, or a small image's link; empty for none. */
+  icon?: string;
 }
+/** Up to three levels; the API leaves `children` out at the third. */
 export interface MenuItem extends MenuLink {
-  children: MenuLink[];
+  children: MenuItem[];
 }
 export interface Menu {
   id: string;
@@ -336,6 +339,15 @@ export const contentApi = api.injectEndpoints({
       query: ({ theme, storefrontId }) => ({ url: "/admin/content/theme", method: "PUT", body: theme, params: sfParams(storefrontId) }),
       invalidatesTags: ["Theme", { type: "Store", id: "STOREFRONTS" }],
     }),
+    /** Groups of words that mean the same for shop search ("panjabi", "punjabi"). */
+    getSearchWords: b.query<{ groups: string[][] }, void>({ query: () => "/admin/content/search-words" }),
+    saveSearchWords: b.mutation<{ groups: string[][] }, { groups: string[][] }>({
+      query: (body) => ({ url: "/admin/content/search-words", method: "PUT", body }),
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        const { data } = await queryFulfilled;
+        dispatch(contentApi.util.updateQueryData("getSearchWords", undefined, () => data));
+      },
+    }),
     resetTheme: b.mutation<ThemeSettings, string>({
       query: (storefrontId) => ({ url: "/admin/content/theme", method: "DELETE", params: { storefrontId } }),
       invalidatesTags: ["Theme", { type: "Store", id: "STOREFRONTS" }],
@@ -358,6 +370,8 @@ export const contentApi = api.injectEndpoints({
 
 export const {
   useResetThemeMutation,
+  useGetSearchWordsQuery,
+  useSaveSearchWordsMutation,
   useGetCmsPagesQuery,
   useGetCmsPageQuery,
   useCreateCmsPageMutation,

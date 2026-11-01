@@ -120,7 +120,7 @@ export type Brand = {
 export type ProductsQueryArgs = {
   page?: number;
   perPage?: number;
-  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount";
+  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount" | "relevance";
   /** One id or a comma-separated list; descendants of each category are included. */
   categoryId?: string;
   categorySlug?: string;
@@ -138,7 +138,59 @@ export type ProductsQueryArgs = {
   tag?: string;
   /** These products only, comma-separated ids. */
   ids?: string;
+  /** Size, colour… as `size:M|L;color:Red` (see optionsParam). */
+  options?: string;
+  /** Only products that can be bought now. */
+  inStock?: boolean;
 };
+
+/** A size, colour… filter with how many products each value would show. */
+export interface ProductOptionFacet {
+  slug: string;
+  name: string;
+  values: { value: string; count: number; color?: string }[];
+}
+
+/** { size: ["M", "L"] } → "size:M|L" (empty groups left out). */
+export const optionsParam = (chosen: Record<string, string[]>) =>
+  Object.entries(chosen)
+    .filter(([, v]) => v.length)
+    .map(([k, v]) => `${k}:${v.join("|")}`)
+    .join(";") || undefined;
+
+/** "size:M|L;color:Red" → { size: ["M", "L"], color: ["Red"] } (the API reads it the same way). */
+export function parseOptions(raw: string | null | undefined): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const part of (raw ?? "").split(";")) {
+    const at = part.indexOf(":");
+    if (at < 1) continue;
+    const values = part.slice(at + 1).split("|").map((v) => v.trim()).filter(Boolean);
+    if (values.length) out[part.slice(0, at).trim().toLowerCase()] = [...new Set(values)];
+  }
+  return out;
+}
+
+function productParams(args: ProductsQueryArgs): string {
+  const params = new URLSearchParams();
+  if (args.page) params.set("page", String(args.page));
+  if (args.perPage) params.set("perPage", String(args.perPage));
+  if (args.sort) params.set("sort", args.sort);
+  if (args.categoryId) params.set("categoryId", args.categoryId);
+  if (args.categorySlug) params.set("categorySlug", args.categorySlug);
+  if (args.featured !== undefined) params.set("featured", String(args.featured));
+  if (args.onSale) params.set("onSale", "true");
+  if (args.excludeId) params.set("excludeId", args.excludeId);
+  if (args.brandId) params.set("brandId", args.brandId);
+  if (args.minPrice) params.set("minPrice", String(args.minPrice));
+  if (args.maxPrice) params.set("maxPrice", String(args.maxPrice));
+  if (args.rating) params.set("rating", String(args.rating));
+  if (args.search) params.set("search", args.search);
+  if (args.tag) params.set("tag", args.tag);
+  if (args.ids) params.set("ids", args.ids);
+  if (args.options) params.set("options", args.options);
+  if (args.inStock) params.set("inStock", "true");
+  return params.toString();
+}
 
 export type Paginated<T> = {
   items: T[];
@@ -154,23 +206,7 @@ export const catalogApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getProducts: builder.query<Paginated<ProductSummary>, ProductsQueryArgs>({
       query: (args) => {
-        const params = new URLSearchParams();
-        if (args.page) params.set("page", String(args.page));
-        if (args.perPage) params.set("perPage", String(args.perPage));
-        if (args.sort) params.set("sort", args.sort);
-        if (args.categoryId) params.set("categoryId", args.categoryId);
-        if (args.categorySlug) params.set("categorySlug", args.categorySlug);
-        if (args.featured !== undefined) params.set("featured", String(args.featured));
-        if (args.onSale) params.set("onSale", "true");
-        if (args.excludeId) params.set("excludeId", args.excludeId);
-        if (args.brandId) params.set("brandId", args.brandId);
-        if (args.minPrice) params.set("minPrice", String(args.minPrice));
-        if (args.maxPrice) params.set("maxPrice", String(args.maxPrice));
-        if (args.rating) params.set("rating", String(args.rating));
-        if (args.search) params.set("search", args.search);
-        if (args.tag) params.set("tag", args.tag);
-        if (args.ids) params.set("ids", args.ids);
-        const qs = params.toString();
+        const qs = productParams(args);
         return {
           url: qs ? `/storefront/products?${qs}` : `/storefront/products`,
           method: "GET",
@@ -183,6 +219,11 @@ export const catalogApi = api.injectEndpoints({
               { type: "Product" as const, id: "LIST" },
             ]
           : [{ type: "Product" as const, id: "LIST" }],
+    }),
+
+    getProductOptions: builder.query<ProductOptionFacet[], ProductsQueryArgs>({
+      query: (args) => ({ url: `/storefront/product-options?${productParams(args)}`, method: "GET" }),
+      providesTags: [{ type: "Product" as const, id: "LIST" }],
     }),
 
     getProductBySlug: builder.query<ProductDetail, string>({
@@ -223,6 +264,7 @@ export const catalogTagTypes: readonly TagType[] = STOREFRONT_CATALOG_TAG_TYPES;
 
 export const {
   useGetProductsQuery,
+  useGetProductOptionsQuery,
   useGetProductBySlugQuery,
   useGetCategoriesTreeQuery,
   useGetBrandsQuery,

@@ -21,7 +21,7 @@ export default function SearchPage() {
     setText(q);
     setPage(1);
   }, [q]);
-  const { data, isFetching } = useGetProductsQuery({ search: q, page, perPage: PER_PAGE }, { skip: !q });
+  const { data, isFetching } = useGetProductsQuery({ search: q, page, perPage: PER_PAGE, sort: "relevance" }, { skip: !q });
   const { data: popular = [] } = usePopularSearchesQuery();
   const actions = useProductGridActions();
   const t = useT();
@@ -67,9 +67,16 @@ export default function SearchPage() {
         <Popular />
       ) : (
         <>
-          <h1 className="text-xl font-bold md:text-2xl">
-            {data ? t("{n} results for “{q}”", { n: data.total, q }) : t("Searching for “{q}”…", { q })}
-          </h1>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-xl font-bold md:text-2xl">
+              {data ? t("{n} results for “{q}”", { n: data.total, q }) : t("Searching for “{q}”…", { q })}
+            </h1>
+            {!!data?.total && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/products?search=${encodeURIComponent(q)}`}>{t("Filter by size, colour and more")}</Link>
+              </Button>
+            )}
+          </div>
           {data?.total === 0 ? (
             <div className="space-y-6 rounded-2xl border p-8 text-center">
               <p className="text-muted-foreground">{t("Nothing matches “{q}”. Try a shorter word, or one of these:", { q })}</p>

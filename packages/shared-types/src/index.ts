@@ -224,3 +224,4 @@ export enum EventName {
   COUPON_REDEEMED = "coupon.redeemed",
 }
 export * from "./permissions";
+export * from "./menu-icons";

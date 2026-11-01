@@ -79,6 +79,15 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Recently viewed under a product after opening a few; "Order again" on an old order
 - [ ] Account → Your data: download the file; delete a test account (refused while an order is on its way)
 
+### F. Batch 52 (search, filters, menu), no keys needed
+- [ ] Search "panjbi" or "punjabi": panjabi products are found. Search a mistyped brand or product name
+- [ ] Store admin → Online store → Search words: "Add common words", save; then search "sari" finds sarees
+- [ ] Search results: "Filter by size, colour and more" opens the product list with the same search
+- [ ] Product list: Size and Colour filters (from Catalog → Attributes with "show in filters" on), with counts; a sold-out size doesn't show its products
+- [ ] Colour filter shows swatches (the colour codes in Attributes); "In stock only"; chips remove each filter; the address keeps the filters (copy the link to another tab)
+- [ ] Menus: "Fill from categories" on the header menu; links three levels deep (+ on a link), an icon on some links, save
+- [ ] Shop header: the dropdown opens a side list for the third level; the phone menu shows the third level indented; icons show
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

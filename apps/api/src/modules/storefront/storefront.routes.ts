@@ -33,6 +33,13 @@ storefrontCatalogRouter.get(
   storefrontController.listProducts,
 );
 
+// Size, colour… filters for the same list (its own path so "/products/:slug" can't take it).
+storefrontCatalogRouter.get(
+  "/product-options",
+  validate({ query: StorefrontProductsQueryDto }),
+  storefrontController.productOptions,
+);
+
 storefrontCatalogRouter.get(
   "/products/:slug",
   validate({ params: StorefrontSlugParamDto }),

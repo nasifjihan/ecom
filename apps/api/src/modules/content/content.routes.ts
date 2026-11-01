@@ -29,6 +29,7 @@ import {
 } from "./content.dto"
 import { StorefrontQuery } from "../storefronts/storefronts.dto"
 import { SliderDto, SliderService } from "./sliders"
+import { SearchWordsDto, listSearchWords, saveSearchWords } from "../search/shop-search"
 
 type Req = Request & { ctx: RequestContext }
 type Handler = (svc: ContentService, req: Req) => Promise<unknown>
@@ -280,6 +281,19 @@ adminContentRouter.delete(
     await sliders(r).remove(id(r))
     return { deleted: true }
   }),
+)
+
+// ---- search words (same-meaning words for shop search)
+const storeOf = (r: Req) => {
+  if (r.ctx.storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED")
+  return BigInt(r.ctx.storeId)
+}
+adminContentRouter.get("/search-words", can("online_store.view"), send((_, r) => listSearchWords(storeOf(r))))
+adminContentRouter.put(
+  "/search-words",
+  can("online_store.edit"),
+  validate({ body: SearchWordsDto }),
+  send((_, r) => saveSearchWords(storeOf(r), body<SearchWordsDto>(r))),
 )
 
 // ============================================================ storefront

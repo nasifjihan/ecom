@@ -50,6 +50,8 @@ import { COURIER_NAMES, type Courier } from "../couriers/couriers.rules";
 import { giftFields, GiftProblem, NOT_A_GIFT, type GiftFields } from "../orders/gift.rules";
 import { assertCanOrder } from "../customers/customer-ban";
 import { NewsletterService } from "../customers/newsletter.service";
+import { searchMatches } from "../search/shop-search";
+import { countOptions, filterAttributes, optionsWhere, parseOptions, sellableVariants } from "./product-options";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -331,94 +333,14 @@ export class StorefrontService {
   async listProducts(q: StorefrontProductsQueryDto) {
     const sf = await this.storefront();
     const include = await this.listInclude();
-    const where: Prisma.ProductWhereInput = { storeId: this.storeId, status: "published" };
-    const and: Prisma.ProductWhereInput[] = [inRange(sf)];
-
-    let categoryIds: bigint[] = q.categoryId ? q.categoryId.split(",").map((s) => BigInt(s)) : [];
-    if (q.categorySlug) {
-      const cat = await prisma.category.findFirst({ where: { storeId: this.storeId, slug: q.categorySlug, isActive: true } });
-      if (!cat) return this.page([], 0, q);
-      categoryIds.push(cat.id);
-    }
-    if (categoryIds.length) {
-      categoryIds = await this.expandCategories(categoryIds);
-      where.categories = { some: { categoryId: { in: categoryIds } } };
-    }
-    if (q.brandId) where.brandId = { in: q.brandId.split(",").map((s) => BigInt(s)) };
-    if (q.featured !== undefined) where.featured = q.featured;
-    if (q.rating) where.averageRating = { gte: q.rating };
-    if (q.excludeId) where.id = { not: q.excludeId };
-    if (q.tag) where.tags = { has: q.tag };
-    if (q.ids) where.id = { in: q.ids.split(",").map((s) => BigInt(s)) };
-    if (q.search) {
-      const term = q.search.toLowerCase().trim();
-      and.push({
-        OR: [
-          { name: { contains: q.search, mode: "insensitive" } },
-          { translations: { path: ["bn", "name"], string_contains: q.search.trim() } },
-          { sku: { contains: q.search, mode: "insensitive" } },
-          { shortDescription: { contains: q.search, mode: "insensitive" } },
-          { tags: { has: term } },
-          { brand: { name: { contains: q.search, mode: "insensitive" } } },
-        ],
-      });
-    }
-    // A storefront with its own prices is filtered on them in memory (below), not in the database.
-    const ownPrices = sf.priceAdjustPercent !== 0 ||
-      (await prisma.productStorefront.count({
-        where: { storefrontId: sf.id, OR: [{ regularPrice: { not: null } }, { variantPrices: { not: Prisma.DbNull } }] },
-      })) > 0;
-    const priceRange = q.minPrice !== undefined || q.maxPrice !== undefined;
-    if (priceRange && !ownPrices) {
-      // Filter on the price a shopper pays: salePrice when set, otherwise regularPrice.
-      const range: Prisma.DecimalNullableFilter = {};
-      if (q.minPrice !== undefined) range.gte = q.minPrice;
-      if (q.maxPrice !== undefined) range.lte = q.maxPrice;
-      and.push({ OR: [{ salePrice: range }, { salePrice: null, regularPrice: range }] });
-    }
-    where.AND = and;
+    const filter = await this.productFilter(q, sf);
+    if (!filter) return this.page([], 0, q);
+    const { where, matches, ownPrices, priceRange } = filter;
+    const relevance = q.sort === "relevance" && matches !== null;
 
     const byPrice = q.sort === "price_asc" || q.sort === "price_desc";
-    if (byPrice || q.sort === "discount" || q.onSale || (priceRange && ownPrices)) {
-      // Sort or filter on the price a shopper pays (sale price inside its window, flash sales),
-      // which Prisma's orderBy cannot express, so rank the matching ids in memory and load one page.
-      const candidates = await prisma.product.findMany({
-        where,
-        select: {
-          id: true,
-          regularPrice: true,
-          salePrice: true,
-          salePriceStartAt: true,
-          salePriceEndAt: true,
-          categories: { select: { categoryId: true } },
-          storefronts: ownRow(sf.id),
-        },
-      });
-      const flash = await FlashSales.load(this.storeId, candidates.map((c) => c.id));
-      const dir = q.sort === "price_desc" ? -1 : 1;
-      const ranked = candidates
-        .map((c) => {
-          const { price, compareAtPrice } = pricedWith(flash, c, null, this.sfRow(sf, c, c));
-          return { id: c.id, price, off: compareAtPrice && compareAtPrice > price ? (compareAtPrice - price) / compareAtPrice : 0 };
-        })
-        .filter((r) => (q.minPrice === undefined || r.price >= q.minPrice) && (q.maxPrice === undefined || r.price <= q.maxPrice))
-        .filter((r) => !q.onSale || r.off > 0);
-      if (byPrice) ranked.sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
-      if (q.sort === "discount") ranked.sort((a, b) => b.off - a.off || Number(b.id - a.id));
-      const kept = byPrice || q.sort === "discount"
-        ? ranked.map((r) => r.id)
-        : (
-            await prisma.product.findMany({
-              where: { id: { in: ranked.map((r) => r.id) } },
-              orderBy: this.orderBy(q.sort),
-              select: { id: true },
-            })
-          ).map((r) => r.id);
-      const pageIds = kept.slice((q.page - 1) * q.perPage, q.page * q.perPage);
-      const rows = await prisma.product.findMany({ where: { id: { in: pageIds } }, include });
-      const byId = new Map(rows.map((r) => [r.id, r]));
-      const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
-      return this.page(ordered.map((r) => this.toSummary(r, flash, sf)), kept.length, q);
+    if (byPrice || relevance || q.sort === "discount" || q.onSale || (priceRange && ownPrices)) {
+      return this.rankedPage(q, sf, include, where, matches, byPrice, relevance);
     }
 
     const [total, rows] = await Promise.all([
@@ -433,6 +355,113 @@ export class StorefrontService {
     ]);
     const flash = await FlashSales.load(this.storeId, rows.map((r) => r.id));
     return this.page(rows.map((r) => this.toSummary(r, flash, sf)), total, q);
+  }
+
+  /**
+   * Which published products a list asks for (category, brand, search, size/colour in stock…).
+   * Null when the category asked for doesn't exist. Prices a storefront sets itself, and "on sale",
+   * are checked in memory by the caller.
+   */
+  private async productFilter(q: StorefrontProductsQueryDto, sf: StorefrontInfo) {
+    const where: Prisma.ProductWhereInput = { storeId: this.storeId, status: "published" };
+    const and: Prisma.ProductWhereInput[] = [inRange(sf)];
+
+    let categoryIds: bigint[] = q.categoryId ? q.categoryId.split(",").map((s) => BigInt(s)) : [];
+    if (q.categorySlug) {
+      const cat = await prisma.category.findFirst({ where: { storeId: this.storeId, slug: q.categorySlug, isActive: true } });
+      if (!cat) return null;
+      categoryIds.push(cat.id);
+    }
+    if (categoryIds.length) {
+      categoryIds = await this.expandCategories(categoryIds);
+      where.categories = { some: { categoryId: { in: categoryIds } } };
+    }
+    if (q.brandId) where.brandId = { in: q.brandId.split(",").map((s) => BigInt(s)) };
+    if (q.featured !== undefined) where.featured = q.featured;
+    if (q.rating) where.averageRating = { gte: q.rating };
+    if (q.excludeId) where.id = { not: q.excludeId };
+    if (q.tag) where.tags = { has: q.tag };
+    if (q.ids) where.id = { in: q.ids.split(",").map((s) => BigInt(s)) };
+    // Spelling-tolerant, with the shop's same-meaning words; ids with how well each matched.
+    const matches = q.search ? await searchMatches(this.storeId, q.search) : null;
+    if (matches) and.push({ id: { in: [...matches.keys()] } });
+    if (q.options || q.inStock) and.push(await optionsWhere(this.storeId, q.options, q.inStock ?? false));
+    // A storefront with its own prices is filtered on them in memory (below), not in the database.
+    const ownPrices = sf.priceAdjustPercent !== 0 ||
+      (await prisma.productStorefront.count({
+        where: { storefrontId: sf.id, OR: [{ regularPrice: { not: null } }, { variantPrices: { not: Prisma.DbNull } }] },
+      })) > 0;
+    const priceRange = q.minPrice !== undefined || q.maxPrice !== undefined;
+    if (priceRange && !ownPrices) {
+      // Filter on the price a shopper pays: salePrice when set, otherwise regularPrice.
+      const range: Prisma.DecimalNullableFilter = {};
+      if (q.minPrice !== undefined) range.gte = q.minPrice;
+      if (q.maxPrice !== undefined) range.lte = q.maxPrice;
+      and.push({ OR: [{ salePrice: range }, { salePrice: null, regularPrice: range }] });
+    }
+    where.AND = and;
+    return { where, matches, ownPrices, priceRange };
+  }
+
+  /** Size, colour… filters for a product list, with how many products each value would show. */
+  async productOptions(q: StorefrontProductsQueryDto) {
+    const sf = await this.storefront();
+    const filter = await this.productFilter({ ...q, options: undefined }, sf);
+    if (!filter) return [];
+    const [attrs, variants] = await Promise.all([filterAttributes(this.storeId), sellableVariants(filter.where)]);
+    return countOptions(attrs, variants, parseOptions(q.options));
+  }
+
+  private async rankedPage(
+    q: StorefrontProductsQueryDto,
+    sf: StorefrontInfo,
+    include: Awaited<ReturnType<StorefrontService["listInclude"]>>,
+    where: Prisma.ProductWhereInput,
+    matches: Map<bigint, number> | null,
+    byPrice: boolean,
+    relevance: boolean,
+  ) {
+    // Sort or filter on the price a shopper pays (sale price inside its window, flash sales),
+    // which Prisma's orderBy cannot express, so rank the matching ids in memory and load one page.
+    const candidates = await prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        regularPrice: true,
+        salePrice: true,
+        salePriceStartAt: true,
+        salePriceEndAt: true,
+        saleCount: true,
+        categories: { select: { categoryId: true } },
+        storefronts: ownRow(sf.id),
+      },
+    });
+    const flash = await FlashSales.load(this.storeId, candidates.map((c) => c.id));
+    const dir = q.sort === "price_desc" ? -1 : 1;
+    const ranked = candidates
+      .map((c) => {
+        const { price, compareAtPrice } = pricedWith(flash, c, null, this.sfRow(sf, c, c));
+        return { id: c.id, price, sold: c.saleCount, off: compareAtPrice && compareAtPrice > price ? (compareAtPrice - price) / compareAtPrice : 0 };
+      })
+      .filter((r) => (q.minPrice === undefined || r.price >= q.minPrice) && (q.maxPrice === undefined || r.price <= q.maxPrice))
+      .filter((r) => !q.onSale || r.off > 0);
+    if (byPrice) ranked.sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
+    if (relevance) ranked.sort((a, b) => matches!.get(b.id)! - matches!.get(a.id)! || b.sold - a.sold || Number(b.id - a.id));
+    if (q.sort === "discount") ranked.sort((a, b) => b.off - a.off || Number(b.id - a.id));
+    const kept = byPrice || q.sort === "discount" || relevance
+      ? ranked.map((r) => r.id)
+      : (
+          await prisma.product.findMany({
+            where: { id: { in: ranked.map((r) => r.id) } },
+            orderBy: this.orderBy(q.sort),
+            select: { id: true },
+          })
+        ).map((r) => r.id);
+    const pageIds = kept.slice((q.page - 1) * q.perPage, q.page * q.perPage);
+    const rows = await prisma.product.findMany({ where: { id: { in: pageIds } }, include });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
+    return this.page(ordered.map((r) => this.toSummary(r, flash, sf)), kept.length, q);
   }
 
   private orderBy(sort: StorefrontProductsQueryDto["sort"]): Prisma.ProductOrderByWithRelationInput[] {

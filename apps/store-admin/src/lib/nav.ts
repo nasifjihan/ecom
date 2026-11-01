@@ -15,6 +15,7 @@ import {
   FileText,
   ClipboardList,
   CornerUpRight,
+  SpellCheck,
   Trophy,
   Coins,
   HandCoins,
@@ -162,6 +163,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/online-store/storefronts", label: "Storefronts", icon: Store, perm: "online_store.view" },
       { href: "/online-store/landing-pages", label: "Landing pages", icon: Megaphone, perm: "pages.view" },
       { href: "/online-store/redirects", label: "Redirects", icon: CornerUpRight, perm: "online_store.view" },
+      { href: "/online-store/search-words", label: "Search words", icon: SpellCheck, perm: "online_store.view" },
     ],
   },
   {

@@ -232,13 +232,13 @@ describe.skipIf(!runDb)("storefronts (Postgres)", () => {
   it("uses a storefront's own menu for a place, else the main one", async () => {
     const c = new Content(admin)
     const mainHeader = await c.createMenu({ name: "Main header", location: "header" })
-    await c.setMenuItems(mainHeader.id, { items: [{ title: "All", url: "/products", openInNewTab: false, children: [] }] })
+    await c.setMenuItems(mainHeader.id, { items: [{ title: "All", url: "/products", openInNewTab: false, icon: "", children: [] }] })
     const footer = await c.createMenu({ name: "Help", location: "footer" })
-    await c.setMenuItems(footer.id, { items: [{ title: "FAQ", url: "/faq", openInNewTab: false, children: [] }] })
+    await c.setMenuItems(footer.id, { items: [{ title: "FAQ", url: "/faq", openInNewTab: false, icon: "", children: [] }] })
     expect((await new Content(at(kidsId)).site()).headerMenu?.[0]?.title).toBe("All")
 
     const kidsHeader = await c.createMenu({ name: "Kids header", location: "header", storefrontId: kidsId })
-    await c.setMenuItems(kidsHeader.id, { items: [{ title: "Toys", url: "/products?tag=toys", openInNewTab: false, children: [] }] })
+    await c.setMenuItems(kidsHeader.id, { items: [{ title: "Toys", url: "/products?tag=toys", openInNewTab: false, icon: "", children: [] }] })
     const kids = await new Content(at(kidsId)).site()
     expect(kids.headerMenu?.[0]?.title).toBe("Toys")
     expect(kids.footerMenus.map((m) => m.title)).toEqual(["Help"]) // no own footer: the main one

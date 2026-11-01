@@ -6,5 +6,6 @@
  */
 export * from "./components/primitives";
 export { Markdown, markdownToText } from "./components/markdown";
+export { MenuIcon, MENU_ICON_COMPONENTS } from "./components/menu-icon";
 export { cn } from "@ecom/utils";
 export type { ClassValue } from "clsx";

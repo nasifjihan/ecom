@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronRight,
   LogIn,
   UserCircle,
   Package,
@@ -32,12 +33,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "../ui";
+import { MenuIcon } from "@ecom/ui";
 import { cn } from "@ecom/utils";
 import { LanguageSwitcher, useT } from "../../i18n/provider";
 
 export type MenuLink = {
   label: string;
   href: string;
+  /** One of MENU_ICONS, or an image link. */
+  icon?: string;
   children?: MenuLink[];
 };
 
@@ -143,8 +147,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="px-3 py-2 rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                    className="px-3 py-2 rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors inline-flex items-center gap-1.5"
                   >
+                    <MenuIcon icon={link.icon} />
                     {link.label}
                   </Link>
                 );
@@ -157,6 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onMouseLeave={() => setOpenCategory(null)}
                 >
                   <button className="px-3 py-2 rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors inline-flex items-center gap-1">
+                    <MenuIcon icon={link.icon} />
                     {link.label}
                     <ChevronDown className={cn("h-4 w-4 transition-transform", openCategory === link.href && "rotate-180")} />
                   </button>
@@ -171,13 +177,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                       >
                         <div className="rounded-md border bg-white p-1 shadow-md">
                           {link.children!.map((child) => (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              className="block px-3 py-2 rounded-sm text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                            >
-                              {child.label}
-                            </Link>
+                            <div key={child.href} className="group/sub relative">
+                              <Link
+                                href={child.href}
+                                className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                              >
+                                <MenuIcon icon={child.icon} />
+                                <span className="flex-1">{child.label}</span>
+                                {!!child.children?.length && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </Link>
+                              {!!child.children?.length && (
+                                <div className="absolute left-full top-0 hidden pl-1 group-hover/sub:block group-focus-within/sub:block">
+                                  <div className="min-w-44 rounded-md border bg-white p-1 shadow-md">
+                                    {child.children.map((g) => (
+                                      <Link
+                                        key={g.href}
+                                        href={g.href}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                                      >
+                                        <MenuIcon icon={g.icon} />
+                                        {g.label}
+                                      </Link>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </motion.div>
@@ -315,9 +340,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {!link.children?.length ? (
                   <Link
                     href={link.href}
-                    className="block px-3 py-2 rounded-md font-medium hover:bg-accent hover:text-accent-foreground"
+                    className="flex items-center gap-2 px-3 py-2 rounded-md font-medium hover:bg-accent hover:text-accent-foreground"
                     onClick={() => setMobileOpen(false)}
                   >
+                    <MenuIcon icon={link.icon} />
                     {link.label}
                   </Link>
                 ) : (
@@ -326,7 +352,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                       onClick={() => setOpenCategory(openCategory === link.href ? null : link.href)}
                       className="flex w-full items-center justify-between px-3 py-2 rounded-md font-medium hover:bg-accent hover:text-accent-foreground"
                     >
-                      {link.label}
+                      <span className="flex items-center gap-2">
+                        <MenuIcon icon={link.icon} />
+                        {link.label}
+                      </span>
                       <ChevronDown className={cn("h-4 w-4 transition-transform", openCategory === link.href && "rotate-180")} />
                     </button>
                     <AnimatePresence>
@@ -338,14 +367,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                           className="overflow-hidden pl-4"
                         >
                           {link.children!.map((child) => (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              className="block px-3 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground"
-                              onClick={() => setMobileOpen(false)}
-                            >
-                              {child.label}
-                            </Link>
+                            <div key={child.href}>
+                              <Link
+                                href={child.href}
+                                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => setMobileOpen(false)}
+                              >
+                                <MenuIcon icon={child.icon} />
+                                {child.label}
+                              </Link>
+                              {child.children?.map((g) => (
+                                <Link
+                                  key={g.href}
+                                  href={g.href}
+                                  className="ml-4 flex items-center gap-2 border-l px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                                  onClick={() => setMobileOpen(false)}
+                                >
+                                  <MenuIcon icon={g.icon} />
+                                  {g.label}
+                                </Link>
+                              ))}
+                            </div>
                           ))}
                         </motion.div>
                       )}

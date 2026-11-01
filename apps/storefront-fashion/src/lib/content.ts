@@ -24,6 +24,8 @@ export interface MenuLink {
   title: string;
   url: string;
   openInNewTab: boolean;
+  /** One of MENU_ICONS, or an image link; empty for none. */
+  icon?: string;
   children?: MenuLink[];
 }
 

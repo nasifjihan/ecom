@@ -108,6 +108,7 @@ model Store {
   loginSetting         StoreLoginSetting?
   customerIdentities   CustomerIdentity[]
   searchTerms          SearchTerm[]
+  searchSynonyms       SearchSynonym[]
   productQuestions     ProductQuestion[]
   flashSales           FlashSale[]
   giftCards            GiftCard[]
@@ -1283,6 +1284,8 @@ model Product {
   @@index([storeId, type])
   @@index([tags], type: Gin)
   @@index([storeId, deletedAt])
+  /// Search that forgives spelling ("panjbi" finds "Panjabi"); needs the pg_trgm extension.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_name_trgm_idx")
 }
 
 model ProductImage {
@@ -1563,6 +1566,19 @@ model SearchTerm {
 
   @@unique([storeId, term])
   @@index([storeId, searches])
+}
+
+/// Words that mean the same to shoppers ("panjabi, punjabi", "saree, sari"): searching one finds all.
+model SearchSynonym {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Lower-case, at least two.
+  words     String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId])
 }
 
 /// Questions customers ask on a product page; shown once staff answer and publish them.
