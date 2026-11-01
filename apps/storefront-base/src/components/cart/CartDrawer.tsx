@@ -55,6 +55,7 @@ function CartItemRow({
               <h4 className="font-medium text-sm line-clamp-2 hover:text-primary transition-colors">{item.title}</h4>
             </Link>
             {item.variantLabel && <p className="text-xs text-muted-foreground mt-0.5">{item.variantLabel}</p>}
+            {item.preOrder && <p className="text-xs font-medium text-primary mt-0.5">{t("Pre-order")}</p>}
           </div>
           <button
             onClick={onRemove}

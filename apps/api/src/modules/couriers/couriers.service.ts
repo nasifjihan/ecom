@@ -378,6 +378,7 @@ export class CouriersService {
             id: true,
             number: true,
             status: true,
+            shippingMethodCode: true,
             customerNote: true,
             shippingFirstName: true,
             shippingLastName: true,
@@ -466,6 +467,8 @@ export class CouriersService {
         `Order ${s.order.number} is ${s.order.status.toLowerCase()}`,
         "VALIDATION_FAILED",
       )
+    if (s.order.shippingMethodCode === "pickup")
+      throw new ConflictError(`Order ${s.order.number} is picked up by the customer, so it has no courier`, "VALIDATION_FAILED")
 
     const input = this.bookingInput(s, a, dto)
     if (a.courier === "pathao") {

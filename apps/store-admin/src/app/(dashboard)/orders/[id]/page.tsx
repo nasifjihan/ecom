@@ -75,6 +75,7 @@ import {
 import {
   useGetOrderQuery,
   useUpdateOrderStatusMutation,
+  useMarkReadyForPickupMutation,
   useOrderInvoiceMutation,
   usePackingSlipsMutation,
   useSendOrderEmailMutation,
@@ -518,6 +519,7 @@ export default function OrderDetailPage() {
                 </div>
               )}
               <div className="flex justify-between text-sm"><span className="text-slate-600 dark:text-slate-400">Shipping ({order.shippingMethod})</span><span className="font-medium">{formatCurrency(order.shippingCost)}</span></div>
+              <PickupAndShipDate order={order} />
               {!vat.vatIncluded && vat.vatAmount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400">{vatName}</span>
@@ -804,6 +806,46 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
+    </div>
+  );
+}
+
+/** A pickup order's "ready" step, and when pre-order items are expected to ship. */
+function PickupAndShipDate({ order }: { order: { id: string | number; isPickup?: boolean; readyForPickupAt?: string | null; expectedShipOn?: string | null; status: string } }) {
+  const [markReady, { isLoading }] = useMarkReadyForPickupMutation();
+  const closed = ["CANCELLED", "REFUNDED", "FAILED", "DELIVERED", "COMPLETED"].includes(order.status);
+  if (!order.isPickup && !order.expectedShipOn) return null;
+  return (
+    <div className="space-y-2 rounded-md border border-dashed p-2 text-xs">
+      {order.expectedShipOn && (
+        <p className="text-slate-600 dark:text-slate-400">
+          Pre-order: expected to ship by <strong>{new Date(`${order.expectedShipOn}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</strong>
+        </p>
+      )}
+      {order.isPickup && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-slate-600 dark:text-slate-400">
+            {order.readyForPickupAt ? `Customer told it's ready (${new Date(order.readyForPickupAt).toLocaleString("en-GB")}). Mark Delivered when collected.` : "Customer collects this order. No courier."}
+          </span>
+          {!closed && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isLoading}
+              onClick={async () => {
+                try {
+                  await markReady(order.id).unwrap();
+                  toast.success("Customer told the order is ready to pick up");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Couldn't update the order");
+                }
+              }}
+            >
+              {order.readyForPickupAt ? "Tell them again" : "Mark ready to pick up"}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -115,7 +115,7 @@ export interface ThemeSettings {
   /** The ready-made theme (THEME_PRESETS) and light / dark. */
   appearance: { preset: string; mode: "light" | "dark" | "auto"; shopperSwitch: boolean };
   announcement: { enabled: boolean; text: string; link: string | null };
-  footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
+  footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean; mapQuery?: string };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
   display: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number; sizeGuideUrl: string };
   /** Facebook Pixel, Google Analytics 4 and the Search Console code; empty loads nothing. */

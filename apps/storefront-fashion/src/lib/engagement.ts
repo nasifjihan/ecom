@@ -53,6 +53,10 @@ const engagementApi = api.injectEndpoints({
     askQuestion: b.mutation<{ id: string; status: string }, { productId: string; name?: string; question: string }>({
       query: ({ productId, ...body }) => ({ url: `/storefront/products/${productId}/questions`, method: "POST", body }),
     }),
+    /** "Notify me when it's back" on a sold-out product or option. */
+    requestStockAlert: b.mutation<{ waiting: boolean; by: "sms" | "email" }, { productId: string; variantId?: string; contact: string }>({
+      query: ({ productId, ...body }) => ({ url: `/storefront/products/${productId}/stock-alerts`, method: "POST", body }),
+    }),
     /** One photo for a review (multipart "file"); send the returned key with the review. */
     uploadReviewPhoto: b.mutation<{ key: string; url: string; thumbUrl: string }, FormData>({
       query: (body) => ({ url: "/storefront/reviews/photos", method: "POST", body }),
@@ -80,6 +84,7 @@ const engagementApi = api.injectEndpoints({
 });
 
 export const {
+  useRequestStockAlertMutation,
   useUploadReviewPhotoMutation,
   useSearchSuggestQuery,
   usePopularSearchesQuery,

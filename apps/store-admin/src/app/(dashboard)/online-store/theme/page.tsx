@@ -429,6 +429,17 @@ export default function ThemePage() {
                 <Input id="email" type="email" maxLength={120} value={t.footer.email} onChange={(e) => set("footer", { email: e.target.value })} />
               </Field>
             </div>
+            <Field label="Map (optional)" htmlFor="mapQuery" hint="The shop's address or name as you'd type it into Google Maps. Shown in the footer and on the contact page.">
+              <Input id="mapQuery" maxLength={200} placeholder="House 12, Road 5, Dhanmondi, Dhaka" value={t.footer.mapQuery ?? ""} onChange={(e) => set("footer", { mapQuery: e.target.value })} />
+            </Field>
+            {t.footer.mapQuery?.trim() && (
+              <iframe
+                title="Map preview"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(t.footer.mapQuery.trim())}&z=15&output=embed`}
+                loading="lazy"
+                className="h-40 w-full rounded-lg border-0"
+              />
+            )}
             <Toggle checked={t.footer.showNewsletter} onChange={(v) => set("footer", { showNewsletter: v })} label="Show newsletter sign-up" />
           </CardContent>
         </Card>

@@ -29,6 +29,7 @@ export function defaultTheme(store: {
       phone: store.phone ?? "",
       email: store.email ?? "",
       showNewsletter: true,
+      mapQuery: "",
     },
     social: { facebook: "", instagram: "", youtube: "", twitter: "" },
     display: { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" },

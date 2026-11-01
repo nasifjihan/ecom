@@ -17,6 +17,18 @@ export type ShippingRate = {
   useSlots?: boolean;
 };
 
+/** A place customers collect orders from. */
+export interface PickupPoint {
+  id: string;
+  name: string;
+  address: string;
+  district: string;
+  phone: string | null;
+  hours: string | null;
+  mapUrl: string | null;
+  readyInHours: number;
+}
+
 /** A delivery time slot on one day (GET /storefront/checkout/delivery-choices). */
 export interface DeliverySlotChoice {
   id: string;
@@ -225,6 +237,8 @@ export type PlaceOrderBody = {
   billingSameAsShipping?: boolean;
   /** `ShippingRate.methodId` of the chosen rate. */
   shippingMethodId?: string;
+  /** Picked up from this point instead of delivered (then no shippingMethodId). */
+  pickupPointId?: string;
   shippingProviderId?: string;
   shippingCost?: number;
   /** For options that use time slots: the slot and day picked. */
@@ -407,6 +421,10 @@ export const checkoutApi = api.injectEndpoints({
       query: () => ({ url: `/storefront/checkout/payment-methods`, method: "GET" }),
     }),
 
+    /** Where orders can be picked up (Settings > Shipping > Pickup points). */
+    getPickupPoints: builder.query<PickupPoint[], void>({
+      query: () => ({ url: "/storefront/shipping/pickup-points", method: "GET" }),
+    }),
     getDeliveryChoices: builder.query<DeliveryChoices, void>({
       query: () => ({ url: `/storefront/checkout/delivery-choices`, method: "GET" }),
     }),
@@ -442,6 +460,7 @@ export const checkoutApi = api.injectEndpoints({
 
 export const {
   useGetDeliveryChoicesQuery,
+  useGetPickupPointsQuery,
   useGetLocationsQuery,
   useGetShippingRatesQuery,
   useLazyGetShippingRatesQuery,

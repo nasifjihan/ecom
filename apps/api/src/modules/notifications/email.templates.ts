@@ -125,6 +125,28 @@ export const EMAIL_TEMPLATES = {
     button: { label: "View your order", url: "order.url" },
     variables: [...STORE, ...CUSTOMER, ...ORDER, "update.note"],
   },
+  order_ready_pickup_customer: {
+    label: "Ready to pick up",
+    audience: "customer",
+    description: "Sent when your team marks a pickup order ready to collect.",
+    subject: "Order #{{order.number}} is ready to pick up",
+    message:
+      "# Your order is ready\n\nHi {{customer.first_name}},\n\nOrder #{{order.number}} is ready to pick up at **{{pickup.name}}**, {{pickup.address}}.\n\n{{pickup.hours}}\n\nPlease bring your order number.",
+    blocks: ["order_summary"],
+    button: { label: "View your order", url: "order.url" },
+    variables: [...STORE, ...CUSTOMER, ...ORDER, "pickup.name", "pickup.address", "pickup.hours"],
+  },
+  back_in_stock_customer: {
+    label: "Back in stock",
+    audience: "customer",
+    description: "Sent once to shoppers who asked to be told (Notify me) when a sold-out product is back.",
+    subject: "{{product.name}} is back in stock",
+    message:
+      "# It's back!\n\n**{{product.name}}** {{product.option}} is back in stock at {{store.name}}. Popular sizes go fast, so grab yours soon.",
+    blocks: [],
+    button: { label: "Shop now", url: "product.url" },
+    variables: [...STORE, "product.name", "product.option", "product.url"],
+  },
   customer_welcome: {
     label: "Welcome",
     audience: "customer",

@@ -6689,3 +6689,79 @@ Phase 3 of `FEATURE_LIST_REVIEW.md` section 3.
 - **Not run:**
   - The new `phase3-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC.
   - The browser check, including how each theme looks in dark mode: `TESTING_CHECKLIST.md` section G lists what to try.
+
+---
+
+## ✅ BATCH #54 — Phase 4: pre-order, notify me, delivery estimate, pickup points, maps (2026-11-01)
+Phase 4 of `FEATURE_LIST_REVIEW.md` section 3.
+
+### Pre-order
+- **Fields:** `Product.preOrder`, plus `preOrderDays` (ships N days after the order) or `preOrderShipsOn` (a set day; once that day has passed, "today").
+- **Ship date rule:** `catalog/pre-order.ts` works out the date in Dhaka calendar days.
+- **Product editor:** a Pre-order box on the Inventory tab.
+- **Selling with no stock:**
+  - Pre-order products count as sellable: `available()` in the storefront, and the stock ledger's "available" guard lets them through like backorders.
+  - Stock is still reserved and moved as usual.
+- **Shop:**
+  - A "PRE-ORDER" badge on cards, "Pre-order now" and "Pre-order: ships around <date>" on the product page.
+  - The note is also on cart lines and in the cart drawer.
+- **Orders:**
+  - Each pre-order line keeps `meta.preOrder.shipsOn`, and `Order.expectedShipOn` is the latest.
+  - The date shows on the admin and customer order pages and in the order emails' item lines.
+
+### Notify me when it's back
+- **Requests:** a new `StockAlert` table, one request per option per contact (a Bangladeshi mobile or an email). Asking again starts a fresh request. Requests lapse after 90 days, and a contact can have at most 30 open.
+- **Endpoint:** `POST /api/storefront/products/:id/stock-alerts`; signed-in or not.
+- **Shop:** the "Notify me" box shows on a sold-out product or option.
+- **Sending:**
+  - The stock ledger (`moveStock`, which every stock change goes through) spots "sold out → available" and calls `scheduleBackInStock`. That covers purchases, adjustments, transfers and cancellations.
+  - A few seconds later `notifyBackInStock` re-checks the stock, claims the requests with one timestamp (so two servers never both send), and sends an SMS (new `back_in_stock` SMS event) or email (new `back_in_stock_customer` template). Both can be edited or turned off.
+  - Shortcut, noted in code: the timer is in-process. If the server stops in those seconds, the requests stay and go out on the next restock.
+- **Admin:**
+  - "Waiting for stock" on the product's Inventory tab.
+  - "Shoppers are waiting for" on the Inventory page (`/admin/inventory/most-wanted`).
+
+### Delivery estimate
+- **Where:** `_components/delivery-estimate.tsx` on the product page and in the cart.
+- **How:** the shopper picks an area (the checkout's location pickers) and sees each delivery option's charge and days. It uses the same rates API as checkout, with the cart's real total and weight.
+- **Pre-order:** the waiting days are added.
+- **Remembered:** the area is kept in the browser; signed-in shoppers start with their default address.
+- **Replaced:** the old "shown at checkout" line.
+
+### Pickup points
+- **Admin:**
+  - A new `PickupPoint` table: name, address, district, phone, hours, Google Maps link, ready-in hours, warehouse, on/off.
+  - Managed on **Shipping → Pickup points**, with routes under `/api/admin/shipping/pickup-points` and the shipping permissions.
+- **Checkout:**
+  - "Deliver to me / Pick up from the shop (free)". With pickup, only name and phone stay; the address fields, gift, courier and delivery options are hidden.
+  - `PlaceOrderDto` takes `pickupPointId` instead of `shippingMethodId`, exactly one of the two.
+- **Order engine:**
+  - It already had a pickup delivery type, used by manual orders; it now takes a point. The point's address becomes the shipping address, the delivery is free and named "Pickup: <point>", and no courier is set.
+  - The order is packed from the point's warehouse when it has one, and saved with `Order.pickupPointId`.
+- **Courier booking:** refuses pickup orders.
+- **Staff:**
+  - "Mark ready to pick up" on the order page (`POST /api/admin/orders/:id/ready-for-pickup`). It sets `readyForPickupAt`, adds a history note, and sends the new `order_ready_pickup_customer` email and `pickup_ready` SMS ({place} added to the SMS variables).
+  - "Collected" is the existing Delivered status. I used this action instead of a new order status, because the statuses drive stock, money and couriers.
+- **Customer's order page:** shows "You'll pick this up at…" and then "Ready to pick up".
+
+### Maps
+- **Setting:** Theme → Footer → "Map": an address or place name as typed into Google Maps (`footer.mapQuery`), with a preview in the admin.
+- **Where it shows:** the footer, and the contact page with a list of the pickup points (each with its own map). Pages with the `contact` slug get `contact-extras.tsx` under their content.
+- **No key:** it uses Google's free embed (`MapEmbed`), loaded only when it scrolls near.
+
+### Also
+- **Pre-existing flake fixed:** `translations.test.ts` imported the settings module inside the test, which could pass the 5-second timeout on a busy machine (it failed twice). It now imports at the top.
+- **Type change:** `STATUS_EVENTS` is narrowed to the order-status SMS events, so WhatsApp keeps its own list.
+
+### Migration
+- `20261101200000_preorder_alerts_pickup` adds the pre-order columns and the `Order` columns (`pickupPointId`, `readyForPickupAt`, `expectedShipOn`).
+- It creates the `StockAlert` and `PickupPoint` tables.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 65 files and 839 tests pass, twice in a row. New: `pre-order.test.ts` and `back-in-stock.test.ts`.
+- **Bangla check:** passes.
+- **Not run:**
+  - The new `phase4-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers pre-order with no stock and its dates, notify-me sent once after a restock, and a pickup order's address, charge and warehouse.
+  - The browser check: `TESTING_CHECKLIST.md` section H lists what to try.

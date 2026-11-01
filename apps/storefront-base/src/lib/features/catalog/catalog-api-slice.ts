@@ -43,6 +43,8 @@ export type ProductSummary = {
   hasVariants?: boolean;
   isNew?: boolean;
   isOutOfStock?: boolean;
+  /** Can be ordered now, ships later (around shipsOn, YYYY-MM-DD). */
+  preOrder?: { shipsOn: string | null } | null;
   brand?: { id: string; slug: string; name: string };
 };
 

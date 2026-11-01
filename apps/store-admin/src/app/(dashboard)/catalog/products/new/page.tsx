@@ -119,6 +119,9 @@ const productCreateSchema = z.object({
   manageStock: z.boolean().default(true),
   lowStockThreshold: z.coerce.number<number>().int().min(0).optional(),
   allowBackorder: z.boolean().default(false),
+  preOrder: z.boolean().default(false),
+  preOrderDays: z.number().int().min(1).max(365).nullable().optional(),
+  preOrderShipsOn: z.string().optional().or(z.literal("")),
   weight: z.coerce.number<number>().min(0).nullable().optional(),
   length: z.coerce.number<number>().min(0).nullable().optional(),
   width: z.coerce.number<number>().min(0).nullable().optional(),
@@ -189,6 +192,9 @@ export default function NewProductPage() {
     manageStock: true,
     lowStockThreshold: 5,
     allowBackorder: false,
+      preOrder: false,
+      preOrderDays: null,
+      preOrderShipsOn: "",
     weight: null,
     length: null,
     width: null,
@@ -338,6 +344,9 @@ export default function NewProductPage() {
         stockQty: values.stockQty,
         lowStockThreshold: values.lowStockThreshold,
         allowBackorder: values.allowBackorder,
+          preOrder: values.preOrder,
+          preOrderDays: values.preOrder ? (values.preOrderDays ?? null) : null,
+          preOrderShipsOn: values.preOrder && values.preOrderShipsOn ? values.preOrderShipsOn : null,
         weight: values.weight ?? null,
         length: values.length ?? null,
         width: values.width ?? null,
@@ -857,6 +866,26 @@ export default function NewProductPage() {
                             </FormItem>
                           )}
                         />
+                      </div>
+
+                      <div className="space-y-3 rounded-md border p-3">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <Checkbox checked={!!watch("preOrder")} onCheckedChange={(v) => setValue("preOrder", !!v, { shouldDirty: true })} />
+                          Pre-order: sell before the stock arrives
+                        </label>
+                        {watch("preOrder") && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="pre-days">Ships in (days after the order)</Label>
+                              <Input id="pre-days" type="number" min={1} max={365} value={watch("preOrderDays") ?? ""} onChange={(e) => setValue("preOrderDays", e.target.value === "" ? null : Number(e.target.value), { shouldDirty: true })} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="pre-date">Or ships from (a set day)</Label>
+                              <Input id="pre-date" type="date" value={watch("preOrderShipsOn") ?? ""} onChange={(e) => setValue("preOrderShipsOn", e.target.value, { shouldDirty: true })} />
+                            </div>
+                            <p className="text-xs text-muted-foreground sm:col-span-2">Shoppers see "Pre-order" and when it ships; the set day wins over the days. It can be ordered with no stock.</p>
+                          </div>
+                        )}
                       </div>
 
                       <Separator />

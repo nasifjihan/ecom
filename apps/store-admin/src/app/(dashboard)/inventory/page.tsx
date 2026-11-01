@@ -85,6 +85,7 @@ import {
   type AdjustmentReason,
 } from "@/lib/features/operations/operations-api-slice";
 import { cn } from "@/components/ui";
+import { MostWanted } from "@/components/inventory/waiting-for-stock";
 
 const ADJUSTMENT_TYPE_STYLES: Record<AdjustmentType, string> = {
   ADD: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-transparent",
@@ -389,6 +390,8 @@ export default function InventoryPage() {
           </motion.div>
         ))}
       </div>
+
+      <MostWanted />
 
       <Card className="border-slate-200 shadow-sm dark:border-slate-800 overflow-hidden">
         <CardContent className="p-0">

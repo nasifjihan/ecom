@@ -279,7 +279,7 @@ export class EmailService {
     const summary: OrderSummary = {
       items: order.items.map((i) => ({
         name: i.productName,
-        detail: variantText(i.variantValues),
+        detail: [variantText(i.variantValues), preOrderNote(i.meta)].filter(Boolean).join(" · "),
         qty: i.quantity,
         total: money(i.lineSubtotal),
         imageUrl: i.imageUrl,
@@ -373,6 +373,32 @@ export class EmailService {
       recipientType: "customer",
       recipientId: d.order.customerId,
       orderId,
+    })
+  }
+
+  /** "Ready to pick up" for an order collected from a pickup point. */
+  async orderReadyForPickup(orderId: bigint) {
+    const d = await this.orderDetails(orderId)
+    if (!d) return
+    const point = await prisma.order.findFirst({ where: { id: orderId, storeId: this.storeId }, select: { pickupPoint: { select: { name: true, address: true, hours: true } } } })
+    if (!point?.pickupPoint) return
+    const p = point.pickupPoint
+    await this.send("order_ready_pickup_customer", {
+      to: [d.order.billingEmail],
+      vars: { ...d.vars, "pickup.name": p.name, "pickup.address": p.address, "pickup.hours": p.hours ? `Open ${p.hours}.` : "" },
+      order: d.summary,
+      recipientType: "customer",
+      recipientId: d.order.customerId,
+      orderId,
+    })
+  }
+
+  /** "Back in stock" to a shopper who asked for it (Notify me). */
+  async backInStock(to: string, product: { name: string; option: string | null; url: string }) {
+    await this.send("back_in_stock_customer", {
+      to: [to],
+      vars: { "product.name": product.name, "product.option": product.option ? `(${product.option})` : "", "product.url": product.url },
+      recipientType: "customer",
     })
   }
 
@@ -686,6 +712,12 @@ export class EmailService {
         "report.summary": "Net sales: ৳1,84,250 (+12% vs the period before)\nOrders: 96 (+8% vs the period before)\nGross profit: ৳61,400 (+15% vs the period before)",
         "report.list": "Sales & profit, Products",
         "report.admin_url": `${urls.admin}/reports`,
+        "pickup.name": "Dhanmondi office",
+        "pickup.address": "House 12, Road 5, Dhanmondi, Dhaka",
+        "pickup.hours": "Open Sat–Thu, 10am–8pm.",
+        "product.name": "Cotton Panjabi",
+        "product.option": "(Size: L)",
+        "product.url": `${urls.storefront}/products`,
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },
@@ -823,4 +855,13 @@ export class EmailService {
 /** Runs an email job in the background; a failure is logged and never reaches the caller. */
 export function inBackground(what: string, run: () => Promise<unknown>) {
   void run().catch((err: unknown) => logger.error({ err, what }, "Email notification failed"))
+}
+
+/** "Pre-order, ships around 10 Nov" for a pre-order line (its meta.preOrder.shipsOn). */
+function preOrderNote(meta: unknown): string {
+  const p = (meta as { preOrder?: { shipsOn?: string | null } } | null)?.preOrder
+  if (!p) return ""
+  if (!p.shipsOn) return "Pre-order"
+  const day = new Date(`${p.shipsOn}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
+  return `Pre-order, ships around ${day}`
 }

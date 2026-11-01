@@ -218,6 +218,8 @@ export const ThemeDto = z.object({
     phone: text(40),
     email: text(120),
     showNewsletter: z.boolean(),
+    /** A map in the footer and on the contact page: the address or place name as typed into Google Maps. */
+    mapQuery: text(200).default(""),
   }),
   social: z.object({ facebook: link, instagram: link, youtube: link, twitter: link }),
 })

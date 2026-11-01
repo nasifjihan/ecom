@@ -135,6 +135,11 @@ export interface Order {
   transactionId?: string;
   paidAt?: string;
   shippingMethod?: string;
+  /** Collected from a pickup point, and when staff marked it ready. */
+  isPickup?: boolean;
+  readyForPickupAt?: string | null;
+  /** Has pre-order items: the day the last is expected to ship. */
+  expectedShipOn?: string | null;
   shippingZone?: ShippingZone;
   trackingNo?: string;
   carrier?: string;
@@ -614,6 +619,9 @@ interface ApiOrder {
   transactionId: string | null;
   paidAt: string | null;
   shippingMethodName: string | null;
+  shippingMethodCode?: string | null;
+  readyForPickupAt?: string | null;
+  expectedShipOn?: string | null;
   trackingNumber: string | null;
   itemsSubtotal: string;
   discountTotal: string;
@@ -723,6 +731,9 @@ export function fromApiOrder(o: ApiOrder): Order {
     transactionId: o.transactionId ?? undefined,
     paidAt: o.paidAt ?? undefined,
     shippingMethod: o.shippingMethodName ?? undefined,
+    isPickup: o.shippingMethodCode === "pickup",
+    readyForPickupAt: o.readyForPickupAt ?? null,
+    expectedShipOn: o.expectedShipOn ? o.expectedShipOn.slice(0, 10) : null,
     trackingNo: o.trackingNumber ?? undefined,
     deliveredAt: o.completedAt ?? undefined,
     subtotal: Number(o.itemsSubtotal),
@@ -858,6 +869,11 @@ export const operationsApiSlice = api.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "Order", id }],
     }),
 
+    /** A pickup order is ready to collect: the customer gets an email and SMS. */
+    markReadyForPickup: builder.mutation<{ readyForPickupAt: string }, string | number>({
+      query: (id) => ({ url: `/admin/orders/${id}/ready-for-pickup`, method: "POST" }),
+      invalidatesTags: (_r, _e, id) => [{ type: "Order", id }],
+    }),
     updateOrderStatus: builder.mutation<
       unknown,
       { id: string | number; status: OrderStatus; note?: string }
@@ -1030,6 +1046,15 @@ export const operationsApiSlice = api.injectEndpoints({
       },
     }),
 
+    /** Products shoppers are waiting for (Notify me), most wanted first. */
+    getMostWanted: builder.query<{ productId: string; productName: string; option: string | null; waiting: number }[], void>({
+      query: () => "/admin/inventory/most-wanted",
+    }),
+    /** Who is waiting for one product, by option. */
+    getStockAlerts: builder.query<{ id: string; variantLabel: string | null; contact: string; createdAt: string }[], string | number>({
+      query: (productId) => `/admin/products/${productId}/stock-alerts`,
+    }),
+
     getStockList: builder.query<
       PaginatedResponse<StockItem> & { summary: StockSummary; warehouses: StockWarehouse[] },
       StockFilters
@@ -1155,6 +1180,9 @@ export const operationsApiSlice = api.injectEndpoints({
 });
 
 export const {
+  useMarkReadyForPickupMutation,
+  useGetMostWantedQuery,
+  useGetStockAlertsQuery,
   useGetOrderListQuery,
   useGetOrderQuery,
   useUpdateOrderStatusMutation,

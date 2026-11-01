@@ -140,3 +140,4 @@ export { Tracking, track } from "./lib/tracking";
 export type { TrackedItem } from "./lib/tracking";
 export { themeCss, modeScript, hexToHsl, MODE_COOKIE } from "./lib/theme-css";
 export { ModeSwitch } from "./components/layout/ModeSwitch";
+export { MapEmbed, mapEmbedSrc } from "./components/layout/MapEmbed";

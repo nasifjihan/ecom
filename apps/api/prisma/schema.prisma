@@ -109,6 +109,8 @@ model Store {
   customerIdentities   CustomerIdentity[]
   searchTerms          SearchTerm[]
   searchSynonyms       SearchSynonym[]
+  stockAlerts          StockAlert[]
+  pickupPoints         PickupPoint[]
   productQuestions     ProductQuestion[]
   flashSales           FlashSale[]
   giftCards            GiftCard[]
@@ -1247,6 +1249,11 @@ model Product {
   ogImageUrl            String?
   /// YouTube, Facebook, Vimeo or .mp4 link, shown as the last item in the gallery.
   videoUrl              String?
+  /// Can be ordered with no stock; ships later (preOrderShipsOn, else preOrderDays after the order).
+  preOrder              Boolean                @default(false)
+  preOrderDays          Int?
+  preOrderShipsOn       DateTime?              @db.Date
+  stockAlerts           StockAlert[]
   schemaType            String?
   translations          Json?
   fulfillmentType       String                 @default("own")
@@ -1760,6 +1767,13 @@ model Order {
   /// The courier the customer chose at checkout; booking uses it before the storefront's default.
   courierAccountId       BigInt?
   courierAccount         CourierAccount?      @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  /// Picked up from this point instead of delivered (no courier).
+  pickupPointId          BigInt?
+  pickupPoint            PickupPoint?         @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
+  /// Staff marked a pickup order ready (the customer was told).
+  readyForPickupAt       DateTime?
+  /// Has pre-order items: the latest day they are expected to ship.
+  expectedShipOn         DateTime?            @db.Date
   trackingNumber         String?
   trackingUrl            String?
   estimatedDelivery      DateTime?
@@ -3261,6 +3275,7 @@ model Warehouse {
   sortOrder    Int              @default(0)
   stock        WarehouseStock[]
   orders       Order[]
+  pickupPoints PickupPoint[]
   shipments    Shipment[]
   purchases    Purchase[]
   transfersOut StockTransfer[]  @relation("TransferFrom")
@@ -3818,4 +3833,53 @@ model DataJob {
   createdAt   DateTime  @default(now())
 
   @@index([storeId, createdAt])
+}
+
+/// "Notify me when it's back": a shopper waiting for a sold-out product or option. Sent once.
+model StockAlert {
+  id           BigInt    @id @default(autoincrement())
+  storeId      BigInt
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId    BigInt
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId    BigInt?
+  /// productId or productId:variantId (one request per option per contact).
+  skuKey       String
+  /// The option as the shopper saw it ("Size: M").
+  variantLabel String?
+  /// A Bangladeshi mobile (sent by SMS) or an email address.
+  contact      String
+  customerId   BigInt?
+  notifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([storeId, skuKey, contact])
+  @@index([storeId, productId, notifiedAt])
+}
+
+/// A place customers collect orders from (the shop's storage room or office).
+model PickupPoint {
+  id           BigInt     @id @default(autoincrement())
+  storeId      BigInt
+  store        Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  address      String
+  district     String     @default("")
+  phone        String?
+  /// Opening hours as the shop writes them ("Sat–Thu, 10am–8pm").
+  hours        String?
+  /// A Google Maps link or the address for the map.
+  mapUrl       String?
+  /// Ready this many hours after the order (0: as soon as it's packed).
+  readyInHours Int        @default(24)
+  /// Orders picked up here are packed from this warehouse.
+  warehouseId  BigInt?
+  warehouse    Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  isActive     Boolean    @default(true)
+  sortOrder    Int        @default(0)
+  orders       Order[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([storeId, isActive])
 }

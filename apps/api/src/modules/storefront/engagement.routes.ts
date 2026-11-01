@@ -16,6 +16,7 @@ import { BadRequestError, TooLargeError, ctrl, envelope, type RequestContext } f
 import { authMiddleware, validate } from "../../middleware"
 import { StorefrontEngagement } from "./engagement"
 import { MAX_REVIEW_PHOTOS, MAX_REVIEW_PHOTO_BYTES, uploadReviewPhoto } from "./review-photos"
+import { requestStockAlert } from "../stock/back-in-stock"
 
 type Req = Request & { ctx: RequestContext }
 const svc = (req: Req) => new StorefrontEngagement(req.ctx)
@@ -155,5 +156,25 @@ storefrontWishlistRouter.delete(
         BigInt((req.params as { productId: string }).productId),
       ),
     })
+  }),
+)
+
+// "Notify me when it's back" on a sold-out product or option (signed in or not).
+storefrontEngagementRouter.post(
+  "/products/:id/stock-alerts",
+  authMiddleware("optional"),
+  validate({
+    params: IdParam,
+    body: z.object({ variantId: z.coerce.bigint().positive().optional().nullable(), contact: z.string().trim().min(5).max(254) }),
+  }),
+  ctrl(async (req: Req, res: Response) => {
+    const body = req.body as { variantId?: bigint | null; contact: string }
+    const data = await requestStockAlert(BigInt(req.ctx.storeId!), {
+      productId: id(req),
+      variantId: body.variantId ?? null,
+      contact: body.contact,
+      customerId: req.ctx.customer?.id ?? null,
+    })
+    envelope(res, { status: 201, data, message: "We'll tell you when it's back" })
   }),
 )

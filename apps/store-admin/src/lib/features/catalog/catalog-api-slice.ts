@@ -37,6 +37,10 @@ export interface Product {
   relatedProductIds?: (string | number)[];
   /** YouTube, Facebook, Vimeo or .mp4 link, last in the gallery. */
   videoUrl?: string | null;
+  /** Sold before the stock arrives; ships on preOrderShipsOn, else preOrderDays after the order. */
+  preOrder?: boolean;
+  preOrderDays?: number | null;
+  preOrderShipsOn?: string | null;
   /** Lower-case search and filter words. */
   tags?: string[];
   /** Rows of the product page's specifications table. */

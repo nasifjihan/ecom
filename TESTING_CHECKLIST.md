@@ -97,6 +97,14 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Write a review with 1–4 photos (signed in): they show in the review and under "Customer photos"; tap to enlarge
 - [ ] Marketing → Reviews: the photos show; remove one, the review stays
 
+### H. Batch 54 (pre-order, notify me, delivery estimate, pickup, maps), no keys needed
+- [ ] Product editor → Inventory: tick Pre-order, set days or a day; the shop shows "PRE-ORDER", "Pre-order now" and "ships around …", and the order is placed with no stock. The admin order and the customer's order show the ship date
+- [ ] Sold-out size: "Notify me" takes a mobile or email. Add stock (adjustment or purchase): within seconds the SMS (SMS log) or email (Mailpit) goes out, once. The product's Inventory tab and the Inventory page show who is waiting
+- [ ] Product page and cart: "Deliver to": pick a district; charges and days per option
+- [ ] Shipping → Pickup points: add one (with a warehouse). Checkout: "Pick up from the shop": no address fields, free. Admin order: "Mark ready to pick up" sends the email and SMS; no courier booking
+- [ ] Theme → Footer → Map: the map shows in the footer and on the contact page with the pickup points
+- [ ] Settings → SMS and Emails: the new "Ready to pick up" and "Back in stock" messages can be edited and turned off
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

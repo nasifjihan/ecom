@@ -111,7 +111,9 @@ export const PlaceOrderDto = z.object({
   shippingAddress: StorefrontAddressDto,
   billingAddress: StorefrontAddressDto.optional(),
   billingSameAsShipping: z.boolean().optional().default(true),
-  shippingMethodId: z.coerce.bigint().positive(),
+  /** A delivery option, or (with no delivery) the pickup point the customer will collect from. */
+  shippingMethodId: z.coerce.bigint().positive().optional(),
+  pickupPointId: z.coerce.bigint().positive().optional(),
   /** For delivery options that use time slots: the slot and day picked. */
   deliverySlot: z.object({ slotId: z.string().regex(/^\d{1,18}$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).optional(),
   /** A gift: sent to the shipping address; the card message, who it's from, prices off the packing slip. */
@@ -137,7 +139,7 @@ export const PlaceOrderDto = z.object({
   /** A salesperson's share-link code (?sp=CODE): the order is credited to them. */
   salesCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{3,20}$/).optional().or(z.literal("")),
   termsAgreed: z.literal(true, { error: "You must accept the terms" }),
-});
+}).refine((v) => !!v.shippingMethodId !== !!v.pickupPointId, { message: "Choose a delivery option or a pickup point", path: ["shippingMethodId"] });
 export type PlaceOrderDto = z.infer<typeof PlaceOrderDto>;
 
 export const MyOrdersQueryDto = z.object({

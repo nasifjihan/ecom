@@ -180,6 +180,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/shipping/zones", label: "Zones", icon: Map, perm: "shipping.view" },
       { href: "/shipping/locations", label: "Delivery areas", icon: MapPin, perm: "shipping.view" },
       { href: "/shipping/slots", label: "Delivery slots", icon: CalendarClock, perm: "shipping.view" },
+      { href: "/shipping/pickup", label: "Pickup points", icon: Store, perm: "shipping.view" },
       { href: "/shipping/taxes", label: "Taxes", icon: Receipt, perm: "taxes.view" },
     ],
   },

@@ -7,6 +7,8 @@ import { BulkPrices, bulkUnitPrice } from "./bulk-prices";
 import { tiersForOption, useProductBulkPrices } from "@/lib/wholesale";
 import { QuestionsSection, ReviewForm } from "./engagement-sections";
 import { RecentlyViewed } from "./recently-viewed";
+import { NotifyMe } from "./notify-me";
+import { DeliveryEstimate } from "../../_components/delivery-estimate";
 import { HoverZoom, MediaViewer, ProductVideo } from "./media-viewer";
 import { videoEmbed } from "@ecom/utils";
 import Link from "next/link";
@@ -57,6 +59,8 @@ import {
   formatMoney,
   toast,
   track,
+  useLocale,
+  DATE_LOCALES,
 } from "@ecom/storefront-base";
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -270,6 +274,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       qty,
       weightKG: product.weightKG,
       variantLabel: selectedVariant?.label,
+      preOrder: product.preOrder ?? null,
     });
     return true;
   };
@@ -290,6 +295,8 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
 
   const averageRating = product.rating ?? 0;
   const display = useDisplay();
+  const { locale } = useLocale();
+  const shipDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "long" });
   const sizeGuide = product.sizeGuideUrl || display.sizeGuideUrl;
   const ratingCounts = React.useMemo(() => {
     const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
@@ -558,7 +565,12 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                {!inStock ? (
+                {product.preOrder && (
+                  <span className="font-medium text-primary">
+                    {product.preOrder.shipsOn ? t("Pre-order: ships around {date}", { date: shipDay(product.preOrder.shipsOn) }) : t("Pre-order")}
+                  </span>
+                )}
+                {product.preOrder ? null : !inStock ? (
                   <span className="text-destructive font-medium">{t("Currently out of stock")}</span>
                 ) : display.showLowStock && stockLeft !== null && stockLeft <= (product.lowStockThreshold ?? display.lowStockThreshold) ? (
                   <span className="font-medium text-amber-600">{t("Hurry, only {n} left", { n: stockLeft })}</span>
@@ -569,10 +581,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               </div>
             </div>
 
+            {!inStock && !product.preOrder && (!hasVariants || selectedVariant) && (
+              <NotifyMe productId={product.id} variantId={selectedVariant?.id} option={selectedVariant?.label} />
+            )}
+
             <div className="flex flex-wrap gap-3 pt-2">
               <Button size="lg" className="flex-1 min-w-[220px] h-12 text-base shadow-soft" onClick={handleAddToCart} disabled={!inStock}>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                {inStock ? `${t("Add to Cart")} — ${formatMoney(price * qty)}` : t("Out of Stock")}
+                {inStock ? `${product.preOrder ? t("Pre-order now") : t("Add to Cart")} — ${formatMoney(price * qty)}` : t("Out of Stock")}
               </Button>
               {inStock && (
                 <Button size="lg" variant="secondary" className="h-12 min-w-[130px]" onClick={() => addToCart() && router.push("/checkout")}>
@@ -603,11 +619,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               </div>
             )}
 
+            <DeliveryEstimate
+              subtotal={price * qty}
+              weightKG={(product.weightKG ?? 0) * qty || undefined}
+              qty={qty}
+              extraDays={product.preOrder?.shipsOn ? Math.max(0, Math.ceil((new Date(`${product.preOrder.shipsOn}T00:00:00`).getTime() - Date.now()) / 86_400_000)) : 0}
+            />
+
             <div className="pt-2 text-xs text-muted-foreground space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Truck className="h-3.5 w-3.5 text-primary" />
-                {t("Delivery time and charge are shown at checkout")}
-              </div>
               <div className="flex items-center gap-2">
                 <RotateCcw className="h-3.5 w-3.5 text-primary" />
                 {t("Cash on Delivery available nationwide")}

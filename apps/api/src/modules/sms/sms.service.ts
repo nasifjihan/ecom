@@ -289,7 +289,7 @@ export class SmsService {
   private async orderVars(orderId: bigint) {
     const o = await prisma.order.findFirst({
       where: { id: orderId, storeId: this.storeId },
-      include: { shipments: { orderBy: { createdAt: "desc" }, take: 1 } },
+      include: { shipments: { orderBy: { createdAt: "desc" }, take: 1 }, pickupPoint: { select: { name: true, address: true } } },
     })
     if (!o) return null
     const { brand, urls } = await storeBrand(this.storeId)
@@ -310,6 +310,7 @@ export class SmsService {
         courier: courier ? ` with ${courier}` : "",
         tracking: tracking ? `Track: ${tracking}` : number ? `Tracking no: ${number}` : "",
         link: `${urls.storefront}/checkout/thank-you?key=${encodeURIComponent(o.orderKey)}`,
+        place: o.pickupPoint ? `${o.pickupPoint.name}, ${o.pickupPoint.address}` : "",
       },
     }
   }
@@ -441,5 +442,13 @@ export class SmsService {
       },
     })
     return { customer, created: true }
+  }
+
+  /** "Back in stock" to a shopper who asked for it (Notify me), when the shop has that SMS on. */
+  async backInStock(to: string, product: string, link: string) {
+    const setting = eventSettings((await this.row())?.events).back_in_stock
+    if (!setting.enabled || !bdMobile(to)) return null
+    const { brand } = await storeBrand(this.storeId)
+    return this.send({ to, text: renderSms(setting.template, { product, link, store: brand.storeName }), kind: "back_in_stock" })
   }
 }

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { adminDeliverySlotsRouter } from "./slots.routes";
+import { adminPickupPointsRouter, publicPickupPoints } from "./pickup-points";
 import { Router } from "express";
 import { ctrl, envelope, BaseController, type RequestContext } from "../../core";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
@@ -257,9 +258,17 @@ adminShippingRouter.get(
 );
 
 adminShippingRouter.use("/slots", adminDeliverySlotsRouter);
+adminShippingRouter.use("/pickup-points", adminPickupPointsRouter);
 
 export const storefrontShippingRouter = Router();
 
+// Where orders can be picked up (checkout, the contact page).
+storefrontShippingRouter.get(
+  "/pickup-points",
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { data: await publicPickupPoints(BigInt(req.ctx.storeId!)) });
+  }),
+);
 storefrontShippingRouter.get(
   "/rates",
   validate({ query: ShippingRatesQueryDto }),

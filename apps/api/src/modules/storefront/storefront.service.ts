@@ -53,6 +53,8 @@ import { NewsletterService } from "../customers/newsletter.service";
 import { searchMatches } from "../search/shop-search";
 import { countOptions, filterAttributes, optionsWhere, parseOptions, sellableVariants } from "./product-options";
 import { thumbOf } from "./review-photos";
+import { latestShipDate, preOrderShipDate } from "../catalog/pre-order";
+import { pickupPointFor } from "../shipping/pickup-points";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -108,8 +110,9 @@ function pricedWith(
   return deal ? { price: deal.price, compareAtPrice: num(row.regularPrice), flash: deal } : { ...base, flash: null };
 }
 
-function available(row: { manageStock: boolean; stockQty: number | null; reservedStock: number; allowBackorder: boolean }): number {
-  if (!row.manageStock || row.allowBackorder) return Number.POSITIVE_INFINITY;
+/** Units that can be sold; pre-order products (and backorders, untracked stock) have no limit. */
+function available(row: { manageStock: boolean; stockQty: number | null; reservedStock: number; allowBackorder: boolean }, preOrder = false): number {
+  if (preOrder || !row.manageStock || row.allowBackorder) return Number.POSITIVE_INFINITY;
   return Math.max(0, (row.stockQty ?? 0) - (row.reservedStock ?? 0));
 }
 
@@ -181,7 +184,7 @@ export type OrderDraft = {
   billingAddress?: StorefrontAddressDto;
   billingSameAsShipping?: boolean;
   /** A zone method, a fee typed by staff, or pickup (no delivery charge). */
-  delivery: { methodId: bigint | string } | { customFee: number; name?: string } | { pickup: true };
+  delivery: { methodId: bigint | string } | { customFee: number; name?: string } | { pickup: true; pointId?: bigint | string };
   /** Also list the zone's delivery options (for the admin form) when delivery isn't a zone method. */
   listShippingOptions?: boolean;
   /** The delivery time slot picked, for options that use slots. */
@@ -272,8 +275,8 @@ export class StorefrontService {
     const primary = p.categories?.find((c: any) => c.primary) ?? p.categories?.[0];
     const variants: any[] = p.variants ?? [];
     const qty = variants.length > 0
-      ? variants.reduce((s: number, v: any) => s + available(v), 0)
-      : available(p);
+      ? variants.reduce((s: number, v: any) => s + available(v, p.preOrder), 0)
+      : available(p, p.preOrder);
     const images: string[] = (p.images ?? []).map((i: any) => i.imageUrl);
     // 480px WebP copies made on upload; the full image where there's none (older uploads, outside links).
     const thumbs: string[] = (p.images ?? []).map((i: any) => i.media?.thumbUrl ?? i.imageUrl);
@@ -307,6 +310,8 @@ export class StorefrontService {
       category: primary
         ? { id: String(primary.category.id), slug: primary.category.slug, name: tr(primary.category, L, "name") }
         : undefined,
+      /** Can be ordered now, ships later (the day it's expected to ship). */
+      preOrder: p.preOrder ? { shipsOn: preOrderShipDate(p) } : null,
       shortDescription: tr(p, L, "shortDescription") ?? undefined,
     };
   }
@@ -582,7 +587,7 @@ export class StorefrontService {
       variants: p.variants.map((v) => {
         const vp = pricedWith(flash, p, v.id, this.sfRow(sf, p, variantPriceRow(p, v), v.id));
         const values = (v.attributeValues ?? {}) as Record<string, unknown>;
-        const qty = available(v);
+        const qty = available(v, p.preOrder);
         return {
           id: String(v.id),
           attributes: Object.fromEntries(Object.entries(values).map(([k, val]) => [k, String(val)])),
@@ -711,7 +716,7 @@ export class StorefrontService {
         : base;
       const stockRow = variant ?? p;
       const what = `"${p.name}"${variant ? ` (${variantLabel(variant.attributeValues)})` : ""}`;
-      const left = available(stockRow);
+      const left = available(stockRow, p.preOrder);
       const flashLeft = priced.flash?.remaining ?? null;
       const problem =
         left < line.qty
@@ -871,7 +876,7 @@ export class StorefrontService {
         continue;
       }
       const bought = lines.filter((l) => l.product.id === p.id && (l.variant?.id ?? null) === (v?.id ?? null)).reduce((s, l) => s + l.qty, 0);
-      if (available(v ?? p) - bought < g.qty) {
+      if (available(v ?? p, p.preOrder) - bought < g.qty) {
         notes.push(`The free gift from "${g.name}" has run out`);
         continue;
       }
@@ -1103,7 +1108,11 @@ export class StorefrontService {
     const qty = lines.reduce((s, l) => s + l.qty, 0);
     const weightKG = lines.reduce((s, l) => s + l.weightKG, 0);
 
-    const ship = await this.withLocation(input.shippingAddress);
+    // Collected from a pickup point: its address is the shipping address, and nothing is delivered.
+    const point = "pickup" in input.delivery && input.delivery.pointId ? await pickupPointFor(storeId, input.delivery.pointId) : null;
+    const ship = point
+      ? { ...(await this.withLocation({ ...input.shippingAddress, addressLine1: point.address, addressLine2: "", district: point.district || input.shippingAddress.district, upazila: "", locationId: null })), chain: [] }
+      : await this.withLocation(input.shippingAddress);
     const bill = input.billingSameAsShipping || !input.billingAddress ? ship : await this.withLocation(input.billingAddress);
     if (ship.chain.length) {
       const off = offInChain(ship.chain, await storeLocationsOff(storeId));
@@ -1146,7 +1155,7 @@ export class StorefrontService {
     } else if ("customFee" in input.delivery) {
       delivery = { zoneId: null, code: "custom", name: input.delivery.name || "Delivery", fee: round2(input.delivery.customFee) };
     } else {
-      delivery = { zoneId: null, code: "pickup", name: "Pickup / walk-in", fee: 0 };
+      delivery = point ? { zoneId: null, code: "pickup", name: `Pickup: ${point.name}`, fee: 0 } : { zoneId: null, code: "pickup", name: "Pickup / walk-in", fee: 0 };
     }
 
     // A delivery time slot, for options that use them; its charge is added to delivery.
@@ -1164,7 +1173,7 @@ export class StorefrontService {
 
     // The courier the customer chose, if this storefront lets them.
     let courier: { id: bigint; name: string } | null = null;
-    if (input.courierAccountId) {
+    if (input.courierAccountId && !point) {
       const offered = (await this.storefront()).checkoutCourierIds.map(String);
       const a = offered.includes(String(input.courierAccountId))
         ? await prisma.courierAccount.findFirst({ where: { id: BigInt(input.courierAccountId), storeId, enabled: true }, select: { id: true, courier: true } })
@@ -1257,6 +1266,8 @@ export class StorefrontService {
       delivery,
       slot,
       courier,
+      /** The point the customer will collect from (no delivery). */
+      pickupPoint: point ? { id: point.id, name: point.name, warehouseId: point.warehouseId } : null,
       coupon,
       couponError,
       promotions,
@@ -1289,7 +1300,8 @@ export class StorefrontService {
       if (q.slot) await new DeliverySlotService(storeId).hold(t, q.slot.id, q.slot.date);
       // Hold the stock in the warehouse the order ships from; the guard stops overselling.
       const skuOf = (x: { product: { id: bigint }; variant?: { id: bigint } | null }) => ({ productId: x.product.id, variantId: x.variant?.id ?? null });
-      const warehouseId = await chooseWarehouse(t, storeId, [...lines, ...q.gifts].map((x) => ({ sku: skuOf(x), qty: x.qty })));
+      // A pickup order is packed where it's collected, when that point has a warehouse.
+      const warehouseId = q.pickupPoint?.warehouseId ?? (await chooseWarehouse(t, storeId, [...lines, ...q.gifts].map((x) => ({ sku: skuOf(x), qty: x.qty }))));
       const held: number[] = [];
       for (const l of lines) {
         const r = await moveStock(t, { storeId, warehouseId, sku: skuOf(l), reserved: l.qty, guard: "available", reason: "ORDER_RESERVE", ref: orderKey, label: l.product.name });
@@ -1370,6 +1382,8 @@ export class StorefrontService {
       const taxable = itemsSubtotal - discountTotal;
       const { taxIncluded, taxRate } = q.totals;
       const itemTaxRatio = taxable > 0 ? q.totals.itemTax / taxable : 0;
+      // Pre-order items: the order ships when the last of them is expected.
+      const shipOn = latestShipDate(lines.map((l) => preOrderShipDate(l.product)));
 
       const order = await t.order.create({
         data: {
@@ -1419,6 +1433,8 @@ export class StorefrontService {
           deliverySlotLabel: q.slot?.label ?? null,
           slotFee: q.totals.slotFee,
           courierAccountId: q.courier?.id ?? null,
+          pickupPointId: q.pickupPoint?.id ?? null,
+          expectedShipOn: shipOn ? slotDayDate(shipOn) : null,
           ...(meta.gift ?? NOT_A_GIFT),
           itemsSubtotal,
           discountTotal,
@@ -1464,10 +1480,11 @@ export class StorefrontService {
                 lineTax,
                 lineTotal: round2(l.lineSubtotal - lineDiscount + (taxIncluded ? 0 : lineTax)),
                 meta:
-                  l.flash || l.giftBox
+                  l.flash || l.giftBox || l.product.preOrder
                     ? {
                         ...(l.flash ? { flashSale: { id: String(l.flash.saleId), itemId: l.flash.itemId ? String(l.flash.itemId) : null, name: l.flash.name } } : {}),
                         ...(l.giftBox ? { giftBox: l.giftBox } : {}),
+                        ...(l.product.preOrder ? { preOrder: { shipsOn: preOrderShipDate(l.product) } } : {}),
                       }
                     : undefined,
               };
@@ -1537,7 +1554,7 @@ export class StorefrontService {
       shippingAddress: dto.shippingAddress,
       billingAddress: dto.billingAddress,
       billingSameAsShipping: dto.billingSameAsShipping,
-      delivery: { methodId: dto.shippingMethodId },
+      delivery: dto.pickupPointId ? { pickup: true, pointId: dto.pickupPointId } : { methodId: dto.shippingMethodId! },
       slot: dto.deliverySlot ?? null,
       requireSlot: true,
       courierAccountId: dto.courierAccountId ?? null,
@@ -1847,6 +1864,10 @@ function orderView(o: OrderWithItems) {
     email: o.billingEmail,
     phone: o.shippingPhone ?? o.billingPhone,
     shippingMethodName: o.shippingMethodName,
+    /** Collected from a pickup point (shippingMethodName says where), and when staff said it's ready. */
+    pickup: o.shippingMethodCode === "pickup" ? { readyAt: o.readyForPickupAt ? o.readyForPickupAt.toISOString() : null } : null,
+    /** Has pre-order items: the day the last is expected to ship. */
+    expectedShipOn: o.expectedShipOn ? o.expectedShipOn.toISOString().slice(0, 10) : null,
     shipping: {
       name: `${o.shippingFirstName ?? o.billingFirstName} ${o.shippingLastName ?? o.billingLastName}`,
       address: [o.shippingAddress1, o.shippingAddress2].filter(Boolean).join(", "),

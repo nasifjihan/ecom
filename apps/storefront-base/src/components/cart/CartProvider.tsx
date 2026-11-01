@@ -14,6 +14,8 @@ export type CartItem = {
   qty: number;
   weightKG?: number;
   variantLabel?: string;
+  /** A pre-order item and when it ships (shown in the cart). */
+  preOrder?: { shipsOn: string | null } | null;
   /** Regular price when the item is discounted. */
   compareAtPrice?: number | null;
   /** The running flash sale that sets `price`, if any. */

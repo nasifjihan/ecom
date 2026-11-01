@@ -17,7 +17,7 @@ export interface ThemeSettings {
   robots?: { blockAll: boolean; extra: string };
   tracking?: { googleAnalyticsId: string; facebookPixelId: string; googleVerification: string };
   announcement: { enabled: boolean; text: string; link: string | null };
-  footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean };
+  footer: { about: string; address: string; phone: string; email: string; showNewsletter: boolean; mapQuery?: string };
   social: { facebook: string; instagram: string; youtube: string; twitter: string };
 }
 

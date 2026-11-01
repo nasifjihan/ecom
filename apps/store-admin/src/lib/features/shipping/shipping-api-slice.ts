@@ -172,8 +172,32 @@ export interface TaxClass {
   isDefault: boolean;
 }
 
+export interface PickupPoint {
+  id: string;
+  name: string;
+  address: string;
+  district: string;
+  phone: string | null;
+  hours: string | null;
+  mapUrl: string | null;
+  readyInHours: number;
+  warehouseId: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+export type PickupPointInput = Omit<PickupPoint, "id">;
+
 export const shippingApi = api.injectEndpoints({
   endpoints: (b) => ({
+    getPickupPoints: b.query<PickupPoint[], void>({ query: () => "/admin/shipping/pickup-points", providesTags: ["PickupPoint"] }),
+    savePickupPoint: b.mutation<PickupPoint, { id?: string } & PickupPointInput>({
+      query: ({ id, ...body }) => ({ url: id ? `/admin/shipping/pickup-points/${id}` : "/admin/shipping/pickup-points", method: id ? "PUT" : "POST", body }),
+      invalidatesTags: ["PickupPoint"],
+    }),
+    deletePickupPoint: b.mutation<void, string>({
+      query: (id) => ({ url: `/admin/shipping/pickup-points/${id}`, method: "DELETE" }),
+      invalidatesTags: ["PickupPoint"],
+    }),
     getLocations: b.query<AdminLocation[], void>({
       query: () => "/admin/locations",
       providesTags: ["Location"],
@@ -285,6 +309,9 @@ export const shippingApi = api.injectEndpoints({
 });
 
 export const {
+  useGetPickupPointsQuery,
+  useSavePickupPointMutation,
+  useDeletePickupPointMutation,
   useGetLocationsQuery,
   useSetLocationDeliveryMutation,
   useGetZonesQuery,

@@ -2,6 +2,8 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { inventoryController } from "./inventory.controller";
 import { patchOf } from "../../core/patch-schema";
+import { ctrl, envelope, type RequestContext } from "../../core";
+import { mostWanted } from "../stock/back-in-stock";
 import {
   StockAdjustmentDto,
   MovementQueryDto,
@@ -18,6 +20,16 @@ function multerFallback(_req: Request, _res: Response, next: NextFunction): void
 const IdParamDto = VariantIdParamDto.extend({ id: undefined as any });
 
 export const adminInventoryRouter = Router();
+
+// Products shoppers are waiting for (Notify me): what to restock first.
+adminInventoryRouter.get(
+  "/most-wanted",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("inventory.view"),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { data: await mostWanted(BigInt(req.ctx.storeId!)) });
+  }),
+);
 
 adminInventoryRouter.post(
   "/adjust",

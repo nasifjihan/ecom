@@ -148,6 +148,10 @@ const BaseCreateProductDto = z.object({
   stockQty: z.coerce.number().int().optional().nullable(),
   reservedStock: z.coerce.number().int().default(0),
   allowBackorder: z.boolean().default(false),
+  /** Sold before the stock arrives: ships on preOrderShipsOn, else preOrderDays after the order. */
+  preOrder: z.boolean().default(false),
+  preOrderDays: z.coerce.number().int().min(1).max(365).optional().nullable(),
+  preOrderShipsOn: z.coerce.date().optional().nullable(),
   lowStockThreshold: z.coerce.number().int().optional().nullable(),
   weight: z.coerce.number().nonnegative().optional().nullable(),
   length: z.coerce.number().nonnegative().optional().nullable(),

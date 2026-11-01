@@ -124,6 +124,14 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
         <CardHeader>
           <CardTitle className="text-lg">{t("Items")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("Placed {date}", { date: formatDate(o.createdAt) })}</p>
+          {o.expectedShipOn && (
+            <p className="text-sm font-medium text-primary">{t("Pre-order: ships around {date}", { date: formatDate(o.expectedShipOn) })}</p>
+          )}
+          {o.pickup && (
+            <p className="text-sm font-medium">
+              {o.pickup.readyAt ? t("Ready to pick up: {place}", { place: o.shippingMethodName?.replace(/^Pickup: /, "") ?? "" }) : t("You'll pick this up: {place}. We'll tell you when it's ready.", { place: o.shippingMethodName?.replace(/^Pickup: /, "") ?? "" })}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {o.items.map((i) => (

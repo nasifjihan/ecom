@@ -213,6 +213,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             contactInfo={theme ? { address: theme.footer.address, phone: theme.footer.phone, email: theme.footer.email } : undefined}
             socialLinks={theme?.social}
             showNewsletter={theme?.footer.showNewsletter ?? true}
+            mapQuery={theme?.footer.mapQuery || undefined}
             columns={footerColumns?.length ? footerColumns : undefined}
           />
           <CartDrawerSlot storeName={storeName} />

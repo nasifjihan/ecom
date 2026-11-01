@@ -168,6 +168,9 @@ export class CatalogService extends BaseService {
         // Stock goes in through the ledger below (default warehouse), never written directly.
         stockQty: 0,
         allowBackorder: dto.allowBackorder,
+        preOrder: dto.preOrder,
+        preOrderDays: dto.preOrder ? (dto.preOrderDays ?? null) : null,
+        preOrderShipsOn: dto.preOrder ? (dto.preOrderShipsOn ?? null) : null,
         lowStockThreshold: dto.lowStockThreshold ?? null,
         weight: dto.weight ?? null,
         length: dto.length ?? null,

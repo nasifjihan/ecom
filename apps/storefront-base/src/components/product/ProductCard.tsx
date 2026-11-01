@@ -36,6 +36,8 @@ export type ProductCardData = {
   badgeVariant?: "default" | "secondary" | "destructive" | "outline" | "success";
   isNew?: boolean;
   isOutOfStock?: boolean;
+  /** Sold before the stock arrives. */
+  preOrder?: { shipsOn: string | null } | null;
 };
 
 export type ProductCardProps = {
@@ -138,6 +140,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {product.isNew && (
                 <Badge variant="success" className="text-[10px] font-semibold">
                   {t("NEW")}
+                </Badge>
+              )}
+              {product.preOrder && (
+                <Badge variant="secondary" className="text-[10px] font-semibold">
+                  {t("PRE-ORDER")}
                 </Badge>
               )}
               {product.badge && (

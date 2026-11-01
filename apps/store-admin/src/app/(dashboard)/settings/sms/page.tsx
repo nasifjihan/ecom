@@ -45,7 +45,7 @@ import {
 
 const SELECT = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const PLACEHOLDERS = ["{name}", "{order}", "{total}", "{store}", "{phone}", "{courier}", "{tracking}", "{link}"];
+const PLACEHOLDERS = ["{name}", "{order}", "{total}", "{store}", "{phone}", "{courier}", "{tracking}", "{link}", "{product}", "{place}"];
 
 const STATUS_STYLE: Record<string, string> = {
   sent: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",

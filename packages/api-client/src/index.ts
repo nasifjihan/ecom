@@ -189,6 +189,7 @@ export const api = createApi({
     "EmailLog",
     "ShippingZone",
     "DeliverySlot",
+    "PickupPoint",
     "Location",
     "AuditLog",
     "Purchasing",

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { cleanLanguages } from "../../src/modules/settings/languages"
 import {
   mergeTranslations,
   normalizeLocale,
@@ -54,8 +55,7 @@ describe("translations", () => {
 })
 
 describe("store languages", () => {
-  it("keeps known languages, always English, and a default that's on", async () => {
-    const { cleanLanguages } = await import("../../src/modules/settings/languages")
+  it("keeps known languages, always English, and a default that's on", () => {
     expect(cleanLanguages(["bn", "xx"], "bn")).toEqual({ enabled: ["en", "bn"], default: "bn" })
     expect(cleanLanguages([], "bn")).toEqual({ enabled: ["en"], default: "en" }) // bn isn't on
     expect(cleanLanguages(null, null)).toEqual({ enabled: ["en"], default: "en" })

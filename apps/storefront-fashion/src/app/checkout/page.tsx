@@ -53,6 +53,7 @@ import {
   usePlaceOrderMutation,
   useGetPaymentMethodsQuery,
   useGetDeliveryChoicesQuery,
+  useGetPickupPointsQuery,
   apiErrorMessage,
   ShippingRate,
   CouponApplyInput,
@@ -250,7 +251,12 @@ export default function CheckoutPage() {
     }
   }, [rates, selectedShippingRateId]);
 
-  const selectedRate = rates.find((r) => r.methodId === selectedShippingRateId);
+  // "Pick up from the shop": a pickup point instead of delivery (no address, no charge).
+  const { data: pickupPoints = [] } = useGetPickupPointsQuery(undefined, { skip: !mounted });
+  const [pickupId, setPickupId] = React.useState<string | null>(null);
+  const pickupPoint = pickupPoints.find((p) => p.id === pickupId) ?? null;
+  const pickupOn = pickupId !== null;
+  const selectedRate = pickupOn ? undefined : rates.find((r) => r.methodId === selectedShippingRateId);
 
   // Delivery day and time (options that use slots) and the courier, when the shop lets customers choose.
   const { data: deliveryChoices } = useGetDeliveryChoicesQuery(undefined, { skip: !mounted || itemCount === 0 });
@@ -456,19 +462,22 @@ export default function CheckoutPage() {
           return false;
         }
         // The address is on this step (with contact details), so it is checked here.
-        if (!shippingAddress.firstName || !shippingAddress.lastName ||
-            !shippingAddress.addressLine1 || !shippingAddress.phone ||
-            !shippingAddress.district) {
+        if (pickupOn && !pickupPoint) {
+          toast.error(t("Choose where to pick up"));
+          return false;
+        }
+        if (!shippingAddress.firstName || !shippingAddress.lastName || !shippingAddress.phone ||
+            (!pickupOn && (!shippingAddress.addressLine1 || !shippingAddress.district))) {
           toast.error(t("Fill shipping address"), { description: t("All required fields in shipping address are required") });
           return false;
         }
         return true;
       case "shipping":
-        if (!selectedShippingRateId) {
+        if (!pickupOn && !selectedShippingRateId) {
           toast.error(t("Choose shipping method"), { description: t("Select a shipping method to continue") });
           return false;
         }
-        if (giftsOffered && giftProblem(gift)) {
+        if (!pickupOn && giftsOffered && giftProblem(gift)) {
           toast.error(t("Gift details"), { description: t(giftProblem(gift)!) });
           return false;
         }
@@ -565,6 +574,8 @@ export default function CheckoutPage() {
         phone: shippingAddress.phone ?? "",
         email: contactEmail || shippingAddress.email || customerEmail || undefined,
       };
+      // Picked up: the point's address stands in for the shipping address (the API uses the point's own).
+      if (pickupPoint) Object.assign(shippingPayload, { country: "BD", division: "", district: pickupPoint.district || "Dhaka", upazila: "", locationId: null, postcode: "", addressLine1: pickupPoint.address, addressLine2: "" });
 
       const isGift = giftsOffered && gift.on;
       // A gift: the address above is the recipient's; the buyer is billed with their own name and phone.
@@ -611,10 +622,11 @@ export default function CheckoutPage() {
         shippingAddress: shippingPayload,
         billingAddress: billingPayload,
         billingSameAsShipping: billingSameAsShipping && !isGift,
-        gift: isGift ? { message: gift.message, from: gift.from.trim() || gift.buyerFirstName.trim(), hidePrices: gift.hidePrices } : undefined,
-        shippingMethodId: selectedRate?.methodId,
+        gift: isGift && !pickupOn ? { message: gift.message, from: gift.from.trim() || gift.buyerFirstName.trim(), hidePrices: gift.hidePrices } : undefined,
+        shippingMethodId: pickupOn ? undefined : selectedRate?.methodId,
+        pickupPointId: pickupPoint?.id,
         deliverySlot: selectedRate?.useSlots && slotPick ? slotPick : undefined,
-        courierAccountId: couriers.length && courierPick ? courierPick : undefined,
+        courierAccountId: !pickupOn && couriers.length && courierPick ? courierPick : undefined,
         shippingProviderId: selectedRate?.providerId,
         shippingCost: shippingAmount,
         paymentGateway: selectedPaymentMethod ?? PaymentMethod.COD,
@@ -888,6 +900,49 @@ export default function CheckoutPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {pickupPoints.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("How you get your order")}>
+                        {[
+                          { on: false, label: t("Deliver to me") },
+                          { on: true, label: t("Pick up from the shop (free)") },
+                        ].map((o) => (
+                          <button
+                            key={String(o.on)}
+                            type="button"
+                            role="radio"
+                            aria-checked={pickupOn === o.on}
+                            onClick={() => setPickupId(o.on ? (pickupId ?? pickupPoints[0]!.id) : null)}
+                            className={cn("rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition-colors", pickupOn === o.on ? "border-primary bg-primary/5" : "hover:border-primary/40")}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      {pickupOn && (
+                        <div className="space-y-2">
+                          {pickupPoints.map((p) => (
+                            <label key={p.id} className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm", pickupId === p.id && "border-primary")}>
+                              <input type="radio" name="pickup-point" className="mt-1 accent-primary" checked={pickupId === p.id} onChange={() => setPickupId(p.id)} />
+                              <span className="space-y-0.5">
+                                <span className="block font-medium">{p.name}</span>
+                                <span className="block text-muted-foreground">{[p.address, p.district].filter(Boolean).join(", ")}</span>
+                                {p.hours && <span className="block text-xs text-muted-foreground">{p.hours}</span>}
+                                <span className="block text-xs text-muted-foreground">
+                                  {p.readyInHours === 0 ? t("Ready once packed. We'll tell you.") : t("Usually ready in {n} hours. We'll tell you.", { n: p.readyInHours })}
+                                  {p.mapUrl && (
+                                    <a href={p.mapUrl} target="_blank" rel="noreferrer" className="ml-2 text-primary hover:underline">
+                                      {t("Map")}
+                                    </a>
+                                  )}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                       { key: "firstName", label: msg("First Name *"), placeholder: "John", required: true },
@@ -905,6 +960,8 @@ export default function CheckoutPage() {
                       </div>
                     ))}
                   </div>
+                  {!pickupOn && (
+                  <>
                   <div className="space-y-1.5">
                     <Label>{t("Company (Optional)")}</Label>
                     <Input
@@ -1005,6 +1062,8 @@ export default function CheckoutPage() {
                       }
                     />
                   </div>
+                  </>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label>{t("Phone Number *")}</Label>
@@ -1031,7 +1090,7 @@ export default function CheckoutPage() {
                       />
                     </div>
                   </div>
-                  {giftsOffered && (
+                  {giftsOffered && !pickupOn && (
                     <GiftSection value={gift} onChange={setGift} cod={selectedPaymentMethod === PaymentMethod.COD} />
                   )}
                   {deliveryChoices?.whatsappUpdates && (
@@ -1077,7 +1136,15 @@ export default function CheckoutPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {ratesLoading ? (
+                  {pickupOn ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-primary bg-primary/5 p-4 text-sm">
+                      <span>
+                        <span className="block font-semibold">{t("Pick up from the shop")}</span>
+                        <span className="block text-muted-foreground">{pickupPoint ? `${pickupPoint.name}, ${pickupPoint.address}` : t("Choose where to pick up")}</span>
+                      </span>
+                      <span className="font-semibold text-emerald-600">{t("Free")}</span>
+                    </div>
+                  ) : ratesLoading ? (
                     <div className="space-y-3">
                       {[0, 1, 2].map((i) => (
                         <Skeleton key={i} className="h-24 w-full rounded-xl" />
@@ -1182,7 +1249,7 @@ export default function CheckoutPage() {
                   {selectedRate?.useSlots && (
                     <DeliveryTimePicker days={slotDays} value={pickedSlot ? slotPick : null} onChange={setSlotPick} />
                   )}
-                  {couriers.length > 0 && <CourierPicker couriers={couriers} value={courierPick} onChange={setCourierPick} />}
+                  {!pickupOn && couriers.length > 0 && <CourierPicker couriers={couriers} value={courierPick} onChange={setCourierPick} />}
                   <Separator />
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1360,7 +1427,7 @@ export default function CheckoutPage() {
           <OrderSummaryCard
             subtotal={subtotal}
             shippingAmount={shippingAmount}
-            shippingLabel={selectedRate?.methodName}
+            shippingLabel={pickupPoint ? t("Pick up from the shop") : selectedRate?.methodName}
             shippingFree={isShippingFree}
             shippingLoading={ratesLoading}
             taxAmount={actualTaxTotal}

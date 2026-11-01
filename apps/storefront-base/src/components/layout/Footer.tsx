@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button, Input, Separator } from "../ui";
 import { cn } from "@ecom/utils";
+import { MapEmbed } from "./MapEmbed";
 import { useT } from "../../i18n/provider";
 import { setDataSaver, useDataSaver } from "../../lib/data-saver";
 import { apiErrorMessage, useSubscribeNewsletterMutation } from "../../lib/features/checkout/checkout-api-slice";
@@ -38,6 +39,8 @@ export type FooterProps = {
   };
   className?: string;
   showNewsletter?: boolean;
+  /** A map of this place (address or place name) under the contact details. */
+  mapQuery?: string;
   onNewsletterSubmit?: (email: string) => void | Promise<void>;
 };
 
@@ -57,6 +60,7 @@ export const Footer: React.FC<FooterProps> = ({
   },
   className,
   showNewsletter = true,
+  mapQuery,
   onNewsletterSubmit,
   logoUrl,
   columns,
@@ -189,6 +193,7 @@ export const Footer: React.FC<FooterProps> = ({
                 </a>
               )}
             </div>
+            {mapQuery && <MapEmbed query={mapQuery} title={t("Map")} className="mt-4 h-40 w-full max-w-sm rounded-lg border-0" />}
           </div>
 
           {linkColumns.map((col) => (

@@ -32,6 +32,8 @@ import {
   Skeleton,
   Label,
   useCart,
+  useLocale,
+  DATE_LOCALES,
   GiftBoxCartCard,
   useGetProductsQuery,
   useT,
@@ -42,15 +44,17 @@ import {
 import { cartLineKey, useCartPriceCheck } from "@/lib/cart-prices";
 import { AskForQuote } from "./ask-quote";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
+import { DeliveryEstimate } from "@/app/_components/delivery-estimate";
 
 function formatBDT(n: number) {
   return formatMoney(n, "BDT");
 }
 
 export default function CartPage() {
-  const { items, boxes, subtotal, itemCount, updateQty, removeItem, removeBox, clearCart } = useCart();
+  const { items, boxes, subtotal, itemCount, totalWeightKG, updateQty, removeItem, removeBox, clearCart } = useCart();
   const empty = items.length === 0 && boxes.length === 0;
   const t = useT();
+  const { locale } = useLocale();
   const [mounted, setMounted] = React.useState(false);
   const { problems, hasProblems, promotions } = useCartPriceCheck();
   const promoLines = promotionLines(promotions);
@@ -174,6 +178,11 @@ export default function CartPage() {
                             <h3 className="font-medium md:text-sm leading-snug line-clamp-2 hover:text-primary transition-colors">{item.title}</h3>
                           </Link>
                           {item.variantLabel && <div className="text-xs text-muted-foreground mt-1">{item.variantLabel}</div>}
+                          {item.preOrder && (
+                            <div className="text-xs font-medium text-primary mt-1">
+                              {item.preOrder.shipsOn ? t("Pre-order: ships around {date}", { date: new Date(`${item.preOrder.shipsOn}T00:00:00`).toLocaleDateString(DATE_LOCALES[locale], { day: "numeric", month: "long" }) }) : t("Pre-order")}
+                            </div>
+                          )}
                           {item.flashSale && (
                             <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10">
                               <Zap className="h-3 w-3" /> {item.flashSale.name}
@@ -332,6 +341,7 @@ export default function CartPage() {
                   </div>
                 ))}
                 <CartPromotionSummary promotions={promotions} />
+                <DeliveryEstimate subtotal={subtotal} weightKG={totalWeightKG || undefined} qty={itemCount} />
 
                 <p className="text-xs text-muted-foreground pt-2 border-t">
                   {t("Delivery charge, VAT and promo codes are calculated at checkout from your address.")}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ContactExtras } from "./contact-extras";
 import { notFound } from "next/navigation";
 import { Markdown, markdownToText } from "@ecom/ui";
 import { formatDate, getCmsPage, getFaqs, serverT, type CmsPage } from "@/lib/content";
@@ -42,15 +43,19 @@ export default async function CmsPageView({ params }: Props) {
       <>
         <h1 className="sr-only">{page.title}</h1>
         <PageSections sections={page.sections} faqs={faqs ?? []} className="pt-6 md:pt-10" />
+        {page.slug === "contact" && <ContactExtras />}
       </>
     );
   }
 
   return (
+    <>
     <div className="container max-w-3xl py-10 md:py-14">
       <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{page.title}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{(await serverT())("Last updated {date}", { date: formatDate(page.updatedAt) })}</p>
       <Markdown source={page.content} className="mt-8 text-[15px] md:text-base" />
     </div>
+    {page.slug === "contact" && <ContactExtras />}
+    </>
   );
 }

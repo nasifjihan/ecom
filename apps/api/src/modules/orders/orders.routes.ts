@@ -4,7 +4,9 @@ import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { ordersController } from "./orders.controller";
 import type { Request, Response } from "express";
 import { BadRequestError, NotFoundError, ctrl, envelope, type RequestContext } from "../../core";
-import { EmailService } from "../notifications";
+import { EmailService, inBackground } from "../notifications";
+import { SmsService } from "../sms/sms.service";
+import { prisma } from "../../config";
 import { InvoiceService, sendInvoice } from "../invoices";
 import { packingSlips } from "../invoices/packing-slip";
 
@@ -231,4 +233,29 @@ checkoutRouter.post(
   authMiddleware("optional"),
   validate({ body: AddCartItemDto }),
   ordersController.addItemToCart,
+);
+
+/** A pickup order is ready to collect: noted on the order, and the customer gets an email and SMS. */
+adminOrdersRouter.post(
+  "/:id/ready-for-pickup",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.edit"),
+  validate({ params: z.object({ id: z.coerce.bigint().positive() }) }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const storeId = storeOf(req);
+    const id = (req.params as unknown as { id: bigint }).id;
+    const o = await prisma.order.findFirst({ where: { id, storeId }, select: { status: true, shippingMethodCode: true } });
+    if (!o) throw new NotFoundError("Order", id);
+    if (o.shippingMethodCode !== "pickup") throw new BadRequestError("This order is delivered, not picked up", "VALIDATION_FAILED");
+    if (["CANCELLED", "REFUNDED", "FAILED", "DELIVERED", "COMPLETED"].includes(o.status))
+      throw new BadRequestError("This order is already closed", "VALIDATION_FAILED");
+    const readyAt = new Date();
+    await prisma.$transaction([
+      prisma.order.update({ where: { id }, data: { readyForPickupAt: readyAt } }),
+      prisma.orderStatusLog.create({ data: { orderId: id, status: o.status, note: "Ready to pick up (customer told)", notifyCustomer: true, adminId: req.ctx.admin?.id ?? null } }),
+    ]);
+    inBackground("pickup ready email", () => new EmailService(storeId).orderReadyForPickup(id));
+    void new SmsService(storeId).orderEvent(id, "pickup_ready").catch(() => undefined);
+    envelope(res, { data: { readyForPickupAt: readyAt.toISOString() }, message: "Customer told the order is ready" });
+  }),
 );

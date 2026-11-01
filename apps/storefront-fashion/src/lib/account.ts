@@ -65,6 +65,10 @@ export interface MyOrder {
   orderRef: string;
   orderKey: string;
   status: string;
+  /** Collected from a pickup point (shippingMethodName says where); readyAt once the shop said so. */
+  pickup?: { readyAt: string | null } | null;
+  /** Has pre-order items: the day the last is expected to ship. */
+  expectedShipOn?: string | null;
   paymentStatus: string;
   paymentGateway: string | null;
   createdAt: string;

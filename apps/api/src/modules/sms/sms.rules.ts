@@ -59,6 +59,8 @@ export const SMS_EVENTS = [
   "order_shipped",
   "order_delivered",
   "order_cancelled",
+  "pickup_ready",
+  "back_in_stock",
 ] as const
 export type SmsEvent = (typeof SMS_EVENTS)[number]
 
@@ -91,10 +93,20 @@ export const SMS_EVENT_INFO: Record<
     template: "Your order {order} was cancelled. Questions? Call {phone}. - {store}",
     defaultOn: true,
   },
+  pickup_ready: {
+    label: "Ready to pick up",
+    template: "Your order {order} is ready to pick up at {place}. - {store}",
+    defaultOn: true,
+  },
+  back_in_stock: {
+    label: "Back in stock (Notify me)",
+    template: "Good news! {product} is back in stock at {store}: {link}",
+    defaultOn: true,
+  },
 }
 
 /** Which event an order status sends. */
-export const STATUS_EVENTS: Record<string, SmsEvent> = {
+export const STATUS_EVENTS: Record<string, "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled"> = {
   PROCESSING: "order_confirmed",
   SHIPPED: "order_shipped",
   DELIVERED: "order_delivered",
@@ -110,6 +122,8 @@ export const TEMPLATE_VARS = [
   "courier",
   "tracking",
   "link",
+  "product",
+  "place",
 ] as const
 
 export interface EventSetting {

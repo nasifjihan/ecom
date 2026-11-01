@@ -11,6 +11,7 @@
 import { Prisma } from "@prisma/client"
 import { BadRequestError } from "../../core"
 import { pickWarehouse, skuKey } from "./stock.rules"
+import { scheduleBackInStock } from "./back-in-stock"
 
 type T = Prisma.TransactionClient
 
@@ -82,11 +83,11 @@ export async function moveStock(t: T, m: Move): Promise<MoveResult> {
   const sku = variantId
     ? await t.productVariant.findFirst({
         where: { id: variantId, productId, product: { storeId: m.storeId } },
-        select: { manageStock: true, allowBackorder: true, stockQty: true, reservedStock: true },
+        select: { manageStock: true, allowBackorder: true, stockQty: true, reservedStock: true, product: { select: { preOrder: true } } },
       })
     : await t.product.findFirst({
         where: { id: productId, storeId: m.storeId },
-        select: { manageStock: true, allowBackorder: true, stockQty: true, reservedStock: true },
+        select: { manageStock: true, allowBackorder: true, stockQty: true, reservedStock: true, preOrder: true },
       })
   if (!sku) return { applied: false } // deleted since: nothing to move
   if (!sku.manageStock) return { applied: false }
@@ -131,7 +132,8 @@ export async function moveStock(t: T, m: Move): Promise<MoveResult> {
   }
   const updateTotals = async () => {
     const totalGuard =
-      m.guard === "available" && !sku.allowBackorder
+      // Pre-order products are sold before the stock arrives, like backorders.
+      m.guard === "available" && !sku.allowBackorder && !("preOrder" in sku ? sku.preOrder : sku.product.preOrder)
         ? Prisma.sql`AND COALESCE("stockQty", 0) - "reservedStock" - ${r} + ${d} >= 0`
         : Prisma.empty
     const rows = variantId
@@ -162,6 +164,10 @@ export async function moveStock(t: T, m: Move): Promise<MoveResult> {
     await updateWarehouse()
     after = await updateTotals()
   }
+  // Sold out → available again (a purchase, an adjustment, a cancelled order): tell who's waiting.
+  const freeBefore = (sku.stockQty ?? 0) - sku.reservedStock
+  const freeAfter = after - Math.max(sku.reservedStock + r, 0)
+  if (freeBefore <= 0 && freeAfter > 0) scheduleBackInStock(m.storeId, productId, variantId)
 
   if (d) {
     const code = await t.warehouse.findUnique({

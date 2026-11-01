@@ -32,6 +32,7 @@ import {
   ReorderGalleryDto,
 } from "./catalog.dto";
 import { productImportRouter } from "./import/import.routes";
+import { waitingFor } from "../stock/back-in-stock";
 
 function multerFallback(_req: Request, _res: Response, next: NextFunction): void {
   next();
@@ -139,6 +140,16 @@ adminProductsRouter.post(
   ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
     const r = await new CatalogService(req.ctx).purgeProducts(trashIds(req));
     envelope(res, { data: r, message: `${r.deleted} deleted for good` });
+  }),
+);
+
+adminProductsRouter.get(
+  "/:id/stock-alerts",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("products.view"),
+  validate({ params: ProductIdParamDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    envelope(res, { data: await waitingFor(BigInt(req.ctx.storeId!), (req.params as unknown as ProductIdParamDto).id) });
   }),
 );
 
