@@ -199,7 +199,7 @@ function Features({ section }: { section: SectionOf<"features"> }) {
           const Icon = FEATURE_ICONS[f.icon] ?? ShoppingBag;
           return (
             <div key={f.title} className="flex items-start gap-3 p-2">
-              <div className="h-12 w-12 rounded-xl bg-white shadow-soft flex items-center justify-center flex-shrink-0">
+              <div className="h-12 w-12 rounded-xl bg-card shadow-soft flex items-center justify-center flex-shrink-0">
                 <Icon className="h-6 w-6 text-primary" />
               </div>
               <div>

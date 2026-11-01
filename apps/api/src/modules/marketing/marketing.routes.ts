@@ -1,4 +1,7 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import { z } from "zod";
+import { ctrl, envelope, type RequestContext } from "../../core";
+import { MarketingService } from "./marketing.service";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { marketingController } from "./marketing.controller";
 import {
@@ -146,4 +149,16 @@ marketingReviewsRouter.get(
   rbacMiddleware("reviews.view"),
   validate({ params: ReviewIdParamDto }),
   marketingController.getReview,
+);
+
+// Takes one photo off a review (a bad or private photo); the review stays.
+marketingReviewsRouter.post(
+  "/:id/remove-photo",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("reviews.edit"),
+  validate({ params: ReviewIdParamDto, body: z.object({ url: z.string().min(1).max(1000) }) }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const id = (req.params as unknown as ReviewIdParamDto).id;
+    envelope(res, { data: await new MarketingService(req.ctx).removeReviewPhoto(id, (req.body as { url: string }).url), message: "Photo removed" });
+  }),
 );

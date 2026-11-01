@@ -34,6 +34,7 @@ export function defaultTheme(store: {
     display: { showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" },
     robots: { blockAll: false, extra: "" },
     tracking: { googleAnalyticsId: "", facebookPixelId: "", googleVerification: "" },
+    appearance: { preset: "classic", mode: "light", shopperSwitch: false },
   }
 }
 
@@ -124,6 +125,7 @@ export function mergeTheme(base: ThemeSettings, saved: unknown): ThemeSettings {
     display: { ...base.display, ...(s.display ?? {}) },
     robots: { ...base.robots, ...(s.robots ?? {}) },
     tracking: { ...base.tracking, ...(s.tracking ?? {}) },
+    appearance: { ...base.appearance, ...(s.appearance ?? {}) },
     maintenance: { ...base.maintenance, ...(s.maintenance ?? {}) },
   }
 }

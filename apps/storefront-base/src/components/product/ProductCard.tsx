@@ -107,7 +107,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       <Link href={`/products/${product.slug}`} className="block h-full">
         <Card className="h-full overflow-hidden group transition-shadow hover:shadow-hover">
-          <div className="relative overflow-hidden bg-slate-100 aspect-[4/5]">
+          <div className="relative overflow-hidden bg-muted aspect-[4/5]">
             <img
               src={dataSaver && thumb ? thumb : product.image}
               srcSet={!dataSaver && thumb ? `${thumb} 480w, ${product.image} 2000w` : undefined}
@@ -164,7 +164,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <Button
                 size="icon"
                 variant="outline"
-                className="h-9 w-9 rounded-full bg-white/90 backdrop-blur hover:bg-white"
+                className="h-9 w-9 rounded-full bg-background/90 backdrop-blur hover:bg-background"
                 onClick={handleQuickView}
                 aria-label={t("Quick view")}
               >
@@ -174,7 +174,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 size="icon"
                 variant="outline"
                 className={cn(
-                  "h-9 w-9 rounded-full bg-white/90 backdrop-blur hover:bg-white",
+                  "h-9 w-9 rounded-full bg-background/90 backdrop-blur hover:bg-background",
                   liked && "text-red-500 bg-red-50",
                 )}
                 onClick={handleWishlist}
@@ -214,7 +214,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                       key={i}
                       className={cn(
                         "h-3.5 w-3.5",
-                        i <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200",
+                        i <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30",
                       )}
                     />
                   ))}

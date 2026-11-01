@@ -88,6 +88,15 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Menus: "Fill from categories" on the header menu; links three levels deep (+ on a link), an icon on some links, save
 - [ ] Shop header: the dropdown opens a side list for the third level; the phone menu shows the third level indented; icons show
 
+### G. Batch 53 (themes, zoom, video, review photos), no keys needed
+- [ ] Online store → Theme: pick each ready-made theme; the shop's colours, backgrounds and corners change. Change the main colour on top
+- [ ] "Light or dark": Dark → the shop opens dark with no white flash; Follow device → set your phone to dark and back
+- [ ] "Let shoppers switch": a sun/moon button in the header; the choice is kept after reload. Check home, product, cart, checkout, account and the menus in dark mode
+- [ ] Product page: hover a photo on a computer to magnify; click or tap it for full screen, pinch or double-tap to zoom, swipe, Escape to close
+- [ ] Product editor → Media → Video link (YouTube, a Short, Facebook): the video is the last gallery item and plays when tapped; a wrong link is refused
+- [ ] Write a review with 1–4 photos (signed in): they show in the review and under "Customer photos"; tap to enlarge
+- [ ] Marketing → Reviews: the photos show; remove one, the review stays
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

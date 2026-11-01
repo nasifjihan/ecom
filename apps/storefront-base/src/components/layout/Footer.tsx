@@ -124,7 +124,7 @@ export const Footer: React.FC<FooterProps> = ({
   const year = new Date().getFullYear();
 
   return (
-    <footer className={cn("bg-slate-50 border-t", className)}>
+    <footer className={cn("bg-muted border-t", className)}>
       {showNewsletter && (
         <div className="bg-primary/5 border-b">
           <div className="container py-8 flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -217,22 +217,22 @@ export const Footer: React.FC<FooterProps> = ({
               <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider">{t("Follow Us")}</h4>
               <div className="flex items-center gap-2">
                 {socialLinks.facebook && (
-                  <a href={socialLinks.facebook} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-primary hover:text-white flex items-center justify-center transition-colors">
+                  <a href={socialLinks.facebook} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-muted hover:bg-primary hover:text-white flex items-center justify-center transition-colors">
                     <Facebook className="h-4 w-4" />
                   </a>
                 )}
                 {socialLinks.instagram && (
-                  <a href={socialLinks.instagram} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-pink-500 hover:text-white flex items-center justify-center transition-colors">
+                  <a href={socialLinks.instagram} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-muted hover:bg-pink-500 hover:text-white flex items-center justify-center transition-colors">
                     <Instagram className="h-4 w-4" />
                   </a>
                 )}
                 {socialLinks.youtube && (
-                  <a href={socialLinks.youtube} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
+                  <a href={socialLinks.youtube} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-muted hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
                     <Youtube className="h-4 w-4" />
                   </a>
                 )}
                 {socialLinks.twitter && (
-                  <a href={socialLinks.twitter} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-slate-200 hover:bg-sky-500 hover:text-white flex items-center justify-center transition-colors">
+                  <a href={socialLinks.twitter} target="_blank" rel="noreferrer noopener" className="h-8 w-8 rounded-full bg-muted hover:bg-sky-500 hover:text-white flex items-center justify-center transition-colors">
                     <Twitter className="h-4 w-4" />
                   </a>
                 )}
@@ -251,7 +251,7 @@ export const Footer: React.FC<FooterProps> = ({
             <div
               key={p.name}
               className={cn(
-                "h-8 min-w-[3.5rem] px-2 rounded border border-slate-200 bg-white flex items-center justify-center",
+                "h-8 min-w-[3.5rem] px-2 rounded border border-border bg-background flex items-center justify-center",
                 p.className,
               )}
             >

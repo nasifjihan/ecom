@@ -5,13 +5,14 @@
 import { cookieLocale, serverApi, storeOrigin, withLang } from "@/lib/server-api";
 import type { SlotPromotion } from "@/lib/promotions";
 import { DATE_LOCALES, translatorFor, type Locale, type Translator } from "@ecom/storefront-base";
-import { prefersDarkText } from "@ecom/utils";
 
 export interface ThemeSettings {
   brand: { storeName: string; tagline: string; logoUrl: string | null; faviconUrl?: string | null };
   /** previewHash: SHA-256 of the staff preview key (the preview cookie must match it). */
   maintenance?: { enabled: boolean; message: string; previewHash: string | null };
   colors: { primary: string; secondary?: string };
+  /** The ready-made theme and light / dark (Online store > Theme). */
+  appearance?: { preset: string; mode: "light" | "dark" | "auto"; shopperSwitch: boolean };
   display?: { showRating: boolean; showSoldCount: boolean; showLowStock: boolean; lowStockThreshold: number; sizeGuideUrl: string };
   robots?: { blockAll: boolean; extra: string };
   tracking?: { googleAnalyticsId: string; facebookPixelId: string; googleVerification: string };
@@ -162,34 +163,6 @@ async function serverApiWithMeta<T>(path: string): Promise<{ data: T; meta: { pa
   } catch {
     return null;
   }
-}
-
-/** "#7c3aed" -> "262 83% 58%", the format the Tailwind colour variables use. */
-export function hexToHslVar(hex: string): string | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  const n = parseInt(m[1]!, 16);
-  const r = ((n >> 16) & 255) / 255;
-  const g = ((n >> 8) & 255) / 255;
-  const b = (n & 255) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  let h = 0;
-  let s = 0;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h *= 60;
-  }
-  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-}
-
-/** Text colour for a background, as an HSL variable, so a yellow or pastel brand colour still has readable buttons. */
-export function readableOn(hex: string): string | null {
-  const dark = prefersDarkText(hex);
-  return dark === null ? null : dark ? "240 10% 3.9%" : "0 0% 100%";
 }
 
 export const formatDate = (iso: string | null | undefined, locale: Locale = "en") =>

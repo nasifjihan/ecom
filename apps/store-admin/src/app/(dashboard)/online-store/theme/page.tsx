@@ -12,10 +12,10 @@ import {
   useGetThemeQuery,
   useResetThemeMutation,
   useSaveThemeMutation,
-  COLOR_PRESETS,
   type ThemeSettings,
 } from "@/lib/features/content/content-api-slice";
 import { prefersDarkText } from "@ecom/utils";
+import { THEME_PRESETS } from "@ecom/shared-types";
 
 const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
 const isLink = (v: string) => v === "" || v.startsWith("/") || /^https?:\/\//i.test(v);
@@ -167,30 +167,60 @@ export default function ThemePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Colours</CardTitle>
-            <CardDescription>The main colour is for buttons and links; the second for badges and highlights.</CardDescription>
+            <CardTitle className="text-base">Theme and colours</CardTitle>
+            <CardDescription>A ready-made look in light and dark. The main colour is for buttons and links, the second for badges; change them to make it yours.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Colour schemes">
-              {COLOR_PRESETS.map((p) => {
-                const on = t.colors.primary.toLowerCase() === p.primary && t.colors.secondary.toLowerCase() === p.secondary;
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" role="group" aria-label="Themes">
+              {THEME_PRESETS.map((p) => {
+                const on = t.appearance.preset === p.id;
                 return (
                   <button
-                    key={p.name}
+                    key={p.id}
                     type="button"
                     aria-pressed={on}
-                    title={p.name}
-                    onClick={() => set("colors", { primary: p.primary, secondary: p.secondary })}
+                    onClick={() => setT((cur) => (cur ? { ...cur, appearance: { ...cur.appearance, preset: p.id }, colors: { primary: p.primary, secondary: p.secondary } } : cur))}
                     className={cn("rounded-lg border-2 p-1.5 text-left transition-colors", on ? "border-slate-900 dark:border-white" : "border-transparent hover:border-slate-300")}
                   >
-                    <span className="flex h-7 overflow-hidden rounded">
-                      <span className="flex-[2]" style={{ background: p.primary }} />
-                      <span className="flex-1" style={{ background: p.secondary }} />
+                    <span className="flex h-16 overflow-hidden border" style={{ borderRadius: p.radius === "0rem" ? 0 : 8 }}>
+                      {([
+                        [p.light, p.primary, p.secondary],
+                        [p.dark, p.darkPrimary, p.darkSecondary],
+                      ] as const).map(([tone, main, second], i) => (
+                        <span key={i} className="flex flex-1 flex-col justify-between p-1.5" style={{ background: tone.background }}>
+                          <span className="block h-1.5 w-3/4 rounded-full" style={{ background: tone.mutedForeground, opacity: 0.6 }} />
+                          <span className="flex items-center gap-1">
+                            <span className="block h-3 flex-1" style={{ background: main, borderRadius: p.radius === "0rem" ? 0 : 3 }} />
+                            <span className="block h-3 w-3 rounded-full" style={{ background: second }} />
+                          </span>
+                        </span>
+                      ))}
                     </span>
-                    <span className="mt-1 block truncate text-[11px] text-slate-600 dark:text-slate-400">{p.name}</span>
+                    <span className="mt-1 block truncate text-xs font-medium text-slate-700 dark:text-slate-300">{p.name}</span>
                   </button>
                 );
               })}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Light or dark" htmlFor="mode" hint="Follow device: dark for shoppers whose phone or computer is set to dark.">
+                <select
+                  id="mode"
+                  value={t.appearance.mode}
+                  onChange={(e) => set("appearance", { mode: e.target.value as ThemeSettings["appearance"]["mode"] })}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Follow device</option>
+                </select>
+              </Field>
+              <Toggle
+                id="shopperSwitch"
+                checked={t.appearance.shopperSwitch}
+                onChange={(v) => set("appearance", { shopperSwitch: v })}
+                label="Let shoppers switch"
+                hint="A sun/moon button in the header; each shopper's choice is remembered."
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <ColorField id="primary" label="Main colour" value={t.colors.primary} onChange={(primary) => set("colors", { primary })} />

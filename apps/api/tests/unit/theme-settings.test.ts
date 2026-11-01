@@ -12,6 +12,7 @@ describe("theme settings (Batch 38)", () => {
     expect(t.colors).toEqual({ primary: "#2563eb", secondary: "#f59e0b" })
     expect(t.display).toEqual({ showRating: true, showSoldCount: true, showLowStock: true, lowStockThreshold: 5, sizeGuideUrl: "" })
     expect(t.tracking).toEqual({ googleAnalyticsId: "", facebookPixelId: "", googleVerification: "" })
+    expect(t.appearance).toEqual({ preset: "classic", mode: "light", shopperSwitch: false })
     expect(t.robots).toEqual({ blockAll: false, extra: "" })
     // A save without the new groups still parses, with the defaults.
     const parsed = ThemeDto.parse({ ...base, colors: { primary: "#2563eb" }, display: undefined, robots: undefined })
@@ -49,5 +50,7 @@ describe("theme settings (Batch 38)", () => {
     expect(parse({ display: { ...base.display, lowStockThreshold: 0 } })).toBe(false)
     expect(parse({ display: { ...base.display, lowStockThreshold: 20 } })).toBe(true)
     expect(parse({ colors: { primary: "#2563eb", secondary: "orange" } })).toBe(false)
+    expect(parse({ appearance: { preset: "neon", mode: "light", shopperSwitch: false } })).toBe(false)
+    expect(parse({ appearance: { preset: "royal", mode: "auto", shopperSwitch: true } })).toBe(true)
   })
 })

@@ -225,3 +225,4 @@ export enum EventName {
 }
 export * from "./permissions";
 export * from "./menu-icons";
+export * from "./theme-presets";

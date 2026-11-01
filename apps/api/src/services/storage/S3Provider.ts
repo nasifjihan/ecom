@@ -46,6 +46,10 @@ export class S3Provider implements StorageProvider {
     });
   }
 
+  urlOf(key: string): string {
+    return this.publicUrl ? `${this.publicUrl.replace(/\/$/, "")}/${key}` : key;
+  }
+
   async put(
     key: string,
     buffer: Uint8Array | Readable,
@@ -76,9 +80,7 @@ export class S3Provider implements StorageProvider {
       }),
     );
 
-    const url = this.publicUrl
-      ? `${this.publicUrl.replace(/\/$/, "")}/${key}`
-      : key;
+    const url = this.urlOf(key);
 
     return {
       key,

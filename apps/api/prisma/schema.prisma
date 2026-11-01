@@ -446,8 +446,6 @@ model StoreBrandSetting {
   borderRadius      String   @default("md")
   buttonStyle       String   @default("solid")
   cardShadow        String   @default("sm")
-  darkModeEnabled   Boolean  @default(false)
-  defaultMode       String   @default("light")
   containerMaxWidth Int      @default(1280)
   sectionPaddingY   Int      @default(48)
   sectionPaddingX   Int      @default(16)
@@ -1247,6 +1245,8 @@ model Product {
   metaDesc              String?
   canonicalUrl          String?
   ogImageUrl            String?
+  /// YouTube, Facebook, Vimeo or .mp4 link, shown as the last item in the gallery.
+  videoUrl              String?
   schemaType            String?
   translations          Json?
   fulfillmentType       String                 @default("own")
@@ -1542,7 +1542,8 @@ model Review {
   replyAdminId BigInt?
   replyBody    String?   @db.Text
   replyAt      DateTime?
-  mediaIds     Json?
+  /// Photo addresses the shopper added (up to 4; each has a "-thumb" copy next to it).
+  photos       String[]  @default([])
   helpfulCount Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

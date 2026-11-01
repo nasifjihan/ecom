@@ -366,6 +366,13 @@ export class MarketingService extends BaseService {
     return counts;
   }
 
+  /** Takes one photo off a review (the review stays). */
+  async removeReviewPhoto(id: bigint, url: string) {
+    const r = await prisma.review.findFirst({ where: { id, ...(this.ctx.storeId !== undefined ? { storeId: this.ctx.storeId } : {}) }, select: { photos: true } });
+    if (!r) throw new NotFoundError("Review", id);
+    return prisma.review.update({ where: { id }, data: { photos: r.photos.filter((p) => p !== url) }, select: { id: true, photos: true } });
+  }
+
   async moderateReviews(dto: ReviewModerateDto): Promise<{ count: number; action: string }> {
     const bigIds = dto.ids.map((id) => BigInt(id));
     // Ratings on the product pages follow what's approved, so re-count the products touched.

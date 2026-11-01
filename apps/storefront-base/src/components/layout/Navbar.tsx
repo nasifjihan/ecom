@@ -36,6 +36,7 @@ import {
 import { MenuIcon } from "@ecom/ui";
 import { cn } from "@ecom/utils";
 import { LanguageSwitcher, useT } from "../../i18n/provider";
+import { ModeSwitch } from "./ModeSwitch";
 
 export type MenuLink = {
   label: string;
@@ -60,6 +61,8 @@ export type NavbarProps = {
   storeId?: string;
   /** Replaces the plain search box on wide screens (e.g. one with suggestions). */
   searchSlot?: React.ReactNode;
+  /** Show the light / dark switch in the header. */
+  modeSwitch?: boolean;
   /** The signed-in customer, or null for a guest. */
   account?: { name: string; email?: string | null } | null;
   onLogout?: () => void;
@@ -85,6 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ],
   cartCount = 0,
   wishlistCount = 0,
+  modeSwitch = false,
   onCartClick,
   onWishlistClick,
   className,
@@ -110,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 w-full bg-white transition-all duration-200",
+        "sticky top-0 z-40 w-full bg-background transition-all duration-200",
         scrolled ? "shadow-sm border-b" : "border-b border-transparent",
         className,
       )}
@@ -175,7 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         transition={{ duration: 0.15 }}
                         className="absolute left-0 top-full pt-2 min-w-48"
                       >
-                        <div className="rounded-md border bg-white p-1 shadow-md">
+                        <div className="rounded-md border bg-popover text-popover-foreground p-1 shadow-md">
                           {link.children!.map((child) => (
                             <div key={child.href} className="group/sub relative">
                               <Link
@@ -188,7 +192,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                               </Link>
                               {!!child.children?.length && (
                                 <div className="absolute left-full top-0 hidden pl-1 group-hover/sub:block group-focus-within/sub:block">
-                                  <div className="min-w-44 rounded-md border bg-white p-1 shadow-md">
+                                  <div className="min-w-44 rounded-md border bg-popover text-popover-foreground p-1 shadow-md">
                                     {child.children.map((g) => (
                                       <Link
                                         key={g.href}
@@ -235,6 +239,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="ml-auto flex items-center gap-1">
             <LanguageSwitcher />
+            {modeSwitch && <ModeSwitch />}
             <Link href="/search" className="p-2 rounded-md hover:bg-accent md:hidden" aria-label={t("Search")}>
               <Search className="h-5 w-5" />
             </Link>

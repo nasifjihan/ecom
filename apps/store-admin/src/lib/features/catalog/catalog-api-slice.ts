@@ -35,6 +35,8 @@ export interface Product {
   /** Products picked for "You may also like", in order (product page only). */
   related?: { id: string; name: string; sku: string | null }[];
   relatedProductIds?: (string | number)[];
+  /** YouTube, Facebook, Vimeo or .mp4 link, last in the gallery. */
+  videoUrl?: string | null;
   /** Lower-case search and filter words. */
   tags?: string[];
   /** Rows of the product page's specifications table. */

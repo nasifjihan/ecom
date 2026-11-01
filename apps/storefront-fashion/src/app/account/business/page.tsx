@@ -138,7 +138,7 @@ export default function BusinessAccountPage() {
               )}
               <p className="mt-2 text-xs opacity-75">{t("Applied {date}", { date: formatDate(account.appliedAt) })}</p>
               {account.status === "APPROVED" && (
-                <Button asChild variant="outline" size="sm" className="mt-3 bg-white">
+                <Button asChild variant="outline" size="sm" className="mt-3 bg-background">
                   <Link href="/products">
                     <Briefcase className="mr-1.5 h-4 w-4" /> {t("Shop now")}
                   </Link>

@@ -80,7 +80,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({
   onSlideChange,
 }) => {
   return (
-    <div className={cn("relative w-full overflow-hidden rounded-xl bg-slate-100", className)} style={{ height }}>
+    <div className={cn("relative w-full overflow-hidden rounded-xl bg-muted", className)} style={{ height }}>
       <Swiper
         modules={[Autoplay, Pagination, Navigation, EffectFade]}
         effect="fade"

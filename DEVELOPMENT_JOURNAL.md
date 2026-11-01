@@ -6637,3 +6637,55 @@ Phase 2 of `FEATURE_LIST_REVIEW.md` section 3: search that forgives spelling, si
 - **Not run:**
   - The new `phase2-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers spelling, search words, best match, size-in-stock filters, counts and the 3-level menu.
   - The browser check: `TESTING_CHECKLIST.md` section F lists what to try.
+
+---
+
+## ✅ BATCH #53 — Phase 3: themes, zoom, product video, review photos (2026-11-01)
+Phase 3 of `FEATURE_LIST_REVIEW.md` section 3.
+
+### Themes with light and dark
+- **Eight ready-made themes** in `shared-types/theme-presets.ts`: Classic, Elegant, Fresh, Bold, Earthy, Minimal, Royal and Festive. Each has main and second colours, page/card/text/border tones and corner roundness, in a light and a dark version. Classic is the look stores already had, so nothing changes until a shop picks another.
+- **Saved per storefront** in the theme JSON (`appearance: { preset, mode: light | dark | auto, shopperSwitch }`).
+- **Theme page:** Online store → Theme shows a light/dark preview card for each theme, a "Light or dark" choice and "Let shoppers switch". Picking a theme sets its colours, and the main and second colours can still be changed on top. The old 10 colour pairs are gone; the themes replace them.
+- **Storefront CSS:**
+  - `storefront-base/lib/theme-css.ts` `themeCss` writes the CSS variables for `:root` and `:root.dark`. Only numbers come out of the hex parsing, so it's safe inside `<style>`.
+  - On dark backgrounds a shop's own colour is lightened, and the theme's own dark colours are used when the shop kept the theme's.
+- **No white flash:** `modeScript` runs before the first paint. It reads the shopper's choice (cookie `sf_mode`, only when switching is allowed), else the shop's mode or the device setting. A fixed dark mode is also set on the server.
+- **Switch:** the sun/moon `ModeSwitch` sits in the header.
+- **Fixed colours fixed:**
+  - About 18 storefront files used fixed white or slate colours (header, dropdowns, cards, cart and checkout placeholders, footer, payment chips, product page buttons, stars, account pages). They now use the theme colours.
+  - Photo overlays, banners and logo tiles keep white on purpose.
+  - Some coloured hints (amber or emerald notes) still use their light tints.
+- **Cleanup:** the old helpers `hexToHslVar` and `readableOn` are removed, and so are the unused `StoreBrandSetting.darkModeEnabled` and `defaultMode` columns.
+
+### Image zoom
+- **Computer:** the main photo magnifies under the mouse (`HoverZoom`).
+- **Full screen:** a click or tap opens `MediaViewer`, using Swiper's own Zoom, Keyboard and Navigation modules (Swiper was already installed). Pinch or double-tap zooms, swipe moves between photos, Escape or × closes. It opens in a portal so animated parents can't clip it.
+
+### Product video
+- **Field:** `Product.videoUrl`, in the product editor's Media tab. It takes YouTube (also Shorts), Facebook, Vimeo or an `.mp4` link, checked with the same `videoEmbed` as the page builder's video block (in the admin form and the API). Duplicate copies it, and an empty field removes it.
+- **Product page:** the video is the last gallery item, with a play-icon thumbnail. The player loads only when tapped; YouTube uses its no-cookie player.
+
+### Review photos
+- **Upload:** `POST /api/storefront/reviews/photos` takes one image (signed-in shoppers, 5 MB, JPG/PNG/WebP). It's made into WebP plus a `-thumb` copy, kept under `<store>/media/reviews/<customer>/`, and not added to the shop's media library.
+- **Ownership:** the review sends the keys, and `reviewPhotoUrls` only accepts this shopper's own keys in this store, up to 4.
+- **Storage helper:** storage providers gained `urlOf(key)`, used here and by S3 `put`.
+- **Database:** `Review.photos` replaces the unused `mediaIds`.
+- **Product page:** photos show in each review, plus a "Customer photos" strip above the reviews; tapping one opens the full-screen viewer. The review form has an "Add photo" picker.
+- **Marketing → Reviews:** shows the photos, and staff can remove a single one (`POST /api/admin/marketing/reviews/:id/remove-photo`); the review stays.
+- **Limit:** a removed photo, or one from a deleted review, stays in storage. A cleanup job can come later.
+
+### Migration
+- `20261101150000_themes_video_review_photos` adds `Product.videoUrl`.
+- It replaces `Review.mediaIds` with `photos`.
+- It drops the two unused dark-mode columns.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests:**
+  - API without a database: 63 files and 832 tests pass. New: `review-photos.test.ts`, plus theme cases in `theme-settings.test.ts`.
+  - Storefront: 9 tests pass. New: `theme-css.test.ts`, plus the Bangla check.
+- **Not run:**
+  - The new `phase3-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC.
+  - The browser check, including how each theme looks in dark mode: `TESTING_CHECKLIST.md` section G lists what to try.

@@ -53,7 +53,11 @@ const engagementApi = api.injectEndpoints({
     askQuestion: b.mutation<{ id: string; status: string }, { productId: string; name?: string; question: string }>({
       query: ({ productId, ...body }) => ({ url: `/storefront/products/${productId}/questions`, method: "POST", body }),
     }),
-    submitReview: b.mutation<{ id: string; status: string; verified: boolean }, { productId: string; rating: number; title?: string; body?: string }>({
+    /** One photo for a review (multipart "file"); send the returned key with the review. */
+    uploadReviewPhoto: b.mutation<{ key: string; url: string; thumbUrl: string }, FormData>({
+      query: (body) => ({ url: "/storefront/reviews/photos", method: "POST", body }),
+    }),
+    submitReview: b.mutation<{ id: string; status: string; verified: boolean }, { productId: string; rating: number; title?: string; body?: string; photos?: string[] }>({
       query: ({ productId, ...body }) => ({ url: `/storefront/products/${productId}/reviews`, method: "POST", body }),
       invalidatesTags: (_r, _e, { productId }) => [{ type: "Product", id: `MY-REVIEW-${productId}` }],
     }),
@@ -76,6 +80,7 @@ const engagementApi = api.injectEndpoints({
 });
 
 export const {
+  useUploadReviewPhotoMutation,
   useSearchSuggestQuery,
   usePopularSearchesQuery,
   useTrackOrderMutation,

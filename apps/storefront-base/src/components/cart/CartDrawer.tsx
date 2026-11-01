@@ -44,7 +44,7 @@ function CartItemRow({
     <div className="flex gap-3 py-4">
       <Link
         href={`/products/${item.slug}`}
-        className="h-20 w-20 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 border"
+        className="h-20 w-20 flex-shrink-0 rounded-lg overflow-hidden bg-muted border"
       >
         <img src={item.image} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
       </Link>

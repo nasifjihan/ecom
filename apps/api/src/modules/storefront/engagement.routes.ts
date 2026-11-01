@@ -9,11 +9,13 @@
  *   GET  /api/storefront/products/:id/my-review
  *   GET|POST /api/storefront/account/wishlist, GET /wishlist/ids, DELETE /wishlist/:productId
  */
-import { Router, type Request, type Response } from "express"
+import { Router, type NextFunction, type Request, type Response } from "express"
+import multer from "multer"
 import { z } from "zod"
-import { ctrl, envelope, type RequestContext } from "../../core"
+import { BadRequestError, TooLargeError, ctrl, envelope, type RequestContext } from "../../core"
 import { authMiddleware, validate } from "../../middleware"
 import { StorefrontEngagement } from "./engagement"
+import { MAX_REVIEW_PHOTOS, MAX_REVIEW_PHOTO_BYTES, uploadReviewPhoto } from "./review-photos"
 
 type Req = Request & { ctx: RequestContext }
 const svc = (req: Req) => new StorefrontEngagement(req.ctx)
@@ -39,6 +41,8 @@ const ReviewDto = z.object({
   rating: z.coerce.number().int().min(1).max(5),
   title: z.string().trim().max(120).refine(noXss, "No HTML please").optional(),
   body: z.string().trim().max(2000).refine(noXss, "No HTML please").optional(),
+  /** Keys from POST /reviews/photos. */
+  photos: z.array(z.string().max(200)).max(MAX_REVIEW_PHOTOS).default([]),
 })
 const WishlistDto = z.object({ productIds: z.array(z.coerce.bigint().positive()).min(1).max(100) })
 const ProductParam = z.object({ productId: z.coerce.bigint().positive() })
@@ -82,6 +86,21 @@ storefrontEngagementRouter.post(
       data: await svc(req).askQuestion(id(req), req.body as z.infer<typeof QuestionDto>),
       message: "Thanks! We'll answer soon.",
     })
+  }),
+)
+// One photo for a review (multipart "file"); the review then sends the returned key.
+const uploadPhoto = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_REVIEW_PHOTO_BYTES, files: 1 } }).single("file")
+storefrontEngagementRouter.post(
+  "/reviews/photos",
+  authMiddleware("customer"),
+  (req: Request, res: Response, next: NextFunction) =>
+    uploadPhoto(req as never, res as never, (err: unknown) =>
+      next(err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE" ? new TooLargeError("Photos must be 5 MB or smaller") : err),
+    ),
+  ctrl(async (req: Req, res: Response) => {
+    const file = (req as Req & { file?: { buffer: Buffer; mimetype: string } }).file
+    if (!file) throw new BadRequestError("Choose a photo", "VALIDATION_FAILED")
+    envelope(res, { status: 201, data: await uploadReviewPhoto(BigInt(req.ctx.storeId!), req.ctx.customer!.id, { buffer: file.buffer, mimeType: file.mimetype }) })
   }),
 )
 storefrontEngagementRouter.post(

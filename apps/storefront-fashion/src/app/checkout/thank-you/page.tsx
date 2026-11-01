@@ -210,7 +210,7 @@ export default function ThankYouPage() {
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="absolute -bottom-1 -right-1 h-9 w-9 rounded-full bg-white border-4 border-background flex items-center justify-center shadow-lg"
+            className="absolute -bottom-1 -right-1 h-9 w-9 rounded-full bg-background border-4 border-background flex items-center justify-center shadow-lg"
           >
             <ShoppingBag className="h-4 w-4 text-primary" />
           </motion.div>
@@ -287,7 +287,7 @@ export default function ThankYouPage() {
                       key={it.id}
                       className="flex gap-4 p-3 rounded-xl hover:bg-muted/30 transition-colors"
                     >
-                      <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-slate-100 border flex-shrink-0">
+                      <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-muted border flex-shrink-0">
                         <img
                           src={it.image}
                           alt={it.title}

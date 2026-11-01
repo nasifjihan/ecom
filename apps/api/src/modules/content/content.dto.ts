@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { isMenuIcon } from "@ecom/shared-types"
+import { THEME_MODES, THEME_PRESET_IDS, isMenuIcon } from "@ecom/shared-types"
 import { patchOf } from "../../core/patch-schema"
 import { videoEmbed } from "@ecom/utils"
 
@@ -190,6 +190,15 @@ export const ThemeDto = z.object({
       ),
     })
     .default({ blockAll: false, extra: "" }),
+  /** The ready-made theme (THEME_PRESETS) and light / dark. */
+  appearance: z
+    .object({
+      preset: z.enum(THEME_PRESET_IDS),
+      mode: z.enum(THEME_MODES),
+      /** A sun/moon button in the shop's header; the shopper's choice is remembered. */
+      shopperSwitch: z.boolean(),
+    })
+    .default({ preset: "classic", mode: "light", shopperSwitch: false }),
   /** Measuring visits and ads; empty values load nothing. */
   tracking: z
     .object({

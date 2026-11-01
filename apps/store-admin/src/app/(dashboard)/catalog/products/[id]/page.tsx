@@ -64,6 +64,7 @@ import {
   type ProductVariant,
 } from "@/lib/features/catalog/catalog-api-slice";
 import { ProductStatus, ProductType } from "@ecom/shared-types";
+import { videoEmbed } from "@ecom/utils";
 import { SpecificationsEditor, cleanSpecs, type SpecRow } from "@/components/catalog/specifications-editor";
 import { BanglaFields, banglaOf, banglaPayload, type BanglaField, type BanglaTexts } from "@/components/catalog/bangla-fields";
 import { ProductStorefronts } from "@/components/catalog/product-storefronts";
@@ -146,6 +147,12 @@ const productEditSchema = z.object({
   relatedProductIds: z.array(z.coerce.bigint()).default([]),
   seoTitle: z.string().max(60).optional().or(z.literal("")),
   metaDesc: z.string().max(160).optional().or(z.literal("")),
+  videoUrl: z
+    .string()
+    .max(500)
+    .refine((v) => !v.trim() || videoEmbed(v) !== null, "Use a YouTube, Facebook or Vimeo link, or a link to an .mp4 file")
+    .optional()
+    .or(z.literal("")),
 });
 
 type ProductEditFormValues = z.infer<typeof productEditSchema>;
@@ -223,6 +230,7 @@ export default function EditProductPage() {
       relatedProductIds: [],
       seoTitle: "",
       metaDesc: "",
+      videoUrl: "",
     },
     mode: "onSubmit",
   });
@@ -263,6 +271,7 @@ export default function EditProductPage() {
         relatedProductIds: (product.relatedProductIds ?? []) as any,
         seoTitle: product.seoTitle || "",
         metaDesc: product.metaDesc || "",
+        videoUrl: product.videoUrl || "",
       });
 
       if (product.imageUrls && product.imageUrls.length > 0) {
@@ -415,6 +424,7 @@ export default function EditProductPage() {
           variants,
           seoTitle: values.seoTitle || null,
           metaDesc: values.metaDesc || null,
+          videoUrl: values.videoUrl?.trim() || null,
         } as any,
       }).unwrap();
 
@@ -781,6 +791,27 @@ export default function EditProductPage() {
                           </button>
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Video</CardTitle>
+                      <CardDescription>Shown as the last item in the gallery. YouTube (also Shorts), Facebook or Vimeo link, or a link to an .mp4 file.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <FormField
+                        control={control}
+                        name="videoUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Video link (optional)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="https://www.youtube.com/watch?v=..." {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </CardContent>
                   </Card>
                 </TabsContent>

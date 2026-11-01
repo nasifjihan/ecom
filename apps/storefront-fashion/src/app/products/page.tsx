@@ -344,7 +344,7 @@ export default function ProductsPage() {
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Star
                     key={i}
-                    className={cn("h-3.5 w-3.5", i <= r ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")}
+                    className={cn("h-3.5 w-3.5", i <= r ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30")}
                   />
                 ))}
                 <span className="ml-1">{t("& up")}</span>
@@ -532,7 +532,7 @@ export default function ProductsPage() {
                   href={`/products/${p.slug}`}
                   className="flex gap-4 p-3 border rounded-xl hover:shadow-hover hover:border-primary/30 transition-all group"
                 >
-                  <div className="h-36 w-36 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100">
+                  <div className="h-36 w-36 flex-shrink-0 rounded-lg overflow-hidden bg-muted">
                     <img src={p.image} alt={p.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col">
@@ -540,7 +540,7 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-1.5 my-1 text-sm">
                       <div className="flex">
                         {[1, 2, 3, 4, 5].map((i) => (
-                          <Star key={i} className={cn("h-3.5 w-3.5", i <= Math.round(p.rating ?? 0) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
+                          <Star key={i} className={cn("h-3.5 w-3.5", i <= Math.round(p.rating ?? 0) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30")} />
                         ))}
                       </div>
                       <span className="text-muted-foreground text-xs">({p.reviewCount})</span>

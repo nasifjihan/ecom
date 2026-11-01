@@ -193,6 +193,7 @@ export class CatalogService extends BaseService {
         metaDesc: dto.metaDesc ?? null,
         canonicalUrl: dto.canonicalUrl ?? null,
         ogImageUrl: dto.ogImageUrl ?? null,
+        videoUrl: dto.videoUrl ?? null,
         supplierId: dto.supplierId ?? null,
         supplierCost: dto.supplierCost ?? null,
         supplierSku: dto.supplierSku ?? null,

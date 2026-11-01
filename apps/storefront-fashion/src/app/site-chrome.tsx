@@ -22,10 +22,12 @@ export function NavbarWithCartState({
   storeName,
   logoUrl,
   menu,
+  modeSwitch = false,
 }: {
   storeName: string;
   logoUrl?: string | null;
   menu?: MenuLink[] | null;
+  modeSwitch?: boolean;
 }) {
   const { itemCount, openCart } = useCart();
   const wishlist = useWishlist();
@@ -69,6 +71,7 @@ export function NavbarWithCartState({
       account={auth.isAuthenticated ? { name: auth.customerName ?? t("My Account"), email: auth.customerEmail } : null}
       onLogout={onLogout}
       menuLinks={menuLinks}
+      modeSwitch={modeSwitch}
     />
   );
 }

@@ -22,6 +22,10 @@ export class LocalDiskProvider implements StorageProvider {
     return join(this.baseDir, key);
   }
 
+  urlOf(key: string): string {
+    return this.toUrl(key);
+  }
+
   private toUrl(key: string): string {
     // Absolute, because the storefront and admin run on other origins than the API that serves /uploads.
     return `${env.API_BASE_URL}/uploads/${key}`;

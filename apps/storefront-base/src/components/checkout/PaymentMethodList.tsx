@@ -436,13 +436,13 @@ export function PaymentMethodList({
       </div>
       <Separator className="my-3" />
       <div className="flex flex-wrap gap-2">
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">Visa</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">Mastercard</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">bKash</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">Nagad</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">Rocket</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">DBBL Nexus</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-white border">{t("+20 more")}</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">Visa</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">Mastercard</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">bKash</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">Nagad</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">Rocket</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">DBBL Nexus</span>
+        <span className="px-2 py-1 text-[10px] rounded bg-background border">{t("+20 more")}</span>
       </div>
     </div>
   );
@@ -466,7 +466,7 @@ export function PaymentMethodList({
                   className={cn(
                     "flex-shrink-0 w-10 h-10 rounded-lg border flex items-center justify-center",
                     gw.color,
-                    isSelected ? "bg-white" : "bg-muted/50",
+                    isSelected ? "bg-background" : "bg-muted/50",
                   )}
                 >
                   {gw.icon}

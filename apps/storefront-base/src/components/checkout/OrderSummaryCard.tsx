@@ -135,7 +135,7 @@ export function OrderSummaryCard({
                   key={`${item.productId}-${item.variantId ?? "none"}`}
                   className="flex gap-3 p-2 rounded-lg hover:bg-muted/40 transition-colors"
                 >
-                  <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-slate-100 border flex-shrink-0">
+                  <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-muted border flex-shrink-0">
                     <img
                       src={item.image}
                       alt={item.title}

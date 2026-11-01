@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Loader2,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -52,6 +53,7 @@ import {
   useGetReviewsQuery,
   useGetReviewCountsQuery,
   useModerateReviewsMutation,
+  useRemoveReviewPhotoMutation,
   type Review,
   type ReviewAction,
   type ReviewStatus,
@@ -123,6 +125,16 @@ export default function ReviewsPage() {
   const [dateTo, setDateTo] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [replying, setReplying] = useState<string | number | null>(null);
+  const [removePhotoMut] = useRemoveReviewPhotoMutation();
+  const removePhoto = async (id: string | number, url: string) => {
+    if (!window.confirm("Remove this photo from the review? The review itself stays.")) return;
+    try {
+      await removePhotoMut({ id, url }).unwrap();
+      toast.success("Photo removed");
+    } catch {
+      toast.error("Couldn't remove the photo");
+    }
+  };
   const [replyText, setReplyText] = useState("");
   const [bulkReplyOpen, setBulkReplyOpen] = useState(false);
   const [bulkReplyText, setBulkReplyText] = useState("");
@@ -496,6 +508,26 @@ export default function ReviewsPage() {
                           <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-1">
                             {r.text}
                           </p>
+                          {r.photos.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {r.photos.map((url) => (
+                                <div key={url} className="group relative h-12 w-12 overflow-hidden rounded border">
+                                  <a href={url} target="_blank" rel="noreferrer" title="Open full size">
+                                    <img src={url.replace(/\.webp$/, "-thumb.webp")} alt="" className="h-full w-full object-cover" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => void removePhoto(r.id, url)}
+                                    aria-label="Remove this photo"
+                                    title="Remove this photo (the review stays)"
+                                    className="absolute right-0.5 top-0.5 hidden rounded-full bg-black/70 p-0.5 text-white group-hover:block"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {r.reply && (
                             <div className="mt-2 rounded-md bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 p-2">
                               <div className="text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-300 font-semibold mb-0.5">

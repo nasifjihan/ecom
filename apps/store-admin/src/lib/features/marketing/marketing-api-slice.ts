@@ -146,6 +146,8 @@ export interface Review {
   text: string;
   reply?: string;
   replyAt?: string;
+  /** Photos the shopper added. */
+  photos: string[];
   status: ReviewStatus;
   submittedAt: string;
   updatedAt?: string;
@@ -342,6 +344,7 @@ export function fromApiReview(r: ApiRow): Review {
     text: r.body ?? "",
     reply: r.replyBody ?? undefined,
     replyAt: r.replyAt ?? undefined,
+    photos: (r.photos as string[] | undefined) ?? [],
     status: r.status,
     submittedAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -539,6 +542,10 @@ export const marketingApiSlice = api.injectEndpoints({
       transformResponse: (r: ApiRow) => fromApiReview(r),
       providesTags: (_, __, id) => [{ type: "Review", id }],
     }),
+    removeReviewPhoto: builder.mutation<{ id: string; photos: string[] }, { id: string | number; url: string }>({
+      query: ({ id, url }) => ({ url: `/admin/marketing/reviews/${id}/remove-photo`, method: "POST", body: { url } }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Review" as const, id }, { type: "Review", id: "LIST" }],
+    }),
     moderateReviews: builder.mutation<{ count: number; action: ReviewAction }, BulkUpdateReviewsDto>({
       query: ({ ids, ...body }) => ({
         url: "/admin/marketing/reviews/moderate",
@@ -552,6 +559,7 @@ export const marketingApiSlice = api.injectEndpoints({
 });
 
 export const {
+  useRemoveReviewPhotoMutation,
   useGetCouponsQuery,
   useGetCouponQuery,
   useLazyGetCouponQuery,

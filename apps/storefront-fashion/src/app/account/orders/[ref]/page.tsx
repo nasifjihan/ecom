@@ -281,7 +281,7 @@ function Parcels({ order: o }: { order: MyOrder }) {
           <div key={p.code} className="rounded-lg border p-4 text-sm space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium">{p.courier ?? t("Courier")}</span>
-              <Badge className={cn("border-0", PARCEL_TONE[p.status] ?? "bg-slate-100 text-slate-700")}>{t(PARCEL_TEXT[p.status] ?? p.status)}</Badge>
+              <Badge className={cn("border-0", PARCEL_TONE[p.status] ?? "bg-muted text-foreground")}>{t(PARCEL_TEXT[p.status] ?? p.status)}</Badge>
             </div>
             {p.trackingNumber && (
               <p>

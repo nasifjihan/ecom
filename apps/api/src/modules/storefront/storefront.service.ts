@@ -52,6 +52,7 @@ import { assertCanOrder } from "../customers/customer-ban";
 import { NewsletterService } from "../customers/newsletter.service";
 import { searchMatches } from "../search/shop-search";
 import { countOptions, filterAttributes, optionsWhere, parseOptions, sellableVariants } from "./product-options";
+import { thumbOf } from "./review-photos";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -550,6 +551,7 @@ export class StorefrontService {
       verified: r.verified,
       date: r.createdAt.toISOString(),
       reply: r.replyBody ? { body: r.replyBody, date: (r.replyAt ?? r.updatedAt).toISOString() } : null,
+      photos: r.photos.map((url) => ({ url, thumb: thumbOf(url) })),
     }));
     // averageRating/reviewCount follow every approved review (refreshProductRating), not just the 20 shown.
     return {
@@ -565,6 +567,7 @@ export class StorefrontService {
       lowStockThreshold: p.lowStockThreshold ?? 5,
       /** Picked in the admin to show first under "You may also like". */
       relatedIds: p.links.map((l) => String(l.linkedProductId)),
+      videoUrl: p.videoUrl,
       /** The main category's size chart, when it has its own (else the store-wide one from the theme). */
       sizeGuideUrl: primary?.category.sizeGuideUrl ?? null,
       allowReviews: p.allowReviews,

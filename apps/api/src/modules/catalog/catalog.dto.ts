@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { patchOf } from "../../core/patch-schema";
 import { PaginationSchema } from "@ecom/zod-schemas";
+import { videoEmbed } from "@ecom/utils";
 
 const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
 const noXss = (v: string | null | undefined): boolean => {
@@ -177,6 +178,15 @@ const BaseCreateProductDto = z.object({
   metaDesc: z.string().max(500).optional().nullable().refine(noXss, "No JavaScript injection allowed"),
   canonicalUrl: z.string().max(500).optional().nullable(),
   ogImageUrl: z.string().max(500).optional().nullable(),
+  /** A video link the shop can show (checked like the page builder's video block). */
+  videoUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || videoEmbed(v) !== null, "Use a YouTube, Facebook or Vimeo link, or a link to an .mp4 file")
+    .transform((v) => v || null)
+    .optional()
+    .nullable(),
   supplierId: z.coerce.bigint().optional().nullable(),
   supplierCost: z.coerce.number().nonnegative().optional().nullable(),
   supplierSku: z.string().max(100).optional().nullable(),

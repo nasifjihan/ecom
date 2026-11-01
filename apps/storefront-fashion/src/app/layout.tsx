@@ -3,9 +3,9 @@ import { SentryInit } from "@/components/sentry-init";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Footer, Tracking, translatorFor } from "@ecom/storefront-base";
+import { Footer, Tracking, modeScript, themeCss, translatorFor } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
-import { getSite, getSlotPromotions, hexToHslVar, pageLocale, readableOn } from "@/lib/content";
+import { getSite, getSlotPromotions, pageLocale } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
@@ -121,16 +121,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const languages = site?.languages?.enabled ?? ["en"];
   const theme = site?.theme;
   const storeName = theme?.brand.storeName ?? "";
-  const primary = theme ? hexToHslVar(theme.colors.primary) : null;
-  const secondary = theme?.colors.secondary ? hexToHslVar(theme.colors.secondary) : null;
   const closed = await shopClosed(theme);
-  // Only digits, spaces and % come out of these helpers, so they're safe inside <style>.
-  const colorVars = [
-    primary && `--primary:${primary};--ring:${primary};--primary-foreground:${readableOn(theme!.colors.primary)}`,
-    secondary && `--secondary:${secondary};--secondary-foreground:${readableOn(theme!.colors.secondary!)}`,
-  ]
-    .filter(Boolean)
-    .join(";");
+  const appearance = theme?.appearance ?? { preset: "classic", mode: "light" as const, shopperSwitch: false };
   const announcement = theme?.announcement.enabled && theme.announcement.text ? theme.announcement : null;
   // Shop pages every store has, next to the store's own footer menus.
   const quickLinks = {
@@ -154,11 +146,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     : undefined;
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} className={appearance.mode === "dark" ? "dark" : undefined} suppressHydrationWarning>
       <head>
         <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-        {/* The store's colours, from the admin theme settings. */}
-        {colorVars && <style>{`:root{${colorVars}}`}</style>}
+        {/* The store's theme colours (light and dark), and the mode set before the first paint. */}
+        {theme && <style>{themeCss(theme)}</style>}
+        <script dangerouslySetInnerHTML={{ __html: modeScript(appearance.mode, appearance.shopperSwitch) }} />
       </head>
       <body className="min-h-screen bg-background antialiased flex flex-col">
         {closed ? (
@@ -208,7 +201,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               ))}
             </div>
           )}
-          <NavbarWithCartState storeName={storeName} logoUrl={theme?.brand.logoUrl} menu={site?.headerMenu} />
+          <NavbarWithCartState storeName={storeName} logoUrl={theme?.brand.logoUrl} menu={site?.headerMenu} modeSwitch={appearance.shopperSwitch} />
           {/* Pages that read useSearchParams need a Suspense boundary to prerender. */}
           <main className="flex-1">
             <Suspense>{children}</Suspense>

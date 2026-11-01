@@ -133,7 +133,7 @@ export default function CartPage() {
                       href={`/products/${p.slug}`}
                       className="group block p-3 rounded-xl border hover:shadow-soft hover:border-primary/30 transition-all"
                     >
-                      <div className="aspect-square rounded-lg overflow-hidden bg-slate-100 mb-3">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-3">
                         <img src={p.image} alt={p.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                       </div>
                       <h4 className="text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors mb-1 min-h-[2.5rem]">{p.title}</h4>
@@ -164,7 +164,7 @@ export default function CartPage() {
                   const problem = problems[cartLineKey(item.productId, item.variantId)];
                   return (
                     <div key={`${item.productId}-${item.variantId ?? "none"}`} className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr_auto] gap-3 md:gap-4 p-4 hover:bg-muted/20 transition-colors">
-                      <Link href={`/products/${item.slug}`} className="h-20 md:h-24 w-20 md:w-24 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 border">
+                      <Link href={`/products/${item.slug}`} className="h-20 md:h-24 w-20 md:w-24 flex-shrink-0 rounded-xl overflow-hidden bg-muted border">
                         <img src={item.image} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
                       </Link>
 
@@ -292,7 +292,7 @@ export default function CartPage() {
                     <Link
                       key={p.id}
                       href={`/products/${p.slug}`}
-                      className="group block aspect-square rounded-xl overflow-hidden bg-slate-100 relative"
+                      className="group block aspect-square rounded-xl overflow-hidden bg-muted relative"
                     >
                       <img src={p.image} alt={p.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-white text-xs">

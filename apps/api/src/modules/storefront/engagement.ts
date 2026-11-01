@@ -18,6 +18,7 @@ import { bdMobile, phoneVariants } from "../sms/sms.rules"
 import { flashRules } from "./flash-pricing"
 import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import { StorefrontService } from "./storefront.service"
+import { reviewPhotoUrls } from "./review-photos"
 import { searchMatches } from "../search/shop-search"
 import {
   publicName,
@@ -350,8 +351,9 @@ export class StorefrontEngagement {
    * A signed-in customer's review. A customer who received the product in a delivered order is a
    * verified buyer and the review shows at once; others wait for the shop to approve it.
    */
-  async submitReview(productId: bigint, dto: { rating: number; title?: string; body?: string }) {
+  async submitReview(productId: bigint, dto: { rating: number; title?: string; body?: string; photos?: string[] }) {
     const customerId = this.customerId
+    const photos = reviewPhotoUrls(this.storeId, customerId, dto.photos ?? [])
     const product = await prisma.product.findFirst({
       where: { id: productId, storeId: this.storeId, status: "published" },
       select: { id: true, allowReviews: true },
@@ -385,6 +387,7 @@ export class StorefrontEngagement {
           rating: dto.rating,
           title: dto.title?.trim() ? dto.title.trim() : null,
           body: dto.body?.trim() ? dto.body.trim() : null,
+          photos,
           status: verified ? "approved" : "pending",
           verified,
         },

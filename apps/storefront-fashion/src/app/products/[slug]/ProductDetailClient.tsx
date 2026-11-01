@@ -7,6 +7,8 @@ import { BulkPrices, bulkUnitPrice } from "./bulk-prices";
 import { tiersForOption, useProductBulkPrices } from "@/lib/wholesale";
 import { QuestionsSection, ReviewForm } from "./engagement-sections";
 import { RecentlyViewed } from "./recently-viewed";
+import { HoverZoom, MediaViewer, ProductVideo } from "./media-viewer";
+import { videoEmbed } from "@ecom/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -25,6 +27,7 @@ import {
   RotateCcw,
   Star,
   CheckCircle2,
+  PlayCircle,
   Zap,
 } from "lucide-react";
 import {
@@ -173,6 +176,10 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const router = useRouter();
 
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
+  const [viewerAt, setViewerAt] = React.useState<number | null>(null);
+  const [reviewViewer, setReviewViewer] = React.useState<{ images: string[]; start: number } | null>(null);
+  const reviewPhotos = React.useMemo(() => product.reviews.flatMap((r) => r.photos ?? []), [product.reviews]);
+  const video = React.useMemo(() => (product.videoUrl ? videoEmbed(product.videoUrl) : null), [product.videoUrl]);
   const [qty, setQty] = React.useState(1);
   const wishlist = useWishlist();
   const wishlisted = wishlist.has(product.id);
@@ -334,16 +341,35 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   </div>
                 </SwiperSlide>
               ))}
+              {video && (
+                <SwiperSlide className="!h-[80px] !w-[80px] !flex-shrink-0">
+                  <div className="relative h-full w-full rounded-lg overflow-hidden border-2 cursor-pointer hover:border-primary transition-colors bg-muted" aria-label={t("Video")}>
+                    {images[0] && <img src={thumbOf(0, images[0])} alt="" loading="lazy" className="h-full w-full object-cover opacity-60" />}
+                    <PlayCircle className="absolute inset-0 m-auto h-8 w-8 text-foreground drop-shadow" />
+                  </div>
+                </SwiperSlide>
+              )}
             </Swiper>
 
             <div className="relative min-w-0">
-              <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-slate-50">
+              <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-muted">
                 {images.map((img: string, i: number) => (
                   <SwiperSlide key={i}>
-                    <img src={dataSaver ? thumbOf(i, img) : img} alt={t("{title} — view {n}", { title: product.title, n: i + 1 })} className="h-full w-full object-cover" />
+                    <HoverZoom
+                      src={dataSaver ? thumbOf(i, img) : img}
+                      alt={t("{title} — view {n}", { title: product.title, n: i + 1 })}
+                      label={t("Zoom photo {n}", { n: i + 1 })}
+                      onOpen={() => setViewerAt(i)}
+                    />
                   </SwiperSlide>
                 ))}
+                {video && (
+                  <SwiperSlide>
+                    <ProductVideo video={video} poster={images[0]} title={product.title} />
+                  </SwiperSlide>
+                )}
               </Swiper>
+              {viewerAt !== null && <MediaViewer images={images} start={viewerAt} alt={product.title} onClose={() => setViewerAt(null)} />}
 
               {discountPct > 0 && (
                 <div className="absolute top-4 left-4 flex flex-col gap-1">
@@ -356,14 +382,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 <button
                   onClick={toggleWishlist}
                   aria-pressed={wishlisted}
-                  className={cn("h-10 w-10 rounded-full shadow-lg flex items-center justify-center transition-colors", wishlisted ? "bg-red-50 text-red-500" : "bg-white hover:bg-red-50 hover:text-red-500 text-slate-600")}
+                  className={cn("h-10 w-10 rounded-full shadow-lg flex items-center justify-center transition-colors", wishlisted ? "bg-red-50 text-red-500" : "bg-background hover:bg-red-50 hover:text-red-500 text-muted-foreground")}
                   aria-label={t("Wishlist")}
                 >
                   <Heart className={cn("h-5 w-5", wishlisted && "fill-current")} />
                 </button>
                 <button
                   onClick={share}
-                  className="h-10 w-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-accent text-slate-600"
+                  className="h-10 w-10 rounded-full bg-background shadow-lg flex items-center justify-center hover:bg-accent text-muted-foreground"
                   aria-label={t("Share")}
                 >
                   <Share2 className="h-5 w-5" />
@@ -431,13 +457,13 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 <div className="flex items-center gap-1.5">
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((i) => (
-                      <Star key={i} className={cn("h-4 w-4", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
+                      <Star key={i} className={cn("h-4 w-4", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30")} />
                     ))}
                   </div>
                   <span className="text-sm font-semibold">{averageRating.toFixed(1)}</span>
                   <a href="#reviews" className="text-sm text-muted-foreground hover:underline">({t("{n} reviews", { n: product.reviewCount })})</a>
                 </div>
-                <span className="text-slate-300">|</span>
+                <span className="text-muted-foreground/30">|</span>
               </>
             )}
             <span className="text-sm text-muted-foreground">{t("SKU:")} <span className="font-mono text-foreground">{selectedVariant?.sku ?? product.sku ?? "—"}</span></span>
@@ -638,7 +664,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                     <div className="text-5xl font-black mb-1">{averageRating.toFixed(1)}</div>
                     <div className="flex justify-center mb-2">
                       {[1, 2, 3, 4, 5].map((i) => (
-                        <Star key={i} className={cn("h-5 w-5", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
+                        <Star key={i} className={cn("h-5 w-5", i <= Math.round(averageRating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30")} />
                       ))}
                     </div>
                     <div className="text-sm text-muted-foreground">{t("Based on {n} reviews", { n: product.reviewCount })}</div>
@@ -670,6 +696,19 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                 </Select>
               </div>
 
+              {reviewPhotos.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-2 text-sm font-medium">{t("Customer photos")}</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {reviewPhotos.map((p, i) => (
+                      <button key={p.url} type="button" onClick={() => setReviewViewer({ images: reviewPhotos.map((x) => x.url), start: i })} className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg border" aria-label={t("Open photo")}>
+                        <img src={p.thumb} alt="" loading="lazy" className="h-full w-full object-cover" onError={(e) => ((e.currentTarget as HTMLImageElement).src = p.url)} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {reviewViewer && <MediaViewer images={reviewViewer.images} start={reviewViewer.start} alt={t("Customer photos")} onClose={() => setReviewViewer(null)} />}
               <div className="space-y-4">
                 {sortedReviews.length === 0 && (
                   <p className="text-sm text-muted-foreground">{t("No reviews yet. Be the first to review this product.")}</p>
@@ -697,12 +736,21 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                       </div>
                       <div className="flex items-center">
                         {[1, 2, 3, 4, 5].map((i) => (
-                          <Star key={i} className={cn("h-3.5 w-3.5", i <= r.rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200")} />
+                          <Star key={i} className={cn("h-3.5 w-3.5", i <= r.rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 fill-muted-foreground/30")} />
                         ))}
                       </div>
                     </div>
                     <h5 className="font-semibold text-sm mb-1">{r.title}</h5>
                     <p className="text-sm text-muted-foreground leading-relaxed">{r.body}</p>
+                    {!!r.photos?.length && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {r.photos.map((p) => (
+                          <button key={p.url} type="button" onClick={() => setReviewViewer({ images: r.photos!.map((x) => x.url), start: r.photos!.indexOf(p) })} className="h-20 w-20 overflow-hidden rounded-lg border" aria-label={t("Open photo")}>
+                            <img src={p.thumb} alt="" loading="lazy" className="h-full w-full object-cover" onError={(e) => ((e.currentTarget as HTMLImageElement).src = p.url)} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {r.reply && (
                       <div className="mt-3 rounded-lg border-l-2 border-primary bg-muted/50 px-4 py-3">
                         <div className="text-xs font-semibold mb-1">

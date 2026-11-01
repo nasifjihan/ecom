@@ -71,6 +71,8 @@ export type ProductReview = {
   date: string;
   /** The shop's public answer to the review. */
   reply?: { body: string; date: string } | null;
+  /** Photos the shopper added (full size and a small copy). */
+  photos?: { url: string; thumb: string }[];
 };
 
 /** GET /storefront/products/:slug — summary plus everything the product page renders. */
@@ -90,6 +92,8 @@ export type ProductDetail = ProductSummary & {
   questions?: { id: string; name: string; question: string; answer: string; askedAt: string }[];
   /** Picked in the admin to show first under "You may also like". */
   relatedIds?: string[];
+  /** YouTube, Facebook, Vimeo or .mp4 link, shown as the last item in the gallery. */
+  videoUrl?: string | null;
   /** The main category's size chart link, when it has its own. */
   sizeGuideUrl?: string | null;
   seo?: { title?: string; description?: string; ogImage?: string };
