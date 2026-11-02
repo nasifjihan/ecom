@@ -5,7 +5,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Footer, Tracking, modeScript, themeCss, translatorFor } from "@ecom/storefront-base";
 import { NavbarWithCartState, CartDrawerSlot } from "./site-chrome";
-import { getSite, getSlotPromotions, pageLocale } from "@/lib/content";
+import { getCmsPages, getSite, getSlotPromotions, pageLocale } from "@/lib/content";
 import { EntryPopup } from "./_components/promotions";
 import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
@@ -14,6 +14,15 @@ import { shopClosed } from "@/lib/maintenance";
 import { ChatButton } from "./_components/chat-button";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100";
+
+const isExternal = (url: string) => /^https?:/i.test(url);
+
+/** Storefront pages that exist in code rather than in the CMS (Content > Pages). */
+const STATIC_PATHS = new Set([
+  "account", "app-icon", "blog", "brands", "cart", "categories", "checkout", "faq",
+  "feeds", "flash-sale", "gift-boxes", "lp", "newsletter", "preview", "products", "s",
+  "search", "track", "wishlist",
+]);
 
 // Static pages are rebuilt at most once a minute, so theme, menu and homepage edits show up
 // without a redeploy (including pages first built while the API was unreachable, e.g. in Docker).
@@ -118,7 +127,7 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [site, barPromos, locale] = await Promise.all([getSite(), getSlotPromotions("announcement_bar"), pageLocale()]);
+  const [site, barPromos, locale, cmsPages] = await Promise.all([getSite(), getSlotPromotions("announcement_bar"), pageLocale(), getCmsPages()]);
   const t = translatorFor(locale);
   const languages = site?.languages?.enabled ?? ["en"];
   const theme = site?.theme;
@@ -136,13 +145,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       { label: t("Search"), href: "/search" },
     ],
   };
+  // A footer link can point at a page this store never wrote (the demo "About Us" -> /about), which
+  // would land on the [slug] page and 404, so those links are dropped. Only a one-segment local
+  // path is checked: nested paths (/account/orders) and external URLs are left alone.
+  const pageSlugs = cmsPages ? new Set(cmsPages.map((p) => p.slug)) : null;
+  const liveLocalPath = (url: string) => {
+    if (!pageSlugs) return true; // the page list didn't load: hide nothing
+    const path = url.split(/[?#]/)[0] ?? "";
+    const slug = path.startsWith("/") ? path.slice(1) : "";
+    if (!slug || slug.includes("/")) return true;
+    return STATIC_PATHS.has(slug) || pageSlugs.has(slug);
+  };
   const footerColumns = site
     ? [
         quickLinks,
-        ...site.footerMenus.map((m) => ({
-          title: t(m.title),
-          links: m.links.map((l) => ({ label: t(l.title), href: l.url, external: l.openInNewTab || /^https?:/i.test(l.url) })),
-        })),
+        ...site.footerMenus
+          .map((m) => ({
+            title: t(m.title),
+            links: m.links
+              .filter((l) => l.openInNewTab || isExternal(l.url) || liveLocalPath(l.url))
+              .map((l) => ({ label: t(l.title), href: l.url, external: l.openInNewTab || isExternal(l.url) })),
+          }))
+          .filter((c) => c.links.length > 0),
         ...(site.footerPages.length ? [{ title: t("Information"), links: site.footerPages.map((p) => ({ label: p.title, href: p.url })) }] : []),
       ]
     : undefined;

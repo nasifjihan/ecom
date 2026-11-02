@@ -71,7 +71,10 @@ export async function makeReplacementOrder(ctx: RequestContext, returnId: bigint
   }
   const first = await shop.quoteOrder(draft)
   if (first.problems.length) throw new BadRequestError(`Can't send the replacement: ${first.problems[0]}`, "CART_INVALID")
-  const split = exchangeSplit(credit, first.totals.itemsSubtotal)
+  // The credit is what the returned items were worth with tax in; compare it with the new items
+  // the same way, or a straight size swap would look like it left something to refund.
+  const replacementValue = r2(first.totals.itemsSubtotal + (first.totals.taxIncluded ? 0 : first.totals.taxTotal))
+  const split = exchangeSplit(credit, replacementValue)
   const quote = split.used > 0 ? await shop.quoteOrder({ ...draft, manualDiscount: { type: "fixed", value: split.used } }) : first
   const order = await shop.createOrder(quote, {
     customerId: o.customerId,

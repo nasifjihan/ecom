@@ -6945,3 +6945,63 @@ Phase 7 of `FEATURE_LIST_REVIEW.md` section 3, the last phase of the plan.
 - **Not run:**
   - The new `phase7-campaigns-contact.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers a campaign sent once with opt-outs left out and the night pause, the stop link, the contact form's order check, bot trap, flood limit and notes, and the feed's prices and left-out products.
   - The browser check: `TESTING_CHECKLIST.md` section K lists what to try.
+
+---
+
+## ✅ BUG B10 — Settings → General: the Media and Legal tabs are hidden (2026-11-02)
+Found while building Batch 51 and left open since. On Settings → General the **Media** tab (image sizes, upload quality, watermark) and the **Legal** tab (refund, privacy, terms, shipping policies, cookie banner) had forms, but the API has no storage behind them: `GET` answered `{}` for any section other than general, address, tax and languages, and `PUT` answered "not stored yet". Saving a tab looked like it worked and changed nothing.
+
+### Change
+- **`apps/store-admin/src/app/(dashboard)/settings/general/page.tsx`:** the two tabs are removed, together with everything only they used — the two schemas, their forms, the media and legal API reads, the watermark upload, the policy word counts, and the `SizeField` and `LegalTextarea` helpers. The page is General and Address only, and it no longer fetches settings it can't save.
+- **Chosen over storing them:** the policy texts already work as pages (CMS), and hiding is honest until there is storage and a feature that needs those values.
+
+### Checked
+- **Typecheck:** the editor reports no problems with the file.
+- **Not checked:** the browser (nothing else changed; the page is General and Address only).
+
+---
+
+## ✅ DB TEST RUN — Batches 55/56/57 on a real Postgres, and two bugs fixed (2026-11-02)
+The DB suites for Batches 55–57 had never run (the office PC had no Docker). With `ecom_test` created, all 59 migrations applied and the Prisma Client regenerated, the whole API suite was run against real Postgres. It turned up two real bugs; after fixing them the suite is **114 files, 1094 tests, 0 failures**.
+
+### Bug — Batch 52: close spellings were judged by the wrong rule
+`apps/api/src/modules/search/shop-search.ts` matched a fuzzy spelling with the `<%` operator, which uses `pg_trgm.word_similarity_threshold` (0.6). Measured on `ecom_test`:
+- `word_similarity('panjbi','Cotton Panjabi')` = 0.5714 → below 0.6, so "panjbi" found nothing (the test wanted "Cotton Panjabi").
+- `word_similarity('sari','Silk Saree')` = 0.6000 → at 0.6, so "sari" wrongly matched (the test wanted nothing; saree/sari is for the shop's own same-meaning words to add).
+
+**Change:** the fuzzy clause now uses `<<%` (`strict_word_similarity`, threshold 0.5), which compares whole words: `strict_word_similarity('panjbi','Cotton Panjabi')` = 0.5 (matches), `strict_word_similarity('sari','Silk Saree')` = 0.375 (doesn't). Verified in `psql`: `'panjbi' <<% 'Cotton Panjabi'` is true, `'sari' <<% 'Silk Saree'` is false.
+
+### Bug — Batch 56: a straight size swap looked like it left money to refund
+In `apps/api/src/modules/fulfilment/exchange.ts` the replacement was priced and the returned items' value compared with `first.totals.itemsSubtotal`. But the credit is the returned items' value **with tax in** (৳1725 = ৳1500 + 15% VAT), while `itemsSubtotal` is **before tax** (৳1500), so `exchangeSplit(1725, 1500)` left `toRefund = 225`. The return therefore never closed as `exchanged` and stayed `received`.
+
+**Change:** compare the credit with the new items' value the same way it was measured — `itemsSubtotal + (taxIncluded ? 0 : taxTotal)`. A same-price exchange now uses the whole credit, `toRefund` is 0, and `fulfilment.service.ts` closes the return as `exchanged`.
+
+### Checked
+- **Focused rerun:** `phase2-shop.db.test.ts` and `phase6-order-checks.db.test.ts` — 9/9 pass.
+- **Full suite (real Postgres, `ecom_test`):** 114 files, 1094 tests, all pass.
+- **Setup that made the run possible:** created `ecom_test`, applied 59 migrations, ran `pnpm prisma:generate` (the client predated Batches 55–57), and raised the vitest `--hookTimeout`/`--testTimeout` for the cold start.
+
+---
+
+## ✅ The three small known issues (2026-11-02)
+The last three lines of `TESTING_CHECKLIST.md` ("My side: what I still do"). All three are now closed.
+
+### 1. The cart page had no title of its own
+`cart/page.tsx` is a client component, so it can't export metadata, and nothing set one — the cart tab showed the store name alone. Added `apps/storefront-fashion/src/app/cart/layout.tsx` (the same shape as `flash-sale/layout.tsx`): `title: "Cart"`, canonical `/cart`.
+
+### 2. A store with no About page showed a dead "About" link
+The demo store's footer menu "Company" points at `/about`, but the store has no such page, so the link landed on the `[slug]` page and 404'd. Verified against the running data — store 1's published pages are `contact`, `privacy-policy`, `return-policy`, `shipping-policy`, `terms-of-service`, with no `about`.
+
+**Change** (`apps/storefront-fashion/src/app/layout.tsx`): the layout now also reads `getCmsPages()` and, before building the footer, drops any menu link whose target is a **one-segment local path** that is neither a page the store wrote nor a page that exists in code (`STATIC_PATHS`: `/blog`, `/faq`, `/products`, `/track`, …). A column left with no links is dropped with it.
+- External URLs, `mailto:`/`tel:` links, `/` and nested paths (`/account/orders`) are never touched.
+- If the page list doesn't load, no link is hidden — a storefront without an API shouldn't lose its whole footer.
+- With the seeded data: "Company" keeps Blog and Contact Us, and the dead About Us goes.
+
+### 3. The dashboard's gift filter had no test
+The store dashboard's top products leave out order lines whose `meta` has a `gift` key (a promotion's free gift isn't a sale, and given away in tens it would top the list on every qualifying order), but nothing proved it. New `apps/api/tests/integration/dashboard.db.test.ts` creates an order with a real sale plus a free gift of quantity 10 and asserts the sale is first and the gift is absent.
+
+### Checked
+- **Typecheck:** `@ecom/storefront-fashion` passes.
+- **The new test (real Postgres, `ecom_test`):** 1 passed.
+- **The footer rule against the real data:** store 1's page list read from `ecom_platform`, and every seeded footer link checked against it by hand.
+- **Not checked:** the browser (the running API wasn't up); both changes are server-rendered from data already verified here.

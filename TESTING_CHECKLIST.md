@@ -144,10 +144,10 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 ## 3. My side: what I still do
 
 - [ ] **Fix whatever your testing finds.** Payments, couriers and SMS were built from the providers' published documents and our own pretend versions of them, so real responses may need small changes.
-- [ ] **Small known issues:**
-  - the cart page has no title of its own
-  - a store with no About page shows a dead "About" link
-  - the gift filter on the dashboard has no automated test
+- [x] **Small known issues:**
+  - [x] the cart page has no title of its own — `cart/layout.tsx` sets it
+  - [x] a store with no About page shows a dead "About" link — footer links to a page the store never wrote are dropped
+  - [x] the gift filter on the dashboard has no automated test — `tests/integration/dashboard.db.test.ts`
 - [ ] **Real server, when you have one:** deploy (DEPLOYMENT.md), HTTPS and domains, test backups and restores, a load test on the server, and then the webhook checks that need a public address.
 - [ ] **Before going live:**
   - delete the demo data (`down -v` in the README) and add your real shop

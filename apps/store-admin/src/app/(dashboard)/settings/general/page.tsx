@@ -3,19 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { useForm, FormProvider, Controller } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Save,
-  RefreshCw,
   Loader2,
   Store,
   MapPin,
-  ImageIcon,
-  FileText,
-  Upload,
-  CircleDot,
 } from "lucide-react";
 import {
   Card,
@@ -25,10 +20,8 @@ import {
   CardDescription,
   Button,
   Input,
-  Label,
   Select,
   SelectItem,
-  Checkbox,
   Textarea,
   Tabs,
   TabsList,
@@ -47,8 +40,6 @@ import {
   useUpdateSettingsMutation,
   type StoreGeneralSettings,
   type StoreAddressSettings,
-  type StoreMediaSettings,
-  type StoreLegalSettings,
 } from "@/lib/features/settings/settings-api-slice";
 
 const generalSchema = z.object({
@@ -79,47 +70,8 @@ const addressSchema = z.object({
   companyNumber: z.string().max(50).optional().or(z.literal("")),
 });
 
-const mediaSchema = z.object({
-  thumbnailWidth: z.coerce.number<number>().int().min(16).max(2048).default(150),
-  thumbnailHeight: z.coerce.number<number>().int().min(16).max(2048).default(150),
-  mediumWidth: z.coerce.number<number>().int().min(16).max(4096).default(600),
-  mediumHeight: z.coerce.number<number>().int().min(16).max(4096).default(600),
-  largeWidth: z.coerce.number<number>().int().min(16).max(5000).default(1200),
-  largeHeight: z.coerce.number<number>().int().min(16).max(5000).default(1200),
-  uploadQuality: z.coerce.number<number>().int().min(0).max(100).default(82),
-  webpCompression: z.boolean().default(true),
-  watermarkEnabled: z.boolean().default(false),
-  watermarkPosition: z
-    .enum([
-      "top_left",
-      "top_center",
-      "top_right",
-      "middle_left",
-      "middle_center",
-      "middle_right",
-      "bottom_left",
-      "bottom_center",
-      "bottom_right",
-    ])
-    .default("bottom_right"),
-  watermarkImage: z.string().optional().or(z.literal("")),
-  watermarkOpacity: z.coerce.number<number>().min(0).max(100).default(60),
-});
-
-const legalSchema = z.object({
-  refundPolicy: z.string().max(20000).optional().or(z.literal("")),
-  privacyPolicy: z.string().max(20000).optional().or(z.literal("")),
-  termsOfService: z.string().max(20000).optional().or(z.literal("")),
-  shippingPolicy: z.string().max(20000).optional().or(z.literal("")),
-  cookieNoticeEnabled: z.boolean().default(false),
-  cookieNoticeMessage: z.string().max(500).optional().or(z.literal("")),
-  cookieNoticeButtonText: z.string().max(60).optional().or(z.literal("")),
-});
-
 type GeneralForm = z.infer<typeof generalSchema>;
 type AddressForm = z.infer<typeof addressSchema>;
-type MediaForm = z.infer<typeof mediaSchema>;
-type LegalForm = z.infer<typeof legalSchema>;
 
 const INDUSTRIES = [
   "",
@@ -217,26 +169,11 @@ const CURRENCIES = [
   { code: "AUD", label: "A$ Australian Dollar" },
 ];
 
-const WM_POSITIONS = [
-  { v: "top_left", label: "Top Left" },
-  { v: "top_center", label: "Top Center" },
-  { v: "top_right", label: "Top Right" },
-  { v: "middle_left", label: "Middle Left" },
-  { v: "middle_center", label: "Center" },
-  { v: "middle_right", label: "Middle Right" },
-  { v: "bottom_left", label: "Bottom Left" },
-  { v: "bottom_center", label: "Bottom Center" },
-  { v: "bottom_right", label: "Bottom Right" },
-] as const;
-
 export default function GeneralSettingsPage() {
   const [activeTab, setActiveTab] = useState<string>("general");
-  const [watermarkPreview, setWatermarkPreview] = useState<string | null>(null);
 
   const { data: generalData, isLoading: generalLoading } = useGetSettingsQuery("general");
   const { data: addressData, isLoading: addressLoading } = useGetSettingsQuery("address");
-  const { data: mediaData, isLoading: mediaLoading } = useGetSettingsQuery("media");
-  const { data: legalData, isLoading: legalLoading } = useGetSettingsQuery("legal");
 
   const [updateSettings, { isLoading: updateLoading }] = useUpdateSettingsMutation();
 
@@ -272,50 +209,10 @@ export default function GeneralSettingsPage() {
       companyNumber: "",
     },
   });
-  const mediaMethods = useForm<z.input<typeof mediaSchema>, unknown, MediaForm>({
-    resolver: zodResolver(mediaSchema),
-    defaultValues: {
-      thumbnailWidth: 150,
-      thumbnailHeight: 150,
-      mediumWidth: 600,
-      mediumHeight: 600,
-      largeWidth: 1200,
-      largeHeight: 1200,
-      uploadQuality: 82,
-      webpCompression: true,
-      watermarkEnabled: false,
-      watermarkPosition: "bottom_right",
-      watermarkImage: "",
-      watermarkOpacity: 60,
-    },
-  });
-  const legalMethods = useForm<z.input<typeof legalSchema>, unknown, LegalForm>({
-    resolver: zodResolver(legalSchema),
-    defaultValues: {
-      refundPolicy: "",
-      privacyPolicy: "",
-      termsOfService: "",
-      shippingPolicy: "",
-      cookieNoticeEnabled: false,
-      cookieNoticeMessage: "We use cookies to enhance your browsing experience.",
-      cookieNoticeButtonText: "Accept",
-    },
-  });
-
   const { reset: resetGeneral, control: gCtl, watch: gWatch } = generalMethods;
   const { reset: resetAddress, control: aCtl } = addressMethods;
-  const { reset: resetMedia, control: mCtl, watch: mWatch, setValue: mSet } = mediaMethods;
-  const { reset: resetLegal, control: lCtl, watch: lWatch, setValue: lSet } = legalMethods;
 
   const descLen = gWatch("storeDescription")?.length ?? 0;
-  const refundLen = lWatch("refundPolicy")?.split(/\s+/).filter(Boolean).length ?? 0;
-  const privacyLen = lWatch("privacyPolicy")?.split(/\s+/).filter(Boolean).length ?? 0;
-  const tosLen = lWatch("termsOfService")?.split(/\s+/).filter(Boolean).length ?? 0;
-  const shipLen = lWatch("shippingPolicy")?.split(/\s+/).filter(Boolean).length ?? 0;
-  const cookieMsgLen = lWatch("cookieNoticeMessage")?.length ?? 0;
-  const watermarkEnabled = mWatch("watermarkEnabled");
-  const watermarkPosition = mWatch("watermarkPosition");
-  const watermarkOpacity = mWatch("watermarkOpacity");
 
   useEffect(() => {
     if (generalData) {
@@ -350,53 +247,12 @@ export default function GeneralSettingsPage() {
         companyNumber: a.companyNumber ?? "",
       });
     }
-    if (mediaData) {
-      const m = mediaData as StoreMediaSettings;
-      resetMedia({
-        thumbnailWidth: m.thumbnailWidth ?? 150,
-        thumbnailHeight: m.thumbnailHeight ?? 150,
-        mediumWidth: m.mediumWidth ?? 600,
-        mediumHeight: m.mediumHeight ?? 600,
-        largeWidth: m.largeWidth ?? 1200,
-        largeHeight: m.largeHeight ?? 1200,
-        uploadQuality: m.uploadQuality ?? 82,
-        webpCompression: m.webpCompression ?? true,
-        watermarkEnabled: m.watermarkEnabled ?? false,
-        watermarkPosition: m.watermarkPosition ?? "bottom_right",
-        watermarkImage: m.watermarkImage ?? "",
-        watermarkOpacity: m.watermarkOpacity ?? 60,
-      });
-      setWatermarkPreview(m.watermarkImage ?? null);
-    }
-    if (legalData) {
-      const l = legalData as StoreLegalSettings;
-      resetLegal({
-        refundPolicy: l.refundPolicy ?? "",
-        privacyPolicy: l.privacyPolicy ?? "",
-        termsOfService: l.termsOfService ?? "",
-        shippingPolicy: l.shippingPolicy ?? "",
-        cookieNoticeEnabled: l.cookieNoticeEnabled ?? false,
-        cookieNoticeMessage: l.cookieNoticeMessage ?? "",
-        cookieNoticeButtonText: l.cookieNoticeButtonText ?? "",
-      });
-    }
-  }, [generalData, addressData, mediaData, legalData, resetGeneral, resetAddress, resetMedia, resetLegal]);
+  }, [generalData, addressData, resetGeneral, resetAddress]);
 
-  const handleWatermarkFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const r = String(reader.result);
-      setWatermarkPreview(r);
-      mSet("watermarkImage", r, { shouldDirty: true });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const saveSection = async (section: "general" | "address" | "media" | "legal") => {
+  const saveSection = async (section: "general" | "address") => {
     try {
       // handleSubmit(fn)() resolves to void, so validate with trigger() and read the values directly.
-      const methods =
-        section === "general" ? generalMethods : section === "address" ? addressMethods : section === "media" ? mediaMethods : legalMethods;
+      const methods = section === "general" ? generalMethods : addressMethods;
       if (!(await (methods as any).trigger())) {
         toast.error("Please fix the highlighted fields.");
         return;
@@ -423,7 +279,7 @@ export default function GeneralSettingsPage() {
             <Store className="h-5 w-5" /> Store General Settings
           </CardTitle>
           <CardDescription>
-            Configure identity, currency, units, legal content, and defaults that apply across your storefront.
+            Configure identity, currency, units and defaults that apply across your storefront.
           </CardDescription>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
             <TabsList className="flex-wrap h-auto">
@@ -440,20 +296,6 @@ export default function GeneralSettingsPage() {
                 className="data-[active=true]:!bg-background data-[active=true]:!text-foreground"
               >
                 <MapPin className="h-4 w-4 mr-1.5" /> Address
-              </TabsTrigger>
-              <TabsTrigger
-                value="media"
-                onClick={() => setActiveTab("media")}
-                className="data-[active=true]:!bg-background data-[active=true]:!text-foreground"
-              >
-                <ImageIcon className="h-4 w-4 mr-1.5" /> Media
-              </TabsTrigger>
-              <TabsTrigger
-                value="legal"
-                onClick={() => setActiveTab("legal")}
-                className="data-[active=true]:!bg-background data-[active=true]:!text-foreground"
-              >
-                <FileText className="h-4 w-4 mr-1.5" /> Legal
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -846,310 +688,6 @@ export default function GeneralSettingsPage() {
                 </Form>
               </FormProvider>
             </TabsContent>
-
-            <TabsContent value="media">
-              <FormProvider {...mediaMethods}>
-                <Form
-                  onSubmit={mediaMethods.handleSubmit(() => saveSection("media"))}
-                  className="space-y-5"
-                >
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <SizeField label="Thumbnail" wName="thumbnailWidth" hName="thumbnailHeight" control={mCtl} />
-                    <SizeField label="Medium" wName="mediumWidth" hName="mediumHeight" control={mCtl} />
-                    <SizeField label="Large" wName="largeWidth" hName="largeHeight" control={mCtl} />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={mCtl}
-                      name="uploadQuality"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex justify-between">
-                            Upload Quality <span className="text-slate-500 font-normal">{field.value}%</span>
-                          </FormLabel>
-                          <FormControl>
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={1}
-                                value={field.value}
-                                onChange={(e) => field.onChange(Number(e.target.value))}
-                                className="flex-1 accent-primary"
-                              />
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                className="w-24"
-                                {...field}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormDescription>JPEG / WebP compression quality.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex items-start gap-2 pt-8">
-                      <Controller
-                        control={mCtl}
-                        name="webpCompression"
-                        render={({ field }) => (
-                          <>
-                            <Checkbox
-                              checked={!!field.value}
-                              onCheckedChange={(v) => field.onChange(v)}
-                            />
-                            <div>
-                              <Label className="text-sm font-normal">
-                                Auto-convert to WebP
-                              </Label>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                Smaller file sizes, good for page speed.
-                              </p>
-                            </div>
-                          </>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border p-4 space-y-4 bg-slate-50 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-2">
-                      <Controller
-                        control={mCtl}
-                        name="watermarkEnabled"
-                        render={({ field }) => (
-                          <Checkbox
-                            checked={!!field.value}
-                            onCheckedChange={(v) => field.onChange(v)}
-                          />
-                        )}
-                      />
-                      <div>
-                        <Label className="font-medium">Image Watermarks</Label>
-                        <p className="text-xs text-slate-500">
-                          Stamp every product image with your brand mark.
-                        </p>
-                      </div>
-                    </div>
-
-                    {watermarkEnabled && (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div className="space-y-2">
-                          <Label className="text-xs uppercase tracking-wider text-slate-500">Watermark Image</Label>
-                          <div className="relative h-28 rounded-md border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-white dark:bg-slate-900">
-                            {watermarkPreview ? (
-                              <>
-                                <img src={watermarkPreview} alt="watermark" className="max-h-full max-w-full object-contain p-2" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setWatermarkPreview(null);
-                                    mSet("watermarkImage", "", { shouldDirty: true });
-                                  }}
-                                  className="absolute top-1 right-1 text-xs text-slate-500 hover:text-red-600 px-1"
-                                >
-                                  remove
-                                </button>
-                              </>
-                            ) : (
-                              <label className="cursor-pointer text-center text-sm text-slate-500 hover:text-foreground transition-colors">
-                                <Upload className="h-6 w-6 mx-auto mb-1 opacity-60" />
-                                <span className="underline underline-offset-2">Upload PNG</span>
-                                <input
-                                  type="file"
-                                  accept="image/png,image/webp"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (f) handleWatermarkFile(f);
-                                  }}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        </div>
-                        <FormField
-                          control={mCtl}
-                          name="watermarkPosition"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Position</FormLabel>
-                              <FormControl>
-                                <div className="grid grid-cols-3 gap-1 p-1 rounded-md border bg-background">
-                                  {WM_POSITIONS.map((p) => (
-                                    <button
-                                      key={p.v}
-                                      type="button"
-                                      onClick={() => field.onChange(p.v)}
-                                      className={
-                                        "h-9 rounded-sm text-[10px] font-medium transition-colors " +
-                                        (field.value === p.v
-                                          ? "bg-primary text-white"
-                                          : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400")
-                                      }
-                                    >
-                                      <CircleDot className="h-3 w-3 mx-auto" />
-                                      <div className="leading-none mt-0.5">
-                                        {p.label.split(" ").slice(-1)[0]}
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={mCtl}
-                          name="watermarkOpacity"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="flex justify-between">
-                                Opacity <span className="font-normal text-slate-500">{field.value}%</span>
-                              </FormLabel>
-                              <FormControl>
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={100}
-                                    value={field.value}
-                                    onChange={(e) => field.onChange(Number(e.target.value))}
-                                    className="flex-1 accent-primary"
-                                  />
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    className="w-20"
-                                    {...field}
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <SectionActions
-                    section="media"
-                    loading={saving || mediaLoading}
-                    onSave={() => saveSection("media")}
-                  />
-                </Form>
-              </FormProvider>
-            </TabsContent>
-
-            <TabsContent value="legal">
-              <FormProvider {...legalMethods}>
-                <Form
-                  onSubmit={legalMethods.handleSubmit(() => saveSection("legal"))}
-                  className="space-y-5"
-                >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <LegalTextarea
-                      label="Refund Policy"
-                      name="refundPolicy"
-                      control={lCtl}
-                      count={refundLen}
-                      placeholder="Our refund & return policy..."
-                    />
-                    <LegalTextarea
-                      label="Privacy Policy"
-                      name="privacyPolicy"
-                      control={lCtl}
-                      count={privacyLen}
-                      placeholder="How we collect, store, and use data..."
-                    />
-                    <LegalTextarea
-                      label="Terms of Service"
-                      name="termsOfService"
-                      control={lCtl}
-                      count={tosLen}
-                      placeholder="Terms governing purchases from your store..."
-                    />
-                    <LegalTextarea
-                      label="Shipping Policy"
-                      name="shippingPolicy"
-                      control={lCtl}
-                      count={shipLen}
-                      placeholder="Shipping rates, zones, and delivery times..."
-                    />
-                  </div>
-
-                  <div className="rounded-lg border p-4 space-y-4">
-                    <div className="flex items-start gap-2">
-                      <Controller
-                        control={lCtl}
-                        name="cookieNoticeEnabled"
-                        render={({ field }) => (
-                          <Checkbox
-                            checked={!!field.value}
-                            onCheckedChange={(v) => field.onChange(v)}
-                          />
-                        )}
-                      />
-                      <div>
-                        <Label className="font-medium">Cookie Notice Banner</Label>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Shows a consent banner at the bottom of the storefront.
-                        </p>
-                      </div>
-                    </div>
-                    {lWatch("cookieNoticeEnabled") && (
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-4 pl-6">
-                        <FormField
-                          control={lCtl}
-                          name="cookieNoticeMessage"
-                          render={({ field }) => (
-                            <FormItem className="sm:col-span-2">
-                              <FormLabel className="flex justify-between">
-                                Notice Message{" "}
-                                <span className="text-slate-500 font-normal text-xs">
-                                  {cookieMsgLen}/500
-                                </span>
-                              </FormLabel>
-                              <FormControl>
-                                <Textarea rows={3} maxLength={500} {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={lCtl}
-                          name="cookieNoticeButtonText"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Button Text</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Accept" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <SectionActions
-                    section="legal"
-                    loading={saving || legalLoading}
-                    onSave={() => saveSection("legal")}
-                  />
-                </Form>
-              </FormProvider>
-            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -1183,85 +721,5 @@ function SectionActions({
         Save {section.charAt(0).toUpperCase() + section.slice(1)}
       </Button>
     </div>
-  );
-}
-
-function SizeField({
-  label,
-  wName,
-  hName,
-  control,
-}: {
-  label: string;
-  wName: string;
-  hName: string;
-  control: any;
-}) {
-  return (
-    <div className="rounded-md border p-3">
-      <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">{label}</div>
-      <div className="flex items-center gap-2">
-        <FormField
-          control={control}
-          name={wName}
-          render={({ field }) => (
-            <FormItem className="flex-1">
-              <FormLabel className="text-[11px]">W (px)</FormLabel>
-              <FormControl>
-                <Input type="number" min={16} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <span className="text-slate-400 pt-6">×</span>
-        <FormField
-          control={control}
-          name={hName}
-          render={({ field }) => (
-            <FormItem className="flex-1">
-              <FormLabel className="text-[11px]">H (px)</FormLabel>
-              <FormControl>
-                <Input type="number" min={16} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
-    </div>
-  );
-}
-
-function LegalTextarea({
-  label,
-  name,
-  control,
-  count,
-  placeholder,
-}: {
-  label: string;
-  name: string;
-  control: any;
-  count: number;
-  placeholder?: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel className="flex justify-between">
-            {label}{" "}
-            <span className="text-slate-500 font-normal text-xs">{count} words</span>
-          </FormLabel>
-          <FormControl>
-            <Textarea rows={7} placeholder={placeholder} {...field} />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
   );
 }

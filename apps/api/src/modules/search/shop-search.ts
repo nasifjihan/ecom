@@ -49,7 +49,7 @@ export async function searchMatches(storeId: bigint, raw: string): Promise<Map<b
       AND (
         p.name ILIKE q.l OR p.sku ILIKE q.l OR p."shortDescription" ILIKE q.l OR b.name ILIKE q.l
         OR q.t = ANY(p.tags) OR (p.translations -> 'bn' ->> 'name') LIKE q.l
-        OR (length(q.t) >= ${FUZZY_MIN_LENGTH} AND q.t <% p.name)
+        OR (length(q.t) >= ${FUZZY_MIN_LENGTH} AND q.t <<% p.name)
       )
     GROUP BY p.id`
   return new Map(rows.map((r) => [r.id, r.score]))
