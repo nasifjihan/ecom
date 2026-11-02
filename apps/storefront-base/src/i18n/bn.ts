@@ -1067,4 +1067,10 @@ export const BN: Record<string, string> = {
   "You'll pick this up: {place}. We'll tell you when it's ready.": "আপনি এটি নেবেন: {place}। তৈরি হলে জানাব।",
   "Pick up your order": "অর্ডার নিজে নিয়ে যান",
   "Open in Google Maps": "Google Maps-এ খুলুন",
+  "This cart link has expired.": "এই কার্টের লিংকের মেয়াদ শেষ।",
+  "Getting your cart…": "আপনার কার্ট আনা হচ্ছে…",
+  "Done. We won't send you cart reminders any more.": "হয়ে গেছে। আর কার্টের রিমাইন্ডার পাঠাব না।",
+  "Stop reminders about items left in your cart?": "কার্টে রেখে যাওয়া পণ্যের রিমাইন্ডার বন্ধ করবেন?",
+  "Stop cart reminders": "কার্ট রিমাইন্ডার বন্ধ করুন",
+  "This link has expired.": "এই লিংকের মেয়াদ শেষ।",
 };

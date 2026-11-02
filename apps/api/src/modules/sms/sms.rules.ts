@@ -61,6 +61,8 @@ export const SMS_EVENTS = [
   "order_cancelled",
   "pickup_ready",
   "back_in_stock",
+  "cart_reminder",
+  "cart_reminder_2",
 ] as const
 export type SmsEvent = (typeof SMS_EVENTS)[number]
 
@@ -103,6 +105,16 @@ export const SMS_EVENT_INFO: Record<
     template: "Good news! {product} is back in stock at {store}: {link}",
     defaultOn: true,
   },
+  cart_reminder: {
+    label: "Cart reminder",
+    template: "Hi {name}, you left {product} in your cart at {store}. Order here: {link}",
+    defaultOn: true,
+  },
+  cart_reminder_2: {
+    label: "Cart reminder (second)",
+    template: "{product} is still waiting for you at {store}.{coupon} {link}",
+    defaultOn: true,
+  },
 }
 
 /** Which event an order status sends. */
@@ -124,6 +136,7 @@ export const TEMPLATE_VARS = [
   "link",
   "product",
   "place",
+  "coupon",
 ] as const
 
 export interface EventSetting {

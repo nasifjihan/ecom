@@ -12,6 +12,7 @@ import { ensureBucket } from "./config/s3";
 import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/notifications";
 import { startCourierSync, stopCourierSync } from "./modules/couriers";
 import { startFestivalReminders, stopFestivalReminders } from "./modules/festivals";
+import { startCartReminders, stopCartReminders } from "./modules/marketing/cart-reminders.scheduler";
 import { startReportSchedules, stopReportSchedules } from "./modules/reports";
 import { startDataJobs, stopDataJobs } from "./modules/jobs";
 import { syncLocations } from "./modules/locations";
@@ -46,6 +47,7 @@ async function bootstrap() {
     // Background jobs run in the same process as the email sender.
     void startCourierSync();
     void startFestivalReminders();
+    void startCartReminders();
     void startReportSchedules();
     startDataJobs();
   }
@@ -74,6 +76,7 @@ async function bootstrap() {
       stopEmailQueue(),
       stopCourierSync(),
       stopFestivalReminders(),
+      stopCartReminders(),
       stopReportSchedules(),
       stopDataJobs(),
       disconnectPrisma(),

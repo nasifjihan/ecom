@@ -55,6 +55,7 @@ import { countOptions, filterAttributes, optionsWhere, parseOptions, sellableVar
 import { thumbOf } from "./review-photos";
 import { latestShipDate, preOrderShipDate } from "../catalog/pre-order";
 import { pickupPointFor } from "../shipping/pickup-points";
+import { markOrdered } from "./saved-cart";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -1589,6 +1590,9 @@ export class StorefrontService {
     // Before "order placed" goes out, so the WhatsApp update sees the customer's yes.
     if (dto.whatsappOptIn) await prisma.order.update({ where: { id: order.id }, data: { whatsappOptIn: true } });
     emitOrderPlaced({ storeId: String(this.storeId), orderId: String(order.id) });
+    // Its saved cart (and a reminded one of the same shopper) stops counting as abandoned.
+    await markOrdered(this.storeId, { orderId: order.id, cartToken: dto.cartToken, customerId: this.ctx.customer?.id ?? null, phone: dto.phone, email: dto.email })
+      .catch((err: unknown) => logger.warn({ err, orderId: String(order.id) }, "Saved cart not closed"));
 
     // "Subscribe to our newsletter" ticked at checkout (never blocks the order).
     if (dto.subscribeNewsletter && dto.email) {

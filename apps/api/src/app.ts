@@ -64,6 +64,7 @@ import { adminFestivalsRouter } from "./modules/festivals";
 import { adminGiftBoxesRouter, storefrontGiftBoxesRouter } from "./modules/giftboxes";
 import { adminQuotationsRouter, adminWholesaleRouter, storefrontQuotesRouter, storefrontWholesaleRouter } from "./modules/wholesale";
 import { adminLoyaltyRouter, storefrontLoyaltyRouter } from "./modules/loyalty";
+import { adminCartRemindersRouter } from "./modules/marketing/cart-reminders.routes";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
@@ -73,7 +74,7 @@ import { adminNewsletterRouter, storefrontNewsletterRouter } from "./modules/cus
 import { adminLeadsRouter } from "./modules/leads/leads.routes";
 import { adminInboxRouter, adminMatrixRouter } from "./modules/staff-alerts/staff-alerts.routes";
 import { registerStaffAlertListeners } from "./modules/staff-alerts/staff-alerts.events";
-import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter, storefrontEngagementRouter, storefrontWishlistRouter } from "./modules/storefront";
+import { storefrontCatalogRouter, storefrontCheckoutRouter, storefrontAccountRouter, storefrontCartRouter, storefrontEngagementRouter, storefrontWishlistRouter } from "./modules/storefront";
 import { adminContentRouter, storefrontContentRouter } from "./modules/content";
 import { adminEmailsRouter, registerEmailListeners } from "./modules/notifications";
 import { adminLocationsRouter, storefrontLocationsRouter } from "./modules/locations";
@@ -196,8 +197,10 @@ export function buildApp(): Express {
   app.use("/api/storefront/account", storefrontLoyaltyRouter);          // wallet, level, refer a friend
   app.use("/api/storefront/account", storefrontQuotesRouter);           // my quotes, ask for one, accept / decline
   app.use("/api/storefront/account", storefrontAccountRouter);
+  app.use("/api/storefront/cart", storefrontCartRouter);              // saved cart, reminder links
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
+  app.use("/api/admin/marketing/abandoned-carts", adminCartRemindersRouter); // cart reminder settings and report
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
   app.use("/api/admin/whatsapp", adminWhatsappRouter);

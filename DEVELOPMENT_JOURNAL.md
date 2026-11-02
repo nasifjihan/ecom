@@ -6765,3 +6765,66 @@ Phase 4 of `FEATURE_LIST_REVIEW.md` section 3.
 - **Not run:**
   - The new `phase4-shop.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers pre-order with no stock and its dates, notify-me sent once after a restock, and a pickup order's address, charge and warehouse.
   - The browser check: `TESTING_CHECKLIST.md` section H lists what to try.
+
+---
+
+## ✅ BATCH #55 — Phase 5: cart saved on the server, abandoned-cart reminders (2026-11-02)
+Phase 5 of `FEATURE_LIST_REVIEW.md` section 3 (and bug B7).
+
+### Cart saved on the server
+- **Tables:** the unused `Cart`/`CartItem` tables now hold carts, with new `phone`, `email`, `firstName`, `lastActivityAt`, `orderedAt` and `orderId` columns.
+- **API:** `storefront/saved-cart.ts`, under `/api/storefront/cart`:
+  - `PUT` saves.
+  - `GET` loads.
+  - `POST /join` joins on sign-in.
+  - `GET /recover/:token` is a reminder's link.
+  - `POST /unsubscribe/:token` stops reminders.
+- **Who gets a saved cart:**
+  - A signed-in customer's cart is always saved.
+  - A guest's cart is saved only once checkout has a phone or email, since that's who can be reminded.
+  - Lines are product, option and quantity; prices come from the shop's own price check.
+  - Gift boxes stay in the browser only.
+- **Joining** (`mergeLines`): every item once, at the larger quantity, so nothing is doubled. A guest cart moves into the account.
+- **Browser side:**
+  - `lib/saved-cart.tsx` `CartSync` saves 1.5 s after a change and joins on sign-in. The cart token stays in the browser, and `CartProvider.replaceItems` loads a saved cart without opening the drawer.
+  - Checkout passes the typed phone, email and first name (`rememberCartContact`) and sends `cartToken` with the order.
+- **On order:** `markOrdered` closes the order's cart, and counts a reminded cart of the same shopper (account, phone or email, within 7 days) as recovered by that order.
+- **Link pages:** `/cart/recover/[token]` adds the saved items to this browser's cart. `/cart/unsubscribe/[token]` asks before stopping reminders, so a link preview can't do it.
+
+### Reminders
+- **Settings:** `CartReminderSettings`, one row per store, off until the shop turns it on.
+  - First reminder after 30 minutes to 24 hours (1 hour by default).
+  - An optional second reminder after N hours, with a coupon (it must exist in Coupons).
+  - SMS and/or email.
+- **Job:** `marketing/cart-reminders.ts`, run every 10 minutes by a BullMQ job scheduler, like festival reminders, from the API or the worker process.
+- **First reminder:**
+  - Goes to carts with items and a phone or email, not ordered, quiet for the wait and less than 7 days old.
+  - Each is claimed (`reminderSentAt`) before sending, so none goes out twice.
+- **Second reminder:** only when the shopper didn't come back after the first.
+- **Rules:**
+  - No reminder that would include an SMS goes out 10pm–8am Dhaka time; it waits. Email-only ones go any time.
+  - Opted-out contacts (`ReminderOptOut`) get nothing.
+  - Carts untouched for 60 days are deleted.
+- **Templates:** new `cart_reminder` and `cart_reminder_2` SMS events (with a `{coupon}` variable) and two email templates with an unsubscribe link. All can be edited or turned off.
+
+### Admin
+- **Marketing → Abandoned carts:**
+  - The settings.
+  - A period report: abandoned, reminded, recovered, and recovered sales.
+  - A list of each cart's shopper, items, value, reminders, and the order when it came back.
+  - API under `/api/admin/marketing/abandoned-carts`, with the promotions permissions.
+- **Dashboard (B7):** "Abandoned carts" now counts saved carts left over an hour without an order, with their value, whether or not reminders are on.
+
+### Migration
+- `20261102090000_saved_carts_reminders` adds the cart contact and activity columns.
+- On abandoned carts it adds `phone`, `reminder2SentAt` and `recoveredOrderId`.
+- It creates `CartReminderSettings` and `ReminderOptOut`.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 67 files and 845 tests pass. New: `saved-cart.test.ts` (joining) and `cart-reminders.test.ts` (quiet hours, when to send, the cart's name in the message).
+- **Bangla check:** passes.
+- **Not run:**
+  - The new `phase5-carts.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers guest saving only with a contact, joining on sign-in, reminders once, the night hold, the second reminder, recovery by phone, and opt-out.
+  - The browser check: `TESTING_CHECKLIST.md` section I lists what to try.

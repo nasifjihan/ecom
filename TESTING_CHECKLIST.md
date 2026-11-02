@@ -105,6 +105,14 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Theme → Footer → Map: the map shows in the footer and on the contact page with the pickup points
 - [ ] Settings → SMS and Emails: the new "Ready to pick up" and "Back in stock" messages can be edited and turned off
 
+### I. Batch 55 (saved cart, abandoned-cart reminders), no keys needed
+- [ ] Signed in: add items on the computer, open the shop on your phone and sign in: the same cart. Items already in the phone's cart are kept, nothing doubled
+- [ ] Guest: add items, go to checkout, type a phone or email, leave
+- [ ] Marketing → Abandoned carts: turn reminders on (first after 30 minutes for the test). After the wait (and the 10-minute check) the SMS shows in the SMS log and the email in Mailpit, once. At night (10pm–8am) a reminder with an SMS waits until morning
+- [ ] The reminder link fills the cart back in, on another browser too; ordering marks it "Ordered #…" on the report
+- [ ] Second reminder with a coupon (set a code that exists); "No more cart reminders" in the email stops them
+- [ ] Dashboard: "Abandoned carts" shows real numbers
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

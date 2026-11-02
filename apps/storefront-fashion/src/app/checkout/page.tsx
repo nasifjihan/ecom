@@ -70,6 +70,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { useMyLoyaltyQuery } from "@/lib/loyalty";
 import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/lib/account";
+import { cartToken, rememberCartContact } from "@/lib/saved-cart";
 import { passwordProblem } from "@/app/account/_components";
 import { CourierPicker, DeliveryTimePicker, type SlotPick } from "./_delivery-choices";
 import { GiftSection, NO_GIFT, giftProblem, type GiftState } from "./_gift";
@@ -144,6 +145,13 @@ export default function CheckoutPage() {
   });
   const [billingSameAsShipping, setBillingSameAsShipping] = React.useState(true);
   const [billingAddress, setBillingAddress] = React.useState<Partial<AddressFormData>>({});
+  // Once a phone or email is typed, the cart is saved so the shop can remind the shopper if they leave.
+  const contactPhone = shippingAddress.phone;
+  const contactName = shippingAddress.firstName;
+  React.useEffect(() => {
+    const timer = setTimeout(() => rememberCartContact({ phone: contactPhone || undefined, email: contactEmail || undefined, firstName: contactName || undefined }), 1200);
+    return () => clearTimeout(timer);
+  }, [contactPhone, contactEmail, contactName]);
 
   const [selectedShippingRateId, setSelectedShippingRateId] = React.useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = React.useState<PaymentMethod | null>(null);
@@ -653,6 +661,7 @@ export default function CheckoutPage() {
         currency: CURRENCY,
         termsAgreed: true,
         useWallet: walletUsed > 0,
+        cartToken: cartToken() ?? undefined,
         customerNote: customerNote.trim() || undefined,
         salesCode: salesCode(),
       })).unwrap();

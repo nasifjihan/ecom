@@ -393,6 +393,22 @@ export class EmailService {
     })
   }
 
+  /** A cart reminder (first or second) to a shopper who left items in the cart. */
+  async cartReminder(to: string, stage: 1 | 2, v: { firstName: string; items: string; total: string; url: string; unsubscribeUrl: string; coupon: string }) {
+    await this.send(stage === 1 ? "cart_reminder_customer" : "cart_reminder_2_customer", {
+      to: [to],
+      vars: {
+        "customer.first_name": v.firstName || "there",
+        "cart.items": v.items,
+        "cart.total": v.total,
+        "cart.url": v.url,
+        "cart.unsubscribe_url": v.unsubscribeUrl,
+        "cart.coupon": v.coupon,
+      },
+      recipientType: "customer",
+    })
+  }
+
   /** "Back in stock" to a shopper who asked for it (Notify me). */
   async backInStock(to: string, product: { name: string; option: string | null; url: string }) {
     await this.send("back_in_stock_customer", {
@@ -718,6 +734,11 @@ export class EmailService {
         "product.name": "Cotton Panjabi",
         "product.option": "(Size: L)",
         "product.url": `${urls.storefront}/products`,
+        "cart.items": "Cotton Panjabi and 1 more",
+        "cart.total": money(4900),
+        "cart.url": `${urls.storefront}/cart`,
+        "cart.unsubscribe_url": `${urls.storefront}/cart`,
+        "cart.coupon": "Use code **BACK10** for 10% off.",
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },

@@ -1,4 +1,5 @@
 import { prisma } from "../../config";
+import type { Prisma } from "@prisma/client";
 import type { RequestContext } from "../../core";
 import { StoreStatus } from "@ecom/shared-types";
 
@@ -364,16 +365,21 @@ export class StoreDashboardRepo {
     return orderCount > 0 ? Math.round((refundCount / orderCount) * 10000) / 100 : 0;
   }
 
+  /** Saved carts (signed-in shoppers, or guests who typed a phone or email) left over an hour without an order. */
   async abandonedCartCountAndValue(range: DateRange): Promise<{ count: number; dollarValue: number }> {
-    const where: Record<string, unknown> = { ...this.storeWhere() };
+    const where: Prisma.CartWhereInput = {
+      ...(this.storeWhere() as Prisma.CartWhereInput),
+      orderedAt: null,
+      items: { some: {} },
+      lastActivityAt: { lte: new Date(Date.now() - 3600_000) },
+    };
     const createdAtRange = this.inRange(range.from, range.to);
-    if (Object.keys(createdAtRange).length) (where as any).cart = { createdAt: createdAtRange };
-    const rows = await prisma.abandonedCart.findMany({
-      where: where as any,
-      select: { totalAmount: true },
-    });
-    const count = rows.length;
-    const dollarValue = rows.reduce((acc: number, r: any) => acc + Number(r.totalAmount ?? 0), 0);
+    if (Object.keys(createdAtRange).length) where.createdAt = createdAtRange as Prisma.DateTimeFilter;
+    const [count, sum] = await Promise.all([
+      prisma.cart.count({ where }),
+      prisma.cartItem.aggregate({ where: { cart: where }, _sum: { lineTotal: true } }),
+    ]);
+    const dollarValue = Number(sum._sum.lineTotal ?? 0);
     return { count, dollarValue: Math.round(dollarValue * 100) / 100 };
   }
 

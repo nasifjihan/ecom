@@ -109,6 +109,8 @@ model Store {
   customerIdentities   CustomerIdentity[]
   searchTerms          SearchTerm[]
   searchSynonyms       SearchSynonym[]
+  cartReminderSettings CartReminderSettings?
+  reminderOptOuts      ReminderOptOut[]
   stockAlerts          StockAlert[]
   pickupPoints         PickupPoint[]
   productQuestions     ProductQuestion[]
@@ -1671,9 +1673,19 @@ model Cart {
   updatedAt        DateTime       @updatedAt
   abandoned        AbandonedCart?
   expiresAt        DateTime?
+  /// Who to remind (a signed-in customer, or the phone / email typed at checkout).
+  phone            String?
+  email            String?
+  firstName        String?
+  /// Last time items changed or the shopper came back; reminders count from here.
+  lastActivityAt   DateTime       @default(now())
+  /// The order placed from this cart (it no longer counts as abandoned).
+  orderedAt        DateTime?
+  orderId          BigInt?
 
   @@index([customerId])
   @@index([storeId, createdAt])
+  @@index([storeId, orderedAt, lastActivityAt])
 }
 
 model CartItem {
@@ -2289,7 +2301,12 @@ model AbandonedCart {
   recoveryUrl       String
   reminderSentAt    DateTime?
   reminderSentCount Int       @default(0)
+  /// The second reminder (with the coupon, when the shop set one).
+  reminder2SentAt   DateTime?
+  phone             String?
   recoveredAt       DateTime?
+  /// The order that recovered it (placed after a reminder).
+  recoveredOrderId  BigInt?
   totalAmount       Decimal   @db.Decimal(14, 2)
   createdAt         DateTime  @default(now())
 
@@ -3882,4 +3899,33 @@ model PickupPoint {
   updatedAt    DateTime   @updatedAt
 
   @@index([storeId, isActive])
+}
+
+/// Marketing > Abandoned carts: whether and when to remind shoppers who left items in their cart.
+model CartReminderSettings {
+  id                BigInt   @id @default(autoincrement())
+  storeId           BigInt   @unique
+  store             Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  enabled           Boolean  @default(false)
+  /// Minutes without activity before the first reminder.
+  firstDelayMinutes Int      @default(60)
+  secondEnabled     Boolean  @default(false)
+  /// Hours after the first reminder.
+  secondDelayHours  Int      @default(24)
+  /// A coupon code offered in the second reminder.
+  couponCode        String?
+  sms               Boolean  @default(true)
+  email             Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
+
+/// Shoppers who asked for no more cart reminders (by phone or email).
+model ReminderOptOut {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  contact   String
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, contact])
 }

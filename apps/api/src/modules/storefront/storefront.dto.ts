@@ -136,6 +136,8 @@ export const PlaceOrderDto = z.object({
   customerNote: safeText(2000).optional(),
   /** Signed-in customers: pay what the store allows from the wallet balance. */
   useWallet: z.boolean().optional(),
+  /** The saved cart this order came from (its reminders stop). */
+  cartToken: z.string().regex(/^cart_[\w-]{10,40}$/).optional(),
   /** A salesperson's share-link code (?sp=CODE): the order is credited to them. */
   salesCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{3,20}$/).optional().or(z.literal("")),
   termsAgreed: z.literal(true, { error: "You must accept the terms" }),

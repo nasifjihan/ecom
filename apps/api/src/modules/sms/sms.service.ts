@@ -451,4 +451,12 @@ export class SmsService {
     const { brand } = await storeBrand(this.storeId)
     return this.send({ to, text: renderSms(setting.template, { product, link, store: brand.storeName }), kind: "back_in_stock" })
   }
+
+  /** A cart reminder (first or second), when the shop has that SMS on. */
+  async cartReminder(to: string, stage: 1 | 2, v: { name: string; product: string; link: string; coupon: string }) {
+    const setting = eventSettings((await this.row())?.events)[stage === 1 ? "cart_reminder" : "cart_reminder_2"]
+    if (!setting.enabled || !bdMobile(to)) return null
+    const { brand } = await storeBrand(this.storeId)
+    return this.send({ to, text: renderSms(setting.template, { ...v, store: brand.storeName }), kind: stage === 1 ? "cart_reminder" : "cart_reminder_2" })
+  }
 }

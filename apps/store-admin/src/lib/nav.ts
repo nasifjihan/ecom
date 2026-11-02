@@ -143,6 +143,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Marketing",
     items: [
       { href: "/marketing/promotions", label: "Promotions", icon: Gift, perm: "promotions.view" },
+      { href: "/marketing/abandoned-carts", label: "Abandoned carts", icon: ShoppingCart, perm: "promotions.view" },
       { href: "/marketing/coupons", label: "Coupons", icon: Percent, perm: "coupons.view" },
       { href: "/marketing/newsletter", label: "Newsletter", icon: Newspaper, perm: "customers.view" },
       { href: "/marketing/flash-sales", label: "Flash Sales", icon: Zap, perm: "flash_sales.view" },

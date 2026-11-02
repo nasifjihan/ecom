@@ -96,6 +96,8 @@ type CartContextValue = CartState & {
   hasItem: (productId: string, variantId?: string) => boolean;
   /** Applies current server prices to the cart and returns the lines whose price changed. */
   syncPrices: (quotes: CartPriceQuote[]) => CartPriceChange[];
+  /** Replaces the items (a cart saved on the account), without opening the cart. */
+  replaceItems: (items: CartItem[]) => void;
 };
 
 const CartContext = React.createContext<CartContextValue | null>(null);
@@ -327,6 +329,7 @@ export function CartProvider({ children, storeId = DEFAULT_STORE_ID, initialItem
       clearCart,
       hasItem,
       syncPrices,
+      replaceItems: setItems,
     }),
     [derived, isOpen, addItem, addBox, removeBox, updateQty, removeItem, clearCart, hasItem, syncPrices],
   );

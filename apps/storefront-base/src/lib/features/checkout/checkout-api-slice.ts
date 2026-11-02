@@ -239,6 +239,8 @@ export type PlaceOrderBody = {
   shippingMethodId?: string;
   /** Picked up from this point instead of delivered (then no shippingMethodId). */
   pickupPointId?: string;
+  /** The saved cart this order came from (its reminders stop). */
+  cartToken?: string;
   shippingProviderId?: string;
   shippingCost?: number;
   /** For options that use time slots: the slot and day picked. */

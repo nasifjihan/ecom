@@ -147,6 +147,28 @@ export const EMAIL_TEMPLATES = {
     button: { label: "Shop now", url: "product.url" },
     variables: [...STORE, "product.name", "product.option", "product.url"],
   },
+  cart_reminder_customer: {
+    label: "Cart reminder",
+    audience: "customer",
+    description: "Sent when a shopper leaves items in the cart (Marketing > Abandoned carts).",
+    subject: "You left something in your cart",
+    message:
+      "# Still thinking it over?\n\nHi {{customer.first_name}},\n\nYou left **{{cart.items}}** in your cart at {{store.name}} ({{cart.total}}). It's saved for you.\n\n[No more cart reminders]({{cart.unsubscribe_url}})",
+    blocks: [],
+    button: { label: "Back to your cart", url: "cart.url" },
+    variables: [...STORE, "customer.first_name", "cart.items", "cart.total", "cart.url", "cart.unsubscribe_url"],
+  },
+  cart_reminder_2_customer: {
+    label: "Cart reminder (second)",
+    audience: "customer",
+    description: "The second cart reminder, with the coupon the shop chose (if any).",
+    subject: "Your cart is waiting",
+    message:
+      "# Your cart is still here\n\nHi {{customer.first_name}},\n\n**{{cart.items}}** is waiting for you at {{store.name}}.\n\n{{cart.coupon}}\n\n[No more cart reminders]({{cart.unsubscribe_url}})",
+    blocks: [],
+    button: { label: "Complete your order", url: "cart.url" },
+    variables: [...STORE, "customer.first_name", "cart.items", "cart.total", "cart.coupon", "cart.url", "cart.unsubscribe_url"],
+  },
   customer_welcome: {
     label: "Welcome",
     audience: "customer",

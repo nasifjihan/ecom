@@ -3,7 +3,7 @@
 /** SMS provider settings, order SMS templates, phone sign-in and the SMS log (API: modules/sms). */
 import { api, toPaginated, type Paginated } from "@ecom/api-client";
 
-export type SmsEvent = "order_placed" | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "pickup_ready" | "back_in_stock";
+export type SmsEvent = "order_placed" | "order_confirmed" | "order_shipped" | "order_delivered" | "order_cancelled" | "pickup_ready" | "back_in_stock" | "cart_reminder" | "cart_reminder_2";
 
 export const SMS_EVENT_LABELS: Record<SmsEvent, string> = {
   order_placed: "Order placed",
@@ -13,6 +13,8 @@ export const SMS_EVENT_LABELS: Record<SmsEvent, string> = {
   order_cancelled: "Order cancelled",
   pickup_ready: "Ready to pick up",
   back_in_stock: "Back in stock (Notify me)",
+  cart_reminder: "Cart reminder",
+  cart_reminder_2: "Cart reminder (second)",
 };
 
 export const SMS_KIND_LABELS: Record<string, string> = {
