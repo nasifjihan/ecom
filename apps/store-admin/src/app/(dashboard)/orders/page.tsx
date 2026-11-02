@@ -104,6 +104,7 @@ import { useSearchParams } from "next/navigation";
 import { useStorefrontOptionsQuery } from "@/lib/features/storefronts/storefronts-api-slice";
 import { useGetStaffQuery } from "@/lib/features/team/team-api-slice";
 import { useGetZonesQuery } from "@/lib/features/shipping/shipping-api-slice";
+import { RISK_LABELS, RISK_STYLES } from "@/lib/features/orders/order-checks-api-slice";
 
 const ORDER_STATUSES: { key: OrderStatus | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -388,6 +389,14 @@ export default function OrdersPage() {
                 {status.replace(/_/g, " ")}
               </Badge>
               {extra.length > 0 && <div className="text-[11px] text-slate-500 whitespace-nowrap">{extra.join(" · ")}</div>}
+              {o.risk && (o.risk.level === "watch" || o.risk.level === "high") && (
+                <Badge
+                  className={cn("border-transparent text-[11px] whitespace-nowrap", RISK_STYLES[o.risk.level])}
+                  title={`${o.risk.delivered} delivered, ${o.risk.returned} returned before`}
+                >
+                  {RISK_LABELS[o.risk.level]}
+                </Badge>
+              )}
             </div>
           );
         },

@@ -28,6 +28,7 @@ import {
   FileCheck,
   Image as ImageIcon,
   Eye,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -94,6 +95,8 @@ import { ParcelsCard } from "@/components/orders/parcels-card";
 import { ReturnsCard } from "@/components/orders/returns-card";
 import { OrderSmsCard } from "@/components/orders/order-sms-card";
 import { ShipsFromCard } from "@/components/orders/ships-from-card";
+import { OrderChecksCard } from "@/components/orders/order-checks-card";
+import { EditOrderDialog } from "@/components/orders/edit-order-dialog";
 import { OrderPayments } from "@/components/orders/order-payments";
 import { useCan } from "@/lib/permissions";
 import { OrderSalesperson } from "@/components/sales/order-salesperson";
@@ -186,6 +189,7 @@ export default function OrderDetailPage() {
   const [newNote, setNewNote] = useState("");
   const [noteType, setNoteType] = useState<"INTERNAL" | "CUSTOMER">("INTERNAL");
   const [tab, setTab] = useState("notes");
+  const [editing, setEditing] = useState(false);
 
   const allowedTransitions = VALID_STATUS_TRANSITIONS[order.status as OrderStatus] ?? [];
 
@@ -280,8 +284,20 @@ export default function OrderDetailPage() {
                 Return {RETURN_LABELS[order.returnStatus as ReturnStatus]?.toLowerCase() ?? order.returnStatus}
               </Badge>
             )}
+            {orderRaw?.exchangeFor && (
+              <Link href={`/orders/${orderRaw.exchangeFor.orderId}`} className="text-sm text-indigo-600 hover:underline">
+                Exchange for {orderRaw.exchangeFor.code ?? `order #${orderRaw.exchangeFor.orderNumber}`}
+              </Link>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canEdit && orderRaw && ["PENDING", "PROCESSING", "ON_HOLD"].includes(orderRaw.status) && !(order.parcels ?? []).some((p: { status: string }) => p.status !== "cancelled") && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4" />
+                Edit order
+              </Button>
+            )}
+            {editing && orderRaw && <EditOrderDialog order={orderRaw} open={editing} onOpenChange={setEditing} />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
@@ -670,6 +686,7 @@ export default function OrderDetailPage() {
             </CardContent>
           </Card>
 
+          <OrderChecksCard order={order} canEdit={canEdit} />
           <ParcelsCard order={order} canEdit={canEdit} />
           <ShipsFromCard orderId={orderId} canEdit={canEdit} />
         </div>

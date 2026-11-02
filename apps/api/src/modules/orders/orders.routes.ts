@@ -25,6 +25,7 @@ import {
   InvoiceIdsQueryDto,
 } from "./orders.dto";
 import { ManualOrderDto, ManualOrderQuoteDto, ManualOrderService } from "./manual-order";
+import { EditOrderDto, OrderEditService } from "./order-edit";
 import { publicLocations } from "../locations/locations.service";
 
 export const adminOrdersRouter = Router();
@@ -155,6 +156,18 @@ adminOrdersRouter.post(
   rbacMiddleware("orders.edit"),
   validate({ params: OrderIdParamDto, body: TransitionStatusDto }),
   ordersController.transitionStatus,
+);
+
+/** Change the address, items or delivery charge before a parcel is packed (modules/orders/order-edit). */
+adminOrdersRouter.put(
+  "/:id/edit",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("orders.edit"),
+  validate({ params: OrderIdParamDto, body: EditOrderDto }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    const r = await new OrderEditService(req.ctx).edit(BigInt((req.params as { id: string }).id), req.body as EditOrderDto);
+    envelope(res, { status: 200, data: r, message: "Order updated" });
+  }),
 );
 
 /** The order's invoice as a PDF (?download=1 to save it as a file). */

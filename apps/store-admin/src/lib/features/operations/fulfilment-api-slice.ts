@@ -64,7 +64,7 @@ export const COURIERS = [
   { code: "other", name: "Other" },
 ] as const;
 
-export const RETURN_STATUSES = ["requested", "approved", "received", "refunded", "rejected", "cancelled"] as const;
+export const RETURN_STATUSES = ["requested", "approved", "received", "refunded", "exchanged", "rejected", "cancelled"] as const;
 export type ReturnStatus = (typeof RETURN_STATUSES)[number];
 
 /** Moves staff make by hand; "refunded" is reached by issuing a refund. */
@@ -73,6 +73,7 @@ export const RETURN_NEXT: Record<ReturnStatus, ReturnStatus[]> = {
   approved: ["received", "cancelled"],
   received: ["rejected"],
   refunded: [],
+  exchanged: [],
   rejected: [],
   cancelled: [],
 };
@@ -82,6 +83,7 @@ export const RETURN_LABELS: Record<ReturnStatus, string> = {
   approved: "Approved",
   received: "Received",
   refunded: "Refunded",
+  exchanged: "Exchanged",
   rejected: "Rejected",
   cancelled: "Cancelled",
 };
@@ -91,6 +93,7 @@ export const RETURN_STYLES: Record<ReturnStatus, string> = {
   approved: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
   received: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
   refunded: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
+  exchanged: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
   rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
   cancelled: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700",
 };
@@ -188,7 +191,11 @@ export interface ReturnRequest {
   approvedAt: string | null;
   receivedAt: string | null;
   closedAt: string | null;
-  items: { id: string; orderItemId: string; quantity: number; condition: string | null; restocked: boolean; name?: string }[];
+  items: { id: string; orderItemId: string; quantity: number; condition: string | null; restocked: boolean; name?: string ; exchangeVariantId?: string | null }[];
+  /** return | exchange; an exchange shows its replacement order and what is left to refund. */
+  type: "return" | "exchange";
+  exchangeOrder: { id: string; number: string; status?: string } | null;
+  toRefund: number | null;
   events: StatusEvent[];
 }
 
@@ -224,6 +231,7 @@ interface ApiItem {
   quantity: number;
   condition?: string | null;
   restocked?: boolean;
+  exchangeVariantId?: string | null;
   amount?: string | number;
   orderItem?: { productName: string; variantValues: Record<string, string> | null } | null;
 }
@@ -272,6 +280,9 @@ export interface ApiParcel {
   items?: ApiItem[];
   events?: StatusEvent[];
   order?: ApiOrderRef;
+  type?: string;
+  exchangeOrder?: { id: string; number: string; status?: string } | null;
+  resolutionAmount?: Dec | null;
   courierAccountId?: string | null;
   consignmentId?: string | null;
   courierStatus?: string | null;
@@ -298,6 +309,9 @@ export interface ApiReturn {
   items?: ApiItem[];
   events?: StatusEvent[];
   order?: ApiOrderRef;
+  type?: string;
+  exchangeOrder?: { id: string; number: string; status?: string } | null;
+  resolutionAmount?: Dec | null;
 }
 
 export interface ApiRefund {
@@ -366,12 +380,16 @@ export function fromApiReturn(r: ApiReturn): ReturnRequest {
     approvedAt: r.approvedAt ?? null,
     receivedAt: r.receivedAt ?? null,
     closedAt: r.closedAt ?? null,
+    type: r.type === "exchange" ? "exchange" : "return",
+    exchangeOrder: r.exchangeOrder ?? null,
+    toRefund: r.type === "exchange" && r.exchangeOrder ? Number(r.resolutionAmount ?? 0) : null,
     items: (r.items ?? []).map((i) => ({
       id: i.id ?? "",
       orderItemId: i.orderItemId,
       quantity: i.quantity,
       condition: i.condition ?? null,
       restocked: !!i.restocked,
+      exchangeVariantId: i.exchangeVariantId ?? null,
       name: itemName(i),
     })),
     events: r.events ?? [],
@@ -484,7 +502,7 @@ export const fulfilmentApi = api.injectEndpoints({
     }),
     createReturn: b.mutation<
       ReturnRequest,
-      { orderId: string | number; items: { orderItemId: string; quantity: number }[]; reason: string; note?: string }
+      { orderId: string | number; type?: "return" | "exchange"; items: { orderItemId: string; quantity: number; exchangeVariantId?: string | null }[]; reason: string; note?: string }
     >({
       query: ({ orderId, ...body }) => ({ url: `/admin/orders/${orderId}/returns`, method: "POST", body: clean(body) }),
       transformResponse: fromApiReturn,

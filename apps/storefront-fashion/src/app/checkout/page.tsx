@@ -679,7 +679,7 @@ export default function CheckoutPage() {
       }
     } catch (err: any) {
       const msg = apiErrorMessage(err, t("Could not place order. Please try again."));
-      toast.error(t("Order failed"), { description: msg });
+      toast.error(t("Order failed"), { description: t(msg) });
       // Stock or a flash-sale price may have run out: refresh the cart so it shows what changed.
       recheckCart();
     }

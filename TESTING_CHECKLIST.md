@@ -113,6 +113,16 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Second reminder with a coupon (set a code that exists); "No more cart reminders" in the email stops them
 - [ ] Dashboard: "Abandoned carts" shows real numbers
 
+### J. Batch 56 (fraud check, COD calls, edit orders, exchanges), no keys needed
+- [ ] Place a COD order; its page shows "Order checks" with the number's record. Orders → Confirm calls lists it under "To call now"
+- [ ] "No answer": it moves to "Call again later" and comes back after the wait (Settings on the same page). After the last try it goes to "Couldn't reach"
+- [ ] "Confirmed" moves the order to Processing. "Fake order" cancels it and can block the number
+- [ ] With the number blocked, checkout with cash on delivery says to pay online (in Bangla too); paying online still works. Unblock from the block list
+- [ ] Turn on "Put high-risk COD orders on hold"; an order from a number with many returned parcels lands on hold, with the High risk badge on the order list
+- [ ] Edit order (before packing): change the address and phone, a quantity, swap a size (remove + add), the delivery charge. Totals, the timeline note and the invoice follow. Once a parcel is packed, the Edit button is gone
+- [ ] On a delivered order, Start return → Exchange, pick the new size. Approving it makes a replacement order (linked both ways), with the returned value taken off; a dearer size leaves the difference to collect. Mark the return received: it closes as Exchanged, or leaves the rest to refund when the new item was cheaper
+- [ ] Turn on "Customers can ask for an exchange online": the customer's order page offers "Exchange for another size or colour"
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

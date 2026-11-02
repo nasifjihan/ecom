@@ -40,7 +40,8 @@ export class OrderRepository extends BaseRepository<"order"> {
         courierAccount: { select: { id: true, courier: true, label: true } },
         shipments: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
         paymentRecords: { include: { settlement: { select: { id: true, code: true } }, shipment: { select: { code: true } } }, orderBy: { createdAt: "asc" } },
-        returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } } }, orderBy: { id: "asc" } },
+        returns: { include: { items: true, events: { orderBy: { createdAt: "asc" } }, exchangeOrder: { select: { id: true, number: true } } }, orderBy: { id: "asc" } },
+        exchangeFor: { select: { id: true, code: true, order: { select: { id: true, number: true } } } },
       },
     });
   }

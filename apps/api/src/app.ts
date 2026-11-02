@@ -65,6 +65,7 @@ import { adminGiftBoxesRouter, storefrontGiftBoxesRouter } from "./modules/giftb
 import { adminQuotationsRouter, adminWholesaleRouter, storefrontQuotesRouter, storefrontWholesaleRouter } from "./modules/wholesale";
 import { adminLoyaltyRouter, storefrontLoyaltyRouter } from "./modules/loyalty";
 import { adminCartRemindersRouter } from "./modules/marketing/cart-reminders.routes";
+import { adminOrderChecksRouter } from "./modules/orders/order-checks.routes";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
@@ -201,6 +202,7 @@ export function buildApp(): Express {
   app.use("/api/storefront/account", customerSelfRouter);
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/abandoned-carts", adminCartRemindersRouter); // cart reminder settings and report
+  app.use("/api/admin/order-checks", adminOrderChecksRouter); // fraud check, COD calls and block list
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
   app.use("/api/admin/whatsapp", adminWhatsappRouter);

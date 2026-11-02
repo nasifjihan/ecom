@@ -265,11 +265,13 @@ const RETURN_TEXT: Record<string, string> = {
   approved: msg("Approved, please send the items back"),
   received: msg("Items received, refund on the way"),
   refunded: msg("Refunded"),
+  exchanged: msg("Exchanged"),
   rejected: msg("Not accepted"),
   cancelled: msg("Cancelled"),
 };
 const RETURN_TONE: Record<string, string> = {
   refunded: "bg-emerald-100 text-emerald-800",
+  exchanged: "bg-emerald-100 text-emerald-800",
   rejected: "bg-red-100 text-red-800",
   approved: "bg-blue-100 text-blue-800",
   received: "bg-indigo-100 text-indigo-800",
@@ -321,9 +323,14 @@ function Returns({ order: o }: { order: MyOrder }) {
   const [qty, setQty] = React.useState<Record<string, number>>({});
   const [reason, setReason] = React.useState<string>(RETURN_REASONS[0].value);
   const [note, setNote] = React.useState("");
+  const [kind, setKind] = React.useState<"return" | "exchange">("return");
+  const [swap, setSwap] = React.useState<Record<string, string>>({});
   const [requestReturn, { isLoading }] = useRequestReturnMutation();
   const t = useT();
-  const items = Object.entries(qty).filter(([, q]) => q > 0).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+  const exchange = kind === "exchange";
+  const items = Object.entries(qty)
+    .filter(([, q]) => q > 0)
+    .map(([orderItemId, quantity]) => ({ orderItemId, quantity, ...(exchange ? { exchangeVariantId: swap[orderItemId] || null } : {}) }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -331,9 +338,13 @@ function Returns({ order: o }: { order: MyOrder }) {
       toast.error(t("Choose the items to return"));
       return;
     }
+    if (exchange && items.some((i) => !i.exchangeVariantId)) {
+      toast.error(t("Choose the size or colour you want instead"));
+      return;
+    }
     try {
-      const r = await requestReturn({ orderRef: o.orderRef, items, reason, note: note.trim() || undefined }).unwrap();
-      toast.success(t("Return requested"), { description: t("Reference {code}. The shop will get back to you.", { code: r.code }) });
+      const r = await requestReturn({ orderRef: o.orderRef, type: kind, items, reason, note: note.trim() || undefined }).unwrap();
+      toast.success(exchange ? t("Exchange requested") : t("Return requested"), { description: t("Reference {code}. The shop will get back to you.", { code: r.code }) });
       setOpen(false);
       setQty({});
       setNote("");
@@ -367,7 +378,10 @@ function Returns({ order: o }: { order: MyOrder }) {
         {o.returns.map((r) => (
           <div key={r.code} className="rounded-lg border p-4 text-sm space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-mono text-xs">{r.code}</span>
+              <span className="font-mono text-xs">
+                {r.code}
+                {r.type === "exchange" && <span className="ml-1.5 font-sans">{t("Exchange")}</span>}
+              </span>
               <Badge className={cn("border-0", RETURN_TONE[r.status] ?? "bg-amber-100 text-amber-800")}>{t(RETURN_TEXT[r.status] ?? r.status)}</Badge>
             </div>
             <p className="text-muted-foreground">{r.items.map((i) => `${i.quantity} × ${i.title}`).join(", ")}</p>
@@ -379,13 +393,38 @@ function Returns({ order: o }: { order: MyOrder }) {
         ))}
         {open && (
           <form onSubmit={submit} className="rounded-lg border p-4 space-y-4">
-            <p className="text-sm font-medium">{t("What would you like to return?")}</p>
-            {o.returnable.map((i) => (
-              <div key={i.orderItemId} className="flex items-center justify-between gap-3 text-sm">
+            {o.canExchange && (
+              <div className="flex flex-wrap gap-2" role="group" aria-label={t("Return or exchange")}>
+                <Button type="button" size="sm" variant={exchange ? "outline" : "default"} onClick={() => { setKind("return"); setQty({}); }}>
+                  {t("Return for a refund")}
+                </Button>
+                <Button type="button" size="sm" variant={exchange ? "default" : "outline"} onClick={() => { setKind("exchange"); setQty({}); }}>
+                  {t("Exchange for another size or colour")}
+                </Button>
+              </div>
+            )}
+            <p className="text-sm font-medium">{exchange ? t("What would you like to exchange?") : t("What would you like to return?")}</p>
+            {(exchange ? o.returnable.filter((i) => i.exchangeOptions.length > 0) : o.returnable).map((i) => (
+              <div key={i.orderItemId} className="flex flex-wrap items-center justify-between gap-3 text-sm">
                 <div className="min-w-0">
                   <p className="truncate">{i.title}</p>
                   {i.variantLabel && <p className="text-xs text-muted-foreground">{i.variantLabel}</p>}
                 </div>
+                {exchange && (qty[i.orderItemId] ?? 0) > 0 && (
+                  <select
+                    value={swap[i.orderItemId] ?? ""}
+                    onChange={(e) => setSwap({ ...swap, [i.orderItemId]: e.target.value })}
+                    className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                    aria-label={t("Instead of {title}", { title: i.title })}
+                  >
+                    <option value="">{t("Choose instead…")}</option>
+                    {i.exchangeOptions.map((v) => (
+                      <option key={v.variantId} value={v.variantId}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <Input
                   type="number"
                   min={0}
@@ -429,7 +468,7 @@ function Returns({ order: o }: { order: MyOrder }) {
                 {t("Cancel")}
               </Button>
               <Button type="submit" disabled={isLoading || !items.length}>
-                {isLoading ? t("Sending...") : t("Request return")}
+                {isLoading ? t("Sending...") : exchange ? t("Request exchange") : t("Request return")}
               </Button>
             </div>
           </form>

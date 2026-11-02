@@ -28,6 +28,8 @@ import {
   returnStatusOf,
   unitRefund,
 } from "./fulfilment.rules";
+import { checkExchangeVariants, makeReplacementOrder } from "./exchange";
+import { orderCheckSettings } from "../orders/order-checks";
 import type { CreateParcelDto, CreateRefundDto, CreateReturnDto, ListQueryDto, MoveParcelDto, MoveReturnDto, UpdateParcelDto } from "./fulfilment.dto";
 
 type T = Prisma.TransactionClient;
@@ -366,6 +368,11 @@ export class FulfilmentService {
       if (l.quantity > hit.left) throw new BadRequestError(`Only ${hit.left} of "${hit.item.productName}" can be returned`, "VALIDATION_FAILED");
       return { ...l, item: hit.item };
     });
+    if (dto.type === "exchange") {
+      if (by === "customer" && !(await orderCheckSettings(this.storeId)).customerExchanges)
+        throw new BadRequestError("This shop doesn't take exchange requests online. Ask for a return or contact the shop.", "VALIDATION_FAILED");
+      await checkExchangeVariants(this.storeId, lines.map((l) => ({ ...l.item, exchangeVariantId: l.exchangeVariantId })));
+    }
     const amount = r2(lines.reduce((s, l) => s + unitRefund({ quantity: l.item.quantity, lineTotal: num(l.item.lineTotal) }) * l.quantity, 0));
     const created = await tx(async (t: T) => {
       const r = await t.returnRequest.create({
@@ -374,6 +381,7 @@ export class FulfilmentService {
           orderId,
           customerId: o.customerId,
           code: `${o.number}-R${o.returns.length + 1}`,
+          type: dto.type,
           reason: dto.reason,
           customerNote: dto.note || null,
           requestedAmount: amount,
@@ -383,6 +391,7 @@ export class FulfilmentService {
               orderItemId: l.item.id,
               quantity: l.quantity,
               condition: l.condition || null,
+              exchangeVariantId: dto.type === "exchange" ? l.exchangeVariantId ?? null : null,
               resolutionAmount: r2(unitRefund({ quantity: l.item.quantity, lineTotal: num(l.item.lineTotal) }) * l.quantity),
             })),
           },
@@ -402,6 +411,7 @@ export class FulfilmentService {
         items: { include: { orderItem: { select: { productName: true, productSku: true, variantValues: true, quantity: true, lineTotal: true } } } },
         events: { orderBy: { createdAt: "asc" } },
         refunds: { select: { id: true, amount: true, method: true, createdAt: true } },
+        exchangeOrder: { select: { id: true, number: true, status: true, grandTotal: true } },
         order: { select: { id: true, number: true, status: true, billingFirstName: true, billingLastName: true, shippingPhone: true, billingPhone: true } },
       },
     });
@@ -417,6 +427,25 @@ export class FulfilmentService {
     }
     if (dto.status === "rejected" && !dto.note) throw new BadRequestError("Say why the return is rejected", "VALIDATION_FAILED");
     const now = new Date();
+    // An exchange sends the replacement once approved (or received, if approval was skipped).
+    let toRefund: number | null = null;
+    if (r.type === "exchange" && !r.exchangeOrderId && ["approved", "received"].includes(dto.status)) {
+      // Claim the move first, so a second click doesn't make a second replacement.
+      const claimed = await prisma.returnRequest.updateMany({ where: { id, status: r.status, exchangeOrderId: null }, data: { status: dto.status } });
+      if (!claimed.count) throw new ConflictError("This return was just changed. Reload and try again.", "ORDER_STATUS_INVALID_TRANSITION");
+      try {
+        const made = await makeReplacementOrder(this.ctx, id);
+        toRefund = made.toRefund;
+        await prisma.returnRequest.update({ where: { id }, data: { exchangeOrderId: made.order.id, resolution: "exchange", resolutionAmount: made.toRefund } });
+      } catch (e) {
+        await prisma.returnRequest.update({ where: { id }, data: { status: r.status } });
+        throw e;
+      }
+    } else if (r.type === "exchange" && r.exchangeOrderId) {
+      toRefund = num(r.resolutionAmount);
+    }
+    // Received with nothing left to refund: the exchange is done.
+    const finalStatus = dto.status === "received" && r.type === "exchange" && toRefund !== null && toRefund <= 0 ? "exchanged" : dto.status;
     await tx(async (t: T) => {
       if (dto.status === "received") {
         // Items come back on the shelf unless staff say they can't be sold again.
@@ -431,14 +460,15 @@ export class FulfilmentService {
       await t.returnRequest.update({
         where: { id },
         data: {
-          status: dto.status,
+          status: finalStatus,
           ...(dto.status === "approved" ? { approvedAt: now } : {}),
           ...(dto.status === "received" ? { receivedAt: now } : {}),
-          ...(["rejected", "cancelled"].includes(dto.status) ? { closedAt: now } : {}),
+          ...(["rejected", "cancelled", "exchanged"].includes(finalStatus) ? { closedAt: now } : {}),
           ...(dto.note && dto.status === "rejected" ? { adminNotes: dto.note } : {}),
         },
       });
       await t.returnEvent.create({ data: { returnRequestId: id, status: dto.status, note: dto.note || null, adminId: this.adminId } });
+      if (finalStatus === "exchanged") await t.returnEvent.create({ data: { returnRequestId: id, status: "exchanged", note: "Replacement sent, nothing to refund", adminId: this.adminId } });
       await this.recompute(t, r.orderId);
     });
     return this.getReturn(id);

@@ -108,6 +108,10 @@ export interface OrderLine {
   giftFrom?: string;
   /** Part of a gift box the shopper filled: the box itself or an item in it, with the card message. */
   giftBox?: { key: string; name: string; role: "box" | "item"; message: string | null };
+  /** For editing the order: the product and option, and the name without the option. */
+  productId?: string | null;
+  variantId?: string | null;
+  baseName?: string;
 }
 
 /** An automatic promotion the order got (Order.promotions). */
@@ -186,7 +190,16 @@ export interface Order {
   /** From the newest return: none, requested, approved, received, refunded, rejected. */
   returnStatus: string;
   refundedTotal: number;
+  /** The phone's delivery record when the order was placed (order checks). */
+  risk: { level: RiskLevel; delivered: number; returned: number } | null;
+  /** COD confirmation call: confirmed, no_answer, wrong_number, fake, cancelled (null: not called). */
+  callStatus: string | null;
+  /** This order sends the replacement for an exchange. */
+  exchangeFor: { code: string | null; orderId: string; orderNumber: string } | null;
+  shippingLocationId: string | null;
 }
+
+export type RiskLevel = "new" | "good" | "watch" | "high";
 
 export interface OrderListFilters {
   status?: OrderStatus;
@@ -679,6 +692,7 @@ interface ApiOrder {
   fulfillmentStatus?: string;
   returnStatus?: string;
   refundedTotal?: string;
+  exchangeFor?: { code: string | null; order: { id: string; number: string } } | null;
 }
 
 const address = (o: ApiOrder, prefix: "billing" | "shipping"): Address => {
@@ -717,6 +731,9 @@ export function fromApiOrder(o: ApiOrder): Order {
     lineTotal: Number(i.lineTotal),
     giftFrom: i.meta?.gift?.promotionName,
     giftBox: i.meta?.giftBox ?? undefined,
+    productId: i.productId,
+    variantId: i.variantId,
+    baseName: i.productName,
   }));
   return {
     id: o.id,
@@ -775,6 +792,10 @@ export function fromApiOrder(o: ApiOrder): Order {
     fulfillmentStatus: o.fulfillmentStatus ?? "unfulfilled",
     returnStatus: o.returnStatus ?? "none",
     refundedTotal: Number(o.refundedTotal ?? 0),
+    risk: o.riskLevel ? { level: o.riskLevel as RiskLevel, delivered: Number(o.riskDelivered ?? 0), returned: Number(o.riskReturned ?? 0) } : null,
+    callStatus: (o.callStatus as string | null | undefined) ?? null,
+    exchangeFor: o.exchangeFor ? { code: o.exchangeFor.code, orderId: String(o.exchangeFor.order.id), orderNumber: o.exchangeFor.order.number } : null,
+    shippingLocationId: o.shippingLocationId == null ? null : String(o.shippingLocationId),
   };
 }
 

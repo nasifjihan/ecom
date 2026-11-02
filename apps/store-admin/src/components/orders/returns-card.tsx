@@ -4,6 +4,7 @@
 import { useIdempotencyKey } from "@/lib/idempotency";
 import { useCheckGatewayRefundMutation } from "@/lib/features/operations/payments-api-slice";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Undo2, Wallet } from "lucide-react";
 import {
@@ -47,6 +48,36 @@ import {
 } from "@/lib/features/operations/fulfilment-api-slice";
 import type { OrderLine } from "@/lib/features/operations/operations-api-slice";
 import { NoteDialog } from "./parcels-card";
+import { usePickVariantsQuery } from "@/lib/features/operations/manual-order-api-slice";
+
+/** The option to send instead of a returned line: another option of the same product. */
+function SwapSelect({ line, value, onChange }: { line: OrderLine; value: string; onChange: (v: string) => void }) {
+  const { data = [], isLoading } = usePickVariantsQuery(String(line.productId ?? ""), { skip: !line.productId });
+  const options = data.filter((v) => v.id !== String(line.variantId ?? ""));
+  return (
+    <div className="space-y-1 rounded-md bg-slate-50 p-2 text-sm dark:bg-slate-800/50">
+      <Label className="text-xs">Send instead of {line.productName}</Label>
+      {isLoading ? (
+        <p className="text-xs text-slate-500">Loading…</p>
+      ) : !options.length ? (
+        <p className="text-xs text-red-600">This product has no other option to exchange for.</p>
+      ) : (
+        <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`Exchange ${line.productName} for`}>
+          <option value="">Choose…</option>
+          {options.map((v) => {
+            const out = v.manageStock && (v.stockQty ?? 0) <= 0;
+            return (
+              <option key={v.id} value={v.id} disabled={out}>
+                {v.label} · ৳{v.price}
+                {out ? " (out of stock)" : ""}
+              </option>
+            );
+          })}
+        </select>
+      )}
+    </div>
+  );
+}
 
 const money = (n: number) => `৳ ${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -127,7 +158,10 @@ export function ReturnsCard({ order, canEdit }: Props) {
             return (
               <div key={r.id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 text-sm space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs font-semibold">{r.code}</span>
+                  <span className="font-mono text-xs font-semibold">
+                    {r.code}
+                    {r.type === "exchange" && <span className="ml-1.5 font-sans font-normal text-indigo-600">Exchange</span>}
+                  </span>
                   <Badge variant="outline" className={cn("text-[11px]", RETURN_STYLES[r.status])}>{RETURN_LABELS[r.status]}</Badge>
                 </div>
                 <div className="text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
@@ -138,6 +172,15 @@ export function ReturnsCard({ order, canEdit }: Props) {
                     {r.items.map((i) => `${i.quantity} × ${i.name ?? names.get(i.orderItemId) ?? "Item"}${i.restocked ? " (restocked)" : ""}`).join(", ")}
                   </div>
                   <div>Worth {money(r.requestedAmount)}</div>
+                  {r.exchangeOrder && (
+                    <div>
+                      Replacement:{" "}
+                      <Link href={`/orders/${r.exchangeOrder.id}`} className="font-medium text-indigo-600 hover:underline">
+                        order #{r.exchangeOrder.number}
+                      </Link>
+                      {r.toRefund ? <> · {money(r.toRefund)} left to refund</> : null}
+                    </div>
+                  )}
                   {r.customerNote && <div className="italic">“{r.customerNote}”</div>}
                   {r.adminNotes && <div className="text-red-600">{r.adminNotes}</div>}
                 </div>
@@ -158,7 +201,7 @@ export function ReturnsCard({ order, canEdit }: Props) {
                           {MOVE_LABEL[s] ?? RETURN_LABELS[s]}
                         </Button>
                       ))}
-                      {r.status === "received" && paid && (
+                      {r.status === "received" && paid && (r.type !== "exchange" || (r.toRefund ?? 0) > 0) && (
                         <Button size="sm" className="h-7 text-xs" onClick={() => setRefunding({ returnId: r.id })}>Refund</Button>
                       )}
                     </div>
@@ -243,9 +286,11 @@ function MoveReturnDialog({
     }
   }
 
+  // An exchange makes its replacement order on the first of these steps.
+  const swap = ret.type === "exchange" && !ret.exchangeOrder ? " A replacement order is made now for the new options, with the returned items' value taken off." : "";
   const copy: Partial<Record<ReturnStatus, string>> = {
-    approved: "The customer can send the items back.",
-    received: "The items are back with you. Ticked items go back into stock.",
+    approved: `The customer can send the items back.${swap}`,
+    received: `The items are back with you. Ticked items go back into stock.${swap}`,
     rejected: "Say why, e.g. used or outside the return window. If the items were received, they stay in stock.",
     cancelled: "Close the request without a refund (e.g. the customer changed their mind).",
   };
@@ -284,14 +329,19 @@ function StartReturnDialog({ order, onClose }: { order: Props["order"]; onClose:
     return new Map(order.lines.map((l) => [String(l.id), l.quantity - (taken.get(String(l.id)) ?? 0)]));
   }, [order]);
   const [qty, setQty] = useState<Record<string, number>>({});
+  const [kind, setKind] = useState<"return" | "exchange">("return");
+  const [swap, setSwap] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<string>(RETURN_REASONS[0].value);
   const [note, setNote] = useState("");
   const [createReturn, { isLoading }] = useCreateReturnMutation();
-  const items = Object.entries(qty).filter(([, q]) => q > 0).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+  const items = Object.entries(qty)
+    .filter(([, q]) => q > 0)
+    .map(([orderItemId, quantity]) => ({ orderItemId, quantity, ...(kind === "exchange" ? { exchangeVariantId: swap[orderItemId] || null } : {}) }));
+  const missingSwap = kind === "exchange" && items.some((i) => !i.exchangeVariantId);
 
   async function submit() {
     try {
-      const r = await createReturn({ orderId: order.id, items, reason, note: note.trim() || undefined }).unwrap();
+      const r = await createReturn({ orderId: order.id, type: kind, items, reason, note: note.trim() || undefined }).unwrap();
       toast.success(`Return ${r.code} opened`);
       onClose();
     } catch (e) {
@@ -307,6 +357,13 @@ function StartReturnDialog({ order, onClose }: { order: Props["order"]; onClose:
           <DialogDescription>For a customer who called or messaged. Nothing is refunded yet: receive the items, then refund.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant={kind === "return" ? "default" : "outline"} onClick={() => setKind("return")}>Return for money</Button>
+            <Button type="button" size="sm" variant={kind === "exchange" ? "default" : "outline"} onClick={() => setKind("exchange")}>Exchange (other size or colour)</Button>
+          </div>
+          {kind === "exchange" && (
+            <p className="text-xs text-slate-500">Approving it makes a replacement order for the new options, with the returned items' value taken off.</p>
+          )}
           <div className="space-y-2">
             {order.lines.map((l) => {
               const max = left.get(String(l.id)) ?? 0;
@@ -322,6 +379,10 @@ function StartReturnDialog({ order, onClose }: { order: Props["order"]; onClose:
                 </div>
               );
             })}
+            {kind === "exchange" &&
+              order.lines
+                .filter((l) => (qty[String(l.id)] ?? 0) > 0)
+                .map((l) => <SwapSelect key={`swap-${l.id}`} line={l} value={swap[String(l.id)] ?? ""} onChange={(v) => setSwap({ ...swap, [String(l.id)]: v })} />)}
           </div>
           <div>
             <Label className="text-xs mb-1 block">Reason</Label>
@@ -336,7 +397,7 @@ function StartReturnDialog({ order, onClose }: { order: Props["order"]; onClose:
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={isLoading || !items.length}>Open return</Button>
+          <Button onClick={submit} disabled={isLoading || !items.length || missingSwap}>{kind === "exchange" ? "Open exchange" : "Open return"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -350,10 +411,12 @@ function RefundDialog({ order, returnId, onClose }: { order: Props["order"]; ret
     for (const f of order.refunds ?? []) for (const i of f.items) m.set(i.orderItemId, (m.get(i.orderItemId) ?? 0) + i.quantity);
     return m;
   }, [order.refunds]);
+  // An exchange refunds only what the replacement didn't use, as an amount.
+  const swapped = ret?.type === "exchange";
   const [qty, setQty] = useState<Record<string, number>>(() =>
-    ret ? Object.fromEntries(ret.items.map((i) => [i.orderItemId, i.quantity])) : {},
+    ret && !swapped ? Object.fromEntries(ret.items.map((i) => [i.orderItemId, i.quantity])) : {},
   );
-  const [extra, setExtra] = useState("");
+  const [extra, setExtra] = useState(swapped ? String(ret?.toRefund ?? "") : "");
   const isOnline = !["COD", "BANK_TRANSFER"].includes(order.paymentMethod);
   const [method, setMethod] = useState<RefundMethod>(isOnline ? "original" : "cash");
   const [reason, setReason] = useState(ret ? reasonLabel(ret.reason) : "");

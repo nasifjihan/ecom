@@ -86,7 +86,8 @@ export function orderStatusPath(from: string, to: string, transitions: Record<st
 
 // ------------------------------------------------------------------ returns
 
-export const RETURN_STATUSES = ["requested", "approved", "received", "refunded", "rejected", "cancelled"] as const;
+// exchanged: an exchange whose replacement covered it all (nothing to refund).
+export const RETURN_STATUSES = ["requested", "approved", "received", "refunded", "exchanged", "rejected", "cancelled"] as const;
 export type ReturnStatus = (typeof RETURN_STATUSES)[number];
 
 export const RETURN_NEXT: Record<ReturnStatus, ReturnStatus[]> = {
@@ -94,6 +95,7 @@ export const RETURN_NEXT: Record<ReturnStatus, ReturnStatus[]> = {
   approved: ["received", "cancelled"],
   received: ["refunded", "rejected"],
   refunded: [],
+  exchanged: [],
   rejected: [],
   cancelled: [],
 };

@@ -45,7 +45,12 @@ export type MoveParcelDto = z.infer<typeof MoveParcelDto>;
 export const RETURN_REASONS = ["wrong_size", "damaged", "not_as_described", "wrong_item", "changed_mind", "other"] as const;
 
 export const CreateReturnDto = z.object({
-  items: z.array(Line.extend({ condition: text(80).optional() })).min(1, "Choose at least one item").max(100),
+  /** exchange: the customer gets another size or colour (exchangeVariantId on each item) instead of money. */
+  type: z.enum(["return", "exchange"]).default("return"),
+  items: z
+    .array(Line.extend({ condition: text(80).optional(), exchangeVariantId: z.coerce.bigint().positive().optional().nullable() }))
+    .min(1, "Choose at least one item")
+    .max(100),
   reason: z.enum(RETURN_REASONS),
   note: text(1000).optional(),
 });

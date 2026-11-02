@@ -126,12 +126,14 @@ export interface MyOrder {
     deliveredAt: string | null;
     items: { title: string; quantity: number }[];
   }[];
-  returns: { code: string; status: string; reason: string | null; createdAt: string; amount: number; items: { title: string; quantity: number }[] }[];
+  returns: { code: string; type?: string; status: string; reason: string | null; createdAt: string; amount: number; items: { title: string; quantity: number }[] }[];
   /** Last day a return can be asked for (7 days after delivery), once delivered. */
   returnWindowUntil: string | null;
   canRequestReturn: boolean;
   /** Units per line that can still be returned. */
-  returnable: { orderItemId: string; title: string; variantLabel: string; quantity: number }[];
+  returnable: { orderItemId: string; title: string; variantLabel: string; quantity: number; exchangeOptions: { variantId: string; label: string }[] }[];
+  /** The shop takes exchange requests (another size or colour) online. */
+  canExchange?: boolean;
   /** Paying by bKash / Nagad / Rocket / bank by hand: where to send it and the transaction IDs sent. */
   payment: OrderPayment;
 }
@@ -147,7 +149,8 @@ export const RETURN_REASONS = [
 
 export interface ReturnRequestInput {
   orderRef: string;
-  items: { orderItemId: string; quantity: number }[];
+  type?: "return" | "exchange";
+  items: { orderItemId: string; quantity: number; exchangeVariantId?: string | null }[];
   reason: string;
   note?: string;
 }

@@ -56,6 +56,8 @@ import { thumbOf } from "./review-photos";
 import { latestShipDate, preOrderShipDate } from "../catalog/pre-order";
 import { pickupPointFor } from "../shipping/pickup-points";
 import { markOrdered } from "./saved-cart";
+import { COD_BLOCKED_MESSAGE, isCodBlocked, orderCheckSettings, recordOrderRisk } from "../orders/order-checks";
+import { phoneKeyOf } from "../orders/order-checks.rules";
 
 const OFFLINE_GATEWAYS = new Set(["cod", "bank_transfer"]);
 
@@ -123,7 +125,7 @@ function stockStatus(qty: number, lowThreshold?: number | null): "IN_STOCK" | "O
   return "IN_STOCK";
 }
 
-function variantLabel(values: unknown): string {
+export function variantLabel(values: unknown): string {
   if (!values || typeof values !== "object") return "";
   return Object.entries(values as Record<string, unknown>)
     .map(([k, v]) => `${k.charAt(0).toUpperCase()}${k.slice(1)}: ${String(v)}`)
@@ -1295,8 +1297,11 @@ export class StorefrontService {
     const { itemsSubtotal, discountTotal, shippingTotal, taxTotal, feeTotal, grandTotal } = q.totals;
     const orderKey = newId("ok");
     const status = meta.status ?? "PENDING";
+    // Numbers on the COD block list pay online (staff taking a phone order see the warning instead).
+    if (gateway.code === "cod" && !meta.createdByAdminId && ((await isCodBlocked(storeId, ship.phone)) || (await isCodBlocked(storeId, bill.phone))))
+      throw new BadRequestError(COD_BLOCKED_MESSAGE, "COD_BLOCKED");
 
-    return tx(async (t: Prisma.TransactionClient) => {
+    const order = await tx(async (t: Prisma.TransactionClient) => {
       // The slot may have filled up since the quote: check again, taking turns with other orders.
       if (q.slot) await new DeliverySlotService(storeId).hold(t, q.slot.id, q.slot.date);
       // Hold the stock in the warehouse the order ships from; the guard stops overselling.
@@ -1413,6 +1418,7 @@ export class StorefrontService {
           billingCountryCode: bill.country,
           billingEmail: q.email,
           billingPhone: bill.phone,
+          phoneKey: phoneKeyOf({ shippingPhone: ship.phone, billingPhone: bill.phone }),
           shippingSameAsBilling: bill === ship,
           shippingFirstName: ship.firstName,
           shippingLastName: ship.lastName,
@@ -1518,6 +1524,8 @@ export class StorefrontService {
       }
       return order;
     });
+    await recordOrderRisk(storeId, order.id);
+    return order;
   }
 
   /** A transaction ID typed at checkout: right shape, and not already used in this store. */
@@ -1809,8 +1817,24 @@ export class StorefrontService {
     const returnable = o.items
       .map((i) => ({ orderItemId: String(i.id), title: i.productName, variantLabel: variantLabel(i.variantValues), quantity: i.quantity - (taken.get(String(i.id)) ?? 0) }))
       .filter((i) => i.quantity > 0);
+    // Exchanges (when the shop takes them online): the item's other options that are in stock.
+    const exchanges = (await orderCheckSettings(this.storeId)).customerExchanges;
+    const productOf = new Map(o.items.map((i) => [String(i.id), i]));
+    const options = exchanges
+      ? await prisma.productVariant.findMany({
+          where: { productId: { in: [...new Set(o.items.map((i) => i.productId).filter((p): p is bigint => !!p))] }, status: "active" },
+          select: { id: true, productId: true, attributeValues: true, manageStock: true, stockQty: true, reservedStock: true, allowBackorder: true },
+        })
+      : [];
+    const exchangeOptions = (orderItemId: string) => {
+      const i = productOf.get(orderItemId);
+      return options
+        .filter((v) => v.productId === i?.productId && v.id !== i?.variantId && available(v) > 0)
+        .map((v) => ({ variantId: String(v.id), label: variantLabel(v.attributeValues) }));
+    };
     return {
       ...orderView(o),
+      canExchange: exchanges,
       canCancel: CUSTOMER_CANCELLABLE.has(o.status),
       history: o.statusHistory.map((l) => ({ status: l.status, note: l.note, at: l.createdAt.toISOString() })),
       fulfillmentStatus: o.fulfillmentStatus,
@@ -1826,6 +1850,7 @@ export class StorefrontService {
       })),
       returns: o.returns.map((r) => ({
         code: r.code,
+        type: r.type,
         status: r.status,
         reason: r.reason,
         createdAt: r.createdAt.toISOString(),
@@ -1835,7 +1860,7 @@ export class StorefrontService {
       returnWindowUntil: window.until?.toISOString() ?? null,
       payment: await this.paymentView(o),
       canRequestReturn: window.open && returnable.length > 0,
-      returnable,
+      returnable: returnable.map((i) => ({ ...i, exchangeOptions: exchangeOptions(i.orderItemId) })),
     };
   }
 

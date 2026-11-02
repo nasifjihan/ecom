@@ -66,6 +66,7 @@ import {
   Megaphone,
   CalendarHeart,
   CalendarClock,
+  PhoneCall,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -101,6 +102,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/orders/sales-team", label: "Sales team", icon: Trophy, perm: "commissions.view" },
       { href: "/my-commission", label: "My commission", icon: Coins, salesOnly: true },
       { href: "/orders/shipments", label: "Shipments", icon: Truck, perm: "orders.view" },
+      { href: "/orders/calls", label: "Confirm calls", icon: PhoneCall, perm: "orders.view" },
       { href: "/orders/returns", label: "Returns", icon: Undo2, perm: "orders.view" },
       { href: "/orders/payments", label: "Payments to verify", icon: CreditCard, perm: "payments.view" },
       { href: "/orders/cash", label: "Cash & couriers", icon: Banknote, perm: "payments.view" },

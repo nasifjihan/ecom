@@ -6828,3 +6828,62 @@ Phase 5 of `FEATURE_LIST_REVIEW.md` section 3 (and bug B7).
 - **Not run:**
   - The new `phase5-carts.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers guest saving only with a contact, joining on sign-in, reminders once, the night hold, the second reminder, recovery by phone, and opt-out.
   - The browser check: `TESTING_CHECKLIST.md` section I lists what to try.
+
+## ✅ BATCH #56 — Phase 6: fraud check, COD call confirmation, edit orders, exchanges (2026-11-09)
+Phase 6 of `FEATURE_LIST_REVIEW.md` section 3.
+
+### Fraud check
+- **Phone key:** orders get `phoneKey`, the shipping phone (else billing) as 01XXXXXXXXX, indexed. The migration fills it for older orders.
+- **Delivery record** (`orders/order-checks.ts`): the number's past orders that went out, on **every shop on the platform** (the user's choice): delivered, or returned / delivery failed. Shops see only counts, never other shops' orders or names; "at your shop" is shown apart.
+- **Levels** (`order-checks.rules.ts`): new, good, watch (delivered share below 70%), high (below 50% with at least 3 parcels). Each shop can change the numbers.
+- **Saved on the order** when it's placed (`riskLevel`, `riskDelivered`, `riskReturned`), from `createOrder`, so storefront, landing-page, phone and exchange orders all get it. Never fails the order.
+- **Hold:** an optional setting puts high-risk COD orders on hold when they're placed.
+- **COD block list** (`CodBlock`): a blocked number can't choose cash on delivery at checkout (`COD_BLOCKED`, translated); it can still pay online. Staff orders aren't refused.
+- **Where it shows:** a badge on the order list (watch and high only), an "Order checks" card on the order page, and "Check a number" on the new page.
+
+### COD call confirmation
+- **Orders:** `callStatus`, `callAttempts`, `nextCallAt`; every call is an `OrderCall` row (outcome, note, who).
+- **Outcomes:**
+  - Confirmed → Processing (the customer gets the usual update).
+  - No answer → back on the list after the wait (2 hours by default), up to the tries (3).
+  - Wrong number → waits for staff.
+  - Fake or customer cancelled → cancelled, stock back. Fake can also block the number.
+- **Orders → Confirm calls:** tabs "To call now", "Call again later", "Couldn't reach" for COD orders still pending or on hold, with tap-to-call and quick outcome buttons. Also the block list and the settings (`OrderCheckSettings`). API under `/api/admin/order-checks`.
+
+### Edit an order
+- **When:** pending, processing or on hold, with no packed parcel, refund or return (`order-edit.rules.ts`).
+- **What:** the delivery address and phone, quantities, removing and adding items (another size = remove + add), the delivery charge. `PUT /api/admin/orders/:id/edit`.
+- **Money:**
+  - A kept line keeps its price, discount and tax per unit.
+  - A new line is at today's price (the shop's own price check) with no discount, taxed at the order's VAT rate.
+  - Totals move by the difference. Free gifts stay as they are; the coupon and promotion breakdown isn't recalculated.
+  - Paid online and the total went up: partly paid. Went down: the timeline says how much to refund.
+- **Stock:** reserved stock follows the change in the order's warehouse.
+- **Records:** the timeline lists every change. The invoice is built from the order, so it follows. A new phone gets its record checked again.
+
+### Exchanges
+- **Requests:** a return can be `type: "exchange"`, with the option to send for each item (`exchangeVariantId`, another option of the same product).
+  - Staff can always start one.
+  - Customers only when the shop turns on online exchanges. Their order page then offers the in-stock options.
+- **Replacement** (`fulfilment/exchange.ts`): when it's approved (or received, if approval was skipped), a replacement order is made through the normal order code.
+  - It is in Processing, ships to the same address and is linked both ways (`ReturnRequest.exchangeOrderId`).
+  - The returned items' value comes off it as a discount, and the shop's exchange delivery fee is added.
+  - Dearer new items leave the difference to collect; cheaper ones leave the rest on the return to refund.
+- **Double clicks:** the move is claimed first, so a second click doesn't make a second order. If making the order fails (say the size sold out), the return stays as it was.
+- **Closing:** received with nothing left to refund closes as the new status **exchanged**. Otherwise it waits for a refund of the rest (the refund dialog fills the amount in).
+
+### Migration
+- `20261109090000_order_checks_exchanges`:
+  - Order columns for the phone key, risk and calls.
+  - `ReturnRequest.exchangeOrderId` and `ReturnItem.exchangeVariantId`.
+  - New tables `OrderCheckSettings`, `CodBlock` and `OrderCall`.
+  - The phone backfill.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 68 files and 856 tests pass. New: `order-checks.test.ts` (risk levels, call outcomes, edit planning and money, exchange split).
+- **Bangla check:** passes.
+- **Not run:**
+  - The new `phase6-order-checks.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers the cross-shop record and hold, the COD block at checkout, no answer then confirmed, editing items and address, and an exchange making its replacement and closing as exchanged.
+  - The browser check: `TESTING_CHECKLIST.md` section J lists what to try.
