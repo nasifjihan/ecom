@@ -364,6 +364,11 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
     }),
   }),
   z.object({
+    type: z.literal("contact_form"),
+    enabled: z.boolean(),
+    config: z.object({ heading: text(120), subheading: text(300) }),
+  }),
+  z.object({
     type: z.literal("quote"),
     enabled: z.boolean(),
     config: z.object({ text: text(1_000).min(1, "Add the quote"), author: text(80), role: text(120) }),

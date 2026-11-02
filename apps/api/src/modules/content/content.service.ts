@@ -20,6 +20,7 @@ import {
 import { storeLanguages } from "../settings/languages"
 import { recordMove } from "../redirects"
 import { assertStaffStorefront, defaultStorefrontId } from "../storefronts/storefronts.context"
+import { chatButtonOf } from "../storefronts/storefronts.rules"
 import { DEFAULT_HOMEPAGE, defaultTheme, mergeTheme, shopperTheme } from "./content.defaults"
 import { withSliders } from "./sliders"
 import {
@@ -646,7 +647,7 @@ export class ContentService {
 
   /** Everything the header and footer need, in one request. */
   async site() {
-    const [theme, allMenus, footerPages, languages, owner, general] = await Promise.all([
+    const [theme, allMenus, footerPages, languages, owner, general, sf] = await Promise.all([
       this.getTheme(),
       this.listMenus(),
       prisma.cmsPage.findMany({
@@ -657,6 +658,7 @@ export class ContentService {
       storeLanguages(this.storeId),
       this.ownerOf(),
       prisma.storeGeneralSetting.findUnique({ where: { storeId: this.storeId }, select: { faviconUrl: true } }),
+      prisma.storefront.findFirst({ where: { storeId: this.storeId, ...(this.ctx.storefrontId ? { id: this.ctx.storefrontId } : { isDefault: true }) }, select: { chatButton: true } }),
     ])
     // This storefront's own menus for a place (header / footer), else the main ones there.
     const menus = (["header", "footer"] as const).flatMap((loc) => {
@@ -700,6 +702,8 @@ export class ContentService {
       footerPages: footerPages.map((p) => ({ title: p.title, url: `/${p.slug}` })),
       /** The browser tab icon set in Settings → General (null: the storefront's default). */
       faviconUrl: theme.brand.faviconUrl || general?.faviconUrl || null,
+      /** The floating WhatsApp / Messenger button (Settings → Storefronts). */
+      chatButton: chatButtonOf(sf?.chatButton),
     }
   }
 

@@ -6887,3 +6887,61 @@ Phase 6 of `FEATURE_LIST_REVIEW.md` section 3.
 - **Not run:**
   - The new `phase6-order-checks.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers the cross-shop record and hold, the COD block at checkout, no answer then confirmed, editing items and address, and an exchange making its replacement and closing as exchanged.
   - The browser check: `TESTING_CHECKLIST.md` section J lists what to try.
+
+## ✅ BATCH #57 — Phase 7: SMS campaigns, chat button, contact form and inbox, product feeds, Daraz (2026-11-16)
+Phase 7 of `FEATURE_LIST_REVIEW.md` section 3, the last phase of the plan.
+
+### SMS campaigns (Marketing → SMS campaigns)
+- **Tables:** `SmsCampaign` (text, audience filters, stop link, status, counts), `SmsCampaignRecipient` (one row per number, with its stop token) and `SmsOptOut`. `SmsMessage.campaignId` ties each SMS in the log to its campaign.
+- **Audience** (`sms-campaigns.rules.ts`): active customers with a phone, narrowed by ordered in the last N days, not ordered for N days (but ordered before), spent at least ৳X, a district, a loyalty level.
+- **Before sending:** the editor shows the people count (opted-out numbers taken off), characters, Unicode or not, SMS parts each and in all. "Test" sends to staff's own number.
+- **Sending** (`sms-campaigns.ts`, a BullMQ job every minute, like cart reminders):
+  - When it starts, the list of numbers is fixed (bad numbers, repeats and opted-out numbers left out).
+  - Then 100 a minute per campaign. Each number is claimed before sending, so none gets it twice.
+  - Nothing goes out 10pm–8am Dhaka time; sending pauses and carries on in the morning.
+  - Staff can cancel a scheduled or sending campaign.
+- **`{name}`** becomes the first name. Without a name it goes, with the space before it.
+- **Stop link** (on by default, the user's choice): `/s/<token>` on the storefront asks first, then adds the number to `SmsOptOut`. Order messages still go.
+- **Results:** sent and failed, plus orders by the same phone within 3 days of getting it, with their sales. The providers don't report delivery, so there's no "delivered" count.
+
+### Chat button
+- **Settings:** `Storefront.chatButton` holds the WhatsApp number (stored as 8801…), the Facebook page name (a pasted page link is trimmed to the name) and the side. It's edited in Online Store → Storefronts, and a button switched on with neither contact is refused.
+- **Storefront:** the site settings carry it, and the layout shows a floating button.
+  - One contact: one tap. Both: a small menu.
+  - On a product page the WhatsApp message names the product and links to it.
+  - It's hidden at checkout.
+
+### Contact form and inbox
+- **Tables:** `ContactMessage` (question, call me back, order problem; status new, open or done; given to a staff member) and `ContactReply` (SMS, email or note).
+- **Form** (`POST /api/storefront/contact`):
+  - Each kind asks for what it needs.
+  - An order problem must give an order number with the phone on that order, and is linked to it.
+  - A hidden field catches bots (they get a "thanks" and nothing is kept).
+  - At most 5 messages an hour from one IP address or one phone.
+  - Staff get the new "Contact form message" alert.
+- **Where it shows:**
+  - The contact page shows the form under the text (unless the page has its own block).
+  - A new "Contact form" page-builder block puts it on any page.
+- **Customers → Messages:** tabs, search, and the message with its order and customer. Staff reply by SMS (in the SMS log), by email (new "Reply to a message" template) or with a note, give it to someone and mark it done. A reply moves a new message to open.
+
+### Product feeds
+- **Feed data:** `StorefrontService.productFeed()` covers every option the storefront sells, priced through the same price check as the cart (storefront prices, sales, flash sales), with stock and pre-order state. Products without a picture or a price are left out with the reason.
+  - *Shortcut:* the first 5,000 products only.
+- **XML:** the storefront serves `/feeds/facebook.xml` and `/feeds/google.xml` in RSS 2.0 with Google's `g:` fields (Facebook reads them too). Each option is grouped under its product with `item_group_id`. Stock wording follows each site. Refreshed at most once an hour.
+- **Marketing → Product feeds:** each storefront's addresses with copy buttons, where to paste them, and what's left out.
+
+### Daraz
+- **Source:** "Daraz" is added to the order sources (New order, filters, labels).
+- **Channel order number:** `Order.externalRef` is an optional field on New order. It's shown next to the source on the order page and is found by the order search.
+
+### Migration
+- `20261116090000_campaigns_contact_feeds`: the campaign, opt-out and contact tables, plus `Storefront.chatButton`, `SmsMessage.campaignId` and `Order.externalRef`.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 69 files and 862 tests pass. New: `phase7.test.ts` ({name} and the stop link, SMS length, audience filters, cleaning the chat button, what each contact message needs).
+- **Bangla check:** passes.
+- **Not run:**
+  - The new `phase7-campaigns-contact.db.test.ts` and the rest of the DB suite: no Docker on the office PC. It covers a campaign sent once with opt-outs left out and the night pause, the stop link, the contact form's order check, bot trap, flood limit and notes, and the feed's prices and left-out products.
+  - The browser check: `TESTING_CHECKLIST.md` section K lists what to try.

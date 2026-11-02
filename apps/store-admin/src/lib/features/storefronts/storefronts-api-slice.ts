@@ -39,6 +39,7 @@ export interface Storefront {
   checkoutStyle: "single" | "steps";
   /** Customers may order without an account. */
   guestCheckout: boolean;
+  chatButton: ChatButton;
 }
 
 /** A storefront's name for filters and pickers (readable by any staff member). */
@@ -63,6 +64,7 @@ export type StorefrontInput = Partial<{
   socialLogin: boolean;
   checkoutStyle: "single" | "steps";
   guestCheckout: boolean;
+  chatButton: ChatButton;
 }>;
 
 export interface ProductStorefront {
@@ -160,3 +162,12 @@ export function storefrontUrl(sf: Pick<Storefront, "domains"> | undefined, fallb
   if (!host) return fallback;
   return `${/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https"}://${host}`;
 }
+
+/** The floating WhatsApp / Messenger button; WhatsApp is stored as 8801XXXXXXXXX. */
+export interface ChatButton {
+  enabled: boolean;
+  whatsapp: string;
+  messenger: string;
+  side: "right" | "left";
+}
+export const NO_CHAT: ChatButton = { enabled: false, whatsapp: "", messenger: "", side: "right" };

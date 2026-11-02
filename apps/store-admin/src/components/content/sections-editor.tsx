@@ -22,6 +22,7 @@ import {
   MousePointerClick,
   Plus,
   Quote,
+  Mail,
   Rows3,
   Sparkles,
   Star,
@@ -67,6 +68,7 @@ export const SECTION_INFO: Record<HomepageSectionType, { label: string; text: st
   columns: { label: "Columns", text: "Two to four columns of text.", icon: LayoutPanelTop },
   button: { label: "Button", text: "A single button with a link.", icon: MousePointerClick },
   quote: { label: "Quote", text: "A customer's words or a testimonial.", icon: Quote },
+  contact_form: { label: "Contact form", text: "Questions, call-me-back requests and order problems, sent to Customers > Messages.", icon: Mail },
   product_rail: { label: "Product row", text: "Products you pick, from a category or tag, or on sale.", icon: Rows3 },
   category_tiles: { label: "Category tiles", text: "Categories you pick, with their pictures.", icon: LayoutGrid },
 };
@@ -78,6 +80,7 @@ const PALETTE_ORDER: HomepageSectionType[] = [
   "video",
   "columns",
   "quote",
+  "contact_form",
   "button",
   "hero",
   "promo_banner",
@@ -171,6 +174,8 @@ export function newSection(type: HomepageSectionType): Section {
       };
     case "button":
       return { ...base, type, config: { text: "Shop now", href: "/products", style: "solid", align: "center" } };
+    case "contact_form":
+      return { ...base, type, config: { heading: "Get in touch", subheading: "Ask a question, ask us to call you back, or tell us about a problem with an order." } };
     case "quote":
       return { ...base, type, config: { text: "", author: "", role: "" } };
     case "product_rail":
@@ -220,6 +225,8 @@ export function sectionProblem(s: HomepageSection): string | null {
     case "button":
       if (!s.config.text.trim()) return "Add the button text";
       return s.config.href.trim() && isLink(s.config.href) ? null : "Add the button link";
+    case "contact_form":
+      return null;
     case "quote":
       return s.config.text.trim() ? null : "Add the quote";
     case "product_rail": {
@@ -261,6 +268,8 @@ function summary(s: HomepageSection): string {
       return s.config.columns.map((c) => c.heading).filter(Boolean).join(" · ");
     case "button":
       return `${s.config.text} → ${s.config.href}`;
+    case "contact_form":
+      return s.config.heading || "Contact form";
     case "quote":
       return s.config.text.slice(0, 90);
     case "product_rail":
@@ -753,6 +762,20 @@ function SectionForm({ uid, section, onChange }: { uid: string; section: Homepag
             <Input id={id("heading")} maxLength={120} value={c.heading} onChange={(e) => onChange({ ...section, config: { ...c, heading: e.target.value } })} />
           </Field>
           <CategoryChecklist chosen={c.categoryIds} max={12} onChange={(categoryIds) => onChange({ ...section, config: { ...c, categoryIds } })} />
+        </div>
+      );
+    }
+    case "contact_form": {
+      const c = section.config;
+      const set = (p: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...p } });
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Heading" htmlFor={id("heading")}>
+            <Input id={id("heading")} maxLength={120} value={c.heading} onChange={(e) => set({ heading: e.target.value })} />
+          </Field>
+          <Field label="Text under it" htmlFor={id("sub")}>
+            <Input id={id("sub")} maxLength={300} value={c.subheading} onChange={(e) => set({ subheading: e.target.value })} />
+          </Field>
         </div>
       );
     }

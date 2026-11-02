@@ -61,6 +61,7 @@ export default function NewOrderPage() {
   const [paid, setPaid] = useState(false);
   const [trx, setTrx] = useState("");
   const [source, setSource] = useState<OrderSource>("phone");
+  const [externalRef, setExternalRef] = useState("");
   const { data: storefronts = [] } = useStorefrontOptionsQuery();
   const [storefrontId, setStorefrontId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -139,6 +140,7 @@ export default function NewOrderPage() {
       paid,
       transactionId: trx.trim() || undefined,
       source,
+      externalRef: externalRef.trim() || undefined,
       ...(storefrontId ? { storefrontId } : {}),
       status: confirmed ? "PROCESSING" : "PENDING",
       customerNote: customerNote.trim() || undefined,
@@ -149,7 +151,7 @@ export default function NewOrderPage() {
       ...(fromLead ? { leadId: fromLead.id } : {}),
       ...(salesperson === "auto" ? {} : { salespersonId: salesperson === "none" ? null : salesperson }),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, storefrontId, confirmed, customerNote, staffNote, notify, whatsapp, fromQuote, fromLead, salesperson],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, externalRef, storefrontId, confirmed, customerNote, staffNote, notify, whatsapp, fromQuote, fromLead, salesperson],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -471,6 +473,9 @@ export default function NewOrderPage() {
                       </option>
                     ))}
                   </select>
+                </Field>
+                <Field label="Channel order number" htmlFor="ext-ref" hint="Optional: the order ID on Daraz or another channel, to find it later.">
+                  <Input id="ext-ref" maxLength={60} value={externalRef} onChange={(e) => setExternalRef(e.target.value)} placeholder={source === "daraz" ? "Daraz order ID" : ""} />
                 </Field>
                 <Field label="Source" htmlFor="src" hint="Where the customer ordered.">
                   <select id="src" className={SELECT} value={source} onChange={(e) => setSource(e.target.value as OrderSource)}>

@@ -162,6 +162,7 @@ export class SmsService {
     kind: string
     orderId?: bigint | null
     logText?: string
+    campaignId?: bigint | null
   }) {
     const to = bdMobile(p.to)
     if (!to)
@@ -179,6 +180,7 @@ export class SmsService {
         body: p.logText ?? p.text,
         kind: p.kind,
         orderId: p.orderId ?? null,
+        campaignId: p.campaignId ?? null,
         provider,
         status: "sending",
         segments: parts,

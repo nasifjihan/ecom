@@ -114,6 +114,7 @@ export class OrderRepository extends BaseRepository<"order"> {
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: "insensitive" } },
+        { externalRef: { contains: filters.search, mode: "insensitive" } },
         { billingEmail: { contains: filters.search, mode: "insensitive" } },
         { billingPhone: { contains: filters.search } },
         { shippingPhone: { contains: filters.search } },

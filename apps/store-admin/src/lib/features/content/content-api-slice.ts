@@ -195,6 +195,7 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
   | { type: "columns"; config: { heading: string; columns: TextColumn[] } }
   | { type: "button"; config: { text: string; href: string; style: "solid" | "outline"; align: "left" | "center" | "right" } }
   | { type: "quote"; config: { text: string; author: string; role: string } }
+  | { type: "contact_form"; config: { heading: string; subheading: string } }
   | { type: "product_rail"; config: ProductRailConfig }
   | { type: "category_tiles"; config: { heading: string; categoryIds: string[] } }
 );

@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client"
 import { cacheDel, CACHE_KEYS, prisma, tx } from "../../config"
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, type RequestContext } from "../../core"
 import { assertStaffStorefront, defaultStorefrontId, forgetStorefronts, staffStorefronts } from "./storefronts.context"
-import { cleanHostname, optionPrices, storefrontCode } from "./storefronts.rules"
+import { chatButtonOf, cleanHostname, optionPrices, storefrontCode } from "./storefronts.rules"
 import type { ProductStorefrontsInput, StorefrontInput } from "./storefronts.dto"
 
 type T = Prisma.TransactionClient
@@ -93,6 +93,7 @@ export class StorefrontsService {
       socialLogin: r.socialLogin,
       checkoutStyle: r.checkoutStyle,
       guestCheckout: r.guestCheckout,
+      chatButton: chatButtonOf(r.chatButton),
       // Addresses not linked to a storefront open the default one.
       domains: domains
         .filter((d) => (d.storefrontId ?? def?.id) === r.id)
@@ -130,6 +131,8 @@ export class StorefrontsService {
 
   /** Gateway codes the store has, and a courier account of its own. */
   private async checkSettings(d: Partial<StorefrontInput>) {
+    if (d.chatButton?.enabled && !chatButtonOf(d.chatButton).enabled)
+      throw new BadRequestError("Enter a WhatsApp number (01XXXXXXXXX) or a Facebook page name for the chat button", "VALIDATION_FAILED")
     if (d.paymentGateways?.length) {
       const known = await prisma.paymentGatewayConfig.findMany({ where: { storeId: this.storeId, code: { in: d.paymentGateways } }, select: { code: true } })
       const missing = d.paymentGateways.filter((c) => !known.some((k) => k.code === c))
@@ -192,6 +195,7 @@ export class StorefrontsService {
           ...(d.socialLogin !== undefined ? { socialLogin: d.socialLogin } : {}),
           ...(d.checkoutStyle !== undefined ? { checkoutStyle: d.checkoutStyle } : {}),
           ...(d.guestCheckout !== undefined ? { guestCheckout: d.guestCheckout } : {}),
+          ...(d.chatButton !== undefined ? { chatButton: chatButtonOf(d.chatButton) } : {}),
         },
       })
     })

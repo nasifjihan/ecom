@@ -8,6 +8,7 @@ import { startEmailWorker, stopEmailQueue } from "../modules/notifications"
 import { startCourierSync, stopCourierSync } from "../modules/couriers"
 import { startFestivalReminders, stopFestivalReminders } from "../modules/festivals"
 import { startCartReminders, stopCartReminders } from "../modules/marketing/cart-reminders.scheduler"
+import { startSmsCampaigns, stopSmsCampaigns } from "../modules/marketing/sms-campaigns.scheduler"
 import { startReportSchedules, stopReportSchedules } from "../modules/reports"
 import { startDataJobs, stopDataJobs } from "../modules/jobs"
 import { initSentry } from "../config/sentry"
@@ -21,6 +22,7 @@ startWorkerHeartbeat()
 void startCourierSync()
 void startFestivalReminders()
 void startCartReminders()
+void startSmsCampaigns()
 void startReportSchedules()
 startDataJobs()
 logger.info("Worker running. Press Ctrl+C to stop.")
@@ -31,6 +33,7 @@ const stop = async () => {
   await stopCourierSync()
   await stopFestivalReminders()
   await stopCartReminders()
+  await stopSmsCampaigns()
   await stopReportSchedules()
   await stopDataJobs()
   await Promise.allSettled([disconnectPrisma(), disconnectRedis()])

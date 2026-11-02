@@ -131,3 +131,18 @@ export function storefrontZones<Z extends { storefrontIds: readonly bigint[] }>(
   const own = usable.filter((z) => z.storefrontIds.length > 0)
   return own.length ? own : usable
 }
+
+// ------------------------------------------------------------------ chat button
+
+export type ChatButton = { enabled: boolean; whatsapp: string; messenger: string; side: "right" | "left" }
+export const NO_CHAT_BUTTON: ChatButton = { enabled: false, whatsapp: "", messenger: "", side: "right" }
+
+/** The stored chat button, cleaned: WhatsApp as 8801XXXXXXXXX (wa.me form), Messenger as a page name. */
+export function chatButtonOf(raw: unknown): ChatButton {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+  const digits = String(r.whatsapp ?? "").replace(/\D/g, "").replace(/^(?:00)?880/, "0")
+  const whatsapp = /^01[3-9]\d{8}$/.test(digits) ? `88${digits}` : ""
+  const messenger = String(r.messenger ?? "").trim().replace(/^https?:\/\/(www\.)?(m\.me|facebook\.com|fb\.com)\//i, "").replace(/[/?#].*$/, "")
+  const page = /^[\w.-]{2,80}$/.test(messenger) ? messenger : ""
+  return { enabled: r.enabled === true && !!(whatsapp || page), whatsapp, messenger: page, side: r.side === "left" ? "left" : "right" }
+}

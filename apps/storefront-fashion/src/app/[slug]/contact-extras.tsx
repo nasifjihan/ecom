@@ -1,14 +1,17 @@
-/** Under the contact page: the shop's map and where orders can be picked up. */
+/** Under the contact page: the contact form (unless the page has its own block), the shop's map and where orders can be picked up. */
 import { MapEmbed, translatorFor, type PickupPoint } from "@ecom/storefront-base";
 import { getSite, pageLocale } from "@/lib/content";
 import { serverApi } from "@/lib/server-api";
+import { ContactForm } from "../_components/contact-form";
 
-export async function ContactExtras() {
+export async function ContactExtras({ form }: { form: boolean }) {
   const [site, points, locale] = await Promise.all([getSite(), serverApi<PickupPoint[]>("/storefront/shipping/pickup-points", 300), pageLocale()]);
   const t = translatorFor(locale);
   const map = site?.theme.footer.mapQuery?.trim();
-  if (!map && !points?.length) return null;
+  if (!form && !map && !points?.length) return null;
   return (
+    <>
+    {form && <ContactForm heading={t("Send us a message")} />}
     <div className="container max-w-3xl space-y-8 pb-14">
       {map && <MapEmbed query={map} title={t("Map")} className="h-72 w-full rounded-2xl border-0" />}
       {!!points?.length && (
@@ -37,5 +40,6 @@ export async function ContactExtras() {
         </section>
       )}
     </div>
+    </>
   );
 }

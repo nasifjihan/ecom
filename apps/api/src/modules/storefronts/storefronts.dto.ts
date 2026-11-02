@@ -29,6 +29,8 @@ export const StorefrontDto = z.object({
   checkoutStyle: z.enum(CHECKOUT_STYLES).optional(),
   /** Off: customers sign in or sign up before ordering. */
   guestCheckout: z.boolean().optional(),
+  /** Floating WhatsApp / Messenger button on this storefront. */
+  chatButton: z.object({ enabled: z.boolean(), whatsapp: z.string().trim().max(20), messenger: z.string().trim().max(200), side: z.enum(["right", "left"]) }).optional(),
 })
 export const UpdateStorefrontDto = patchOf(StorefrontDto)
 

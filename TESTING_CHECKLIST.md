@@ -123,6 +123,16 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] On a delivered order, Start return → Exchange, pick the new size. Approving it makes a replacement order (linked both ways), with the returned value taken off; a dearer size leaves the difference to collect. Mark the return received: it closes as Exchanged, or leaves the rest to refund when the new item was cheaper
 - [ ] Turn on "Customers can ask for an exchange online": the customer's order page offers "Exchange for another size or colour"
 
+### K. Batch 57 (SMS campaigns, chat button, contact form, feeds, Daraz), no keys needed
+- [ ] Marketing → SMS campaigns: write one with {name}, pick filters; the people count and SMS parts update. "Test" sends to your number (SMS log)
+- [ ] Send it: each person gets it once in the SMS log, with a Stop link. Opening the link and pressing the button leaves that number out of the next campaign. Scheduled for a time between 10pm and 8am, it waits until morning
+- [ ] Results: an order with the same phone within 3 days counts under "Orders after"
+- [ ] Online Store → Storefronts: turn on the chat button with a WhatsApp number and a page name. The storefront shows it; on a product page WhatsApp opens with the product named. One contact = one tap, both = a small menu. Hidden at checkout
+- [ ] The contact page shows the form. Send a question, a call-back and an order problem (wrong phone for the order is refused). Customers → Messages lists them, the bell rings, a reply by SMS shows in the SMS log and by email in Mailpit
+- [ ] Add a "Contact form" block to another page in the page builder
+- [ ] Marketing → Product feeds: open the Facebook and Google addresses; the XML lists each size or colour with price, sale price and stock. Products without a picture are listed as left out
+- [ ] New order: pick "Daraz" as the source and type the Daraz order ID; the order page shows it, and searching the orders by that ID finds it
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

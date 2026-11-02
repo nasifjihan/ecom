@@ -30,6 +30,15 @@ export interface MenuLink {
   children?: MenuLink[];
 }
 
+export interface ChatButtonSettings {
+  enabled: boolean;
+  /** 8801XXXXXXXXX, as wa.me wants it. */
+  whatsapp: string;
+  /** The Facebook page name, for m.me. */
+  messenger: string;
+  side: "right" | "left";
+}
+
 export interface SiteContent {
   theme: ThemeSettings;
   /** Languages the storefront offers and the one it opens in. */
@@ -39,6 +48,8 @@ export interface SiteContent {
   footerPages: { title: string; url: string }[];
   /** The store's own browser tab icon (Settings → General), when it set one. */
   faviconUrl?: string | null;
+  /** The floating WhatsApp / Messenger button, when this storefront has one. */
+  chatButton?: ChatButtonSettings;
 }
 
 export interface CmsPage {
@@ -102,6 +113,7 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
   | { type: "columns"; config: { heading: string; columns: { imageUrl: string | null; heading: string; text: string }[] } }
   | { type: "button"; config: { text: string; href: string; style: "solid" | "outline"; align: "left" | "center" | "right" } }
   | { type: "quote"; config: { text: string; author: string; role: string } }
+  | { type: "contact_form"; config: { heading: string; subheading: string } }
   | {
       type: "product_rail";
       config: HeadingConfig & {

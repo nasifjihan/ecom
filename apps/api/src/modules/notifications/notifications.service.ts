@@ -409,6 +409,15 @@ export class EmailService {
     })
   }
 
+  /** A staff reply to a contact-form message (Customers > Messages). */
+  async contactReply(to: string, v: { firstName: string; reply: string; message: string }) {
+    return this.send("contact_reply_customer", {
+      to: [to],
+      vars: { "customer.first_name": v.firstName || "there", "reply.body": v.reply, "message.text": v.message },
+      recipientType: "customer",
+    })
+  }
+
   /** "Back in stock" to a shopper who asked for it (Notify me). */
   async backInStock(to: string, product: { name: string; option: string | null; url: string }) {
     await this.send("back_in_stock_customer", {
@@ -739,6 +748,8 @@ export class EmailService {
         "cart.url": `${urls.storefront}/cart`,
         "cart.unsubscribe_url": `${urls.storefront}/cart`,
         "cart.coupon": "Use code **BACK10** for 10% off.",
+        "reply.body": "Yes, the blue panjabi comes in XL. We've kept one for you until Friday.",
+        "message.text": "Do you have the blue panjabi in XL?",
       },
       order: SAMPLE_ORDER,
       tracking: { carrier: "Pathao", number: "PTH-58213", url: "" },

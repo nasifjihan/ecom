@@ -66,6 +66,9 @@ import { adminQuotationsRouter, adminWholesaleRouter, storefrontQuotesRouter, st
 import { adminLoyaltyRouter, storefrontLoyaltyRouter } from "./modules/loyalty";
 import { adminCartRemindersRouter } from "./modules/marketing/cart-reminders.routes";
 import { adminOrderChecksRouter } from "./modules/orders/order-checks.routes";
+import { adminSmsCampaignsRouter, storefrontSmsStopRouter } from "./modules/marketing/sms-campaigns.routes";
+import { adminProductFeedsRouter, storefrontFeedRouter } from "./modules/marketing/product-feeds.routes";
+import { adminContactMessagesRouter, storefrontContactRouter } from "./modules/content/contact-messages.routes";
 import { adminPromotionsRouter, adminQuestionsRouter, adminSearchTermsRouter, marketingCouponsRouter, marketingFlashSalesRouter, marketingReviewsRouter, storefrontPromotionsRouter } from "./modules/marketing";
 import { superDashboardRouter, storeDashboardRouter } from "./modules/dashboard";
 import { superPlatformRouter } from "./modules/platform";
@@ -203,6 +206,12 @@ export function buildApp(): Express {
   app.use("/api/admin/inventory", adminInventoryRouter);
   app.use("/api/admin/marketing/abandoned-carts", adminCartRemindersRouter); // cart reminder settings and report
   app.use("/api/admin/order-checks", adminOrderChecksRouter); // fraud check, COD calls and block list
+  app.use("/api/admin/marketing/sms-campaigns", adminSmsCampaignsRouter); // SMS campaigns
+  app.use("/api/admin/marketing/product-feeds", adminProductFeedsRouter); // Facebook / Google feed addresses
+  app.use("/api/admin/contact-messages", adminContactMessagesRouter); // contact form inbox
+  app.use("/api/storefront/sms-stop", storefrontSmsStopRouter); // "Stop" link in campaign SMS
+  app.use("/api/storefront/feed", storefrontFeedRouter); // product feed data
+  app.use("/api/storefront/contact", storefrontContactRouter); // contact form
   app.use("/api/admin/marketing/promotions", adminPromotionsRouter);
   app.use("/api/admin/sms", adminSmsRouter);
   app.use("/api/admin/whatsapp", adminWhatsappRouter);

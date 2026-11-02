@@ -113,6 +113,9 @@ model Store {
   reminderOptOuts      ReminderOptOut[]
   orderCheckSettings   OrderCheckSettings?
   codBlocks            CodBlock[]
+  smsCampaigns         SmsCampaign[]
+  smsOptOuts           SmsOptOut[]
+  contactMessages      ContactMessage[]
   orderCalls           OrderCall[]
   stockAlerts          StockAlert[]
   pickupPoints         PickupPoint[]
@@ -225,6 +228,8 @@ model Storefront {
   socialLogin        Boolean             @default(true)
   /// single (everything on one page) | steps (details → delivery → payment, one at a time)
   checkoutStyle      String              @default("single")
+  /// Floating chat button: { enabled, whatsapp: "01…", messenger: "page name", side: "right" | "left" }.
+  chatButton         Json?
   /// Customers may order without an account (off: they sign in or sign up first).
   guestCheckout      Boolean             @default(true)
   sortOrder          Int                 @default(0)
@@ -632,10 +637,114 @@ model SmsMessage {
   providerRef String?
   error       String?
   segments    Int      @default(1)
+  /// Sent by this SMS campaign.
+  campaignId  BigInt?
   createdAt   DateTime @default(now())
 
   @@index([storeId, createdAt])
   @@index([storeId, orderId])
+  @@index([campaignId])
+}
+
+/// A marketing SMS sent to a group of customers (Marketing → SMS campaigns).
+model SmsCampaign {
+  id          BigInt                 @id @default(autoincrement())
+  storeId     BigInt
+  store       Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  /// The text; {name} is the customer's first name.
+  body        String
+  /// Who gets it: { lastOrderWithinDays?, noOrderForDays?, minSpent?, district?, levelId?, newsletter? }
+  audience    Json
+  /// Adds a short "stop" link; tapping it stops campaigns to that number.
+  stopLink    Boolean                @default(true)
+  /// draft | scheduled | sending | sent | cancelled
+  status      String                 @default("draft")
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  recipients  Int                    @default(0)
+  sent        Int                    @default(0)
+  failed      Int                    @default(0)
+  adminId     BigInt?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  to          SmsCampaignRecipient[]
+
+  @@index([storeId, status, scheduledAt])
+}
+
+/// One number a campaign goes to; worked through in batches, so each gets it once.
+model SmsCampaignRecipient {
+  id         BigInt      @id @default(autoincrement())
+  campaignId BigInt
+  campaign   SmsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId BigInt?
+  phone      String
+  firstName  String?
+  /// pending | sent | failed | skipped
+  status     String      @default("pending")
+  /// Part of the stop link (/s/<token>).
+  stopToken  String      @unique
+  sentAt     DateTime?
+
+  @@unique([campaignId, phone])
+  @@index([campaignId, status])
+}
+
+/// Numbers that asked for no more SMS campaigns (order messages still go).
+model SmsOptOut {
+  id        BigInt   @id @default(autoincrement())
+  storeId   BigInt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  phone     String
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, phone])
+}
+
+/// A message from the storefront's contact form (Customers → Messages).
+model ContactMessage {
+  id           BigInt         @id @default(autoincrement())
+  storeId      BigInt
+  store        Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storefrontId BigInt?
+  /// question | callback | order_problem
+  kind         String
+  name         String
+  phone        String?
+  email        String?
+  message      String         @db.Text
+  /// Call me back: when suits them, as they typed it.
+  callbackTime String?
+  /// Problem with my order: the order, checked against the phone.
+  orderId      BigInt?
+  order        Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId   BigInt?
+  /// new | open | done
+  status       String         @default("new")
+  assignedToId BigInt?
+  ip           String?
+  replies      ContactReply[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([storeId, status, createdAt])
+  @@index([storeId, ip, createdAt])
+}
+
+/// A staff reply (by SMS or email) or an internal note on a contact message.
+model ContactReply {
+  id        BigInt         @id @default(autoincrement())
+  messageId BigInt
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  /// sms | email | note
+  channel   String
+  body      String         @db.Text
+  adminId   BigInt?
+  createdAt DateTime       @default(now())
+
+  @@index([messageId])
 }
 
 /// One-time sign-in codes, sent by SMS or email; only a hash of the code is kept.
@@ -1860,6 +1969,9 @@ model Order {
   /// No answer: when to call again (null: not waiting).
   nextCallAt             DateTime?
   calls                  OrderCall[]
+  contactMessages        ContactMessage[]
+  /// The order's number on the channel it came from (e.g. the Daraz order ID).
+  externalRef            String?
   paymentAttempts        PaymentAttempt[]
   paymentRecords         PaymentRecord[]
   reviews                Review[]

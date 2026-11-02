@@ -11,6 +11,7 @@ import { ReferralCapture } from "@/lib/loyalty";
 import { SalesCodeCapture } from "@/lib/sales-code";
 import { CartSync } from "@/lib/saved-cart";
 import { shopClosed } from "@/lib/maintenance";
+import { ChatButton } from "./_components/chat-button";
 
 const SITE_BASE = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100";
 
@@ -222,6 +223,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ReferralCapture />
           <SalesCodeCapture />
           <CartSync />
+          <ChatButton settings={site?.chatButton} />
         </Providers>
         </>
         )}

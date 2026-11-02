@@ -13,6 +13,7 @@ import { initEmailQueue, startEmailWorker, stopEmailQueue } from "./modules/noti
 import { startCourierSync, stopCourierSync } from "./modules/couriers";
 import { startFestivalReminders, stopFestivalReminders } from "./modules/festivals";
 import { startCartReminders, stopCartReminders } from "./modules/marketing/cart-reminders.scheduler";
+import { startSmsCampaigns, stopSmsCampaigns } from "./modules/marketing/sms-campaigns.scheduler";
 import { startReportSchedules, stopReportSchedules } from "./modules/reports";
 import { startDataJobs, stopDataJobs } from "./modules/jobs";
 import { syncLocations } from "./modules/locations";
@@ -48,6 +49,7 @@ async function bootstrap() {
     void startCourierSync();
     void startFestivalReminders();
     void startCartReminders();
+    void startSmsCampaigns();
     void startReportSchedules();
     startDataJobs();
   }
@@ -77,6 +79,7 @@ async function bootstrap() {
       stopCourierSync(),
       stopFestivalReminders(),
       stopCartReminders(),
+      stopSmsCampaigns(),
       stopReportSchedules(),
       stopDataJobs(),
       disconnectPrisma(),

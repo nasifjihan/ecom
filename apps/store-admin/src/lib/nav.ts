@@ -67,6 +67,8 @@ import {
   CalendarHeart,
   CalendarClock,
   PhoneCall,
+  Send,
+  Rss,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -137,6 +139,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Customers",
     items: [
       { href: "/customers", label: "Customers", icon: User2, perm: "customers.view" },
+      { href: "/customers/messages", label: "Messages", icon: MessageSquare, perm: "customers.view" },
       { href: "/customers/leads", label: "Leads", icon: Target, perm: "leads.view" },
       { href: "/customers/business", label: "Business accounts", icon: Briefcase, perm: "customers.view" },
     ],
@@ -146,6 +149,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/marketing/promotions", label: "Promotions", icon: Gift, perm: "promotions.view" },
       { href: "/marketing/abandoned-carts", label: "Abandoned carts", icon: ShoppingCart, perm: "promotions.view" },
+      { href: "/marketing/sms-campaigns", label: "SMS campaigns", icon: Send, perm: "promotions.view" },
+      { href: "/marketing/product-feeds", label: "Product feeds", icon: Rss, perm: "promotions.view" },
       { href: "/marketing/coupons", label: "Coupons", icon: Percent, perm: "coupons.view" },
       { href: "/marketing/newsletter", label: "Newsletter", icon: Newspaper, perm: "customers.view" },
       { href: "/marketing/flash-sales", label: "Flash Sales", icon: Zap, perm: "flash_sales.view" },

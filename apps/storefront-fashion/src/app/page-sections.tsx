@@ -21,6 +21,7 @@ import {
 import type { Faq, HomepageSection } from "@/lib/content";
 import type { SlotPromotion } from "@/lib/promotions";
 import { PromoBanners, PromoOffers } from "./_components/promotions";
+import { ContactForm } from "./_components/contact-form";
 import { useProductGridActions } from "./_components/product-actions";
 
 const CATEGORY_COLORS = [
@@ -144,6 +145,8 @@ export function PageSections({
             return <ColumnsBlock key={key} section={s} />;
           case "button":
             return <ButtonBlock key={key} section={s} />;
+          case "contact_form":
+            return <ContactForm key={key} heading={s.config.heading} subheading={s.config.subheading} />;
           case "quote":
             return <QuoteBlock key={key} section={s} />;
           case "product_rail":

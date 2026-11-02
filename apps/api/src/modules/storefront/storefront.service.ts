@@ -760,6 +760,62 @@ export class StorefrontService {
   }
 
   /** Current prices for the cart page, so a cart saved earlier shows what checkout will charge. */
+  /**
+   * The Facebook / Google product feed: every option this storefront sells, at its price here, with
+   * stock. Products without a picture or a price are left out (with the reason, for the admin page).
+   * shortcut: the first 5,000 products only; page the feed when a shop has more.
+   */
+  async productFeed() {
+    const sf = await this.storefront();
+    const products = await prisma.product.findMany({
+      where: { storeId: this.storeId, status: "published", ...inRange(sf) },
+      orderBy: { id: "asc" },
+      take: 5000,
+      select: {
+        id: true, name: true, slug: true, shortDescription: true, description: true, preOrder: true,
+        brand: { select: { name: true } },
+        images: { orderBy: { sortOrder: "asc" }, take: 1, select: { imageUrl: true } },
+        variants: { where: { status: "active" }, select: { id: true, attributeValues: true, imageUrl: true } },
+      },
+    });
+    const lines: CartLineDto[] = products.flatMap((p): CartLineDto[] => (p.variants.length ? p.variants.map((v) => ({ productId: p.id, variantId: v.id, qty: 1 })) : [{ productId: p.id, variantId: null, qty: 1 }]));
+    const quoted: Awaited<ReturnType<StorefrontService["quoteLines"]>> = [];
+    for (let i = 0; i < lines.length; i += 300) quoted.push(...(await this.quoteLines(lines.slice(i, i + 300), null)));
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const plain = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    const items: {
+      id: string; groupId: string | null; title: string; description: string; slug: string; image: string;
+      price: number; salePrice: number | null; availability: "in stock" | "out of stock" | "preorder"; brand: string | null;
+    }[] = [];
+    const excluded = new Map<string, { productId: string; name: string; reason: string }>();
+    for (const q of quoted) {
+      const p = byId.get(q.line.productId)!;
+      const v = q.line.variantId ? p.variants.find((x) => x.id === q.line.variantId) : null;
+      const image = v?.imageUrl ?? p.images[0]?.imageUrl ?? null;
+      const leave = (reason: string) => excluded.set(String(p.id), { productId: String(p.id), name: p.name, reason });
+      if (!image) { leave("No picture"); continue; }
+      if (!q.priced || q.priced.unitPrice <= 0) {
+        if (q.problem?.code !== "INSUFFICIENT_STOCK") { leave(q.problem?.message ?? "No price"); continue; }
+      }
+      const unit = q.priced?.unitPrice ?? 0;
+      const was = q.priced?.compareAtPrice ?? null;
+      const label = v ? variantLabel(v.attributeValues) : "";
+      items.push({
+        id: v ? `${p.id}-${v.id}` : String(p.id),
+        groupId: v ? String(p.id) : null,
+        title: label ? `${p.name} (${label})` : p.name,
+        description: plain(p.shortDescription) || plain(p.description) || p.name,
+        slug: p.slug,
+        image,
+        price: was ?? unit,
+        salePrice: was ? unit : null,
+        availability: p.preOrder ? "preorder" : q.problem?.code === "INSUFFICIENT_STOCK" ? "out of stock" : "in stock",
+        brand: p.brand?.name ?? null,
+      });
+    }
+    return { items, excluded: [...excluded.values()] };
+  }
+
   async cartPrices(lines: CartLineDto[], couponCode?: string, email?: string) {
     const quoted = await this.quoteLines(lines);
     const priced = quoted.filter((q) => !q.problem && q.priced).map((q) => q.priced!);

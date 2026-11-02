@@ -651,7 +651,7 @@ export default function OrderDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Source</span>
-                <span>{sourceLabel(order.source)}</span>
+                <span>{sourceLabel(order.source)}{order.externalRef ? ` · ${order.externalRef}` : ""}</span>
               </div>
               {placedOn && (
                 <div className="flex justify-between">

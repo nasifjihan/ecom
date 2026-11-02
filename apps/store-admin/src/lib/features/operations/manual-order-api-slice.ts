@@ -47,6 +47,8 @@ export interface ManualOrderInput {
   quotationId?: string;
   /** Made from this CRM lead (the lead is won). */
   leadId?: string;
+  /** The order number on the channel it came from (e.g. the Daraz order ID). */
+  externalRef?: string;
   /** The salesperson credited; null: nobody; left out: the quote's maker or whoever enters it, if on the sales team. */
   salespersonId?: string | null;
 }

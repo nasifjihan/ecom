@@ -43,7 +43,7 @@ export default async function CmsPageView({ params }: Props) {
       <>
         <h1 className="sr-only">{page.title}</h1>
         <PageSections sections={page.sections} faqs={faqs ?? []} className="pt-6 md:pt-10" />
-        {page.slug === "contact" && <ContactExtras />}
+        {page.slug === "contact" && <ContactExtras form={!page.sections.some((s) => s.type === "contact_form")} />}
       </>
     );
   }
@@ -55,7 +55,7 @@ export default async function CmsPageView({ params }: Props) {
       <p className="mt-2 text-sm text-muted-foreground">{(await serverT())("Last updated {date}", { date: formatDate(page.updatedAt) })}</p>
       <Markdown source={page.content} className="mt-8 text-[15px] md:text-base" />
     </div>
-    {page.slug === "contact" && <ContactExtras />}
+    {page.slug === "contact" && <ContactExtras form />}
     </>
   );
 }

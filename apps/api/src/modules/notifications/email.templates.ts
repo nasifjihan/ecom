@@ -147,6 +147,15 @@ export const EMAIL_TEMPLATES = {
     button: { label: "Shop now", url: "product.url" },
     variables: [...STORE, "product.name", "product.option", "product.url"],
   },
+  contact_reply_customer: {
+    label: "Reply to a message",
+    audience: "customer",
+    description: "Your reply to a message sent through the contact form (Customers > Messages).",
+    subject: "Re: your message to {{store.name}}",
+    message: "Hi {{customer.first_name}},\n\n{{reply.body}}\n\n---\n\nYou wrote: {{message.text}}",
+    blocks: [],
+    variables: [...STORE, "customer.first_name", "reply.body", "message.text"],
+  },
   cart_reminder_customer: {
     label: "Cart reminder",
     audience: "customer",

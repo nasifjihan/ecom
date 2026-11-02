@@ -87,6 +87,7 @@ export const ORDER_SOURCES = [
   { value: "instagram", label: "Instagram" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "messenger", label: "Messenger" },
+  { value: "daraz", label: "Daraz" },
   { value: "walk_in", label: "Walk-in" },
   { value: "other", label: "Other" },
 ] as const;
@@ -197,6 +198,8 @@ export interface Order {
   /** This order sends the replacement for an exchange. */
   exchangeFor: { code: string | null; orderId: string; orderNumber: string } | null;
   shippingLocationId: string | null;
+  /** The order number on the channel it came from (e.g. Daraz). */
+  externalRef: string | null;
 }
 
 export type RiskLevel = "new" | "good" | "watch" | "high";
@@ -796,6 +799,7 @@ export function fromApiOrder(o: ApiOrder): Order {
     callStatus: (o.callStatus as string | null | undefined) ?? null,
     exchangeFor: o.exchangeFor ? { code: o.exchangeFor.code, orderId: String(o.exchangeFor.order.id), orderNumber: o.exchangeFor.order.number } : null,
     shippingLocationId: o.shippingLocationId == null ? null : String(o.shippingLocationId),
+    externalRef: (o.externalRef as string | null | undefined) ?? null,
   };
 }
 

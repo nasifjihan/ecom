@@ -37,6 +37,8 @@ import {
   useStorefrontsQuery,
   useUpdateStorefrontMutation,
   type Storefront,
+  NO_CHAT,
+  type ChatButton,
 } from "@/lib/features/storefronts/storefronts-api-slice";
 
 function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; onOpenChange: (v: boolean) => void; storefront: Storefront | null }) {
@@ -49,6 +51,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
   const [social, setSocial] = useState(true);
   const [checkoutStyle, setCheckoutStyle] = useState<"single" | "steps">("single");
   const [guests, setGuests] = useState(true);
+  const [chat, setChat] = useState<ChatButton>(NO_CHAT);
   const { data: methods = [] } = usePaymentMethodsQuery();
   const { data: couriers = [] } = useCourierAccountsQuery();
   const [create, c] = useCreateStorefrontMutation();
@@ -64,6 +67,9 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
     setSocial(storefront?.socialLogin ?? true);
     setCheckoutStyle(storefront?.checkoutStyle ?? "single");
     setGuests(storefront?.guestCheckout ?? true);
+    // Stored as 8801…; shown as 01….
+    const c = storefront?.chatButton ?? NO_CHAT;
+    setChat({ ...c, whatsapp: c.whatsapp.replace(/^88/, "") });
   }, [open, storefront]);
   const pct = Number(f.priceAdjustPercent);
   const pctOk = f.priceAdjustPercent.trim() !== "" && Number.isFinite(pct) && pct >= -90 && pct <= 500;
@@ -79,6 +85,7 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
       socialLogin: social,
       checkoutStyle,
       guestCheckout: guests,
+      chatButton: chat,
     };
     try {
       if (storefront) await update({ id: storefront.id, ...body, ...(storefront.isDefault ? {} : { isActive: active }) }).unwrap();
@@ -222,6 +229,28 @@ function StorefrontDialog({ open, onOpenChange, storefront }: { open: boolean; o
             label="Google and Facebook sign-in buttons"
             hint="Shown when they are switched on in Settings → Customer sign-in. Off: customers here sign in with email or phone only."
           />
+          <Toggle
+            checked={chat.enabled}
+            onChange={(v) => setChat({ ...chat, enabled: v })}
+            label="Chat button (WhatsApp / Messenger)"
+            hint="A floating button on every page. On a product page the message names the product."
+          />
+          {chat.enabled && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="WhatsApp number" htmlFor="sf-wa">
+                <Input id="sf-wa" inputMode="tel" placeholder="01712345678" value={chat.whatsapp} onChange={(e) => setChat({ ...chat, whatsapp: e.target.value })} />
+              </Field>
+              <Field label="Facebook page name" htmlFor="sf-msgr" hint="From facebook.com/yourpage">
+                <Input id="sf-msgr" placeholder="yourpage" value={chat.messenger} onChange={(e) => setChat({ ...chat, messenger: e.target.value })} />
+              </Field>
+              <Field label="Side of the screen" htmlFor="sf-side">
+                <select id="sf-side" value={chat.side} onChange={(e) => setChat({ ...chat, side: e.target.value === "left" ? "left" : "right" })} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="right">Right</option>
+                  <option value="left">Left</option>
+                </select>
+              </Field>
+            </div>
+          )}
           {storefront && !storefront.isDefault && (
             <Toggle checked={active} onChange={setActive} label="Open" hint="A closed storefront's web addresses open the default storefront." />
           )}

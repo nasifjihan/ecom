@@ -17,7 +17,7 @@ import { emitOrderPlaced } from "../notifications";
 import { orderBlocker } from "../wholesale/quotation.rules";
 import { creditOrder } from "../sales/commission.ledger";
 
-export const ORDER_SOURCES = ["website", "phone", "facebook", "instagram", "whatsapp", "messenger", "walk_in", "other"] as const;
+export const ORDER_SOURCES = ["website", "phone", "facebook", "instagram", "whatsapp", "messenger", "daraz", "walk_in", "other"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
 const text = (max: number) => z.string().trim().max(max);
@@ -92,6 +92,8 @@ const Base = z.object({
   salespersonId: z.coerce.bigint().positive().nullable().optional(),
   /** Made from this CRM lead: the lead is won with the order (default salesperson: whoever follows it). */
   leadId: z.coerce.bigint().positive().optional(),
+  /** The order's number on the channel it came from, e.g. the Daraz order ID. */
+  externalRef: z.string().trim().max(60).optional(),
 });
 
 export const ManualOrderQuoteDto = Base;
@@ -382,6 +384,7 @@ export class ManualOrderService {
     if (fromQuote) {
       await prisma.quotation.update({ where: { id: fromQuote.id }, data: { orderId: order.id } });
     }
+    if (dto.externalRef) await prisma.order.update({ where: { id: order.id }, data: { externalRef: dto.externalRef } });
     await this.credit(order.id, dto.salespersonId, lead?.ownerId ?? fromQuote?.createdById ?? adminId);
     if (lead) await winLead(storeId, lead.id, { id: order.id, number: order.number, customerId: customer.id }, { id: adminId, name: who });
     if (dto.whatsappOptIn) await prisma.order.update({ where: { id: order.id }, data: { whatsappOptIn: true } });

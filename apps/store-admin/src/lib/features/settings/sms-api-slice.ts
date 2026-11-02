@@ -22,6 +22,9 @@ export const SMS_KIND_LABELS: Record<string, string> = {
   otp: "Sign-in code",
   invoice: "Invoice link",
   test: "Test",
+  campaign: "SMS campaign",
+  campaign_test: "SMS campaign test",
+  contact_reply: "Reply to a message",
 };
 
 export interface SmsSettings {
