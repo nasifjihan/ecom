@@ -7005,3 +7005,31 @@ The store dashboard's top products leave out order lines whose `meta` has a `gif
 - **The new test (real Postgres, `ecom_test`):** 1 passed.
 - **The footer rule against the real data:** store 1's page list read from `ecom_platform`, and every seeded footer link checked against it by hand.
 - **Not checked:** the browser (the running API wasn't up); both changes are server-rendered from data already verified here.
+
+## ✅ FEATURE LIST SETTLED, DEPLOYMENT BATCH STARTED (2026-11-02)
+The feature list review is finished, and the deployment batch has begun. Nothing else in the codebase changed.
+
+### The review, applied
+`FEATURE_LIST_REVIEW.md` no longer shows a cross on any built row. The rows that changed were read back out of the code rather than taken from the build notes: **50 claims across Batches 51–57, all 50 found**, each with a file and line. Two wording corrections came out of it — "filter configuration" is a tick on each attribute, not a settings screen, and "Reorder" lives on the order page (`account/orders/[ref]/page.tsx`), which the first search missed. The API suite passes on this commit: **115 files, 1095 tests**.
+
+Then every **Later** and **No** row was rechecked against what the platform now does:
+- **0 items are needed before launch.**
+- **6 items were dropped rather than deferred** — a warranty field per product, exit-intent pop-ups, bundle products, digital products, subscriptions, and our own conversion-rate figure (Google Analytics gives it). Their rows now read **Skip**, and the legend gained that value.
+- **34 items stay Later.**
+- **1 item moved up:** price-drop alerts, from **No** to **Later** — Batch 54's back-in-stock alerts already store a product and a contact and send SMS or email, so it is a small step from there.
+- **35 of the 36 No decisions still stand.**
+
+Section 3's "Later, when a shop needs it" and "Not planned" lists were realigned with those decisions so the document doesn't contradict itself.
+
+### Deployment: what was actually missing
+Most of the deployment machinery already existed (`docker-compose.prod.yml`, `docker/Caddyfile`, `.env.production.example`, the backup and restore scripts, the k6 load tests). Two things were not:
+1. **ARM images.** The CI images job built for Intel/AMD only, and Oracle's free server is ARM. `.github/workflows/ci.yml` now sets `platforms: linux/amd64,linux/arm64` and runs `docker/setup-qemu-action`; the job's timeout went from 40 to 90 minutes because the ARM half is built under emulation.
+2. **A walkthrough for someone who has never deployed.** `DEPLOYMENT.md` gained **section 0, "Your first deployment: do these ten steps in order"** — a glossary of the words, the five DNS records, the account checklist (Oracle, Cloudflare R2, Brevo, domain), the `.env` blocks to fill, a checkpoint after every step, and a troubleshooting table. It sequences the sections that already existed rather than replacing them.
+
+### Two traps found while writing it
+- **The demo shop can't run on the planned test server as written.** `scripts/demo/index.ts` refuses when `NODE_ENV=production` unless `PRODUCTION_REHEARSAL=on`, and section 11 says never to set that on a real server — yet the plan calls for the demo on the real test server. Step 9 now gives both routes and the trade-off: set the switch while testing and **remove it before trading**, or skip the demo and fill the shop by hand.
+- **Oracle has two firewalls.** The console's Security List must allow 80/443 as well as `ufw` on the machine; the existing guide only mentioned `ufw`. Also recorded: a private GitHub repository makes the `raw.githubusercontent.com` download commands return 404, so the files must be copied with `scp` instead.
+
+### Not done (the owner's side)
+The accounts and the domain are the owner's to create — nobody else should enter their card or passwords. The server steps start once those exist.
+

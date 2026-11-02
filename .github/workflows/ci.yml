@@ -112,7 +112,9 @@ jobs:
     name: Docker images
     needs: api
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Both processor types are built so the images run on Oracle's free ARM server as well as on
+    # Intel/AMD. The ARM side is built under emulation, which is slow, hence the long timeout.
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -134,6 +136,8 @@ jobs:
             app: super-admin
     steps:
       - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Sign in to GitHub's registry
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -151,6 +155,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.name }}

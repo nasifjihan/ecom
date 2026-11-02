@@ -4,9 +4,11 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 
 **Re-checked on 2026-11-02** after Batches 51–57. Every row the build plan promised is now built: its Status is ✅ and its **Add?** is **—** (built). The rows still marked 🟡 or ❌ are the ones waiting on the **Later** list and the **No** list at the end — those two lists are being reviewed again now, line by line, to decide what is still needed, what can wait, and what to drop.
 
+**Verified on 2026-11-02.** Every row that changed to ✅ was read back out of the code, not taken from the build notes: 50 claims across Batches 51–57, all 50 found, each with a file and line. Two wording corrections came out of it — "filter configuration" is a tick on each attribute rather than a separate settings screen, and "Reorder" lives on the order page (the first search missed it). The API suite passes on this commit: **115 files, 1095 tests**.
+
 **Legend:**
 - **Status:** ✅ we have it · 🟡 partly · ❌ missing · ➖ doesn't apply to us
-- **Add?:** **Yes** (soon) · **Later** (useful, not urgent) · **No** (with the reason) · **—** built
+- **Add?:** **Yes** (soon) · **Later** (useful, not urgent) · **No** (with the reason) · **Skip** (dropped on the 2026-11-02 recheck) · **—** built
 
 **Short version:**
 - We have nearly everything a Bangladeshi fashion shop needs to run day to day, plus a lot the list doesn't mention (purchasing, warehouses, couriers, COD settlement, sales commission, festivals, multi-storefront, B2B).
@@ -22,6 +24,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 - Round 5 (Returns, Shipping, Customers, Marketing, CMS, SEO, Reports): reviewed, no changes.
 - Round 6 (Payments and finance, Reviews and support, Users and security, Notifications, Settings, Marketplace, Advanced): reviewed. **Review complete.**
 - **Built:** Phase 1 (Batch 51), Phase 2 (Batch 52), Phase 3 (Batch 53), Phase 4 (Batch 54), Phase 5 (Batch 55), Phase 6 (Batch 56), Phase 7 (Batch 57). All seven phases are built, so every row they cover now shows ✅.
+- **Later and No rechecked (2026-11-02):** nothing on the **Later** list is needed before launch. Six items were dropped rather than deferred — a warranty field per product, exit-intent pop-ups, bundle products, digital products, subscriptions, and our own conversion-rate figure (Google Analytics gives it). One item moved up: price-drop alerts, from **No** to **Later**, because the back-in-stock alerts built in Batch 54 already store a product and a contact and send SMS or email. Everything else on the **No** list still stands. Tally: **0 needed now · 6 dropped · 34 stay Later**, and **35 of the 36 No decisions stand**.
 
 ---
 
@@ -75,7 +78,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 ### Filtering and sorting
 | Feature | Status | What we have | Add? | Why |
 |---|---|---|---|---|
-| Filter by price, brand, category, size, colour, rating, availability, discount, seller, custom attributes | ✅ | Price, brand, category, rating, tag ✅; size, colour and other attributes ✅; in stock ✅; on sale ✅ (which attributes appear as filters is chosen in the admin); seller ➖ (not a marketplace) | — | For a fashion shop, filtering by size and colour is basic |
+| Filter by price, brand, category, size, colour, rating, availability, discount, seller, custom attributes | ✅ | Price, brand, category, rating, tag ✅; size, colour and other attributes ✅ (any attribute marked "Filterable" on the Attributes screen becomes a filter); in stock ✅; on sale ✅; seller ➖ (not a marketplace) | — | For a fashion shop, filtering by size and colour is basic |
 | Sort by relevance, price, newest, popularity, rating, discount | ✅ | Popular, newest, price both ways, rating, biggest discount | — | |
 | Grid/list view toggle | ✅ | | — | |
 | Pagination, "load more" or infinite scroll | ✅ | Numbered pages | — | Pages are better for Google than infinite scroll |
@@ -94,15 +97,15 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Short and full descriptions, specifications table | ✅ | | — | |
 | Size guide or chart | ✅ | A size-guide page, with a link from the product | — | Fewer size returns |
 | Delivery estimate by postcode or area | ✅ | The zones' days and charges, with a district picker on the product page | — | |
-| Shipping, return, warranty info | 🟡 | COD line, policy pages; no warranty field | Later | A warranty line per product can go in specifications today |
+| Shipping, return, warranty info | 🟡 | COD line, policy pages; no warranty field | **Skip** (warranty field) | A warranty line per product can go in specifications today, so a separate field isn't worth building |
 | Reviews with photos, helpful votes, verified badge | ✅ | Reviews, verified purchase, shop replies, photos; helpful votes ❌ | — | Photo reviews build trust for clothes (*owner's call:* no helpful votes) |
 | Customer Q&A | ✅ | | — | |
 | Related, similar, frequently bought together, customers also viewed | ✅ | "You May Also Like" (same category), "More from", and the admin's related picks shown first | — | "Frequently bought together" needs order history to mean anything, so it waits |
 | Recently viewed products | ✅ | Kept in the browser | — | |
-| Bundle offers, bulk/tier pricing | 🟡 | Bulk/tier prices ✅; buy X get Y promotions ✅; gift boxes ✅; no fixed "bundle" product | Later | Promotions already cover "buy 2 save 10%" |
+| Bundle offers, bulk/tier pricing | 🟡 | Bulk/tier prices ✅; buy X get Y promotions ✅; gift boxes ✅; no fixed "bundle" product | **Skip** (bundle product) | Promotions and gift boxes already cover "buy 2 save 10%", so a fixed bundle product isn't worth building |
 | Social share buttons | ✅ | The phone's share menu, else a real copy of the link | — | |
 | "Notify me when back in stock" | ✅ | A "Notify me" button on every sold-out product or size; the shopper gets an SMS or email when it is back | — | Popular sizes sell out, and this wins the sale back (*owner's call*) |
-| Price drop alerts | ❌ | | **No** | Little use in a small shop; back-in-stock alerts matter more |
+| Price drop alerts | ❌ | | Later | The back-in-stock alerts built in Batch 54 already store a product and a contact and send SMS or email, so this is a small step from there |
 | Product comparison | ❌ | The database has an unused `CompareItem` table | **No** (for fashion) | Comparison helps with electronics specs, not clothes. Revisit for an electronics storefront |
 | Seller info (marketplaces) | ➖ | | **No** | We aren't a marketplace (section 2) |
 | EMI/installment info | 🟡 | No fake line any more (bug B2) | Later | Real EMI only through SSLCommerz's EMI option, shown only when the shop turns it on |
@@ -191,7 +194,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Free shipping offers | ✅ | | — | |
 | First-order discounts | ✅ | First-order coupons | — | |
 | Spin-the-wheel, pop-up offers | 🟡 | Pop-up offers ✅ (promotion slot); spin wheel ❌ | **No** (spin wheel) | Feels cheap and adds little; a pop-up with a coupon does the same job |
-| Exit-intent pop-ups | ❌ | | Later | A small trigger on the existing pop-up; desktop only, and most BD traffic is mobile |
+| Exit-intent pop-ups | ❌ | | **Skip** (exit-intent) | A small trigger on the existing pop-up, desktop only, and most BD traffic is mobile — not worth it |
 | Newsletter signup | ✅ | | — | |
 | Push notifications | ❌ | | Later | iPhones need the site installed first; SMS and WhatsApp reach BD shoppers better |
 | Abandoned cart reminders | ✅ | Email and SMS/WhatsApp reminders on a schedule, once each, quiet at night, with the settings screen and a report | — | One of the best money-makers |
@@ -253,7 +256,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Feature | Status | What we have | Add? | Why |
 |---|---|---|---|---|
 | Sales overview (today, week, month, custom) | ✅ | | — | |
-| Revenue, orders, AOV, conversion rate | 🟡 | Revenue, orders, AOV ✅; conversion ❌ | Later | Needs visitor counts; Google Analytics (below) gives it |
+| Revenue, orders, AOV, conversion rate | 🟡 | Revenue, orders, AOV ✅; conversion ❌ | **Skip** (conversion rate) | Google Analytics (below) reports conversion rate for free, so building our own isn't worth it |
 | Charts and graphs | ✅ | | — | |
 | Top-selling products and categories | ✅ | | — | |
 | Low stock alerts | ✅ | Staff alerts by bell, email, SMS | — | |
@@ -266,7 +269,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Feature | Status | What we have | Add? | Why |
 |---|---|---|---|---|
 | Add, edit, delete, duplicate | ✅ | Add, edit, duplicate, trash and restore | — | |
-| Types: simple, variable, digital, bundle, subscription, service | 🟡 | Simple and variable ✅; the unbuilt types are hidden (bug B4); bundle ❌; service ❌ | Later (digital) · **No** (others) | Build digital only for a shop that sells e-books or courses; bundles are covered by promotions and gift boxes |
+| Types: simple, variable, digital, bundle, subscription, service | 🟡 | Simple and variable ✅; the unbuilt types are hidden (bug B4); bundle ❌; service ❌ | **Skip** (digital, bundle, subscription) · **No** (service) | Digital products, bundles and subscriptions all have better answers here (promotions and gift boxes, or a different platform), so none of them is worth building |
 | Variants and attributes | ✅ | Variant generator | — | |
 | Multiple images and videos | ✅ | Images and one video per product | — | |
 | SKU and barcode generation | 🟡 | SKU (auto for variants) ✅; barcode field ✅; no barcode generation or printing | Later | With barcode scanning (inventory) |
@@ -294,7 +297,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 | Brand management | ✅ | | — | |
 | Attributes and attribute sets | 🟡 | Attributes ✅; sets ❌ | **No** | Sets matter with hundreds of product kinds; one shop's attributes fit on one screen |
 | Collections (manual or rule-based) | ❌ | | Later | See storefront collections |
-| Filter configuration | ✅ | Choose which attributes show as filters on the product list | — | Comes with the size/colour filters |
+| Filter configuration | ✅ | Marking an attribute "Filterable" on the Attributes screen makes it a filter on the product list; the filter panel is built from those attributes | — | Comes with the size/colour filters |
 
 ### Inventory management
 | Feature | Status | What we have | Add? | Why |
@@ -503,7 +506,7 @@ Checked on 2026-10-29 against `main` (Batches 1–50 plus the store-isolation fi
 |---|---|---|---|---|
 | Multi-store management from one panel | ✅ | Super admin; several storefronts per store | — | |
 | B2B: wholesale, quotes, company accounts, purchase approvals | 🟡 | Wholesale prices, quotations, business accounts ✅; purchase approvals ❌ | **No** (approvals) | Only big corporate buyers need approval chains |
-| Subscription and recurring orders | ❌ | | Later | For grocery or cosmetics shops |
+| Subscription and recurring orders | ❌ | | **Skip** (subscriptions) | For grocery or cosmetics shops, which we don't run — a shop that needs it is better on a platform built for it |
 | POS for physical stores | 🟡 | Manual orders with source "walk-in" | Later | A real POS screen if a shop has a counter |
 | ERP and accounting integration | 🟡 | Our own purchasing, accounts and profit reports | **No** | *Owner's call:* not needed; our own purchasing and accounts are enough |
 | Omnichannel (Facebook Shop, Instagram, Google Shopping, Daraz) | ✅ | Facebook and Google product feeds, plus an order source per channel; Daraz as a manual-order source | — | A Facebook/Google product feed powers catalogue ads (*owner's call:* orders from these channels are entered as manual orders). Daraz sync later |
@@ -532,6 +535,8 @@ Sizes: **M** about one batch of normal work, **L** a large batch. A phase can be
 
 **Admin and super admin screens:** built for laptop screens only (owner's call); phone layouts are not a goal.
 
-**Later, when a shop needs it:** countdown in the announcement bar; recent searches; rule-based collections; warranty field; "frequently bought together"; bundle products; real EMI; save for later; gift cards; advance payment on COD; "My reviews"; notification settings; exit-intent pop-up; push; affiliates; personalised recommendations; cookie banner; accessibility audit; captcha; conversion rate and a "to do" card on the dashboard; digital products; barcodes; custom labels; bulk price and stock edit; category banner and drag-and-drop order; hide-when-out-of-stock; return pickup booking; editable return reasons; Paperfly; own riders; customer notes; email campaigns; recommendation rules; device list; required checkout fields; webhooks; subscriptions; POS; AI descriptions.
+**Later, when a shop needs it:** countdown in the announcement bar; recent searches; rule-based collections; "frequently bought together"; real EMI; save for later; gift cards; advance payment on COD; "My reviews"; notification settings; push; affiliates; personalised recommendations; cookie banner; accessibility audit; captcha; a "to do" card on the dashboard; price-drop alerts; barcodes; custom labels; bulk price and stock edit; category banner and drag-and-drop order; hide-when-out-of-stock; return pickup booking; editable return reasons; Paperfly; own riders; customer notes; email campaigns; recommendation rules; device list; required checkout fields; webhooks; POS; AI descriptions.
 
-**Not planned, with reasons above:** marketplace features, foreign payments (Apple/Google Pay, PayPal, Stripe, Razorpay), BNPL, saved cards, multi-currency, languages beyond Bangla and English, RTL, voice and image search, AR, 360° photos, price-drop alerts, product comparison, spin wheel, fake social proof, Instagram feed, blog comments, helpful votes, multiple wishlists, Apple sign-in, customer 2FA, address autocomplete, custom order statuses, attribute sets, batch/expiry tracking, A/B testing, plugins, cache button, invoice designer, own live chat and ticket system, IP allow-list, ERP link, mobile admin app.
+**Dropped on the 2026-11-02 recheck (were on the Later list):** warranty field per product; bundle products; exit-intent pop-ups; digital products; subscriptions; our own conversion-rate figure (Google Analytics gives it). Price-drop alerts moved the other way — from the Not-planned list to **Later** — because the back-in-stock alerts already store a product and a contact and send SMS or email.
+
+**Not planned, with reasons above:** marketplace features, foreign payments (Apple/Google Pay, PayPal, Stripe, Razorpay), BNPL, saved cards, multi-currency, languages beyond Bangla and English, RTL, voice and image search, AR, 360° photos, product comparison, spin wheel, fake social proof, Instagram feed, blog comments, helpful votes, multiple wishlists, Apple sign-in, customer 2FA, address autocomplete, custom order statuses, attribute sets, batch/expiry tracking, A/B testing, plugins, cache button, invoice designer, own live chat and ticket system, IP allow-list, ERP link, mobile admin app, plus the six dropped on the 2026-11-02 recheck (above).

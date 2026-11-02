@@ -19,6 +19,284 @@ browser ──▶ │ Caddy :443 ─▶ storefront · store-admin · super-admin
   - `docker/Caddyfile`: the web addresses;
   - `.env.production.example`: every setting, explained.
 
+---
+
+## 0. Your first deployment: do these ten steps in order
+
+**New to deploying?** Work down this section. Each step says what to do, what to type, and how to tell it worked. Sections 1–13 below are the detailed reference; you only need them if something goes wrong.
+
+### Words you'll meet
+
+| Word | What it means here |
+|---|---|
+| **Server** | A computer you rent that is never switched off, sitting in a data centre. Everything (shop, admin, API, database) runs on this one machine. |
+| **Domain** | The name people type, e.g. `shop.com`. You buy it once a year. |
+| **DNS** | The address book that turns a name into the server's IP address. You add records at whoever you bought the domain from. |
+| **A record** | One line of DNS: "this name → this IP". You'll add five. |
+| **SSH** | How you type commands on the server from your own computer. |
+| **Docker / containers** | The server runs each part of the platform in its own sealed box. **Docker Compose** starts all the boxes together from one file. |
+| **Image** | The sealed box itself, built by GitHub and downloaded by the server. The server never builds anything. |
+| **`.env`** | One text file on the server holding every setting and password. Never in git. |
+| **Caddy** | The front door. It handles HTTPS (the padlock) by itself, for free. |
+
+### What you'll end up with
+
+Five web addresses, all on the one server:
+
+| Address | What it is |
+|---|---|
+| `shop.com`, `www.shop.com` | The storefront — customers shop here |
+| `admin.shop.com` | The store admin — the shop owner runs the business here |
+| `super.shop.com` | The super admin — you run the whole platform here |
+| `api.shop.com` | The API — the engine the three apps talk to; not for browsing |
+
+---
+
+### Step 1 — Create the accounts (your side, roughly an hour)
+
+Costs today: **the domain**. Oracle, Cloudflare R2 and Brevo all have free tiers; SMS and courier test bookings cost a little later.
+
+Keep one notes file with everything you create here: the server's IP, the domain, bucket names, keys. You'll paste these into `.env` in step 5.
+
+**1a. Buy a domain.** Any registrar. About 1,200–1,500 BDT a year for a `.com`. Do **not** use a free subdomain (like DuckDNS): the admin and API addresses can't share login cookies on those, and sign-in breaks.
+
+**1b. An Oracle Cloud server (free).**
+1. Sign up at oracle.com/cloud/free. It asks for a card to check who you are; it is not charged. Some cards are refused.
+2. Choose a **home region** near Bangladesh: Singapore or Mumbai.
+3. Create a compute instance:
+   - **Image:** Ubuntu 24.04 (the ARM/aarch64 build),
+   - **Shape:** `VM.Standard.A1.Flex`, 4 OCPU / 24 GB RAM (that's the whole Always Free allowance),
+   - **SSH keys:** let it create one and **download the private key file** — you need it to log in, and it can't be downloaded again.
+4. **Open the web ports.** Two firewalls are involved on Oracle, and both block HTTPS by default:
+   - in the console: the instance's subnet → Security List → add ingress rules for **TCP 80** and **TCP 443** from `0.0.0.0/0`;
+   - on the machine: step 4 below runs `ufw`.
+5. Note the instance's **public IP address**.
+6. Check you can get in:
+   ```bash
+   ssh -i <your-key-file> ubuntu@<server-ip>
+   ```
+
+   **Catches:** free ARM servers are sometimes "out of capacity" in a region — try again later or pick another region. Oracle may reclaim a free server that sits idle for a week; that stops being a risk once testers are using it.
+
+**1c. Cloudflare R2 storage (free, 10 GB).** This holds product photos and the nightly database backups.
+1. Make a Cloudflare account, then R2 → **Create bucket** twice: `shop-media` (product photos) and `shop-backups` (database backups).
+2. On `shop-media`, turn on public access (the R2.dev address, or a custom domain like `media.shop.com`). `shop-backups` stays private.
+3. R2 → **Manage API tokens** → create one with access to both buckets. It gives you an **Access Key ID** and a **Secret Access Key**, plus your endpoint that looks like `https://<account-id>.r2.cloudflarestorage.com`.
+
+**1d. Brevo email (free, 300 emails a day).** Order confirmations and password resets go through this.
+1. Sign up at brevo.com, then **verify a sender address** (e.g. `no-reply@shop.com`) — Brevo won't send from an unverified address.
+2. SMTP settings: host `smtp-relay.brevo.com`, port `587`, and a **SMTP key** as the password.
+
+---
+
+### Step 2 — Point the domain at the server (DNS)
+
+At your registrar's DNS screen, add five **A records**, all pointing at the server's IP from step 1b:
+
+| Type | Name | Value |
+|---|---|---|
+| A | `@` | `<server-ip>` |
+| A | `www` | `<server-ip>` |
+| A | `admin` | `<server-ip>` |
+| A | `super` | `<server-ip>` |
+| A | `api` | `<server-ip>` |
+
+- TTL can stay at its default or "auto".
+- Wait a few minutes, then check from your own computer:
+  ```bash
+  nslookup api.shop.com
+  ```
+  It must answer with your server's IP. **Do this before starting the platform** — Caddy can only get the padlock certificates once the names already point at the server.
+- **If your domain's DNS is managed by Cloudflare,** set these five records to **DNS only** (grey cloud), not "Proxied" (orange cloud) at first. Proxying hides the server from Caddy and the certificates fail. You can turn proxying on later.
+
+---
+
+### Step 3 — Let GitHub build the images
+
+1. In the GitHub repository: **Settings → Secrets and variables → Actions → Variables** tab, add three repository variables:
+
+   | Variable | Value |
+   |---|---|
+   | `PUBLIC_API_URL` | `https://api.shop.com/api` |
+   | `PUBLIC_SITE_URL` | `https://shop.com` |
+   | `PUBLIC_STORE_ADMIN_URL` | `https://admin.shop.com/login` |
+
+   These get baked into the web apps when they're built, so use your real addresses. Changing them later means rebuilding (push to `main` again).
+
+2. Push to `main`, then open the repository's **Actions** tab and watch the **Docker images** job. It builds four images (API, storefront, store admin, super admin) for both processor types. **The ARM half runs under emulation and is slow — expect this job to take a long time.** Coffee-break long.
+3. When it's green, the images exist as `ghcr.io/<your-github-name>/ecom-api` and three more (see the repository's **Packages**).
+
+Optional: add `PUBLIC_SENTRY_DSN` as well if you've set up Sentry (section 7).
+
+---
+
+### Step 4 — Prepare the server
+
+Log in (`ssh -i <your-key-file> ubuntu@<server-ip>`) and run, one block at a time:
+
+```bash
+# Docker, the program that runs everything
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # then sign out and back in for this to take effect
+
+# The machine's own firewall: only SSH and the web
+sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443 && sudo ufw enable
+```
+
+The images are private, so the server must sign in to GitHub's registry. Make a GitHub **personal access token** with the **read:packages** permission, then:
+
+```bash
+echo <token> | docker login ghcr.io -u <your-github-name> --password-stdin
+```
+
+Now put the three deployment files on the server. The server needs the files, not the source code:
+
+```bash
+mkdir -p ~/ecom/docker && cd ~/ecom
+curl -fsSLO https://raw.githubusercontent.com/<owner>/ecom/main/docker-compose.prod.yml
+curl -fsSL -o docker/Caddyfile https://raw.githubusercontent.com/<owner>/ecom/main/docker/Caddyfile
+curl -fsSL -o .env https://raw.githubusercontent.com/<owner>/ecom/main/.env.production.example
+chmod 600 .env
+```
+
+**If your repository is private, those `curl` commands return 404.** Copy the three files from your own computer instead (run this on your computer, not the server):
+
+```bash
+scp -i <your-key-file> docker-compose.prod.yml docker/Caddyfile .env.production.example ubuntu@<server-ip>:~/ecom/
+```
+
+…then on the server rename the last one: `mv .env.production.example .env && chmod 600 .env`, and move `Caddyfile` into `docker/`. (`scp` can't create the folder, so run `mkdir -p ~/ecom/docker` on the server first.)
+
+---
+
+### Step 5 — Fill in `.env`
+
+`nano ~/ecom/.env` and replace **every** `<…>`. Two rules:
+
+- **Every secret must be different.** Make each one on the server with:
+  ```bash
+  openssl rand -hex 32
+  ```
+- **Never reuse a value from this guide or from a local `.env`.** In production the API refuses to start with weak or placeholder secrets, local addresses (localhost) or the local mail catcher — it prints which setting to fix.
+
+The blocks you'll edit, and what goes in them:
+
+| Block | What to put |
+|---|---|
+| Images | `GHCR_OWNER` = your GitHub name, lowercase. Leave `IMAGE_TAG=latest`. |
+| Domains | `ACME_EMAIL` = your email (certificate notices); `SHOP_DOMAIN=shop.com`; `SHOP_DOMAINS=shop.com, www.shop.com`; `ADMIN_DOMAIN`, `SUPER_DOMAIN`, `API_DOMAIN`; `COOKIE_DOMAIN=shop.com`; `ALLOWED_ORIGINS_REGEX=^https://([a-z0-9-]+\.)?shop\.com$` (your domain, dots escaped). Cancel the "conflict" if one comes up. |
+| Database | `POSTGRES_PASSWORD` = a new secret (24 bytes), and put the **same** value inside `DATABASE_URL` and `DIRECT_URL`. |
+| Redis | `REDIS_PASSWORD` = a new secret, same value inside `REDIS_URL`. |
+| Storage | `S3_ENDPOINT` = your R2 endpoint; `S3_BUCKET=shop-media`; the R2 access key and secret; `S3_PUBLIC_URL` = the public R2.dev address or `https://media.shop.com`; `BACKUP_S3_BUCKET=shop-backups`. |
+| Secrets | One new `openssl rand -hex 32` value each, for the six `JWT_*` secrets, `COOKIE_SECRET` and `APP_ENCRYPTION_KEY`. |
+| Email | `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_ENCRYPTION=tls`, the Brevo SMTP **key** as `SMTP_PASS`, `SMTP_USER` as given by Brevo, and `MAIL_FROM_ADDRESS` = your **verified** sender. |
+| First start only | `BOOTSTRAP_EMAIL` and `BOOTSTRAP_PASSWORD` — your own super-admin login for the first sign-in. |
+
+**Copy `APP_ENCRYPTION_KEY` somewhere safe, off the server.** The payment, courier and SMS keys the shop later saves in the admin are encrypted with it; without it they can't be read back.
+
+Save with `Ctrl+O`, `Enter`, then `Ctrl+X`.
+
+---
+
+### Step 6 — Start everything
+
+```bash
+cd ~/ecom
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+```
+
+**How to tell it worked:**
+- `ps` shows every service **running**, except `migrate`, which shows **exited (0)** — that's correct: it sets up the database tables, then stops on purpose. The API and the background worker wait for it.
+- When you visit `https://shop.com`, the padlock appears on its own (Caddy asked Let's Encrypt for a certificate).
+- If the API keeps restarting, read why:
+  ```bash
+  docker compose -f docker-compose.prod.yml logs api | grep -A20 FATAL
+  ```
+  It names the setting to fix in `.env`.
+
+---
+
+### Step 7 — Create the platform owner, then the shop
+
+**The platform owner** (you) — this is the only time `BOOTSTRAP_*` is used:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm api ./node_modules/.bin/tsx scripts/bootstrap.ts
+```
+
+It creates the owner from `BOOTSTRAP_EMAIL`/`BOOTSTRAP_PASSWORD` and nothing else, and refuses if an owner already exists. **Then delete those two lines from `.env`.** Never run the demo seed (`prisma:seed`) in production.
+
+Then, in the browser:
+
+1. Sign in at `https://super.shop.com`. Open **My account** and turn on **two-step sign-in** straight away.
+2. **Stores → New store.** This is where the shop's first owner account is created.
+3. Add the store's **domains** (storefront `shop.com` and `www.shop.com`, admin `admin.shop.com`). This is how the API knows which shop a request belongs to.
+4. Sign in at `https://admin.shop.com` as the shop owner and fill in the store's settings: payments, couriers, SMS, shipping, taxes. Turn on two-step sign-in here too; **Staff → "Require two-step sign-in for all staff"** is recommended.
+
+The platform is now live and empty.
+
+---
+
+### Step 8 — Backups and monitoring
+
+- **Backups run by themselves** every night at 02:30 Dhaka time, to the server and to the private `shop-backups` bucket, keeping the last 7 nights plus one from each of the last 4 weeks. Check it once:
+  ```bash
+  C="docker compose -f docker-compose.prod.yml"
+  $C logs backup | tail        # expect "Database backup done"
+  ```
+- **Test a restore once a month.** It restores into a scratch database and compares it; nothing live is touched:
+  ```bash
+  $C exec backup ./node_modules/.bin/tsx scripts/restore.ts latest --test
+  ```
+- **Error reports (optional):** create a free Sentry project (platform Node.js), put its DSN in `SENTRY_DSN` in `.env` **and** as the GitHub variable `PUBLIC_SENTRY_DSN`, then `up -d` and push to `main` (the browser side is baked in at build).
+- **Uptime:** add free checks (UptimeRobot or similar) on `https://api.shop.com/readyz` and `https://shop.com`. `/readyz` returns 200 when the database, Redis and the background worker are healthy, and 503 with the reason when they aren't.
+
+---
+
+### Step 9 — The testing phase, with real testers
+
+1. Put payment gateways in **sandbox mode** (store admin → Settings → Payments) and use the test SMS/courier setups available there.
+2. **Hide the site from Google** while it's a test: store admin → Online store → Theme → block all search engines.
+3. Fill the shop with demo data people can click around on. The demo shop script (`scripts/demo/index.ts`) **refuses to run on a production server**, and this server is one, so pick a way round it:
+   ```bash
+   C="docker compose -f docker-compose.prod.yml"
+   $C run --rm api ./node_modules/.bin/tsx scripts/demo/index.ts --shop-host shop.com --admin-host admin.shop.com
+   ```
+   - **Testing with made-up data:** add `PRODUCTION_REHEARSAL=on` to `.env` and run it. It creates a made-up shop (products, orders, reviews, staff, customers). Understand the trade-off: that switch also relaxes the API's production checks elsewhere, so it is a switch for a server you are still testing — **remove it before real trading.**
+   - **No demo data:** skip this and fill the shop by hand, then test with your own products. This is what a live shop needs anyway.
+4. Have the team work through `TESTING_CHECKLIST.md` — that list is written for exactly this stage.
+
+---
+
+### Step 10 — Go live
+
+1. Switch the gateways to **live keys**, and the couriers and SMS to live accounts.
+2. Turn **off** the "block all search engines" switch.
+3. **Wipe the test data before real trading** — this deletes everything, so only do it when testing is finished:
+   ```bash
+   cd ~/ecom
+   docker compose -f docker-compose.prod.yml down -v
+   ```
+   Then start again (step 6), re-run `bootstrap.ts`, and add the real shop by hand (step 7). A real shop should start empty.
+4. Stay on the free server while traffic is small. Moving to a paid one later is easy — everything runs in Docker.
+
+---
+
+### If something goes wrong
+
+| What you see | What it usually is |
+|---|---|
+| `shop.com` won't load, or no padlock | DNS not pointing at the server yet (check with `nslookup`), or ports 80/443 still closed — **remember Oracle has its own Security List as well as `ufw`.** See why: `docker compose -f docker-compose.prod.yml logs caddy` |
+| The API container restarts over and over | A `.env` value is still a placeholder or a local address: `logs api \| grep -A20 FATAL` names it |
+| "No space left on device" | Disk full: `docker image prune -f`, and check what the backups volume is using |
+| You can't sign in at `admin.shop.com` (but the storefront works) | `COOKIE_DOMAIN` doesn't match the domain, or you used a free subdomain domain — see step 1a |
+| Product photos show as broken images | Wrong `S3_ACCESS_KEY`/`S3_SECRET_KEY`, or `S3_PUBLIC_URL` isn't the bucket's public address |
+| Oracle says "out of capacity" | Free ARM servers are popular; retry later, or use another region. Fallback: a paid ARM server elsewhere (section 13) |
+
+---
+
 ## 1. Before you start
 
 | You need | Notes |
@@ -278,10 +556,10 @@ The machine was the limit: the storefront used the most CPU, then the API copies
    - create the accounts: Oracle Cloud, Cloudflare (R2), Brevo;
    - buy the domain;
    - signups and payments are yours to do; nobody else should enter your card or passwords.
-2. **Code side (one change):** the Oracle server is ARM, and CI builds images only for Intel/AMD servers. Add `linux/arm64` to the image build in `.github/workflows/ci.yml` (`platforms: linux/amd64,linux/arm64`). Builds get slower. Alternative: build on the server with `scripts/build-rehearsal-images.sh`, changed to the real addresses.
+2. **Code side (done on 2026-11-02):** the Oracle server is ARM, and CI built images only for Intel/AMD servers. `.github/workflows/ci.yml` now sets `platforms: linux/amd64,linux/arm64` and sets up QEMU, with the job's timeout raised to 90 minutes because the ARM half is built under emulation. If that turns out too slow, the alternative is to build on the server with `scripts/build-rehearsal-images.sh`, changed to the real addresses.
 3. **Deploy:** sections 2–7 of this guide, with the domain's addresses, R2 for backups and Brevo for SMTP.
 4. **Test phase:**
-   - run the demo shop (section 11, `scripts/demo/index.ts`, with the real domain's `--shop-host`, `--admin-host` and `--outlet-host`);
+   - run the demo shop (step 9 — on a real server it needs `PRODUCTION_REHEARSAL=on`, and that switch comes off again before trading);
    - hide the site from Google: store admin → Online store → Theme, "block all" search engines;
    - put the gateways in sandbox mode;
    - the team works through `TESTING_CHECKLIST.md`.
