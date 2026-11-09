@@ -26,7 +26,9 @@ describe.skipIf(!runDb)("Batch 58 split payment, customer names, activity log (P
     ;({ FulfilmentService: Fulfilment } = await import("../../src/modules/fulfilment/fulfilment.service"))
     ;({ logSystem } = await import("../../src/modules/team/audit"))
     storeId = (await prisma.store.create({ data: { name: "B58 Shop", slug: `b58-${suffix}` } })).id
-    owner = { storeId, requestId: "test", locale: "en", currency: "BDT", admin: { id: 1n, role: "OWNER", permissions: ["*"] } }
+    const role = await prisma.role.create({ data: { storeId, name: "Owner", slug: "owner", isSystem: true } })
+    const adminId = (await prisma.adminUser.create({ data: { storeId, email: `o-${suffix}@x.test`, name: "Owner", passwordHash: "x", roleId: role.id } })).id
+    owner = { storeId, requestId: "test", locale: "en", currency: "BDT", admin: { id: adminId, role: "OWNER", permissions: ["*"] } }
     await prisma.paymentGatewayConfig.create({ data: { storeId, code: "cod", name: "Cash on delivery", enabled: true } })
     productId = (await prisma.product.create({ data: { storeId, name: "Cotton Panjabi", slug: `pj-${suffix}`, status: "published", regularPrice: 2500, manageStock: false } })).id
   })
@@ -38,6 +40,8 @@ describe.skipIf(!runDb)("Batch 58 split payment, customer names, activity log (P
     await prisma.order.deleteMany({ where: { storeId } })
     await prisma.customer.deleteMany({ where: { storeId } })
     await prisma.product.deleteMany({ where: { storeId } })
+    await prisma.adminUser.deleteMany({ where: { storeId } })
+    await prisma.role.deleteMany({ where: { storeId } })
     await prisma.store.delete({ where: { id: storeId } })
     await prisma.$disconnect()
   })
@@ -61,7 +65,7 @@ describe.skipIf(!runDb)("Batch 58 split payment, customer names, activity log (P
     expect(o.deliveryBy).toBe("own")
     expect(o.paymentRecords.map((p) => [p.kind, p.method, Number(p.amount)]).sort()).toEqual([["cash", "cash", 500], ["transfer", "bkash", 1000]])
     const parcel = await new Fulfilment(owner).createParcel(o.id, { courierCode: "own", courierName: "Own delivery" } as never)
-    expect(Number(parcel.codAmount)).toBe(2560 - 1500)
+    expect(Number(parcel.codAmount)).toBe(Number(o.grandTotal) - 1500) // the total includes the default 15% VAT
   })
 
   it("refuses payments that add up to more than the order", async () => {
@@ -73,6 +77,11 @@ describe.skipIf(!runDb)("Batch 58 split payment, customer names, activity log (P
     const c = await prisma.customer.findFirstOrThrow({ where: { storeId, phone } })
     expect(c.otherNames).toContain("Karim Uddin")
     expect(await prisma.customer.count({ where: { storeId, phone } })).toBe(1)
+    // A first name alone stays alone: the account's last name isn't added to it.
+    await order({ customer: { firstName: "Rafi", phone } })
+    const again = await prisma.customer.findFirstOrThrow({ where: { storeId, phone } })
+    expect(again.otherNames).toContain("Rafi")
+    expect(again.otherNames).not.toContain("Rafi Akter")
   })
 
   it("writes system entries to the activity log", async () => {

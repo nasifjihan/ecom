@@ -368,7 +368,8 @@ export class ManualOrderService {
       });
     } else {
       // Same phone, another name (someone ordering for a family member): remember the name.
-      const typed = `${dto.customer.firstName || quote.ship.firstName || ""} ${dto.customer.lastName || quote.ship.lastName || ""}`;
+      // Only what staff typed: the delivery name falls back to the account's own last name.
+      const typed = dto.customer.firstName ? `${dto.customer.firstName} ${dto.customer.lastName ?? ""}` : `${quote.ship.firstName ?? ""} ${quote.ship.lastName ?? ""}`;
       const names = withOtherName(customer, typed);
       if ((!customer.phone && phone) || names)
         customer = await prisma.customer.update({ where: { id: customer.id }, data: { ...(!customer.phone && phone ? { phone } : {}), ...(names ? { otherNames: names } : {}) } });

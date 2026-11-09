@@ -7083,3 +7083,34 @@ Docker and the API ran on this PC (Postgres was also published on port 5433, whi
 - **Tests without a database:** 70 files and 868 tests pass. New: `batch58.test.ts` (other names, profile links, paid before delivery, COD still due, naming platform actions).
 - **Bangla check:** passes.
 - **Not run:** the new `batch58.db.test.ts` (split payment and the parcel's COD, the over-total refusal, other names, a system log entry), and the admin screens in a browser. `TESTING_CHECKLIST.md` section L lists them.
+
+---
+
+## ✅ BATCH 58 CHECKS — DB test, full suite and the admin screens (2026-11-09)
+The checks Batch 58 left open were run on this PC (Docker Postgres/Redis, API on 4000, store admin on 3101, signed in as the seed owner).
+
+### Database tests
+- **`batch58.db.test.ts`:** 4/4 pass on `ecom_test` (migration applied there first). Two fixes in the test itself:
+  - It used admin id 1, which doesn't exist in `ecom_test`, so the payment note's foreign key failed. It now creates its own owner and role, and removes them afterwards.
+  - It expected the courier to collect ৳2560 − ৳1500, leaving out the default 15% VAT the store adds when it has no tax rules (`shipping.repository.ts`). It now compares with the order's own total. The code was right: ৳2944 − ৳1500 = ৳1444.
+- **Full API suite on real Postgres:** 117 files, 1105 tests, all pass.
+
+### Bug fixed — a name nobody typed was saved as an "other name"
+New order for a known phone with only a first name ("Rafi") saved "Rafi Ahmed" — the delivery name falls back to the account's last name, and `manual-order.ts` built the other name from it. Now, when staff type a first name, only what they typed is used. The DB test covers it (first name alone stays alone).
+
+### Small fix — React warning on every order page
+The parcels card put the status badge (a `<div>`) inside a `<p>` (`CardDescription`), which React reports as a hydration error. It's a `<div>` with the same look now. (From September, not Batch 58.)
+
+### Seen working in the admin (checklist L)
+- **Customers → Add:** a known phone shows "This number belongs to Ayesha Rahman (0 orders)" with Open customer, and Create is off. A new customer saves its source (TikTok) and links; the page opens `https://facebook.com/test.b58` and `https://wa.me/8801799958058`. Profile links adds an other name ("Also ordered as").
+- **New order:** the phone match note shows. ৳500 cash + ৳1,000 bKash with own delivery saved as partly paid, `deliveryBy=own`, two verified records. The order page shows "Goes out: Own delivery" and "৳1,950 due"; the parcel form starts on Own delivery with ৳1,950 to collect.
+- **Record a payment** on that COD order starts on Cash with ৳1,950; recording it made the order Paid.
+- **Orders:** Manual badge; "Manual orders only" (under Filters) left 8 orders, all manual.
+- **Activity log:** my test actions are listed under the owner's name; Who offers Staff / Platform team / System, and a system entry shows as "System · Steadfast".
+
+### Not checked
+- A platform-team change showing as "Platform team" (needs the super admin), "Make landing page", and the phone check on a real phone.
+- **Search:** an other name is found only when typed in full ("Rafi" doesn't find "Rafi Ahmed"), as Batch 58 noted.
+
+### Checked
+- Typecheck (api, store-admin) passes. Unit tests: 69 files, 846 tests pass (one run had a single failure that didn't repeat).

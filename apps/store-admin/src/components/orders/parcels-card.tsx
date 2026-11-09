@@ -10,7 +10,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Dialog,
@@ -135,12 +134,12 @@ export function ParcelsCard({ order, canEdit }: Props) {
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Truck className="h-4 w-4 text-indigo-600" /> Parcels
             </CardTitle>
-            <CardDescription className="text-xs mt-1">
+            <div className="text-muted-foreground text-xs mt-1">
               <Badge variant="outline" className={cn("font-medium", FULFILLMENT_STYLES[order.fulfillmentStatus])}>
                 {FULFILLMENT_LABELS[order.fulfillmentStatus] ?? order.fulfillmentStatus}
               </Badge>
               {unpacked > 0 && parcels.length > 0 && <span className="ml-2">{unpacked} unit(s) not packed</span>}
-            </CardDescription>
+            </div>
           </div>
           {canEdit && !closed && unpacked > 0 && (
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreating(true)}>
