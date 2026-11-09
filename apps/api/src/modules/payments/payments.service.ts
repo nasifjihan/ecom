@@ -28,6 +28,8 @@ import {
   settlementCode,
   transferPaymentStatus,
   trxIdProblem,
+  PREPAID_KINDS,
+  prepaidOf,
 } from "./payments.rules";
 import type {
   ConfirmCashDto,
@@ -37,6 +39,7 @@ import type {
   RejectDto,
   SettlementListDto,
   StaffTransferDto,
+  StaffCashDto,
   SubmitTransferDto,
   UpdatePaymentMethodDto,
   VerifyDto,
@@ -88,7 +91,7 @@ export class PaymentsService {
 
   /** Payment status and paid date from verified transfers and online payments; returns the new status. */
   async syncTransfers(t: T, orderId: bigint) {
-    const o = await t.order.findUniqueOrThrow({ where: { id: orderId }, include: { paymentRecords: { where: { kind: { in: ["transfer", "gateway"] }, status: "verified" }, orderBy: { checkedAt: "desc" } } } });
+    const o = await t.order.findUniqueOrThrow({ where: { id: orderId }, include: { paymentRecords: { where: { kind: { in: [...PREPAID_KINDS] }, status: "verified" }, orderBy: { checkedAt: "desc" } } } });
     const verified = r2(o.paymentRecords.reduce((s, r) => s + num(r.amount), 0));
     const status = transferPaymentStatus(o.paymentStatus, num(o.grandTotal), verified);
     await t.order.update({
@@ -115,7 +118,7 @@ export class PaymentsService {
   /** Summary of an order's payments for the customer (what's due, what's pending, rejections). */
   static transferState(o: { grandTotal: unknown; paymentStatus: string; paymentGatewayCode: string; paymentRecords: { kind: string; status: string; amount: unknown }[] }) {
     const transfers = o.paymentRecords.filter((r) => r.kind === "transfer");
-    const verified = o.paymentRecords.filter((r) => (r.kind === "transfer" || r.kind === "gateway") && r.status === "verified").reduce((s, r) => s + num(r.amount), 0);
+    const verified = prepaidOf(o.paymentRecords);
     const pending = transfers.some((r) => r.status === "to_verify");
     const due = ["paid", "refunded", "partially_refunded"].includes(o.paymentStatus) ? 0 : amountDue(num(o.grandTotal), verified);
     return { due, pending, canSubmit: isManualCapable(o.paymentGatewayCode) && due > 0 && !pending };
@@ -183,6 +186,28 @@ export class PaymentsService {
         link: "/orders/payments",
       });
     }
+    return this.record(created.r.id);
+  }
+
+  /** Cash staff took at the shop or by hand (part or all of the order); counts as paid at once. */
+  async recordCash(orderId: bigint, dto: StaffCashDto) {
+    const o = await this.order(orderId);
+    if (["CANCELLED", "FAILED", "REFUNDED"].includes(o.status)) throw new BadRequestError(`This order is ${o.status.toLowerCase()}`, "VALIDATION_FAILED");
+    const due = PaymentsService.transferState(o).due;
+    if (due <= 0) throw new BadRequestError("This order is already paid", "VALIDATION_FAILED");
+    const amount = r2(dto.amount ?? due);
+    if (amount > due + 0.009) throw new BadRequestError(`Only ${money(due)} is still due on this order`, "VALIDATION_FAILED");
+    const created = await tx(async (t: T) => {
+      const r = await t.paymentRecord.create({
+        data: {
+          storeId: this.storeId, orderId, kind: "cash", method: "cash", amount, status: "verified", moneyIsWith: "office",
+          submittedBy: "staff", note: dto.note || null, checkedById: this.adminId, checkedAt: new Date(),
+        },
+      });
+      await this.note(t, orderId, o.status, `Cash ${money(amount)} taken${dto.note ? `: ${dto.note}` : ""}`);
+      return { r, sync: await this.syncTransfers(t, orderId) };
+    });
+    await this.startIfPaid(orderId, created.sync);
     return this.record(created.r.id);
   }
 

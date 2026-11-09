@@ -76,7 +76,7 @@ export class OrdersService extends BaseService {
         (updateData as any).completedAt = new Date();
         // Cash on delivery is collected when the parcel is handed over.
         const o = order as { paymentGatewayCode?: string; paymentStatus?: string };
-        if (o.paymentGatewayCode === "cod" && o.paymentStatus === "unpaid") {
+        if (o.paymentGatewayCode === "cod" && (o.paymentStatus === "unpaid" || o.paymentStatus === "partially_paid")) {
           updateData.paymentStatus = "paid";
           updateData.paidAt = new Date();
         }

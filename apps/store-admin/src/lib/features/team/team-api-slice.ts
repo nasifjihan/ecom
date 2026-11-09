@@ -52,12 +52,16 @@ export interface AuditEntry {
   objectType: string;
   objectId: string;
   admin: { id: string; name: string; email: string } | null;
+  /** staff | platform (the platform team) | system (jobs, couriers, payment callbacks) */
+  actorType?: "staff" | "platform" | "system";
+  actorName?: string | null;
   changes: { method?: string; path?: string; by?: string; body?: unknown } | null;
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
 }
 export interface AuditQuery {
+  actor?: "staff" | "platform" | "system";
   page?: number;
   perPage?: number;
   adminId?: string;

@@ -38,6 +38,7 @@ import {
 import type { BookParcelDto, BulkBookDto, CreateAccountDto, UpdateAccountDto } from "./couriers.dto"
 import { alertStaffLater } from "../staff-alerts/staff-alerts.service"
 import { PARCEL_STUCK_DAYS } from "../staff-alerts/staff-alerts.rules"
+import { logSystem } from "../team/audit"
 
 type Account = Prisma.CourierAccountGetPayload<object>
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
@@ -672,6 +673,7 @@ export class CouriersService {
           note: `${COURIER_NAMES[courier]}: ${label}${state.message ? ` — ${state.message}` : ""}`,
         })
         moved.push(step)
+        logSystem(this.storeId, { by: COURIER_NAMES[courier], action: "parcel.status", objectType: "shipments", objectId: s.id, details: { parcel: s.code, status: step, courierStatus: state.status } })
       } catch (e) {
         logger.warn(
           { err: (e as Error).message, parcel: s.code, step },

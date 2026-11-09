@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto"
 import { Prisma } from "@prisma/client"
 import { logger, prisma } from "../../config"
+import { logSystem } from "../team/audit"
 import { BadRequestError, ConflictError, NotFoundError, type RequestContext } from "../../core"
 import { storeUrls } from "../content/store-details"
 import { bdMobile, smsParts } from "../sms/sms.rules"
@@ -162,13 +163,15 @@ async function startCampaign(c: { id: bigint; storeId: bigint; audience: Prisma.
   }
   for (let i = 0; i < rows.length; i += 1000) await prisma.smsCampaignRecipient.createMany({ data: rows.slice(i, i + 1000), skipDuplicates: true })
   await prisma.smsCampaign.update({ where: { id: c.id }, data: { recipients: rows.length } })
+  logSystem(c.storeId, { by: "SMS campaigns", action: "sms_campaigns.started", objectType: "sms_campaigns", objectId: c.id, details: { recipients: rows.length } })
 }
 
 /** Sends the next batch of one campaign; closes it when nobody is left. */
 async function sendBatch(c: { id: bigint; storeId: bigint; body: string; stopLink: boolean }) {
   const batch = await prisma.smsCampaignRecipient.findMany({ where: { campaignId: c.id, status: "pending" }, take: BATCH, orderBy: { id: "asc" } })
   if (!batch.length) {
-    await prisma.smsCampaign.updateMany({ where: { id: c.id, status: "sending" }, data: { status: "sent", finishedAt: new Date() } })
+    const closed = await prisma.smsCampaign.updateMany({ where: { id: c.id, status: "sending" }, data: { status: "sent", finishedAt: new Date() } })
+    if (closed.count) logSystem(c.storeId, { by: "SMS campaigns", action: "sms_campaigns.sent", objectType: "sms_campaigns", objectId: c.id })
     return 0
   }
   const sms = await smsFor(c.storeId)

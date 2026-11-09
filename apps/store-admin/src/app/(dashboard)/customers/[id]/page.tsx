@@ -65,6 +65,8 @@ import {
   type CustomerGroup,
 } from "@/lib/features/operations/operations-api-slice";
 import { useGetReviewsQuery } from "@/lib/features/marketing/marketing-api-slice";
+import { ProfileButton } from "@/components/customers/profile-dialog";
+import { SocialLinks } from "@/components/customers/social-fields";
 import { cn } from "@/components/ui";
 
 // Groups are store-defined; known names get a colour, anything else the neutral style.
@@ -179,8 +181,11 @@ export default function CustomerDetailPage() {
                     <Clock className="h-3 w-3" /> Last active {fd(c.lastActiveAt)}
                   </div>
                 )}
+                {!!c.otherNames?.length && <p className="text-xs text-slate-500">Also ordered as: {c.otherNames.join(", ")}</p>}
+                <SocialLinks value={c.social} />
               </div>
               <div className="flex flex-wrap sm:flex-col sm:items-end gap-2">
+                <ProfileButton customer={c} />
                 {c.email && (
                   <a href={`mailto:${c.email}`}>
                     <Button variant="outline" size="sm" className="gap-1.5">

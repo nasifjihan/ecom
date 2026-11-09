@@ -575,6 +575,8 @@ export class PlatformService extends BaseService {
       data: {
         storeId,
         adminId: owner.id,
+        actorType: "platform",
+        actorName: this.ctx.super ? (await prisma.platformAdmin.findUnique({ where: { id: this.ctx.super.id }, select: { name: true } }))?.name ?? null : null,
         action: "super.impersonate",
         objectType: "admin_user",
         objectId: String(owner.id),

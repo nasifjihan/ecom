@@ -3,7 +3,7 @@
 /** Make or edit a landing page: the product, the offer, the top of the page, blocks and the order form. */
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, Loader2, Megaphone, Search, ShoppingBag, X } from "lucide-react";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Skeleton, Textarea } from "@/components/ui";
@@ -15,6 +15,8 @@ import { errorText } from "@/lib/features/content/content-api-slice";
 import { usePickProductsQuery } from "@/lib/features/operations/manual-order-api-slice";
 import { pageLink, useLandingPageQuery, useSaveLandingPageMutation, type LandingInput } from "@/lib/features/landing/landing-api-slice";
 import { useCan } from "@/lib/permissions";
+import { useGetProductQuery } from "@/lib/features/catalog/catalog-api-slice";
+import type { HomepageSection } from "@/lib/features/content/content-api-slice";
 
 interface Picked {
   id: string;
@@ -102,6 +104,7 @@ function ProductChooser({ value, onChange }: { value: Picked | null; onChange: (
 export default function LandingPageEditor() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const search = useSearchParams();
   const isNew = params.id === "new";
   const { can } = useCan();
   const { data: page, isLoading } = useLandingPageQuery(params.id, { skip: isNew });
@@ -130,6 +133,31 @@ export default function LandingPageEditor() {
       metaDesc: page.metaDesc ?? "",
     });
   }, [page]);
+
+  // "Make landing page" from a product: a ready page from its name, pictures, text and price.
+  const fromProductId = isNew ? search.get("productId") : null;
+  const { data: fromProduct } = useGetProductQuery(fromProductId ?? "", { skip: !fromProductId });
+  useEffect(() => {
+    if (!fromProduct) return;
+    const pics = fromProduct.imageUrls ?? [];
+    const text = (fromProduct.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const blocks: HomepageSection[] = [
+      ...(text ? [{ type: "rich_text" as const, enabled: true, config: { content: text.slice(0, 5000) } }] : []),
+      ...(pics.length > 1 ? [{ type: "gallery" as const, enabled: true, config: { heading: "", columns: 3 as const, images: pics.slice(1, 10).map((url) => ({ url, alt: fromProduct.name, link: null })) } }] : []),
+    ];
+    setSlugTouched(false);
+    setForm((f) => ({
+      ...f,
+      title: fromProduct.name,
+      slug: toSlug(fromProduct.name),
+      product: { id: String(fromProduct.id), name: fromProduct.name, price: fromProduct.salePrice ?? fromProduct.regularPrice ?? null },
+      headline: fromProduct.name,
+      subheadline: (fromProduct.shortDescription ?? "").replace(/<[^>]*>/g, " ").trim().slice(0, 300),
+      heroImageUrl: pics[0] ?? null,
+      sections: withIds(blocks),
+      showReviews: true,
+    }));
+  }, [fromProduct]);
 
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const onTitle = (title: string) => setForm((f) => ({ ...f, title, slug: slugTouched ? f.slug : toSlug(title) }));

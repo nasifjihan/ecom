@@ -11,6 +11,8 @@ export interface OrderExtraFilters {
   hasCoupon?: boolean;
   /** Staff member who made the order by hand. */
   createdByAdminId?: bigint;
+  /** Entered by staff (true) or placed by customers (false). */
+  manual?: boolean;
   shippingZoneId?: bigint;
   minTotal?: number;
   maxTotal?: number;
@@ -22,6 +24,7 @@ export function orderExtraWhere(f: OrderExtraFilters): Prisma.OrderWhereInput {
   if (f.hasCoupon === true) where.couponUsed = { not: null };
   if (f.hasCoupon === false) where.couponUsed = null;
   if (f.createdByAdminId !== undefined) where.createdByAdminId = f.createdByAdminId;
+  else if (f.manual !== undefined) where.createdByAdminId = f.manual ? { not: null } : null;
   if (f.shippingZoneId !== undefined) where.shippingZoneId = f.shippingZoneId;
   if (f.minTotal !== undefined || f.maxTotal !== undefined) {
     where.grandTotal = {

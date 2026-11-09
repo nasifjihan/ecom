@@ -62,6 +62,7 @@ export class CustomerRepository extends BaseRepository<"customer"> {
         { lastName: { contains: filters.search, mode: "insensitive" } },
         { email: { contains: filters.search, mode: "insensitive" } },
         { phone: { contains: filters.search, mode: "insensitive" } },
+        { otherNames: { has: filters.search } },
       ];
     }
     const spentWhere: Record<string, unknown> = {};

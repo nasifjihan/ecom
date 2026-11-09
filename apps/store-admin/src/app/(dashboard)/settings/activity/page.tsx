@@ -37,6 +37,7 @@ export default function ActivityPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [objectType, setObjectType] = useState("");
+  const [actor, setActor] = useState<"" | "staff" | "platform" | "system">("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export default function ActivityPage() {
     perPage: 25,
     search: search.trim() || undefined,
     objectType: objectType || undefined,
+    actor: actor || undefined,
     from: from || undefined,
     to: to ? `${to}T23:59:59` : undefined,
   });
@@ -56,11 +58,20 @@ export default function ActivityPage() {
         <CardTitle className="flex items-center gap-2 text-lg">
           <Activity className="h-5 w-5" /> Activity log
         </CardTitle>
-        <p className="text-sm text-slate-500">Every change made in this admin: who, what, when and from where. Passwords and keys are never stored.</p>
+        <p className="text-sm text-slate-500">
+          Every change made in this admin, by the platform team on your store, and by the system (courier updates, online payments, reminders, campaigns): who, what, when and from where.
+          Passwords and keys are never stored.
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Input className="h-9 max-w-xs" placeholder="Search action or record id" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} aria-label="Search activity" />
+          <select className={SELECT} value={actor} onChange={(e) => { setActor(e.target.value as typeof actor); setPage(1); }} aria-label="Who">
+            <option value="">Anyone</option>
+            <option value="staff">Staff</option>
+            <option value="platform">Platform team</option>
+            <option value="system">System</option>
+          </select>
           <select className={SELECT} value={objectType} onChange={(e) => { setObjectType(e.target.value); setPage(1); }} aria-label="Type">
             <option value="">Everything</option>
             {(data?.objectTypes ?? []).map((t) => (
@@ -100,7 +111,10 @@ export default function ActivityPage() {
                     <TableRow className="cursor-pointer" onClick={() => setOpen(open === e.id ? null : e.id)}>
                       <TableCell>{open === e.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm">{when(e.createdAt)}</TableCell>
-                      <TableCell className="text-sm">{e.admin?.name ?? e.changes?.by ?? "—"}</TableCell>
+                      <TableCell className="text-sm">
+                        {e.admin?.name ??
+                          (e.actorType === "system" ? `System · ${e.actorName ?? ""}` : e.actorType === "platform" ? `Platform team · ${e.actorName ?? ""}` : e.changes?.by ?? "—")}
+                      </TableCell>
                       <TableCell className="text-sm font-medium">{describe(e)}</TableCell>
                       <TableCell className="font-mono text-xs">{e.objectId ? `${e.objectType} #${e.objectId}` : e.objectType}</TableCell>
                       <TableCell className="font-mono text-xs text-slate-500">{e.ipAddress ?? "—"}</TableCell>

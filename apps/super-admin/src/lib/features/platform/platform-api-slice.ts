@@ -112,7 +112,10 @@ export interface StoreAdmin {
 
 export interface AuditLog {
   id: string;
-  storeId: string;
+  /** Null for platform-wide actions (plans, the platform team). */
+  storeId: string | null;
+  actorType?: "staff" | "platform" | "system";
+  actorName?: string | null;
   action: string;
   objectType: string;
   objectId: string;

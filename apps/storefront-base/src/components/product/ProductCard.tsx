@@ -3,7 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Eye, Heart, ShoppingCart, Star } from "lucide-react";
+import { Eye, GitCompareArrows, Heart, ShoppingCart, Star } from "lucide-react";
+import { toast } from "sonner";
+import { MAX_COMPARE, addToCompare, removeFromCompare, useCompare } from "../../lib/compare";
 import {
   Card,
   CardContent,
@@ -62,6 +64,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [isHovered, setIsHovered] = React.useState(false);
   const [liked, setLiked] = React.useState(isWishlisted);
   const t = useT();
+
+  const compare = useCompare();
+  const compared = compare.has(product.id);
+  const handleCompare = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (compared) return removeFromCompare(product.id);
+    const r = addToCompare({ id: product.id, slug: product.slug, title: product.title, image: product.image });
+    if (r === "full") toast.error(t("You can compare up to {n} products", { n: MAX_COMPARE }));
+  };
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -189,6 +201,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               >
                 <Heart className={cn("h-4 w-4", liked && "fill-current")} />
               </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className={cn("h-9 w-9 rounded-full bg-background/90 backdrop-blur hover:bg-background", compared && "text-primary bg-primary/10")}
+                onClick={handleCompare}
+                aria-pressed={compared}
+                aria-label={compared ? t("Remove from compare") : t("Compare")}
+              >
+                <GitCompareArrows className="h-4 w-4" />
+              </Button>
             </div>
 
             <motion.div
@@ -232,7 +254,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               </div>
             )}
 
-            <div className="flex items-baseline gap-2 pt-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-1">
               <span className="font-bold text-foreground">
                 {formatMoney(product.price, currency)}
               </span>

@@ -83,3 +83,15 @@ export function settle(expected: number, charges: number, received: number): { s
 }
 
 export const settlementCode = (n: number) => `PAY-${String(n).padStart(4, "0")}`;
+
+// ------------------------------------------------------------------ paid before delivery
+
+/** Money that counts as paid before delivery: checked transfers, online payments and cash taken by staff. */
+export const PREPAID_KINDS = ["transfer", "gateway", "cash"] as const
+
+/** What an order has been paid before delivery (verified records only). */
+export const prepaidOf = (records: { kind: string; status: string; amount: unknown }[]) =>
+  r2(records.filter((r) => (PREPAID_KINDS as readonly string[]).includes(r.kind) && r.status === "verified").reduce((s, r) => s + Number(r.amount ?? 0), 0));
+
+/** The cash a courier (or the shop) still has to collect on a COD order. */
+export const codStillDue = (grandTotal: number, prepaid: number, otherParcelsCod: number) => Math.max(0, r2(grandTotal - prepaid - otherParcelsCod));

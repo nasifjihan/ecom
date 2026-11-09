@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { patchOf } from "../../core/patch-schema";
-import { CUSTOMER_SOURCES } from "./customer.rules";
+import { CUSTOMER_SOURCES, MAX_OTHER_NAMES, cleanSocial } from "./customer.rules";
 import { PaginationSchema } from "@ecom/zod-schemas";
 import { ExportFormat, CustomerStatus } from "@ecom/shared-types";
 
@@ -85,6 +85,10 @@ const BaseCustomerDto = z.object({
   storeCredit: z.coerce.number().nonnegative().optional(),
   loyaltyPoints: z.coerce.number().int().nonnegative().optional(),
   addresses: z.array(BaseCustomerAddressDto).optional(),
+  /** Profile links: Facebook, Instagram, WhatsApp, TikTok, website. */
+  social: z.object({ facebook: z.string().trim().max(300), instagram: z.string().trim().max(300), whatsapp: z.string().trim().max(300), tiktok: z.string().trim().max(300), website: z.string().trim().max(300) }).partial().nullable().optional().transform((v) => (v === undefined ? undefined : cleanSocial(v))),
+  /** Other names ordered with this phone. */
+  otherNames: z.array(z.string().trim().min(1).max(100).refine(noXss, noXssMessage)).max(MAX_OTHER_NAMES).optional(),
 });
 export const CreateCustomerDto = BaseCustomerDto.superRefine((v, ctx) => {
   if (!v.email && !v.phone) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a phone number or an email", path: ["phone"] });

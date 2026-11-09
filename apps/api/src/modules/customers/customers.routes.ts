@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { z } from "zod";
 import { authMiddleware, rbacMiddleware, validate } from "../../middleware";
 import { BadRequestError, ctrl, envelope, type RequestContext } from "../../core";
-import { banCustomer, unbanCustomer } from "./customer-ban";
+import { banCustomer, customerByPhone, unbanCustomer } from "./customer-ban";
 import { deleteMyAccount, exportMyData } from "./account-deletion";
 import { customersController } from "./customers.controller";
 import {
@@ -25,6 +25,18 @@ function multerFallback(_req: Request, _res: Response, next: NextFunction): void
 }
 
 export const adminCustomersRouter = Router();
+
+/** Who has this phone already (Create customer, New order). */
+adminCustomersRouter.get(
+  "/by-phone",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("customers.view"),
+  validate({ query: z.object({ phone: z.string().trim().min(10).max(20) }) }),
+  ctrl(async (req: Request & { ctx: RequestContext }, res: Response) => {
+    if (req.ctx.storeId === undefined) throw new BadRequestError("No store for this request", "STORE_REQUIRED");
+    envelope(res, { data: await customerByPhone(BigInt(req.ctx.storeId), (req.query as { phone: string }).phone) });
+  }),
+);
 
 const BanDto = z.object({ reason: z.string().trim().min(3, "Say why (staff see it on the customer)").max(300) });
 const storeOf = (req: Request & { ctx: RequestContext }): bigint => {

@@ -68,6 +68,9 @@ interface Props {
   storefront?: { courierAccountId?: string | null };
     /** The courier the customer chose at checkout (booked with it by default). */
     courierChoice?: { id: string } | null;
+    /** Paid before delivery, and how a staff-entered order goes out. */
+    prepaid?: number;
+    deliveryBy?: string | null;
   };
   canEdit: boolean;
 }
@@ -299,12 +302,13 @@ function CreateParcelDialog({
   onClose: () => void;
 }) {
   const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(remaining));
-  const [courier, setCourier] = useState<string>(COURIERS[0].code);
+  // Own delivery chosen on New order: our rider, otherwise the first courier.
+  const [courier, setCourier] = useState<string>(order.deliveryBy === "own" && COURIERS.some((c) => c.code === "own") ? "own" : COURIERS[0].code);
   const [otherName, setOtherName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
   const isCod = order.paymentMethod === "COD" && order.paymentStatus !== "PAID";
-  const [cod, setCod] = useState(isCod ? String(Math.max(0, order.grandTotal - otherCod)) : "0");
+  const [cod, setCod] = useState(isCod ? String(Math.max(0, Math.round((order.grandTotal - (order.prepaid ?? 0) - otherCod) * 100) / 100)) : "0");
   const [weight, setWeight] = useState("");
   const [note, setNote] = useState("");
   const [createParcel, { isLoading }] = useCreateParcelMutation();

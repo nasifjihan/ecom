@@ -200,6 +200,12 @@ export interface Order {
   shippingLocationId: string | null;
   /** The order number on the channel it came from (e.g. Daraz). */
   externalRef: string | null;
+  /** Entered by staff on New order (not placed by the customer). */
+  manual: boolean;
+  /** How a staff-entered order goes out: courier | own | pickup (null: decided when packing). */
+  deliveryBy: "courier" | "own" | "pickup" | null;
+  /** Paid before delivery (checked transfers, online, cash at the shop): the courier collects the rest. */
+  prepaid: number;
 }
 
 export type RiskLevel = "new" | "good" | "watch" | "high";
@@ -214,6 +220,8 @@ export interface OrderListFilters {
   /** Payment gateway code: cod, bkash, ... */
   paymentGateway?: string;
   hasCoupon?: boolean;
+  /** Only orders staff entered (true) or customers placed (false). */
+  manual?: boolean;
   /** Staff member who made the order by hand. */
   createdByAdminId?: string;
   shippingZoneId?: string;
@@ -292,6 +300,10 @@ export interface Customer {
   banned: boolean;
   banReason?: string;
   bannedAt?: string;
+  /** Profile links (Facebook, Instagram, WhatsApp, TikTok, website). */
+  social?: CustomerSocial;
+  /** Other names ordered with this phone. */
+  otherNames?: string[];
   /** How a customer staff added came to the shop. */
   source?: string;
   acceptMarketing?: boolean;
@@ -302,6 +314,11 @@ export const CUSTOMER_SOURCE_LABELS: Record<string, string> = {
   facebook: "Facebook",
   instagram: "Instagram",
   whatsapp: "WhatsApp",
+  messenger: "Messenger",
+  tiktok: "TikTok",
+  daraz: "Daraz",
+  website: "Website",
+  referral: "Referred by someone",
   walk_in: "Walk-in",
   other: "Other",
 };
@@ -325,6 +342,7 @@ export interface CreateCustomerInput {
   password?: string;
   groupId?: string;
   source?: string;
+  social?: CustomerSocial | null;
 }
 
 interface ApiCustomer {
@@ -335,6 +353,8 @@ interface ApiCustomer {
   banReason?: string | null;
   bannedAt?: string | null;
   source?: string | null;
+  social?: CustomerSocial | null;
+  otherNames?: string[];
   acceptMarketing?: boolean;
   phone: string | null;
   avatarUrl: string | null;
@@ -406,6 +426,8 @@ export function fromApiCustomer(c: ApiCustomer): Customer {
     banReason: c.banReason ?? undefined,
     bannedAt: c.bannedAt ?? undefined,
     source: c.source ?? undefined,
+    social: (c.social as CustomerSocial | null | undefined) ?? undefined,
+    otherNames: (c.otherNames as string[] | undefined) ?? [],
     acceptMarketing: c.acceptMarketing,
     group: c.isGuest ? "Guest" : c.group?.name ?? "No group",
     groupId: c.groupId ?? undefined,
@@ -800,6 +822,11 @@ export function fromApiOrder(o: ApiOrder): Order {
     exchangeFor: o.exchangeFor ? { code: o.exchangeFor.code, orderId: String(o.exchangeFor.order.id), orderNumber: o.exchangeFor.order.number } : null,
     shippingLocationId: o.shippingLocationId == null ? null : String(o.shippingLocationId),
     externalRef: (o.externalRef as string | null | undefined) ?? null,
+    manual: o.createdByAdminId != null,
+    deliveryBy: (o.deliveryBy as Order["deliveryBy"] | undefined) ?? null,
+    prepaid: ((o.paymentRecords as { kind: string; status: string; amount: string }[] | undefined) ?? [])
+      .filter((r) => ["transfer", "gateway", "cash"].includes(r.kind) && r.status === "verified")
+      .reduce((s, r) => s + Number(r.amount), 0),
   };
 }
 
@@ -823,6 +850,7 @@ export const operationsApiSlice = api.injectEndpoints({
         if (filters.customerId !== undefined) params.set("customerId", String(filters.customerId));
         if (filters.paymentGateway) params.set("paymentGateway", filters.paymentGateway);
         if (filters.hasCoupon !== undefined) params.set("hasCoupon", String(filters.hasCoupon));
+        if (filters.manual !== undefined) params.set("manual", String(filters.manual));
         if (filters.createdByAdminId) params.set("createdByAdminId", filters.createdByAdminId);
         if (filters.shippingZoneId) params.set("shippingZoneId", filters.shippingZoneId);
         params.set("page", String(filters.page ?? 1));
@@ -1233,3 +1261,25 @@ export const {
   useGetInventoryLogsQuery,
   useGetStockTransfersQuery,
 } = operationsApiSlice;
+
+/** A customer's profile links. */
+export type CustomerSocial = Partial<Record<"facebook" | "instagram" | "whatsapp" | "tiktok" | "website", string>>;
+export const SOCIAL_LABELS: Record<keyof CustomerSocial, string> = { facebook: "Facebook", instagram: "Instagram", whatsapp: "WhatsApp", tiktok: "TikTok", website: "Website" };
+
+/** "This number belongs to …" (Create customer, New order). */
+export interface PhoneOwner {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  otherNames: string[];
+  orderCount: number;
+  banned: boolean;
+}
+const phoneOwnerApi = api.injectEndpoints({
+  endpoints: (b) => ({
+    customerByPhone: b.query<PhoneOwner | null, string>({ query: (phone) => ({ url: "/admin/customers/by-phone", params: { phone } }) }),
+  }),
+  overrideExisting: false,
+});
+export const { useCustomerByPhoneQuery } = phoneOwnerApi;

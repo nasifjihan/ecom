@@ -87,6 +87,10 @@ import {
 import { INSTANT_EXPORT_LIMIT } from "@/lib/features/jobs/jobs-api-slice";
 import { useExportJob } from "@/components/jobs/use-export-job";
 import { cn } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { PhoneOwnerNote, usePhoneOwner } from "@/components/customers/phone-owner";
+import { SocialFields } from "@/components/customers/social-fields";
+import type { CustomerSocial } from "@/lib/features/operations/operations-api-slice";
 
 // Groups are store-defined; known names get a colour, anything else the neutral style.
 const GROUP_STYLES: Record<string, string> = {
@@ -138,6 +142,9 @@ export default function CustomersPage() {
     firstName: "", lastName: "", email: "", phone: "", password: "", source: "phone",
     groupId: "",
   });
+  const [social, setSocial] = useState<CustomerSocial>({});
+  const router = useRouter();
+  const phoneOwner = usePhoneOwner(form.phone);
   const { data: groupOptions = [] } = useGetCustomerGroupsQuery();
 
   const { data, isLoading } = useGetCustomersQuery({
@@ -367,10 +374,12 @@ export default function CustomersPage() {
         password: form.password || undefined,
         groupId: form.groupId || undefined,
         source: form.source || undefined,
+        social,
       }).unwrap();
       toast.success("Customer created");
       setShowAdd(false);
       setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", groupId: "", source: "phone" });
+      setSocial({});
     } catch (err: any) {
       // Field errors come back as { field: [message] }; show the first one.
       const d = err?.data;
@@ -606,6 +615,7 @@ export default function CustomersPage() {
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="+880 1XXX XXX XXXX"
                 />
+                <PhoneOwnerNote owner={phoneOwner} onUse={(o) => router.push(`/customers/${o.id}`)} useLabel="Open customer" />
               </div>
               <div className="col-span-2">
                 <Label className="text-xs mb-1.5 block">Password (optional)</Label>
@@ -636,13 +646,17 @@ export default function CustomersPage() {
                   ))}
                 </Select>
               </div>
+              <div className="col-span-2 space-y-2">
+                <Label className="text-xs block">Profile links (optional)</Label>
+                <SocialFields value={social} onChange={setSocial} />
+              </div>
             </div>
             <Separator />
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
               <Button
                 onClick={handleAddCustomer}
-                disabled={!form.firstName || !form.lastName || (!form.email && !form.phone)}
+                disabled={!form.firstName || !form.lastName || (!form.email && !form.phone) || !!phoneOwner}
                 className="gap-1.5"
               >
                 <Plus className="h-4 w-4" /> Create Customer

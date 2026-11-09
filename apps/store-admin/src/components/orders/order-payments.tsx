@@ -47,7 +47,8 @@ export function OrderPayments({ orderId, method, closed }: { orderId: string | n
   const [rejecting, setRejecting] = useState<PaymentRow | null>(null);
   const [recording, setRecording] = useState(false);
   if (!data) return null;
-  const canRecord = canEdit && !closed && data.due > 0 && MANUAL.includes(method.toLowerCase());
+  // COD orders too: an advance by bKash or cash at the shop, with the rest collected on delivery.
+  const canRecord = canEdit && !closed && data.due > 0 && (MANUAL.includes(method.toLowerCase()) || method.toLowerCase() === "cod");
   if (!data.records.length && !data.attempts.length && !canRecord) return null;
 
   return (

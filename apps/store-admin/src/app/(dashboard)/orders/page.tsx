@@ -214,6 +214,7 @@ export default function OrdersPage() {
   const [filterMaxTotal, setFilterMaxTotal] = useState<string>("");
   const [filterStaff, setFilterStaff] = useState<string>("");
   const [filterCoupon, setFilterCoupon] = useState(false);
+  const [filterManual, setFilterManual] = useState(false);
   const [filterShippingZone, setFilterShippingZone] = useState<string>("");
   const searchParams = useSearchParams();
   const [filterSource, setFilterSource] = useState<string>(searchParams.get("source") ?? "");
@@ -236,7 +237,7 @@ export default function OrdersPage() {
   // Back to the first page whenever a filter changes.
   useEffect(() => {
     setPage(1);
-  }, [datePreset, customDateFrom, customDateTo, filterPaymentMethod, filterMinTotal, filterMaxTotal, filterStaff, filterCoupon, filterShippingZone]);
+  }, [datePreset, customDateFrom, customDateTo, filterPaymentMethod, filterMinTotal, filterMaxTotal, filterStaff, filterCoupon, filterManual, filterShippingZone]);
 
   // The same filters go to the list and to the export.
   const days = presetDays(datePreset, customDateFrom, customDateTo);
@@ -249,6 +250,7 @@ export default function OrdersPage() {
     maxTotal: filterMaxTotal === "" ? undefined : Number(filterMaxTotal),
     paymentGateway: filterPaymentMethod || undefined,
     hasCoupon: filterCoupon ? true : undefined,
+    manual: filterManual ? true : undefined,
     createdByAdminId: filterStaff || undefined,
     shippingZoneId: filterShippingZone || undefined,
   };
@@ -395,6 +397,11 @@ export default function OrdersPage() {
                   title={`${o.risk.delivered} delivered, ${o.risk.returned} returned before`}
                 >
                   {RISK_LABELS[o.risk.level]}
+                </Badge>
+              )}
+              {o.manual && (
+                <Badge variant="outline" className="text-[11px] whitespace-nowrap" title={o.deliveryBy ? `Goes out: ${o.deliveryBy === "own" ? "own delivery" : o.deliveryBy}` : undefined}>
+                  Manual
                 </Badge>
               )}
             </div>
@@ -800,6 +807,10 @@ export default function OrdersPage() {
                 <div className="flex items-center gap-2 h-10">
                   <Checkbox checked={filterCoupon} onCheckedChange={setFilterCoupon} />
                   <Label className="text-sm cursor-pointer">Has coupon applied</Label>
+                </div>
+                <div className="flex items-center gap-2 h-10">
+                  <Checkbox checked={filterManual} onCheckedChange={setFilterManual} />
+                  <Label className="text-sm cursor-pointer">Manual orders only (entered by staff)</Label>
                 </div>
               </div>
               {zones.length > 0 && (

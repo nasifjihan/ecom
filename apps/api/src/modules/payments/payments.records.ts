@@ -5,7 +5,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { BadRequestError } from "../../core";
-import { isManualCapable, normalizeTrxId } from "./payments.rules";
+import { isManualCapable, normalizeTrxId, prepaidOf } from "./payments.rules";
 
 type T = Prisma.TransactionClient;
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
@@ -41,7 +41,9 @@ export async function recordOrderCash(t: T, orderId: bigint) {
   if (!o || o.paymentGatewayCode !== "cod") return;
   if (o.shipments.some((s) => s.status !== "cancelled" && num(s.codAmount) > 0)) return;
   if (await t.paymentRecord.findFirst({ where: { orderId, kind: "cod" } })) return;
-  const amount = r2(num(o.grandTotal) - num(o.refundedTotal));
+  // An advance (bKash, cash at the shop) was paid already: only the rest is collected.
+  const prepaid = prepaidOf(await t.paymentRecord.findMany({ where: { orderId }, select: { kind: true, status: true, amount: true } }));
+  const amount = r2(num(o.grandTotal) - num(o.refundedTotal) - prepaid);
   if (amount <= 0) return;
   await t.paymentRecord.create({
     data: { storeId: o.storeId, orderId, kind: "cod", method: "cod", amount, status: "cash_in_hand", moneyIsWith: "office", submittedBy: "system" },

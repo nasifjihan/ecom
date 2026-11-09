@@ -30,8 +30,8 @@ export function AuditLogTable({ logs, showStore = false }: { logs: AuditLog[]; s
             logs.map((l) => (
               <TableRow key={l.id}>
                 <TableCell className="text-xs text-slate-500 whitespace-nowrap">{when(l.createdAt)}</TableCell>
-                {showStore && <TableCell className="text-sm">{l.store?.name ?? l.storeId}</TableCell>}
-                <TableCell className="text-sm">{l.admin ? `${l.admin.name} (${l.admin.email})` : "System"}</TableCell>
+                {showStore && <TableCell className="text-sm">{l.store?.name ?? l.storeId ?? "Platform"}</TableCell>}
+                <TableCell className="text-sm">{l.actorType === "platform" ? `Platform team: ${l.actorName ?? ""}` : l.admin ? `${l.admin.name} (${l.admin.email})` : `System${l.actorName ? `: ${l.actorName}` : ""}`}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="font-mono text-[11px]">
                     {l.action}

@@ -22,6 +22,7 @@ import { apiError } from "@/lib/features/operations/fulfilment-api-slice";
 import {
   methodLabel,
   useRecordPaymentMutation,
+  useRecordCashMutation,
   useRejectPaymentMutation,
   useVerifyPaymentMutation,
   type PaymentRow,
@@ -129,6 +130,8 @@ export function RejectDialog({ payment, onClose }: { payment: PaymentRow; onClos
 }
 
 const WALLETS = ["bkash", "nagad", "rocket", "bank_transfer"];
+// Cash taken at the shop or by hand counts as paid at once (no transaction ID).
+const METHODS = ["cash", ...WALLETS];
 
 export function RecordPaymentDialog({
   orderId,
@@ -141,16 +144,24 @@ export function RecordPaymentDialog({
   due: number;
   onClose: () => void;
 }) {
-  const [method, setMethod] = useState(WALLETS.includes(defaultMethod) ? defaultMethod : "bkash");
+  const [method, setMethod] = useState(WALLETS.includes(defaultMethod) ? defaultMethod : defaultMethod === "cod" ? "cash" : "bkash");
   const [trx, setTrx] = useState("");
   const [sender, setSender] = useState("");
   const [amount, setAmount] = useState(String(due));
   const [verified, setVerified] = useState(true);
   const [note, setNote] = useState("");
   const [record, { isLoading }] = useRecordPaymentMutation();
+  const [recordCash, c] = useRecordCashMutation();
+  const cash = method === "cash";
 
   async function submit() {
     try {
+      if (cash) {
+        await recordCash({ orderId, amount: Number(amount) || undefined, note: note.trim() || undefined }).unwrap();
+        toast.success("Cash recorded");
+        onClose();
+        return;
+      }
       await record({
         orderId,
         method,
@@ -172,19 +183,20 @@ export function RecordPaymentDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Record a payment</DialogTitle>
-          <DialogDescription>For a customer who sent their transaction ID by phone, Messenger or WhatsApp. {money(due)} is still due.</DialogDescription>
+          <DialogDescription>Cash taken at the shop, or a transaction ID sent by phone, Messenger or WhatsApp. {money(due)} is still due.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs mb-1 block">Paid by</Label>
             <Select value={method} onValueChange={setMethod}>
-              {WALLETS.map((m) => <SelectItem key={m} value={m}>{methodLabel(m)}</SelectItem>)}
+              {METHODS.map((m) => <SelectItem key={m} value={m}>{methodLabel(m)}</SelectItem>)}
             </Select>
           </div>
           <div>
             <Label className="text-xs mb-1 block">Amount (৳)</Label>
             <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-10" />
           </div>
+          {!cash && (<>
           <div>
             <Label className="text-xs mb-1 block">{method === "bank_transfer" ? "Bank reference" : "Transaction ID"}</Label>
             <Input value={trx} onChange={(e) => setTrx(e.target.value)} className="h-9 font-mono" />
@@ -193,19 +205,22 @@ export function RecordPaymentDialog({
             <Label className="text-xs mb-1 block">{method === "bank_transfer" ? "From account (optional)" : "Sent from (optional)"}</Label>
             <Input value={sender} onChange={(e) => setSender(e.target.value)} placeholder={method === "bank_transfer" ? "" : "01XXXXXXXXX"} className="h-9" />
           </div>
+          </>)}
           <div className="col-span-2">
             <Label className="text-xs mb-1 block">Note (optional)</Label>
             <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
+          {!cash && (
           <label className="col-span-2 flex items-center gap-2 text-sm">
             <Checkbox checked={verified} onCheckedChange={setVerified} />
             I can see this payment in our account (verify it now)
           </label>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={isLoading || trx.trim().length < 4 || !(Number(amount) > 0)}>
-            {verified ? "Record and verify" : "Add to queue"}
+          <Button onClick={submit} disabled={isLoading || c.isLoading || (!cash && trx.trim().length < 4) || !(Number(amount) > 0)}>
+            {cash ? "Record cash" : verified ? "Record and verify" : "Add to queue"}
           </Button>
         </DialogFooter>
       </DialogContent>

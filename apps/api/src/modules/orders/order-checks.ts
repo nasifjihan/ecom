@@ -6,6 +6,7 @@
  * - confirmation calls: the outcome of each call, with no-answer orders coming back to the list.
  */
 import { prisma, logger } from "../../config"
+import { logSystem } from "../team/audit"
 import { BadRequestError, NotFoundError, type RequestContext } from "../../core"
 import { bdMobile } from "../sms/sms.rules"
 import { OrdersService } from "./orders.service"
@@ -69,6 +70,7 @@ export async function recordOrderRisk(storeId: bigint, orderId: bigint) {
         notifyCustomer: false,
         sendEmail: false,
       })
+      logSystem(storeId, { by: "Fraud check", action: "orders.held_high_risk", objectType: "orders", objectId: orderId, details: { delivered: rec.all.delivered, returned: rec.all.returned } })
     }
   } catch (err) {
     logger.warn({ err, orderId: String(orderId) }, "Order risk not recorded")

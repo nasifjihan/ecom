@@ -49,6 +49,11 @@ export interface ManualOrderInput {
   leadId?: string;
   /** The order number on the channel it came from (e.g. the Daraz order ID). */
   externalRef?: string;
+  /** Paid now in parts (cash, bKash, …); the rest is collected on delivery. */
+  payments?: { method: SplitMethod; amount: number; transactionId?: string }[];
+  /** How it goes out: courier (which account), own delivery or pickup; left out: decided when packing. */
+  deliveryBy?: "courier" | "own" | "pickup";
+  courierAccountId?: string | null;
   /** The salesperson credited; null: nobody; left out: the quote's maker or whoever enters it, if on the sales team. */
   salespersonId?: string | null;
 }
@@ -179,3 +184,12 @@ export const {
   usePickCustomersQuery,
   useOrderAreasQuery,
 } = manualOrderApi;
+
+export type SplitMethod = "cash" | "bkash" | "nagad" | "rocket" | "bank_transfer";
+export const SPLIT_METHODS: { value: SplitMethod; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "bkash", label: "bKash" },
+  { value: "nagad", label: "Nagad" },
+  { value: "rocket", label: "Rocket" },
+  { value: "bank_transfer", label: "Bank transfer" },
+];

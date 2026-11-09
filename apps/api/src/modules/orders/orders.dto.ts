@@ -58,6 +58,8 @@ const BaseOrderSearchQueryDto = PaginationSchema.extend({
   paymentGateway: z.string().max(40).optional(),
   /** "true" = only orders with a coupon, "false" = only without. */
   hasCoupon: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  /** true = only orders staff entered by hand (New order); false = only ones customers placed. */
+  manual: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   /** Staff member who made the order by hand. */
   createdByAdminId: z.coerce.bigint().positive().optional(),
   shippingZoneId: z.coerce.bigint().positive().optional(),

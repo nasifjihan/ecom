@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma, tx } from "../../config";
 import {
   BaseService,
@@ -72,6 +73,8 @@ export class CustomersService extends BaseService {
     const data: Record<string, unknown> = {
       email: dto.email ? dto.email.toLowerCase() : null,
       source: dto.source ?? null,
+      social: dto.social ?? undefined,
+      otherNames: dto.otherNames ?? [],
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone ?? null,
@@ -177,6 +180,8 @@ export class CustomersService extends BaseService {
       (updateData as any)[key] = (dto as any)[key];
     }
     if (dto.email !== undefined) updateData.email = dto.email ? dto.email.toLowerCase() : null;
+    // No links left: clear the column (a JSON null needs Prisma's marker).
+    if (dto.social === null) updateData.social = Prisma.DbNull;
     if (dto.password !== undefined) {
       (updateData as any).passwordHash = await bcrypt.hash(dto.password, 12);
     }

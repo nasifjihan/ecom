@@ -41,6 +41,7 @@ import {
   ResolveSettlementDto,
   SettlementListDto,
   StaffTransferDto,
+  StaffCashDto,
   SubmitTransferDto,
   UpdatePaymentMethodDto,
   VerifyDto,
@@ -78,6 +79,13 @@ adminOrderPaymentsRouter.post(
   rbacMiddleware("payments.edit"),
   validate({ params: IdParam, body: StaffTransferDto }),
   send((r) => svc(r).submitTransfer(id(r), r.body as StaffTransferDto, "staff"), 201),
+);
+adminOrderPaymentsRouter.post(
+  "/:id/payments/cash",
+  authMiddleware("adminOrSuper"),
+  rbacMiddleware("payments.edit"),
+  validate({ params: IdParam, body: StaffCashDto }),
+  send((r) => svc(r).recordCash(id(r), r.body as StaffCashDto), 201),
 );
 
 export const adminCodRouter = Router();

@@ -8,6 +8,9 @@
  *   POST /api/admin/orders/manual         create the order
  */
 import { leadForOrder, winLead } from "../leads/leads.service";
+import { withOtherName } from "../customers/customer.rules";
+import { PaymentsService } from "../payments/payments.service";
+import { normalizeTrxId, trxIdProblem } from "../payments/payments.rules";
 import { z } from "zod";
 import { logger, prisma } from "../../config";
 import { BadRequestError, ForbiddenError, NotFoundError, type RequestContext } from "../../core";
@@ -63,6 +66,13 @@ const Discount = z.object({
   value: z.coerce.number().min(0).max(10_000_000),
 });
 
+/** One part of a split payment taken when the order is entered. */
+const SplitLine = z.object({
+  method: z.enum(["cash", "bkash", "nagad", "rocket", "bank_transfer"]),
+  amount: z.coerce.number().positive().max(10_000_000),
+  transactionId: text(100).optional(),
+});
+
 const Base = z.object({
   customer: Customer.prefault({}),
   items: z.array(Line).max(100).prefault([]),
@@ -94,6 +104,11 @@ const Base = z.object({
   leadId: z.coerce.bigint().positive().optional(),
   /** The order's number on the channel it came from, e.g. the Daraz order ID. */
   externalRef: z.string().trim().max(60).optional(),
+  /** Paid now in parts (e.g. bKash and cash); what's left is collected on delivery. Replaces "paid". */
+  payments: z.array(SplitLine).max(5).optional(),
+  /** How it goes out: by courier (which account), own delivery, or picked up (null: decided when packing). */
+  deliveryBy: z.enum(["courier", "own", "pickup"]).optional(),
+  courierAccountId: z.coerce.bigint().positive().optional().nullable(),
 });
 
 export const ManualOrderQuoteDto = Base;
@@ -115,6 +130,11 @@ export const ManualOrderDto = Base.superRefine((v, ctx) => {
       ctx.addIssue({ code: "custom", path: ["address", "district"], message: "Pick the district" });
     }
   }
+  for (const [i, p] of (v.payments ?? []).entries()) {
+    const problem = p.method === "cash" ? null : !p.transactionId ? "Enter the transaction ID" : trxIdProblem(p.method, p.transactionId);
+    if (problem) ctx.addIssue({ code: "custom", path: ["payments", i, "transactionId"], message: problem });
+  }
+  if (v.deliveryBy === "courier" && v.delivery.type === "pickup") ctx.addIssue({ code: "custom", path: ["deliveryBy"], message: "A pickup order doesn't go by courier" });
   if (v.paid && v.paymentGateway !== "cod" && !v.transactionId) {
     ctx.addIssue({ code: "custom", path: ["transactionId"], message: "Enter the transaction ID of the payment" });
   }
@@ -322,6 +342,15 @@ export class ManualOrderService {
     const { quote, customer: found, email, phone, shop, fromQuote } = await this.draft(dto, true);
     const storeId = this.storeId;
     const lead = dto.leadId ? await leadForOrder(storeId, dto.leadId) : null;
+    // Split payment: checked before the order is saved, so a bad line can't leave it half recorded.
+    const splitTotal = round2((dto.payments ?? []).reduce((s, p) => s + p.amount, 0));
+    if (splitTotal > quote.totals.grandTotal + 0.009) throw new BadRequestError(`The payments add up to ৳${splitTotal}, more than the order total ৳${quote.totals.grandTotal}`, "VALIDATION_FAILED");
+    for (const p of dto.payments ?? []) {
+      if (p.method === "cash") continue;
+      const trx = p.method === "bank_transfer" ? p.transactionId!.trim().toUpperCase() : normalizeTrxId(p.transactionId!);
+      const used = await prisma.paymentRecord.findFirst({ where: { storeId, method: p.method, transactionId: trx, status: { not: "rejected" } }, include: { order: { select: { number: true } } } });
+      if (used) throw new BadRequestError(`Transaction ${trx} is already recorded on order ${used.order.number}`, "VALIDATION_FAILED");
+    }
 
     // Keep a customer record for the order (no login until they register on the storefront).
     let customer = found;
@@ -337,8 +366,12 @@ export class ManualOrderService {
           status: "active",
         },
       });
-    } else if (!customer.phone && phone) {
-      customer = await prisma.customer.update({ where: { id: customer.id }, data: { phone } });
+    } else {
+      // Same phone, another name (someone ordering for a family member): remember the name.
+      const typed = `${dto.customer.firstName || quote.ship.firstName || ""} ${dto.customer.lastName || quote.ship.lastName || ""}`;
+      const names = withOtherName(customer, typed);
+      if ((!customer.phone && phone) || names)
+        customer = await prisma.customer.update({ where: { id: customer.id }, data: { ...(!customer.phone && phone ? { phone } : {}), ...(names ? { otherNames: names } : {}) } });
     }
 
     // Claim the quotation first, so two people can't both turn it into an order.
@@ -359,7 +392,7 @@ export class ManualOrderService {
         source: dto.source,
         createdByAdminId: adminId,
         status: dto.status,
-        paid: dto.paid,
+        paid: dto.paid && !dto.payments?.length,
         transactionId: dto.transactionId || null,
         notifyCustomer: dto.notifyCustomer,
         historyNote: [
@@ -384,7 +417,24 @@ export class ManualOrderService {
     if (fromQuote) {
       await prisma.quotation.update({ where: { id: fromQuote.id }, data: { orderId: order.id } });
     }
-    if (dto.externalRef) await prisma.order.update({ where: { id: order.id }, data: { externalRef: dto.externalRef } });
+    const deliveryBy = dto.delivery.type === "pickup" ? "pickup" : dto.deliveryBy ?? null;
+    if (dto.externalRef || deliveryBy || dto.courierAccountId)
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          ...(dto.externalRef ? { externalRef: dto.externalRef } : {}),
+          deliveryBy,
+          ...(deliveryBy === "courier" && dto.courierAccountId ? { courierAccountId: dto.courierAccountId } : {}),
+        },
+      });
+    // A split payment: each part is recorded as paid (checked by the staff member entering it).
+    if (dto.payments?.length) {
+      const pay = new PaymentsService(this.ctx);
+      for (const p of dto.payments) {
+        if (p.method === "cash") await pay.recordCash(order.id, { amount: p.amount, note: "Taken when the order was entered" });
+        else await pay.submitTransfer(order.id, { method: p.method, amount: p.amount, transactionId: p.transactionId!, verified: true, note: "Taken when the order was entered" }, "staff");
+      }
+    }
     await this.credit(order.id, dto.salespersonId, lead?.ownerId ?? fromQuote?.createdById ?? adminId);
     if (lead) await winLead(storeId, lead.id, { id: order.id, number: order.number, customerId: customer.id }, { id: adminId, name: who });
     if (dto.whatsappOptIn) await prisma.order.update({ where: { id: order.id }, data: { whatsappOptIn: true } });

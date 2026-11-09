@@ -32,3 +32,18 @@ export async function unbanCustomer(storeId: bigint, id: bigint) {
   if (!c) throw new NotFoundError("Customer")
   return prisma.customer.update({ where: { id }, data: { status: "active", banReason: null, bannedAt: null } })
 }
+
+/**
+ * "This number belongs to …" for Create customer and New order: the customer with this phone
+ * (any written form), with their other names and how many orders they have.
+ */
+export async function customerByPhone(storeId: bigint, raw: string) {
+  const phone = bdMobile(raw)
+  if (!phone) return null
+  const c = await prisma.customer.findFirst({
+    where: { storeId, phone: { in: phoneVariants(phone) } },
+    orderBy: { id: "asc" },
+    select: { id: true, firstName: true, lastName: true, phone: true, email: true, otherNames: true, orderCount: true, status: true },
+  })
+  return c ? { id: String(c.id), name: `${c.firstName} ${c.lastName}`.trim(), phone: c.phone, email: c.email, otherNames: c.otherNames, orderCount: c.orderCount, banned: isBanned(c.status) } : null
+}

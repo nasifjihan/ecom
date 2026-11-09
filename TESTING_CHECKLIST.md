@@ -133,6 +133,17 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] Marketing → Product feeds: open the Facebook and Google addresses; the XML lists each size or colour with price, sale price and stock. Products without a picture are listed as left out
 - [ ] New order: pick "Daraz" as the source and type the Daraz order ID; the order page shows it, and searching the orders by that ID finds it
 
+### L. Batch 58 (customers, split payment, manual orders, activity log, compare), no keys needed
+- [ ] Customers → Add: type a phone that already belongs to someone; the form says whose it is and won't make a second customer. Add Facebook / Instagram / WhatsApp links; they open from the customer's page ("Profile links" edits them)
+- [ ] New order for a known phone with a different name: the customer's page lists the new name under "Also ordered as"
+- [ ] New order, "Paid now in parts": ৳500 cash + ৳1,000 bKash with its transaction ID. The order shows partly paid; packing a parcel suggests only the rest as cash to collect
+- [ ] On a COD order's page, "Record a payment" offers Cash; recording it lowers what's left to collect
+- [ ] New order, "How it goes out": own delivery. The order list shows a "Manual" badge (filter: Manual orders only), the order page shows "Goes out: Own delivery", and the parcel form starts on Own delivery
+- [ ] Settings → Activity log: the "Who" filter. A courier status update or an online payment shows as System; a platform-team change on your store shows as Platform team
+- [ ] Storefront: compare from a product card or product page (up to 4, a 5th is refused); the bottom bar opens the compare page. Scroll down a long page: the up-arrow button takes you back to the top, above the chat button and the compare bar
+- [ ] Product page in the admin → "Make landing page": the new page starts filled in from the product
+- [ ] On your phone: home, products, a product, cart, checkout and account. No page should scroll sideways
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

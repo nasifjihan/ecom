@@ -55,6 +55,8 @@ export const AuditQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(25),
   adminId: z.coerce.bigint().positive().optional(),
+  /** staff | platform | system */
+  actor: z.enum(["staff", "platform", "system"]).optional(),
   objectType: z.string().max(40).optional(),
   search: z.string().trim().max(80).optional(),
   from: z.coerce.date().optional(),

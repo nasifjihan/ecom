@@ -376,14 +376,19 @@ model AdminUser {
 
 model AuditLog {
   id         BigInt     @id @default(autoincrement())
-  storeId    BigInt
-  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Null for platform-wide actions (plans, the platform team).
+  storeId    BigInt?
+  store      Store?     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   adminId    BigInt?
   admin      AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
   action     String
   objectType String
   objectId   String
   changes    Json?
+  /// Who: staff (adminId) | platform (the platform team) | system (jobs, courier and payment callbacks)
+  actorType  String     @default("staff")
+  /// The platform team member or job, when it isn't a staff member.
+  actorName  String?
   ipAddress  String?
   userAgent  String?
   createdAt  DateTime   @default(now())
@@ -1575,6 +1580,10 @@ model Customer {
   /// How a customer staff added came to the shop: phone | facebook | instagram | whatsapp | walk_in | other.
   /// Empty for customers who signed up or ordered online.
   source                String?
+  /// Other names ordered with this phone (e.g. a husband ordering for his wife).
+  otherNames            String[]               @default([])
+  /// Profile links: { facebook, instagram, whatsapp, tiktok, website }.
+  social                Json?
   acceptMarketing       Boolean                @default(false)
   groupId               BigInt?
   group                 CustomerGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -1972,6 +1981,8 @@ model Order {
   contactMessages        ContactMessage[]
   /// The order's number on the channel it came from (e.g. the Daraz order ID).
   externalRef            String?
+  /// How a staff-entered order goes out: courier | own | pickup (null: decided when packing).
+  deliveryBy             String?
   paymentAttempts        PaymentAttempt[]
   paymentRecords         PaymentRecord[]
   reviews                Review[]

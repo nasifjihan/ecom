@@ -38,7 +38,7 @@ export function redact(value: unknown, depth = 0): unknown {
  */
 export function describe(method: string, routePath: string): { action: string; objectType: string } {
   const words = routePath
-    .replace(/^\/api\/admin\//, "")
+    .replace(/^\/api\/(admin|super)\//, "")
     .split("/")
     .filter(Boolean);
   const plain = words.filter((w) => !w.startsWith(":")).map((w) => w.replace(/-/g, "_"));
@@ -62,7 +62,7 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
     if (id !== undefined && id !== null) createdId = String(id);
     return json(body);
   };
-  res.on("finish", () => {
+  res.on("finish", async () => {
     const ctx = (req as Request & { ctx?: RequestContext }).ctx;
     if (res.statusCode >= 400 || !ctx?.storeId || !(ctx.admin || ctx.super)) return;
     const routePath = `${req.baseUrl}${req.route?.path ?? req.path}`;
@@ -74,6 +74,8 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
         data: {
           storeId: ctx.storeId,
           adminId: ctx.super ? null : ctx.admin?.id ?? null,
+          actorType: ctx.super ? "platform" : "staff",
+          actorName: ctx.super ? await platformName(ctx.super.id) : null,
           action,
           objectType,
           objectId: params.join("/") || createdId || "",
@@ -92,10 +94,85 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
   next();
 }
 
+/** A platform team member's name for the log (cached: the same few people act all day). */
+const platformNames = new Map<string, string>();
+async function platformName(id: bigint): Promise<string> {
+  const k = String(id);
+  if (!platformNames.has(k)) {
+    const p = await prisma.platformAdmin.findUnique({ where: { id }, select: { name: true, email: true } }).catch(() => null);
+    platformNames.set(k, p?.name || p?.email || `Platform team #${k}`);
+  }
+  return platformNames.get(k)!;
+}
+
+/**
+ * Records the platform team's changes under /api/super. Changes to one store (/stores/:id/…, or a
+ * new store) go in that store's log too; plans, roles and the team are platform-wide (no store).
+ */
+export function superAuditMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (!MUTATING.has(req.method)) return next();
+  let createdId: string | undefined;
+  const json = res.json.bind(res);
+  res.json = (body: unknown) => {
+    const id = (body as { data?: { id?: unknown } } | null)?.data?.id;
+    if (id !== undefined && id !== null) createdId = String(id);
+    return json(body);
+  };
+  res.on("finish", async () => {
+    const ctx = (req as Request & { ctx?: RequestContext }).ctx;
+    if (res.statusCode >= 400 || !ctx?.super) return;
+    const routePath = `${req.baseUrl}${req.route?.path ?? req.path}`;
+    if (READ_ONLY.test(routePath) || /\/(login|refresh|logout|two-factor)/.test(routePath)) return;
+    const { action, objectType } = describe(req.method, routePath);
+    const params = Object.values(req.params ?? {}).filter(Boolean);
+    const onStore = routePath.startsWith("/api/super/stores");
+    const storeIdRaw = onStore ? (req.params as { id?: string }).id ?? createdId : undefined;
+    const storeId = storeIdRaw && /^\d+$/.test(storeIdRaw) ? BigInt(storeIdRaw) : null;
+    prisma.auditLog
+      .create({
+        data: {
+          storeId,
+          adminId: null,
+          actorType: "platform",
+          actorName: await platformName(ctx.super.id),
+          action: `super.${action}`,
+          objectType,
+          objectId: params.join("/") || createdId || "",
+          changes: { method: req.method, path: req.originalUrl.split("?")[0], body: redact(req.body ?? null) } as Prisma.InputJsonValue,
+          ipAddress: ctx.ip ?? req.ip ?? null,
+          userAgent: req.get("user-agent")?.slice(0, 300) ?? null,
+        },
+      })
+      .catch((e: Error) => logger.warn({ err: e.message, action }, "Couldn't write the activity log"));
+  });
+  next();
+}
+
+/**
+ * Something the system did on its own (a courier update, a gateway payment, reminders or a campaign
+ * sent). Never fails the work it describes.
+ */
+export function logSystem(storeId: bigint, e: { by: string; action: string; objectType: string; objectId: string | bigint; details?: Record<string, unknown> }) {
+  prisma.auditLog
+    .create({
+      data: {
+        storeId,
+        actorType: "system",
+        actorName: e.by,
+        action: e.action,
+        objectType: e.objectType,
+        objectId: String(e.objectId),
+        changes: (e.details ?? {}) as Prisma.InputJsonValue,
+      },
+    })
+    .catch((err: Error) => logger.warn({ err: err.message, action: e.action }, "Couldn't write the activity log"));
+}
+
 export async function listAudit(storeId: bigint, q: AuditQueryDto) {
   const where: Prisma.AuditLogWhereInput = {
     storeId,
     ...(q.adminId ? { adminId: q.adminId } : {}),
+    ...(q.actor ? { actorType: q.actor } : {}),
     ...(q.objectType ? { objectType: q.objectType } : {}),
     ...(q.search
       ? { OR: [{ action: { contains: q.search, mode: "insensitive" } }, { objectId: { contains: q.search } }] }
@@ -120,6 +197,8 @@ export async function listAudit(storeId: bigint, q: AuditQueryDto) {
       objectType: r.objectType,
       objectId: r.objectId,
       admin: r.admin ? { id: String(r.admin.id), name: r.admin.name, email: r.admin.email } : null,
+      actorType: r.actorType,
+      actorName: r.actorName,
       changes: r.changes,
       ipAddress: r.ipAddress,
       userAgent: r.userAgent,

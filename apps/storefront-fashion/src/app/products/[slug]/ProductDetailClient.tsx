@@ -24,6 +24,7 @@ import {
   Heart,
   ShoppingCart,
   Share2,
+  GitCompareArrows,
   ShieldCheck,
   Truck,
   RotateCcw,
@@ -61,6 +62,10 @@ import {
   track,
   useLocale,
   DATE_LOCALES,
+  MAX_COMPARE,
+  addToCompare,
+  removeFromCompare,
+  useCompare,
 } from "@ecom/storefront-base";
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -188,6 +193,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const wishlist = useWishlist();
   const wishlisted = wishlist.has(product.id);
   const toggleWishlist = () => void wishlist.toggle(product.id, product.title);
+  const compareList = useCompare();
+  const compared = compareList.has(product.id);
+  const toggleCompare = () => {
+    if (compared) return removeFromCompare(product.id);
+    const r = addToCompare({ id: product.id, slug: product.slug, title: product.title, image: product.image });
+    if (r === "full") toast.error(t("You can compare up to {n} products", { n: MAX_COMPARE }));
+    else toast.success(t("Added to compare"), { action: { label: t("Compare"), onClick: () => (window.location.href = "/compare") } });
+  };
   const [reviewSort, setReviewSort] = React.useState<"latest" | "top">("latest");
   React.useEffect(() => {
     track({ name: "view_item", item: { id: product.id, name: product.title, price: product.price, qty: 1 } });
@@ -400,6 +413,14 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
                   aria-label={t("Share")}
                 >
                   <Share2 className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={toggleCompare}
+                  aria-pressed={compared}
+                  className={cn("h-10 w-10 rounded-full shadow-lg flex items-center justify-center transition-colors", compared ? "bg-primary/10 text-primary" : "bg-background hover:bg-accent text-muted-foreground")}
+                  aria-label={compared ? t("Remove from compare") : t("Compare")}
+                >
+                  <GitCompareArrows className="h-5 w-5" />
                 </button>
               </div>
             </div>

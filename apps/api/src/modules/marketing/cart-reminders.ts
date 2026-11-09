@@ -6,6 +6,7 @@
  */
 import { randomBytes } from "node:crypto"
 import { prisma, logger } from "../../config"
+import { logSystem } from "../team/audit"
 import { bdMobile } from "../sms/sms.rules"
 import {
   DEFAULT_REMINDER_SETTINGS,
@@ -143,6 +144,7 @@ export async function remindStore(storeId: bigint, now = new Date()) {
       }
     }
   }
+  if (first || second) logSystem(storeId, { by: "Cart reminders", action: "cart_reminders.sent", objectType: "abandoned_carts", objectId: "", details: { first, second } })
   return { first, second }
 }
 

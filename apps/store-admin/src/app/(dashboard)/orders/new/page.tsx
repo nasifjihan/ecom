@@ -24,7 +24,10 @@ import {
   type ManualOrderQuote,
   type PickCustomer,
   type PickProduct,
+  SPLIT_METHODS,
+  type SplitMethod,
 } from "@/lib/features/operations/manual-order-api-slice";
+import { useActiveCouriersQuery } from "@/lib/features/operations/couriers-api-slice";
 
 const SELECT = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 type Line = { key: string; productId: string; variantId: string | null; name: string; variantLabel?: string; qty: number };
@@ -60,6 +63,12 @@ export default function NewOrderPage() {
   const [gateway, setGateway] = useState("cod");
   const [paid, setPaid] = useState(false);
   const [trx, setTrx] = useState("");
+  const [split, setSplit] = useState(false);
+  const [parts, setParts] = useState<{ method: SplitMethod; amount: string; transactionId: string }[]>([]);
+  const splitTotal = split ? Math.round(parts.reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100 : 0;
+  const [deliveryBy, setDeliveryBy] = useState<"" | "courier" | "own">("");
+  const [courierId, setCourierId] = useState("");
+  const { data: couriers = [] } = useActiveCouriersQuery();
   const [source, setSource] = useState<OrderSource>("phone");
   const [externalRef, setExternalRef] = useState("");
   const { data: storefronts = [] } = useStorefrontOptionsQuery();
@@ -141,6 +150,10 @@ export default function NewOrderPage() {
       transactionId: trx.trim() || undefined,
       source,
       externalRef: externalRef.trim() || undefined,
+      ...(split && parts.length
+        ? { payments: parts.filter((p) => Number(p.amount) > 0).map((p) => ({ method: p.method, amount: Number(p.amount), ...(p.method === "cash" ? {} : { transactionId: p.transactionId.trim() }) })) }
+        : {}),
+      ...(deliveryType !== "pickup" && deliveryBy ? { deliveryBy, ...(deliveryBy === "courier" && courierId ? { courierAccountId: courierId } : {}) } : {}),
       ...(storefrontId ? { storefrontId } : {}),
       status: confirmed ? "PROCESSING" : "PENDING",
       customerNote: customerNote.trim() || undefined,
@@ -151,7 +164,7 @@ export default function NewOrderPage() {
       ...(fromLead ? { leadId: fromLead.id } : {}),
       ...(salesperson === "auto" ? {} : { salespersonId: salesperson === "none" ? null : salesperson }),
     }),
-    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, source, externalRef, storefrontId, confirmed, customerNote, staffNote, notify, whatsapp, fromQuote, fromLead, salesperson],
+    [customer, first, last, phone, email, lines, locationId, address1, address2, deliveryType, methodId, customFee, coupon, applyPromotions, useWallet, discountType, discountValue, gateway, paid, trx, split, parts, deliveryBy, courierId, source, externalRef, storefrontId, confirmed, customerNote, staffNote, notify, whatsapp, fromQuote, fromLead, salesperson],
   );
 
   // Re-price whenever the order changes (debounced); the server is the only source of prices.
@@ -196,7 +209,7 @@ export default function NewOrderPage() {
     (customer || ((phone.trim() || email.trim()) && first.trim())) &&
     (!needsAddress || (locationId && address1.trim().length >= 3)) &&
     (deliveryType !== "method" || methodId) &&
-    (!paid || gateway === "cod" || trx.trim()) &&
+    (split ? parts.every((p) => p.method === "cash" || !Number(p.amount) || p.transactionId.trim()) && (!result || splitTotal <= result.totals.grandTotal + 0.009) : !paid || gateway === "cod" || trx.trim()) &&
     !(result?.problems.length);
 
   const submit = async () => {
@@ -404,6 +417,29 @@ export default function NewOrderPage() {
                   </Field>
                 </>
               )}
+              {deliveryType !== "pickup" && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="How it goes out" htmlFor="d-by" hint="Used when the parcel is packed. Leave it to decide then.">
+                    <select id="d-by" className={SELECT} value={deliveryBy} onChange={(e) => setDeliveryBy(e.target.value as "" | "courier" | "own")}>
+                      <option value="">Decide when packing</option>
+                      <option value="courier">By courier</option>
+                      <option value="own">Own delivery (our rider)</option>
+                    </select>
+                  </Field>
+                  {deliveryBy === "courier" && couriers.length > 0 && (
+                    <Field label="Courier" htmlFor="d-courier">
+                      <select id="d-courier" className={SELECT} value={courierId} onChange={(e) => setCourierId(e.target.value)}>
+                        <option value="">The storefront's usual courier</option>
+                        {couriers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.courierName} · {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                </div>
+              )}
               {deliveryType === "method" && (
                 <div className="space-y-2">
                   <Label>Delivery option</Label>
@@ -527,8 +563,58 @@ export default function NewOrderPage() {
                   hint={result.wallet.maxPercent < 100 ? `Up to ${result.wallet.maxPercent}% of the order; the rest by the payment method.` : "The rest, if any, by the payment method."}
                 />
               )}
-              <Toggle checked={paid} onChange={setPaid} label="Already paid" hint={gateway === "cod" ? "Cash received now (e.g. walk-in)." : "The customer has sent the money."} />
-              {paid && gateway !== "cod" && (
+              <Toggle
+                checked={split}
+                onChange={(v) => {
+                  setSplit(v);
+                  if (v) setPaid(false);
+                  if (v && !parts.length) setParts([{ method: "cash", amount: "", transactionId: "" }]);
+                }}
+                label="Paid now in parts"
+                hint="Some or all of it now (e.g. ৳500 bKash + ৳1,000 cash); the rest is collected on delivery."
+              />
+              {split && (
+                <div className="space-y-2 rounded-md border p-3">
+                  {parts.map((p, i) => (
+                    <div key={i} className="grid gap-2 sm:grid-cols-[140px_120px_1fr_auto]">
+                      <select
+                        className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                        aria-label="Paid by"
+                        value={p.method}
+                        onChange={(e) => setParts(parts.map((x, j) => (j === i ? { ...x, method: e.target.value as SplitMethod } : x)))}
+                      >
+                        {SPLIT_METHODS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Input type="number" min={1} aria-label="Amount" placeholder="৳" value={p.amount} onChange={(e) => setParts(parts.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+                      {p.method === "cash" ? (
+                        <span className="self-center text-xs text-slate-500">Cash taken now</span>
+                      ) : (
+                        <Input aria-label="Transaction ID" placeholder="Transaction ID" value={p.transactionId} onChange={(e) => setParts(parts.map((x, j) => (j === i ? { ...x, transactionId: e.target.value } : x)))} />
+                      )}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setParts(parts.filter((_, j) => j !== i))} aria-label="Remove this payment">
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    {parts.length < 5 && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setParts([...parts, { method: "bkash", amount: "", transactionId: "" }])}>
+                        Add a payment
+                      </Button>
+                    )}
+                    <span className={cn(result && splitTotal > result.totals.grandTotal + 0.009 ? "text-red-600" : "text-slate-600")}>
+                      Paid now {taka(splitTotal)}
+                      {result ? ` · on delivery ${taka(Math.max(0, result.totals.grandTotal - splitTotal))}` : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!split && <Toggle checked={paid} onChange={setPaid} label="Already paid" hint={gateway === "cod" ? "Cash received now (e.g. walk-in)." : "The customer has sent the money."} />}
+              {!split && paid && gateway !== "cod" && (
                 <Field label="Transaction ID" htmlFor="trx" hint="From the bKash / Nagad / bank message.">
                   <Input id="trx" value={trx} onChange={(e) => setTrx(e.target.value)} />
                 </Field>

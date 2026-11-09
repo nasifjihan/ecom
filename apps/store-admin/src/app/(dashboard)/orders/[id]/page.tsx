@@ -653,6 +653,12 @@ export default function OrderDetailPage() {
                 <span className="text-slate-500">Source</span>
                 <span>{sourceLabel(order.source)}{order.externalRef ? ` · ${order.externalRef}` : ""}</span>
               </div>
+              {order.deliveryBy && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Goes out</span>
+                  <span>{order.deliveryBy === "own" ? "Own delivery" : order.deliveryBy === "pickup" ? "Customer pickup" : "By courier"}</span>
+                </div>
+              )}
               {placedOn && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Storefront</span>

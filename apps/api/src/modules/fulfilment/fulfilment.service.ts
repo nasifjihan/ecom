@@ -29,6 +29,7 @@ import {
   unitRefund,
 } from "./fulfilment.rules";
 import { checkExchangeVariants, makeReplacementOrder } from "./exchange";
+import { codStillDue, prepaidOf } from "../payments/payments.rules";
 import { orderCheckSettings } from "../orders/order-checks";
 import type { CreateParcelDto, CreateRefundDto, CreateReturnDto, ListQueryDto, MoveParcelDto, MoveReturnDto, UpdateParcelDto } from "./fulfilment.dto";
 
@@ -144,10 +145,11 @@ export class FulfilmentService {
       if (l.quantity > left) throw new BadRequestError(`Only ${left} of "${item.productName}" still need a parcel`, "VALIDATION_FAILED");
     }
 
-    // Cash on delivery: this parcel collects whatever the other parcels don't.
-    const cod = o.paymentGatewayCode === "cod" && o.paymentStatus === "unpaid";
+    // Cash on delivery: this parcel collects what's left after any advance and the other parcels.
+    const cod = o.paymentGatewayCode === "cod" && ["unpaid", "partially_paid"].includes(o.paymentStatus);
     const otherCod = o.shipments.filter((s) => s.status !== "cancelled" && s.status !== "returned").reduce((s, p) => s + num(p.codAmount), 0);
-    const codAmount = dto.codAmount ?? (cod ? Math.max(0, r2(num(o.grandTotal) - otherCod)) : 0);
+    const prepaid = cod ? prepaidOf(await prisma.paymentRecord.findMany({ where: { orderId: o.id }, select: { kind: true, status: true, amount: true } })) : 0;
+    const codAmount = dto.codAmount ?? (cod ? codStillDue(num(o.grandTotal), prepaid, otherCod) : 0);
     const code = `${o.number}-P${o.shipments.length + 1}`;
 
     const parcel = await tx(async (t: T) => {

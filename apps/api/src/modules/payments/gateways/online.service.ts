@@ -37,6 +37,7 @@ import {
   type Verdict,
 } from "./gateway.rules"
 import { alertStaffLater } from "../../staff-alerts/staff-alerts.service"
+import { logSystem } from "../../team/audit"
 
 type T = Prisma.TransactionClient
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
@@ -457,6 +458,7 @@ export class OnlinePaymentsService {
             note: `Paid online with ${name}: ৳${num(attempt.amount).toFixed(2)}${result.txnId ? `, transaction ${result.txnId}` : ""}`,
           },
         })
+        logSystem(attempt.storeId, { by: name, action: "payment.paid_online", objectType: "orders", objectId: attempt.orderId, details: { amount: num(attempt.amount), transaction: result.txnId ?? null } })
         return sync
       }
       if (verdict.status === "review") {

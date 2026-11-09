@@ -559,6 +559,11 @@ export default function EditProductPage() {
                   </a>
                 </Button>
               )}
+              {product?.status === "published" && !product.deletedAt && (
+                <Button type="button" variant="outline" asChild title="A page for ads and Facebook posts, with an order form">
+                  <a href={`/online-store/landing-pages/new?productId=${product.id}`}>Make landing page</a>
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="secondary"

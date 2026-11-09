@@ -7033,3 +7033,53 @@ Most of the deployment machinery already existed (`docker-compose.prod.yml`, `do
 ### Not done (the owner's side)
 The accounts and the domain are the owner's to create — nobody else should enter their card or passwords. The server steps start once those exist.
 
+
+## ✅ BATCH #58 — The gaps from the owner's feature check (2026-11-09)
+The owner listed 12 features to check. Four were already there: dark/light mode in the admin, themes per storefront, notify me, and the blog. The Facebook-to-website landing-page funnel also existed. This batch fills the gaps the owner confirmed.
+
+### Customers
+- **Other names** (`Customer.otherNames`): one customer per phone (the owner's choice). A New order for a known phone with another name adds that name (`customer.rules withOtherName`; own name and repeats skipped, last 10 kept). The names show on the customer and the search finds them (exact name).
+- **Profile links** (`Customer.social`): Facebook, Instagram, WhatsApp, TikTok and website, on Create customer and in "Profile links" on the customer's page, which also edits "came from" and the other names.
+- **Came from:** Messenger, TikTok, Daraz, website and referral were added.
+- **Phone check:** `GET /api/admin/customers/by-phone`. Create customer shows "This number belongs to …" and won't make a duplicate (the API refused one already). New order already matched by phone.
+
+### Split payment
+- **New order:** "Paid now in parts" takes up to 5 lines (cash, bKash, Nagad, Rocket, bank). Each is recorded as paid; the rest stays cash on delivery. The lines are checked before the order is saved: they can't add up to more than the order, wallet lines need a transaction ID, and one can't be reused.
+- **Cash payments:** a new `cash` payment record (`PaymentsService.recordCash`, `POST /admin/orders/:id/payments/cash`). "Record a payment" on the order page now offers Cash, and shows on COD orders too.
+- **One rule for "paid before delivery":** `payments.rules prepaidOf` covers checked transfers, online payments and cash. It's used for the payment status, for the cash a parcel collects (`codStillDue`), and for the cash recorded when an order is delivered without a parcel.
+  - **Bug fixed with it:** before, a COD order with an advance asked the courier to collect the full total, or nothing once it was partly paid. Marking it delivered also left it "partly paid".
+
+### Manual orders
+- **Badge and filter:** a "Manual" badge on the order list and a "Manual orders only" filter (`manual=true`: entered by staff).
+- **Delivery on the form:** New order asks how it goes out: by courier (which account, saved as the order's courier), own delivery, or pickup (`Order.deliveryBy`). The order page shows it, and the parcel form starts on Own delivery when chosen.
+
+### Activity log
+- **Who acted:** entries now say who: `actorType` staff, platform or system, with `actorName`.
+- **Platform team:** their changes under `/api/super` are logged by `superAuditMiddleware`. Changes to one store go in that store's log; platform-wide ones have no store (`AuditLog.storeId` is now optional). Signing in as a store names the person. Older platform entries were marked by the migration.
+- **System:** `logSystem()` records parcel status changes from couriers, online payments, cart reminders sent, SMS campaigns started and sent, and high-risk orders put on hold.
+- **Where it shows:** Settings → Activity log has a "Who" filter. The super admin's log names the platform team member or the system job.
+
+### Storefront
+- **Compare up to 4:** `storefront-base lib/compare.ts` keeps the list in the browser, and it updates across tabs.
+  - A compare button on product cards and the product page; a 5th product is refused.
+  - A bottom bar with thumbnails.
+  - `/compare` shows price, rating, stock, sizes and colours, category, every detail row and a short description.
+- **Back to top:** it appears after a screen of scrolling, above the chat button, and both sit above the compare bar while it shows.
+- **Landing page shortcut:** "Make landing page" on a published product opens a new landing page filled in from the product: name, headline, short text, first picture as the hero, the description and the other pictures as blocks.
+
+### Mobile check (done in the browser this time)
+Docker and the API ran on this PC (Postgres was also published on port 5433, which the local `.env` expects, through a scratchpad override; no repo file changed). At 375 px wide:
+- **No page scrolls sideways:** home, products, a product, cart, compare, contact, search, track, wishlist, flash sale and blog.
+- **One fault fixed:** on product cards the struck-out old price ran past the card's edge (home page and product list). The price row now wraps.
+- **Compare bar and back-to-top:** both seen working, in Bangla.
+
+### Migration
+- `20261117090000_customer_names_split_pay_activity`: `Customer.otherNames` and `social`, `Order.deliveryBy`, `AuditLog.actorType` and `actorName`, `AuditLog.storeId` optional, and the platform-entry backfill.
+- It's named after Batch 57's so every database applies it in order. It was applied to the dev database here.
+
+### Checked
+- **Typecheck:** passes in all 11 packages.
+- **Builds:** the storefront and store-admin production builds pass.
+- **Tests without a database:** 70 files and 868 tests pass. New: `batch58.test.ts` (other names, profile links, paid before delivery, COD still due, naming platform actions).
+- **Bangla check:** passes.
+- **Not run:** the new `batch58.db.test.ts` (split payment and the parcel's COD, the over-total refusal, other names, a system log entry), and the admin screens in a browser. `TESTING_CHECKLIST.md` section L lists them.

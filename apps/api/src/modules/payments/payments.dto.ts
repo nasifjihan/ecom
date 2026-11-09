@@ -22,6 +22,10 @@ export type SubmitTransferDto = z.infer<typeof SubmitTransferDto>;
 export const StaffTransferDto = SubmitTransferDto.extend({ verified: z.boolean().default(false) });
 export type StaffTransferDto = z.infer<typeof StaffTransferDto>;
 
+/** Cash staff took for an order (at the shop, or part of a split payment). */
+export const StaffCashDto = z.object({ amount: money.positive().optional(), note: text(500).optional() });
+export type StaffCashDto = z.infer<typeof StaffCashDto>;
+
 export const VerifyDto = z.object({
   /** The amount that actually arrived, when it differs from what was reported. */
   amount: money.positive().optional(),

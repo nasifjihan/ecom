@@ -94,7 +94,7 @@ import {
   storefrontAccountPaymentsRouter,
   storefrontCheckoutPaymentsRouter,
 } from "./modules/payments";
-import { adminAuditRouter, adminPermissionsRouter, adminStaffRouter, adminTeamRolesRouter, auditMiddleware } from "./modules/team";
+import { adminAuditRouter, adminPermissionsRouter, adminStaffRouter, adminTeamRolesRouter, auditMiddleware, superAuditMiddleware } from "./modules/team";
 import path from "node:path";
 
 let _app: Express | null = null;
@@ -154,6 +154,7 @@ export function buildApp(): Express {
   // =============== MODULE ROUTES (Batch #5 wired) ===============
   app.use("/api/docs", docsRouter);                                  // OpenAPI from the routes below (off in production unless API_DOCS=on)
   app.use("/api/auth", authRoutes);
+  app.use("/api/super", superAuditMiddleware);                      // the platform team's changes, in the activity log
   app.use("/api/super", superPlatformRouter);                      // overview, plans, subscriptions, reports, audit logs
   app.use("/api/super/stores", superStoresRouter);
   app.use("/api/super/domains", superDomainsRouter);

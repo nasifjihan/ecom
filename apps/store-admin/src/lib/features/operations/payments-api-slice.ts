@@ -300,6 +300,12 @@ export const paymentsApi = api.injectEndpoints({
       transformResponse: fromApiPayment,
       invalidatesTags: (_r, _e, { orderId }) => [{ type: "Order", id: orderId }, ...TAGS],
     }),
+    /** Cash taken at the shop or by hand (part or all of the order). */
+    recordCash: b.mutation<PaymentRow, { orderId: string | number; amount?: number; note?: string }>({
+      query: ({ orderId, ...body }) => ({ url: `/admin/orders/${orderId}/payments/cash`, method: "POST", body: clean(body) }),
+      transformResponse: fromApiPayment,
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: "Order", id: orderId }, ...TAGS],
+    }),
     verifyPayment: b.mutation<PaymentRow, { id: string; orderId: string | number; amount?: number; note?: string }>({
       query: ({ id, orderId: _o, ...body }) => ({ url: `/admin/payments/${id}/verify`, method: "POST", body: clean(body) }),
       transformResponse: fromApiPayment,
@@ -388,6 +394,7 @@ export const {
   useListPaymentsQuery,
   useOrderPaymentsQuery,
   useRecordPaymentMutation,
+  useRecordCashMutation,
   useVerifyPaymentMutation,
   useRejectPaymentMutation,
   useMarkNotCollectedMutation,
