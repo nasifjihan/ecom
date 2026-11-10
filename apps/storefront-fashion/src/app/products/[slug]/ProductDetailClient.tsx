@@ -187,6 +187,18 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
   const [thumbsSwiper, setThumbsSwiper] = React.useState<any>(null);
   const [viewerAt, setViewerAt] = React.useState<number | null>(null);
   const [reviewViewer, setReviewViewer] = React.useState<{ images: string[]; start: number } | null>(null);
+  // A link ending in #reviews (the rating under the title, "Write a review" in the account) opens that tab.
+  const [startTab, setStartTab] = React.useState("description");
+  React.useEffect(() => {
+    const open = () => {
+      if (window.location.hash !== "#reviews") return;
+      setStartTab("reviews");
+      document.getElementById("reviews")?.scrollIntoView();
+    };
+    open();
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
+  }, []);
   const reviewPhotos = React.useMemo(() => product.reviews.flatMap((r) => r.photos ?? []), [product.reviews]);
   const video = React.useMemo(() => (product.videoUrl ? videoEmbed(product.videoUrl) : null), [product.videoUrl]);
   const [qty, setQty] = React.useState(1);
@@ -657,9 +669,9 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
         </div>
       </div>
 
-      <Card className="mb-12">
+      <Card id="reviews" className="mb-12 scroll-mt-24">
         <CardContent className="p-0">
-          <Tabs defaultValue="description" className="w-full">
+          <Tabs key={startTab} defaultValue={startTab} className="w-full">
             <div className="border-b px-4 overflow-x-auto">
               <TabsList className="!bg-transparent !p-0 h-auto">
                 <TabsTrigger value="description" className="!rounded-none !shadow-none !bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary px-5 py-4 !h-auto text-sm font-medium text-muted-foreground data-[state=active]:text-foreground">

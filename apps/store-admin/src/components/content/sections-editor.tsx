@@ -1108,6 +1108,7 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
             <option value="category">From a category</option>
             <option value="tag">With a tag</option>
             <option value="sale">On sale now</option>
+            <option value="all">The whole shop</option>
           </select>
         </Field>
         {c.source !== "products" && (
@@ -1115,7 +1116,7 @@ function ProductRailForm({ uid, config: c, onChange }: { uid: string; config: Pr
             <select id={id("sort")} value={c.sort} onChange={(e) => set({ sort: e.target.value as ProductRailConfig["sort"] })} className={SELECT}>
               {RAIL_SORTS.map((s) => (
                 <option key={s} value={s}>
-                  {{ popular: "Best selling", newest: "Newest", price_asc: "Price: low to high", price_desc: "Price: high to low", rating: "Best rated", discount: "Biggest discount" }[s]}
+                  {{ popular: "Best selling", trending: "Trending (sold most this week)", newest: "Newest", price_asc: "Price: low to high", price_desc: "Price: high to low", rating: "Best rated", discount: "Biggest discount" }[s]}
                 </option>
               ))}
             </select>

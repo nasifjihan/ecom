@@ -126,7 +126,7 @@ export type Brand = {
 export type ProductsQueryArgs = {
   page?: number;
   perPage?: number;
-  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount" | "relevance";
+  sort?: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount" | "relevance" | "trending";
   /** One id or a comma-separated list; descendants of each category are included. */
   categoryId?: string;
   categorySlug?: string;

@@ -90,29 +90,30 @@ export const Footer: React.FC<FooterProps> = ({
 
   const companyLinks: FooterLink[] = [
     { label: "About Us", href: "/about" },
-    { label: "Careers", href: "/careers" },
-    { label: "Press", href: "/press" },
     { label: "Blog", href: "/blog" },
+    { label: "Privacy Policy", href: "/privacy-policy" },
+    { label: "Terms of Service", href: "/terms-of-service" },
   ];
 
+  // Every link here is a page each store has (default-pages.ts in the API, or built in).
   const helpLinks: FooterLink[] = [
-    { label: "Shipping Info", href: "/shipping" },
-    { label: "Returns & Refunds", href: "/returns" },
+    { label: "Shipping Info", href: "/shipping-policy" },
+    { label: "Returns & Refunds", href: "/return-policy" },
     { label: "FAQs", href: "/faq" },
     { label: "Contact Us", href: "/contact" },
   ];
 
-  const categoryLinks: FooterLink[] = [
-    { label: "Women", href: "/categories/women" },
-    { label: "Men", href: "/categories/men" },
-    { label: "Kids", href: "/categories/kids" },
-    { label: "Accessories", href: "/categories/accessories" },
+  const shopLinks: FooterLink[] = [
+    { label: "All Products", href: "/products" },
+    { label: "New Arrivals", href: "/products?sort=newest" },
+    { label: "Best Sellers", href: "/products?sort=popular" },
+    { label: "Trending Now", href: "/products?sort=trending" },
   ];
 
   const linkColumns = columns ?? [
     { title: "Company", links: companyLinks },
     { title: "Help", links: helpLinks },
-    { title: "Categories", links: categoryLinks },
+    { title: "Shop", links: shopLinks },
   ];
   const hasSocial = Object.values(socialLinks).some(Boolean);
 

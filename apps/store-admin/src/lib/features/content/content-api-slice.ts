@@ -147,9 +147,9 @@ export interface TextColumn {
   heading: string;
   text: string;
 }
-export const RAIL_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount"] as const;
+export const RAIL_SORTS = ["popular", "trending", "newest", "price_asc", "price_desc", "rating", "discount"] as const;
 export interface ProductRailConfig extends HeadingConfig {
-  source: "products" | "category" | "tag" | "sale";
+  source: "products" | "category" | "tag" | "sale" | "all";
   /** Names are only for showing what was picked; the storefront loads the live products. */
   products: { id: string; name: string }[];
   categoryId: string | null;

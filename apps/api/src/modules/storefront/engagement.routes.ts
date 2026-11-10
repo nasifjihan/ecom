@@ -7,6 +7,7 @@
  *   POST /api/storefront/products/:id/questions     { name?, question }  (anyone)
  *   POST /api/storefront/products/:id/reviews       { rating, title?, body? }  (signed-in customer)
  *   GET  /api/storefront/products/:id/my-review
+ *   GET  /api/storefront/account/reviews            my reviews, and delivered products still to review
  *   GET|POST /api/storefront/account/wishlist, GET /wishlist/ids, DELETE /wishlist/:productId
  */
 import { Router, type NextFunction, type Request, type Response } from "express"
@@ -126,6 +127,12 @@ storefrontEngagementRouter.get(
 
 export const storefrontWishlistRouter = Router()
 storefrontWishlistRouter.use(authMiddleware("customer"))
+storefrontWishlistRouter.get(
+  "/reviews",
+  ctrl(async (req: Req, res: Response) => {
+    envelope(res, { data: await svc(req).myReviews() })
+  }),
+)
 storefrontWishlistRouter.get(
   "/wishlist",
   ctrl(async (req: Req, res: Response) => {

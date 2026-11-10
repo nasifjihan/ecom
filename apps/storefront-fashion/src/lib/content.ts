@@ -117,11 +117,11 @@ export type HomepageSection = { id?: string; enabled: boolean } & (
   | {
       type: "product_rail";
       config: HeadingConfig & {
-        source: "products" | "category" | "tag" | "sale";
+        source: "products" | "category" | "tag" | "sale" | "all";
         products: { id: string; name: string }[];
         categoryId: string | null;
         tag: string;
-        sort: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount";
+        sort: "popular" | "newest" | "price_asc" | "price_desc" | "rating" | "discount" | "trending";
       };
     }
   | { type: "category_tiles"; config: { heading: string; categoryIds: string[] } }

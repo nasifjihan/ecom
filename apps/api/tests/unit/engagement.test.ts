@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
+  byTrending,
   publicName,
   searchTerm,
   TRACK_STEPS,
   trackStep,
+  waitingForReview,
 } from "../../src/modules/storefront/engagement.rules"
 
 describe("searchTerm", () => {
@@ -52,5 +54,31 @@ describe("publicName", () => {
     ["", "Akter", "Akter"],
   ])("%j %j -> %s", (f, l, want) => {
     expect(publicName(f, l)).toBe(want)
+  })
+})
+
+describe("byTrending", () => {
+  const rows = [
+    { id: 1n, sold: 50 },
+    { id: 2n, sold: 10 },
+    { id: 3n, sold: 0 },
+    { id: 4n, sold: 0 },
+  ]
+  it("puts this week's sellers first, then all-time sales, then the newest", () => {
+    const week = new Map([[3n, 5], [2n, 1]])
+    expect([...rows].sort(byTrending(week)).map((r) => r.id)).toEqual([3n, 2n, 1n, 4n])
+  })
+  it("is the best-seller order when nothing sold this week", () => {
+    expect([...rows].sort(byTrending(new Map())).map((r) => r.id)).toEqual([1n, 2n, 4n, 3n])
+  })
+})
+
+describe("waitingForReview", () => {
+  it("keeps delivered products not reviewed yet, each once, newest order first", () => {
+    const delivered = [{ productId: 7n, o: "B" }, { productId: 5n, o: "B" }, { productId: 7n, o: "A" }, { productId: null, o: "A" }, { productId: 9n, o: "A" }]
+    expect(waitingForReview(delivered, [5n])).toEqual([{ productId: 7n, o: "B" }, { productId: 9n, o: "A" }])
+  })
+  it("is empty when everything was reviewed", () => {
+    expect(waitingForReview([{ productId: 1n }], [1n])).toEqual([])
   })
 })

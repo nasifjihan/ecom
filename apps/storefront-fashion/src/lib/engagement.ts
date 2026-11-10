@@ -16,6 +16,24 @@ export interface SearchSuggestions {
   terms: string[];
 }
 
+export interface MyReviews {
+  toReview: { productId: string; slug: string; title: string; image: string | null; orderNumber: string }[];
+  reviews: {
+    id: string;
+    productId: string;
+    slug: string;
+    title: string;
+    image: string | null;
+    rating: number;
+    reviewTitle: string | null;
+    body: string | null;
+    photos: string[];
+    shown: boolean;
+    reply: string | null;
+    createdAt: string;
+  }[];
+}
+
 export interface TrackedOrder {
   number: string;
   status: string;
@@ -63,12 +81,14 @@ const engagementApi = api.injectEndpoints({
     }),
     submitReview: b.mutation<{ id: string; status: string; verified: boolean }, { productId: string; rating: number; title?: string; body?: string; photos?: string[] }>({
       query: ({ productId, ...body }) => ({ url: `/storefront/products/${productId}/reviews`, method: "POST", body }),
-      invalidatesTags: (_r, _e, { productId }) => [{ type: "Product", id: `MY-REVIEW-${productId}` }],
+      invalidatesTags: (_r, _e, { productId }) => [{ type: "Product", id: `MY-REVIEW-${productId}` }, { type: "Product", id: "MY-REVIEWS" }],
     }),
     myReview: b.query<{ id: string; rating: number; status: string; createdAt: string } | null, string>({
       query: (productId) => `/storefront/products/${productId}/my-review`,
       providesTags: (_r, _e, productId) => [{ type: "Product", id: `MY-REVIEW-${productId}` }],
     }),
+    /** The account's Reviews page: delivered products still to review, and the reviews written. */
+    myReviews: b.query<MyReviews, void>({ query: () => "/storefront/account/reviews", providesTags: [{ type: "Product", id: "MY-REVIEWS" }] }),
     wishlistIds: b.query<string[], void>({ query: () => "/storefront/account/wishlist/ids", providesTags: [WISHLIST] }),
     wishlistProducts: b.query<ProductSummary[], void>({ query: () => "/storefront/account/wishlist", providesTags: [WISHLIST] }),
     addToWishlist: b.mutation<string[], string[]>({
@@ -93,6 +113,7 @@ export const {
   useAskQuestionMutation,
   useSubmitReviewMutation,
   useMyReviewQuery,
+  useMyReviewsQuery,
   useWishlistIdsQuery,
   useWishlistProductsQuery,
   useAddToWishlistMutation,

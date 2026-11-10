@@ -26,6 +26,7 @@ import type {
 } from "./storefront.dto";
 import { emitOrderPlaced } from "../notifications";
 import { FlashSales, flashView, type FlashDeal, type PricedProduct } from "./flash-sales";
+import { TRENDING_DAYS, byTrending } from "./engagement.rules";
 import { addressWithLocation, offInChain, storeLocationsOff } from "../locations/locations.service";
 import { FulfilmentService } from "../fulfilment/fulfilment.service";
 import { chooseWarehouse, moveStock } from "../stock";
@@ -348,7 +349,7 @@ export class StorefrontService {
     const relevance = q.sort === "relevance" && matches !== null;
 
     const byPrice = q.sort === "price_asc" || q.sort === "price_desc";
-    if (byPrice || relevance || q.sort === "discount" || q.onSale || (priceRange && ownPrices)) {
+    if (byPrice || relevance || q.sort === "discount" || q.sort === "trending" || q.onSale || (priceRange && ownPrices)) {
       return this.rankedPage(q, sf, include, where, matches, byPrice, relevance);
     }
 
@@ -457,7 +458,8 @@ export class StorefrontService {
     if (byPrice) ranked.sort((a, b) => dir * (a.price - b.price) || Number(a.id - b.id));
     if (relevance) ranked.sort((a, b) => matches!.get(b.id)! - matches!.get(a.id)! || b.sold - a.sold || Number(b.id - a.id));
     if (q.sort === "discount") ranked.sort((a, b) => b.off - a.off || Number(b.id - a.id));
-    const kept = byPrice || q.sort === "discount" || relevance
+    if (q.sort === "trending") ranked.sort(byTrending(await this.weekSales()));
+    const kept = byPrice || q.sort === "discount" || q.sort === "trending" || relevance
       ? ranked.map((r) => r.id)
       : (
           await prisma.product.findMany({
@@ -471,6 +473,19 @@ export class StorefrontService {
     const byId = new Map(rows.map((r) => [r.id, r]));
     const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
     return this.page(ordered.map((r) => this.toSummary(r, flash, sf)), kept.length, q);
+  }
+
+  /** Units of each product sold in the last week (cancelled, failed and refunded orders left out). */
+  private async weekSales(): Promise<Map<bigint, number>> {
+    const rows = await prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { not: null },
+        order: { storeId: this.storeId, createdAt: { gte: new Date(Date.now() - TRENDING_DAYS * 86_400_000) }, status: { notIn: ["CANCELLED", "FAILED", "REFUNDED"] } },
+      },
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.productId!, r._sum.quantity ?? 0]));
   }
 
   private orderBy(sort: StorefrontProductsQueryDto["sort"]): Prisma.ProductOrderByWithRelationInput[] {

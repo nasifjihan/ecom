@@ -378,13 +378,13 @@ export const HomepageSectionDto = z.discriminatedUnion("type", [
     enabled: z.boolean(),
     config: z.object({
       ...Heading,
-      /** products: the ones picked, in that order; category / tag / sale: the best of those by `sort`. */
-      source: z.enum(["products", "category", "tag", "sale"]),
+      /** products: the ones picked, in that order; category / tag / sale / all (the whole shop): the best of those by `sort`. */
+      source: z.enum(["products", "category", "tag", "sale", "all"]),
       /** Names are kept only so the editor can show what was picked; the storefront loads live products. */
       products: z.array(z.object({ id: z.string().regex(/^\d+$/), name: text(200) })).max(24),
       categoryId: z.string().regex(/^\d+$/).nullable(),
       tag: text(40),
-      sort: z.enum(["popular", "newest", "price_asc", "price_desc", "rating", "discount"]),
+      sort: z.enum(["popular", "newest", "price_asc", "price_desc", "rating", "discount", "trending"]),
       limit: Count,
     }),
   }),

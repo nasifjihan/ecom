@@ -20,7 +20,7 @@ const isExternal = (url: string) => /^https?:/i.test(url);
 
 /** Storefront pages that exist in code rather than in the CMS (Content > Pages). */
 const STATIC_PATHS = new Set([
-  "account", "app-icon", "blog", "brands", "cart", "categories", "checkout", "faq",
+  "account", "app-icon", "blog", "brands", "cart", "categories", "checkout", "compare", "faq",
   "feeds", "flash-sale", "gift-boxes", "lp", "newsletter", "preview", "products", "s",
   "search", "track", "wishlist",
 ]);

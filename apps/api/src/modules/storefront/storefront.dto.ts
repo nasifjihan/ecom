@@ -4,8 +4,8 @@ const XSS_RE = /<\s*script|<\s*iframe|on(error|load|click|mouseover)\s*=/i;
 const noXss = (v: string | null | undefined): boolean => !v || !XSS_RE.test(v);
 const safeText = (max: number) => z.string().trim().max(max).refine(noXss, "No JavaScript injection allowed");
 
-// relevance: best match first when searching (popular otherwise).
-const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount", "relevance"] as const;
+// relevance: best match first when searching (popular otherwise). trending: sold most in the last week.
+const PRODUCT_SORTS = ["popular", "newest", "price_asc", "price_desc", "rating", "discount", "relevance", "trending"] as const;
 
 export const StorefrontProductsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),

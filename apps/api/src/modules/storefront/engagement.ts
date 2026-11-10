@@ -26,6 +26,7 @@ import {
   SUGGEST_MIN_SEARCHES,
   TRACK_STEPS,
   trackStep,
+  waitingForReview,
 } from "./engagement.rules"
 
 const num = (v: Prisma.Decimal | number | null | undefined) =>
@@ -405,6 +406,62 @@ export class StorefrontEngagement {
       })
     }
     return { id: String(review.id), status: review.status, verified }
+  }
+
+  /** The account's Reviews page: what the customer wrote, and delivered products still to review. */
+  async myReviews() {
+    const customerId = this.customerId
+    const [reviews, delivered] = await Promise.all([
+      prisma.review.findMany({
+        where: { storeId: this.storeId, customerId },
+        orderBy: { id: "desc" },
+        take: 200,
+        include: {
+          product: { select: { name: true, slug: true, images: { orderBy: { sortOrder: "asc" }, take: 1, select: { imageUrl: true } } } },
+        },
+      }),
+      prisma.orderItem.findMany({
+        where: { productId: { not: null }, order: { storeId: this.storeId, customerId, status: { in: ["DELIVERED", "COMPLETED"] } } },
+        orderBy: { id: "desc" },
+        take: 200,
+        select: { productId: true, productName: true, imageUrl: true, order: { select: { number: true } } },
+      }),
+    ])
+    // Any review counts as "done", even a removed one: a second review of a product is refused.
+    const waiting = waitingForReview(delivered, reviews.map((r) => r.productId))
+    const open = await prisma.product.findMany({
+      where: { id: { in: waiting.map((w) => w.productId) }, storeId: this.storeId, status: "published", allowReviews: true },
+      select: { id: true, slug: true },
+    })
+    const slugOf = new Map(open.map((p) => [p.id, p.slug]))
+    return {
+      toReview: waiting
+        .filter((w) => slugOf.has(w.productId))
+        .map((w) => ({
+          productId: String(w.productId),
+          slug: slugOf.get(w.productId)!,
+          title: w.productName,
+          image: w.imageUrl,
+          orderNumber: w.order.number,
+        })),
+      reviews: reviews
+        .filter((r) => r.status !== "trashed")
+        .map((r) => ({
+          id: String(r.id),
+          productId: String(r.productId),
+          slug: r.product.slug,
+          title: r.product.name,
+          image: r.product.images[0]?.imageUrl ?? null,
+          rating: r.rating,
+          reviewTitle: r.title,
+          body: r.body,
+          photos: r.photos,
+          // The customer sees "shown" or "waiting"; why the shop is holding one is the shop's business.
+          shown: r.status === "approved",
+          reply: r.replyBody,
+          createdAt: r.createdAt.toISOString(),
+        })),
+    }
   }
 
   /** The signed-in customer's review of a product, if any (so the page can say it's waiting). */

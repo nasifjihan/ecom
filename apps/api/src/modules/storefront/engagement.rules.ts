@@ -51,3 +51,31 @@ export function publicName(first: string | null | undefined, last?: string | nul
   if (!f && !l) return "Customer"
   return l ? `${f || l} ${f ? `${l.charAt(0)}.` : ""}`.trim() : f
 }
+
+/** How far back "trending" looks. */
+export const TRENDING_DAYS = 7
+
+/**
+ * Trending order: most units sold in the last week first, then all-time sales, then newest.
+ * Products with no sales this week simply follow in best-seller order, so a quiet week (or a new
+ * shop) still shows a full list.
+ */
+export function byTrending(week: Map<bigint, number>) {
+  return (a: { id: bigint; sold: number }, b: { id: bigint; sold: number }) =>
+    (week.get(b.id) ?? 0) - (week.get(a.id) ?? 0) || b.sold - a.sold || Number(b.id - a.id)
+}
+
+/**
+ * Products a customer can still review: bought and delivered (newest order first), not reviewed
+ * yet, each once.
+ */
+export function waitingForReview<T extends { productId: bigint | null }>(delivered: T[], reviewed: Iterable<bigint>): (T & { productId: bigint })[] {
+  const seen = new Set(reviewed)
+  const out: (T & { productId: bigint })[] = []
+  for (const d of delivered) {
+    if (d.productId === null || seen.has(d.productId)) continue
+    seen.add(d.productId)
+    out.push(d as T & { productId: bigint })
+  }
+  return out
+}

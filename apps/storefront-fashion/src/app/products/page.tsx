@@ -57,6 +57,7 @@ import { toast } from "sonner";
 const SORT_OPTIONS = [
   { value: "relevance", label: msg("Best Match") },
   { value: "popular", label: msg("Most Popular") },
+  { value: "trending", label: msg("Trending Now") },
   { value: "newest", label: msg("Newest First") },
   { value: "price_asc", label: msg("Price: Low to High") },
   { value: "price_desc", label: msg("Price: High to Low") },
@@ -97,6 +98,24 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [search, setSearch] = React.useState(searchParams.get("search") ?? "");
   const [page, setPage] = React.useState(1);
+  // Menu, footer and home page links open this list as a view:
+  // ?sort=newest (New Arrivals), ?sort=popular (Best Sellers), ?sort=trending, ?featured=true.
+  const urlSort = searchParams.get("sort");
+  const featured = searchParams.get("featured") === "true";
+  React.useEffect(() => {
+    // No sort in the address ("All Products") goes back to the usual order.
+    setSort(SORT_OPTIONS.find((o) => o.value === urlSort)?.value ?? (searchParams.get("search") ? "relevance" : "popular"));
+    setPage(1);
+  }, [urlSort, featured]);
+  const viewTitle = featured
+    ? msg("Featured Products")
+    : sort === "newest"
+      ? msg("New Arrivals")
+      : sort === "trending"
+        ? msg("Trending Now")
+        : sort === "popular" && urlSort === "popular"
+          ? msg("Best Sellers")
+          : msg("All Products");
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
   const perPage = 16;
@@ -122,6 +141,7 @@ export default function ProductsPage() {
     maxPrice: debouncedPrice[1]! < PRICE_MAX ? debouncedPrice[1] : undefined,
     rating: minRating || undefined,
     tag,
+    featured: featured || undefined,
     onSale: onSale || undefined,
     options: optionsParam(chosen),
     inStock: inStock || undefined,
@@ -359,7 +379,7 @@ export default function ProductsPage() {
   return (
     <div className="container py-6 md:py-10">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{tag ? t("Tagged “{tag}”", { tag }) : t("All Products")}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{tag ? t("Tagged “{tag}”", { tag }) : t(viewTitle)}</h1>
         <p className="text-muted-foreground">{total > 0 ? t("Browse {n} items", { n: total }) : t("Browse our catalog")}</p>
       </div>
 

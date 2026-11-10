@@ -59,6 +59,7 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [ ] SSLCommerz
 - [ ] aamarPay
 - [ ] Nagad (refunds are done by hand; check the order records it)
+- [ ] After a failed or cancelled online payment, the shopper lands back on the order page: it says the payment failed and offers to pay again (there is no separate "payment failed" page). Not seen working yet
 - [ ] Each courier: book a parcel from an order, print the label, see the tracking status update
 - [ ] SMS: test send, order SMS, phone OTP login, "send invoice by SMS"
 - [ ] Google and Facebook sign-in on the shop
@@ -143,6 +144,15 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [x] Storefront: compare from a product card or product page (up to 4, a 5th is refused); the bottom bar opens the compare page. Scroll down a long page: the up-arrow button takes you back to the top, above the chat button and the compare bar
 - [ ] Product page in the admin → "Make landing page": the new page starts filled in from the product
 - [ ] On your phone: home, products, a product, cart, checkout and account. No page should scroll sideways
+
+### M. Batch 59 (error page, default pages, My Reviews, product views), no keys needed
+- [x] Footer links (About, Shipping, Returns, Privacy, Terms, FAQ, Contact, Blog) each open a real page
+- [ ] Super admin → create a store: Content → Pages already lists About Us, Shipping Policy, Return & Refund Policy, Privacy Policy and Terms of Service. Edit the starter wording
+- [x] `/products?sort=newest`, `?sort=popular`, `?sort=trending` and `?featured=true` show New Arrivals, Best Sellers, Trending Now and Featured Products as the title. Trending puts this week's sellers first
+- [ ] Online Store → Homepage → add a "Products" block: Which products "The whole shop", Order "Trending" (or "Best selling"). The home page shows it with a "View all" link
+- [x] Account → My reviews: a delivered product shows under "Waiting for your review"; "Write a review" opens the product's Reviews tab. After writing it, it moves to "Your reviews"
+- [x] On a phone, the account pages no longer scroll sideways (the menu row scrolls on its own)
+- [ ] A crashed page shows "Something went wrong" with Try again (can't be triggered by hand; seen with a test page)
 
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.

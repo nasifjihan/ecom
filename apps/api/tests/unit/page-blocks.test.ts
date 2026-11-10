@@ -30,6 +30,12 @@ describe("page blocks (Batch 38)", () => {
     ).toBe(true)
   })
 
+  it("accepts a whole-shop product block in trending order (Batch 59: Best Sellers / Trending blocks)", () => {
+    const rail = (sort: string) => ({ type: "product_rail", enabled: true, config: { heading: "Trending", subheading: "", source: "all", products: [], categoryId: null, tag: "", sort, limit: 8 } })
+    expect(ok([rail("trending"), rail("popular")])).toBe(true)
+    expect(ok([rail("hottest")])).toBe(false)
+  })
+
   it("refuses incomplete or unsafe blocks with a message the admin can show", () => {
     expect(firstError([{ type: "video", enabled: true, config: { heading: "", url: "https://example.com/watch", caption: "" } }])).toMatch(/YouTube, Vimeo or Facebook/)
     expect(firstError([{ type: "video", enabled: true, config: { heading: "", url: "javascript:alert(1)", caption: "" } }])).toBeTruthy()

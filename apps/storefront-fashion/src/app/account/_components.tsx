@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, FileText, Gift, LogOut, MapPin, Package, Ticket, User, Wallet } from "lucide-react";
+import { Briefcase, FileText, Gift, LogOut, MapPin, Package, Star, Ticket, User, Wallet } from "lucide-react";
 import { Badge, Button, Input, Label, LocationSelects, cn, formatMoney, msg, orderStatusWord, useT } from "@ecom/storefront-base";
 import { useAppSelector } from "@/lib/store";
 import { useWholesaleStatus } from "@/lib/wholesale";
@@ -54,6 +54,7 @@ const NAV = [
   { href: "/account", label: msg("Profile"), icon: User },
   { href: "/account/orders", label: msg("Orders"), icon: Package },
   { href: "/account/addresses", label: msg("Addresses"), icon: MapPin },
+  { href: "/account/reviews", label: msg("My reviews"), icon: Star },
   { href: "/account/wallet", label: msg("Wallet"), icon: Wallet },
   { href: "/account/coupons", label: msg("My coupons"), icon: Ticket },
   { href: "/account/refer", label: msg("Refer a friend"), icon: Gift },
@@ -85,7 +86,7 @@ export function AccountShell({ title, description, children }: { title: string; 
   return (
     <div className="container py-8 md:py-12">
       <div className="grid gap-6 md:grid-cols-[220px_1fr]">
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <div className="rounded-xl border bg-card p-4">
             <p className="font-semibold truncate">{name ?? t("My Account")}</p>
             {email && <p className="text-xs text-muted-foreground truncate">{email}</p>}

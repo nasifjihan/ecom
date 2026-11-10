@@ -561,7 +561,9 @@ function ProductRail({
           ? { categoryId: c.categoryId ?? undefined }
           : c.source === "sale"
             ? { onSale: true }
-            : { tag: c.tag }),
+            : c.source === "tag"
+              ? { tag: c.tag }
+              : {}),
     },
     { skip },
   );
@@ -581,7 +583,9 @@ function ProductRail({
       ? `/products?tag=${encodeURIComponent(c.tag)}`
       : c.source === "sale"
         ? `/products?sale=true&sort=${c.sort}`
-        : null;
+        : c.source === "all"
+          ? `/products?sort=${c.sort}`
+          : null;
   return (
     <section className="container">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">

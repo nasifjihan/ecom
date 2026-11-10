@@ -7114,3 +7114,43 @@ The parcels card put the status badge (a `<div>`) inside a `<p>` (`CardDescripti
 
 ### Checked
 - Typecheck (api, store-admin) passes. Unit tests: 69 files, 846 tests pass (one run had a single failure that didn't repeat).
+
+---
+
+## ✅ BATCH #59 — Pages the owner's list was missing (2026-11-10)
+The owner sent a list of about 60 storefront pages to check. Nearly all existed (some as parts of one page: the checkout steps, and the account's profile, password and settings). This batch fills the gaps the owner agreed to.
+
+**Decided not to build:** a phone code before a guest order (the owner confirms early orders by phone, and checkout should stay easy), a Recently Viewed page (the strip on the product page stays), a confirm-your-email step, and a separate Payment Failed page (the order page shows the result).
+
+### Error page (500)
+- **Storefront:** `app/error.tsx` shows "Something went wrong" inside the usual header and footer, in Bangla too, with Try again and Home. `app/global-error.tsx` covers a crash of the layout itself (plain styles, both languages on one page).
+- **Store admin:** `(dashboard)/error.tsx` keeps the menu and offers Try again.
+- All three report to Sentry when a DSN is set.
+
+### Default pages and footer links
+- **New stores** (`content/default-pages.ts`) now start with About Us, Shipping Policy and Return & Refund Policy as well as Privacy Policy and Terms of Service. One Return & Refund page covers "return policy" and "refund policy".
+- **Default footer** (used when a store hasn't set its own): Shipping and Returns pointed at `/shipping` and `/returns`, and Careers and Press at pages that never existed. They now point at `/shipping-policy` and `/return-policy`; Careers and Press are gone; Privacy and Terms were added; the fashion-only category column became a Shop column (All Products, New Arrivals, Best Sellers, Trending Now).
+- **Dev store:** the missing About page was added by hand (the seed adds it on a fresh database).
+- `compare` was added to the layout's list of built-in pages, so a menu link to it isn't dropped.
+
+### My reviews
+- **API:** `GET /api/storefront/account/reviews` (`StorefrontEngagement.myReviews`) returns:
+  - `toReview`: products from delivered or completed orders with no review yet, each once, newest order first (`engagement.rules waitingForReview`). Unpublished products and ones with reviews turned off are left out.
+  - `reviews`: what the customer wrote, with photos, the shop's reply, and whether it is shown or waiting.
+- **Storefront:** `/account/reviews`, linked in the account menu. "Write a review" opens the product page at `#reviews`, which now opens the Reviews tab (the rating link under the product title used the same address and went nowhere before).
+
+### Product views
+- **Trending:** a new sort, `trending` (`byTrending`): units sold in the last 7 days first (cancelled, failed and refunded orders left out), then all-time sales, then newest. A quiet week still shows a full list, in best-seller order.
+- **Titled views of the product list:** `/products?sort=newest` (New Arrivals), `?sort=popular` (Best Sellers), `?sort=trending` (Trending Now) and `?featured=true` (Featured Products; the page didn't read `featured` before). Moving between views by link updates the list.
+- **Home page blocks:** the Products block gained "The whole shop" as a source and "Trending" as an order, so a Best Sellers or Trending block is that block with those two choices. No new block types were needed.
+
+### Bug fixed — account pages scrolled sideways on a phone
+The account menu is a row that scrolls sideways on small screens, but its container (`aside` in `account/_components.tsx`) could grow to the row's full width and stretched the whole page to 960 px. `min-w-0` on the container keeps the scrolling inside the row. It affected every account page; Batch 58's phone check hadn't covered them.
+
+### Checked
+- **Typecheck:** all 11 packages.
+- **Unit tests:** 69 files, 851 tests (new: trending order, waiting-for-review, the whole-shop trending block).
+- **Bangla check:** passes (17 new strings).
+- **Database test** (`batch59.db.test.ts` on `ecom_test`): 3/3 — trending against best-seller order with a cancelled order ignored; My Reviews before and after writing a review; reviews turned off.
+- **In the browser:** the four views with their titles (Featured showed 4 of 12), every footer link, My Reviews signed in as a seed customer, "Write a review" opening the Reviews tab, the error page (with a temporary crashing page, since removed), and the account pages at 375 px.
+- **Not checked:** the Products block's new options in the admin editor (only the API's validation), a new store getting the five pages through the super admin, and the admin error page.
