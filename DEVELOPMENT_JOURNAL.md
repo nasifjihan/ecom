@@ -7187,3 +7187,26 @@ The owner expects about 95% of shoppers on phones, so every storefront page was 
 - **Seen at 360 px:** product page, cart, checkout, home.
 - **Typecheck:** all 11 packages. **Storefront production build:** passes. **Bangla check:** passes (2 new strings).
 - **Not checked:** a real phone and iPhone Safari; the open cart drawer, filters and quick view; a single gift box and a landing page (none in the dev data); forms with the keyboard up; the step bar by eye (measured only). Checkout is still about seven screens long on a phone, though the order button is now always on screen.
+
+---
+
+## ✅ ADMIN CHECKS — the open items from Batches 58 and 59 (2026-11-11)
+The five admin checks left open in checklist sections L and M were done in the browser on this PC (API, store admin and super admin running; seed owner and seed platform accounts).
+
+### Bug fixed — "Make landing page" and "View on store" never showed
+The product editor loads a product with its status in capitals (`catalog-api-slice fromApiProduct` → "PUBLISHED"), but the header buttons tested `status === "published"`. So Batch 58's "Make landing page" button, and the older "View on store" button beside it (and the one in the Publish box), never appeared for any product. The three tests now compare with "PUBLISHED". Batch 58 had noted this button as not checked; it had never been visible.
+
+### Seen working
+- **Make landing page:** from a published product, the new landing page starts with the product, headline, name, address and main picture filled in.
+- **Product row block:** in Online Store → Homepage, a new block offers "The whole shop" and "Trending (sold most this week)". Saved as "Trending now", the storefront home page shows 8 products with this week's seller first and "View all" going to `/products?sort=trending`.
+- **New store's pages:** a store made through the super admin started with About Us, Shipping Policy, Return & Refund Policy, Privacy Policy and Terms of Service, all published.
+- **Platform team in the store's log:** a store update made as the platform owner shows in that store's Settings → Activity log as "Platform team · Platform Owner", and Who = Platform team lists only it. Creating the test store was logged the same way against the new store.
+- **Admin error page:** a page that throws shows "This page couldn't be shown" with Try again and Dashboard, and the menu stays (seen with a temporary page, since removed).
+
+### Notes
+- **Deleting a store in the super admin suspends it.** The test store was then removed from the dev database by hand, with its owner and pages.
+- **The dev store's home page now has a "Trending now" block** (dev data only).
+- **Dev-only oddity:** with three Next dev servers running, the storefront reloaded every second until its dev server was restarted. Nothing in the app code caused it; it did not come back.
+
+### Checked
+- Typecheck (store-admin) passes.
