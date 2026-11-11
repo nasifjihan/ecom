@@ -1149,4 +1149,6 @@ export const BN: Record<string, string> = {
   "Error code: {code}": "এরর কোড: {code}",
   "Trending Now": "এখন ট্রেন্ডিং",
   "Best Sellers": "সবচেয়ে বেশি বিক্রিত",
+  "Checkout": "চেকআউট",
+  "Add company, postcode or more address details": "প্রতিষ্ঠান, পোস্টকোড বা ঠিকানার আরও তথ্য যোগ করুন",
 };

@@ -154,6 +154,16 @@ For each gateway: pay successfully, cancel on the gateway page, let a payment fa
 - [x] On a phone, the account pages no longer scroll sideways (the menu row scrolls on its own)
 - [ ] A crashed page shows "Something went wrong" with Try again (can't be triggered by hand; seen with a test page)
 
+### N. Batch 60 (phones), on a real phone, Android and iPhone if you can
+- [ ] No page scrolls sideways: home, product list, a product, cart, checkout, the order-received page, the account pages
+- [ ] Product page: the photo is full width, thumbnails are a row under it, then the name and price. "Add to cart" and "Buy now" stay at the bottom of the screen; with no size picked, tapping one goes back to the sizes
+- [ ] Cart: "Checkout" with the subtotal stays at the bottom
+- [ ] Checkout: "Place order" with the total stays at the bottom. "Add company, postcode or more address details" opens the extra fields. "Show all delivery options" opens the rest
+- [ ] iPhone: tapping a form field doesn't zoom the page
+- [ ] With products picked to compare, a small "Compare (2)" button shows in a corner and doesn't cover the buy bar. The chat and back-to-top buttons sit above the bar too
+- [ ] Open the cart drawer, the filters and a product's quick view: each fits the screen and closes
+- [ ] Type in the checkout form with the keyboard up: the field you're typing in stays visible
+
 **Limits on your computer:** gateways, couriers and WhatsApp can't call back into your computer from the internet.
 - **Payments:** confirmed by asking the gateway directly when the shopper returns, so they still work.
 - **Couriers:** tracking updates through the scheduled sync instead of their webhooks.

@@ -73,6 +73,7 @@ import { signIn, useCustomerRegisterMutation, useGetMyAddressesQuery } from "@/l
 import { cartToken, rememberCartContact } from "@/lib/saved-cart";
 import { passwordProblem } from "@/app/account/_components";
 import { CourierPicker, DeliveryTimePicker, type SlotPick } from "./_delivery-choices";
+import { MobileBar } from "@/app/_components/mobile-bar";
 import { GiftSection, NO_GIFT, giftProblem, type GiftState } from "./_gift";
 import { useCartPriceCheck } from "@/lib/cart-prices";
 import { useAvailableCouponsQuery } from "@/lib/promotions";
@@ -154,6 +155,9 @@ export default function CheckoutPage() {
   }, [contactPhone, contactEmail, contactName]);
 
   const [selectedShippingRateId, setSelectedShippingRateId] = React.useState<string | null>(null);
+  // Phones start with the short form: optional address fields and the dearer delivery choices open on a tap.
+  const [moreAddress, setMoreAddress] = React.useState(false);
+  const [allRates, setAllRates] = React.useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = React.useState<PaymentMethod | null>(null);
   const [paymentFormData, setPaymentFormData] = React.useState<PaymentFormData>({});
 
@@ -695,12 +699,14 @@ export default function CheckoutPage() {
       (a, b) => (a.maxDeliveryDays ?? 99) - (b.maxDeliveryDays ?? 99),
     )[0]?.methodId ?? null;
   }, [rates]);
+  // The first three (the API lists the cheapest first), plus the fastest and the one chosen; the rest open with "Show all".
+  const shownRates = allRates || rates.length <= 4 ? rates : rates.filter((r, i) => i < 3 || r.methodId === fastest || r.methodId === selectedShippingRateId);
 
   if (!mounted) {
     return (
       <div className="container py-10">
         <Skeleton className="h-16 w-full mb-8 rounded-2xl" />
-        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
           <div className="space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-32 w-full rounded-2xl" />
@@ -775,7 +781,7 @@ export default function CheckoutPage() {
               </div>
               <div className="min-w-0">
                 <div className="text-xs md:text-sm font-semibold leading-tight">{t(b.label)}</div>
-                <div className="hidden md:block text-[11px] text-muted-foreground leading-tight">
+                <div className="hidden md:block text-xs text-muted-foreground leading-tight">
                   {t(b.desc)}
                 </div>
               </div>
@@ -784,7 +790,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[1fr_380px] gap-6 lg:gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 lg:gap-8 items-start">
         <section className="space-y-6 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
@@ -841,7 +847,7 @@ export default function CheckoutPage() {
                           onChange={(e) => setContactEmail(e.target.value)}
                           className={cn(!contactEmail && "border-muted")}
                         />
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {t("For the order confirmation by email. Order updates also come by SMS to your phone.")}
                         </p>
                       </div>
@@ -852,7 +858,7 @@ export default function CheckoutPage() {
                         />
                         <Label className="text-sm cursor-pointer text-foreground leading-relaxed">
                           {t("Subscribe to our newsletter for exclusive discounts, new arrivals and flash sales.")}
-                          <span className="block text-[11px] text-muted-foreground font-normal mt-0.5">
+                          <span className="block text-xs text-muted-foreground font-normal mt-0.5">
                             {t("Unsubscribe at any time. We respect your privacy.")}
                           </span>
                         </Label>
@@ -971,7 +977,7 @@ export default function CheckoutPage() {
                   </div>
                   {!pickupOn && (
                   <>
-                  <div className="space-y-1.5">
+                  <div className={cn("space-y-1.5", !moreAddress && !shippingAddress.company && "max-md:hidden")}>
                     <Label>{t("Company (Optional)")}</Label>
                     <Input
                       placeholder="Acme Ltd."
@@ -1013,7 +1019,7 @@ export default function CheckoutPage() {
                           </div>
                         )}
                       />
-                      <div className="space-y-1.5">
+                      <div className={cn("space-y-1.5", !moreAddress && !shippingAddress.postcode && "max-md:hidden")}>
                         <Label htmlFor="ship-postcode">{t("Postcode (optional)")}</Label>
                         <Input
                           id="ship-postcode"
@@ -1061,7 +1067,7 @@ export default function CheckoutPage() {
                       }
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className={cn("space-y-1.5", !moreAddress && !shippingAddress.addressLine2 && "max-md:hidden")}>
                     <Label>{t("Address Line 2 (Optional)")}</Label>
                     <Input
                       placeholder={t("Apartment, suite, floor, building")}
@@ -1071,6 +1077,11 @@ export default function CheckoutPage() {
                       }
                     />
                   </div>
+                  {!moreAddress && (
+                    <button type="button" onClick={() => setMoreAddress(true)} className="py-2 text-left text-sm font-medium text-primary hover:underline md:hidden">
+                      + {t("Add company, postcode or more address details")}
+                    </button>
+                  )}
                   </>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1083,7 +1094,7 @@ export default function CheckoutPage() {
                           setShippingAddress((s) => ({ ...s, phone: e.target.value }))
                         }
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {t("Rider will call this number for delivery coordination")}
                       </p>
                     </div>
@@ -1180,7 +1191,7 @@ export default function CheckoutPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {rates.map((rate) => {
+                      {shownRates.map((rate) => {
                         const isSelected = selectedShippingRateId === rate.methodId;
                         const rateIsFree = rate.cost === 0;
                         const isCheapest = cheapest === rate.methodId;
@@ -1214,17 +1225,17 @@ export default function CheckoutPage() {
                                     {rate.providerName}
                                   </span>
                                   {isCheapest && (
-                                    <Badge variant="success" className="text-[10px] px-2 py-0.5 gap-1">
+                                    <Badge variant="success" className="text-xs px-2 py-0.5 gap-1">
                                       <Tag className="h-3 w-3" /> {t("Cheapest")}
                                     </Badge>
                                   )}
                                   {isFastest && !isCheapest && (
-                                    <Badge variant="default" className="text-[10px] px-2 py-0.5 gap-1">
+                                    <Badge variant="default" className="text-xs px-2 py-0.5 gap-1">
                                       <Zap className="h-3 w-3" /> {t("Fastest")}
                                     </Badge>
                                   )}
                                   {rateIsFree && (
-                                    <Badge variant="success" className="text-[10px] px-2 py-0.5 gap-1">
+                                    <Badge variant="success" className="text-xs px-2 py-0.5 gap-1">
                                       {t("FREE")}
                                     </Badge>
                                   )}
@@ -1253,6 +1264,11 @@ export default function CheckoutPage() {
                           </div>
                         );
                       })}
+                      {shownRates.length < rates.length && (
+                        <button type="button" onClick={() => setAllRates(true)} className="w-full rounded-xl border border-dashed py-3 text-sm font-medium text-primary hover:bg-accent">
+                          {t("Show all {n} delivery options", { n: rates.length })}
+                        </button>
+                      )}
                     </div>
                   )}
                   {selectedRate?.useSlots && (
@@ -1275,7 +1291,7 @@ export default function CheckoutPage() {
                             <span className="text-muted-foreground flex items-center gap-2">
                               {t(line.name)}
                               {typeof line.rate === "number" && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-muted">
                                   {(line.rate * 100).toFixed(0)}%
                                 </span>
                               )}
@@ -1374,25 +1390,29 @@ export default function CheckoutPage() {
               )}
 
               {!stepped && (
-              <div className="flex flex-col sm:flex-row justify-between gap-3 lg:hidden">
-                <Button variant="outline" size="lg" asChild>
+                <Button variant="outline" size="lg" asChild className="lg:hidden">
                   <Link href="/cart">← {t("Back to Cart")}</Link>
                 </Button>
-                <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12">
-                  {placingOrder ? t("Placing Order...") : `${t("Place Order")} • ${formatBDT(grandTotal)}`}
-                </Button>
-              </div>
               )}
-              {stepped && currentStepId === "payment" && (
-                <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12 w-full lg:hidden">
-                  {placingOrder ? t("Placing Order...") : `${t("Place Order")} • ${formatBDT(grandTotal)}`}
-                </Button>
+              {/* Phones: the order button stays on screen (the page is long). */}
+              {(!stepped || currentStepId === "payment") && (
+                <MobileBar>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground">{t("Total")}</p>
+                      <p className="truncate text-base font-bold">{formatBDT(grandTotal)}</p>
+                    </div>
+                    <Button size="lg" onClick={handlePlaceOrder} disabled={placingOrder || cartHasProblems} className="h-12 px-5 text-base">
+                      {placingOrder ? t("Placing Order...") : t("Place Order")}
+                    </Button>
+                  </div>
+                </MobileBar>
               )}
             </motion.div>
           </AnimatePresence>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           {cartHasProblems && (
             <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
               <div className="flex items-center gap-2 font-semibold text-destructive">
@@ -1418,7 +1438,7 @@ export default function CheckoutPage() {
                   <li key={c.code} className="flex items-center justify-between gap-3 text-sm">
                     <span className="min-w-0">
                       <span className="font-mono font-semibold">{c.code}</span>
-                      {c.forYou && <span className="ml-2 rounded bg-primary/10 px-1.5 text-[11px] font-medium text-primary">{t("For you")}</span>}
+                      {c.forYou && <span className="ml-2 rounded bg-primary/10 px-1.5 text-xs font-medium text-primary">{t("For you")}</span>}
                       <span className="block text-xs text-muted-foreground">
                         {c.summary}
                         {c.minSubtotal ? ` ${t("on orders over {amount}", { amount: formatBDT(c.minSubtotal) })}` : ""}

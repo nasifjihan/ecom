@@ -7154,3 +7154,36 @@ The account menu is a row that scrolls sideways on small screens, but its contai
 - **Database test** (`batch59.db.test.ts` on `ecom_test`): 3/3 — trending against best-seller order with a cancelled order ignored; My Reviews before and after writing a review; reviews turned off.
 - **In the browser:** the four views with their titles (Featured showed 4 of 12), every footer link, My Reviews signed in as a seed customer, "Write a review" opening the Reviews tab, the error page (with a temporary crashing page, since removed), and the account pages at 375 px.
 - **Not checked:** the Products block's new options in the admin editor (only the API's validation), a new store getting the five pages through the super admin, and the admin error page.
+
+---
+
+## ✅ BATCH #60 — Phones first: the storefront at 360 and 320 px (2026-11-11)
+The owner expects about 95% of shoppers on phones, so every storefront page was measured at 360 px (the usual Android width) and 320 px (the narrowest phones), and the key pages were looked at on a 360 px screen. The plan was approved in full.
+
+### What the check found
+- **Scrolled sideways at 360 px:** the cart (385 px wide), the order-received page (the five-step bar, 429 px) and the account's order page (363 px).
+- **Product page:** thumbnails took a quarter of the width, a 110 px gap sat under the photo, the three trust boxes overflowed, and the name and price came after all of it.
+- **Checkout:** about 8,100 px tall, with "Place order" about 6,100 px down.
+- **Smaller things:** form fields at 14 px (iPhones zoom the page on fields under 16 px), banner arrows over the headline, trust badges in two narrow columns, 16 px tap targets, 9-10 px text, and at 320 px a header 1 px too wide plus three more pages overflowing.
+
+### Fixed
+- **Sideways scroll:** one-column grids are now `grid-cols-1` (a bare `grid` lets the column grow to its widest content) on the cart, checkout and order-received pages; the order page's button row wraps; the cart's two buttons wrap.
+- **Step bar** (`CheckoutStepper`): the label sits under its circle, and on phones only the current step is named.
+- **Product page on phones:** the photo is full width with the thumbnails in a row under it (Swiper turns them into the left column at 768 px), no gap, then the name, price and options, then the trust boxes (icon above text).
+- **Fixed bottom bars on phones** (`_components/mobile-bar.tsx`, hidden from lg up):
+  - product page: Add to cart and Buy now (with no size picked, the page goes back to the options);
+  - cart: subtotal and Checkout;
+  - checkout: total and Place order (the two inline phone buttons were removed).
+  - The bar publishes its height as `--bar`: the page gets that much bottom padding, and the chat, back-to-top and compare buttons sit above it.
+- **Compare on phones:** the full-width bar is now a small "Compare (2)" button in the corner the chat button doesn't use; the bar with thumbnails stays from md up.
+- **Shorter checkout:** on phones, Company, Postcode and Address line 2 open with "Add company, postcode or more address details" (a filled field always shows). Delivery choices show the first three plus the fastest and the chosen one, with "Show all N delivery options" (all screen sizes). The page went from about 8,100 px to about 5,400 px.
+- **Fields:** 16 px on phones (one rule in `globals.css`), which stops the iPhone zoom.
+- **Home:** banner arrows hidden on phones (swipe still works); trust badges one per row.
+- **Tap targets and text:** bigger "Change" link, cart quantity buttons (40 px), back links and language button; 9-11 px text raised to 12 px across the storefront, except the small count bubbles.
+- **320 px:** tighter header gaps; the waiting-for-review card wraps.
+
+### Checked
+- **Measured again:** 30 pages at 360 px and 320 px, signed in with an item in the cart: none scrolls sideways and nothing is cut off. Login, register and forgot-password measured at 360 px before the changes (fit).
+- **Seen at 360 px:** product page, cart, checkout, home.
+- **Typecheck:** all 11 packages. **Storefront production build:** passes. **Bangla check:** passes (2 new strings).
+- **Not checked:** a real phone and iPhone Safari; the open cart drawer, filters and quick view; a single gift box and a landing page (none in the dev data); forms with the keyboard up; the step bar by eye (measured only). Checkout is still about seven screens long on a phone, though the order button is now always on screen.

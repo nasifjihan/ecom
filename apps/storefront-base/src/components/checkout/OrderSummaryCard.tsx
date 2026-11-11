@@ -151,7 +151,7 @@ export function OrderSummaryCard({
                       {item.title}
                     </p>
                     {item.variantLabel && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {item.variantLabel}
                       </p>
                     )}
@@ -181,7 +181,7 @@ export function OrderSummaryCard({
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground flex items-center gap-2">
               {t("Subtotal")}
-              <Badge variant="secondary" className="text-[10px] px-1.5">
+              <Badge variant="secondary" className="text-xs px-1.5">
                 {displayItemCount === 1 ? t("1 item") : t("{n} items", { n: displayItemCount })}
               </Badge>
             </span>
@@ -193,7 +193,7 @@ export function OrderSummaryCard({
               <Truck className="h-3.5 w-3.5" />
               {t("Shipping")}
               {shippingFree && (
-                <Badge variant="success" className="text-[10px] px-1.5">{t("FREE")}</Badge>
+                <Badge variant="success" className="text-xs px-1.5">{t("FREE")}</Badge>
               )}
             </span>
             {shippingLoading ? (
@@ -217,7 +217,7 @@ export function OrderSummaryCard({
           </div>
 
           {shippingLabel && !shippingLoading && shippingAmount !== undefined && shippingAmount > 0 && (
-            <p className="text-[11px] text-muted-foreground pl-5">
+            <p className="text-xs text-muted-foreground pl-5">
               {shippingLabel ?? t("Standard Shipping")}
             </p>
           )}
@@ -233,7 +233,7 @@ export function OrderSummaryCard({
                 <div key={i} className="flex justify-between items-center pl-0">
                   <span className="text-muted-foreground text-xs pl-5">
                     {t(line.name)}
-                    {line.rate !== undefined && <span className="text-[10px] ml-1">({(line.rate * 100).toFixed(0)}%)</span>}
+                    {line.rate !== undefined && <span className="text-xs ml-1">({(line.rate * 100).toFixed(0)}%)</span>}
                   </span>
                   <span className="font-medium text-xs">{formatMoney(line.amount, currency)}</span>
                 </div>
@@ -262,7 +262,7 @@ export function OrderSummaryCard({
                 {d.isDiscount && <Tag className="h-3.5 w-3.5" />}
                 {d.label}
                 {d.badge && (
-                  <Badge variant={d.badgeVariant ?? "secondary"} className="text-[10px] px-1.5">
+                  <Badge variant={d.badgeVariant ?? "secondary"} className="text-xs px-1.5">
                     {d.badge}
                   </Badge>
                 )}
@@ -285,7 +285,7 @@ export function OrderSummaryCard({
               <span className={cn(line.color ?? "text-muted-foreground")}>
                 {line.label}
                 {line.badge && (
-                  <Badge variant={line.badgeVariant ?? "secondary"} className="text-[10px] px-1.5 ml-2">
+                  <Badge variant={line.badgeVariant ?? "secondary"} className="text-xs px-1.5 ml-2">
                     {line.badge}
                   </Badge>
                 )}
@@ -320,7 +320,7 @@ export function OrderSummaryCard({
               <div className="text-2xl font-black text-primary tracking-tight">
                 {formatMoney(grandTotal, currency)}
               </div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 {taxIncluded && taxAmount > 0
                   ? t("Includes VAT {amount}", { amount: formatMoney(taxAmount, currency) })
                   : t("Incl. all taxes & fees")}
@@ -379,18 +379,18 @@ export function OrderSummaryCard({
         <div className="grid grid-cols-3 gap-2 pt-1">
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <Truck className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">{t("Fast Ship")}</span>
-            <span className="text-[9px] text-muted-foreground">{t("24-72hrs")}</span>
+            <span className="text-xs font-semibold">{t("Fast Ship")}</span>
+            <span className="text-xs text-muted-foreground">{t("24-72hrs")}</span>
           </div>
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <ShieldCheck className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">{t("100% Secure")}</span>
-            <span className="text-[9px] text-muted-foreground">{t("SSL Encrypted")}</span>
+            <span className="text-xs font-semibold">{t("100% Secure")}</span>
+            <span className="text-xs text-muted-foreground">{t("SSL Encrypted")}</span>
           </div>
           <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
             <Gift className="h-5 w-5 text-primary mb-1" />
-            <span className="text-[10px] font-semibold">{t("7 Days")}</span>
-            <span className="text-[9px] text-muted-foreground">{t("Easy Returns")}</span>
+            <span className="text-xs font-semibold">{t("7 Days")}</span>
+            <span className="text-xs text-muted-foreground">{t("Easy Returns")}</span>
           </div>
         </div>
       </CardContent>

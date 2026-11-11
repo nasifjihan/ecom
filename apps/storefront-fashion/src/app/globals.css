@@ -132,3 +132,15 @@
 .cms-prose img { max-width: 100%; height: auto; border-radius: 0.75rem; }
 .cms-prose figure img { width: 100%; }
 .cms-prose figcaption { margin-top: 0.4em; font-size: 0.85em; color: hsl(var(--muted-foreground)); text-align: center; }
+
+/* Phones (Batch 60) */
+
+/* Room for a page's fixed bottom bar (mobile-bar.tsx sets --bar), so it never covers the footer. */
+body { padding-bottom: var(--bar, 0px); }
+
+/* iPhones zoom the whole page when a field with text under 16px is tapped. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: 16px !important; }
+}

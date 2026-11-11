@@ -103,10 +103,10 @@ function OrderDetail({ orderRef }: { orderRef: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <Link href="/account/orders" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/account/orders" className="inline-flex items-center gap-1 py-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> {t("All orders")}
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <OrderStatusBadge status={o.status} />
           <OrderAgain order={o} />
           <Button variant="outline" size="sm" disabled={loadingInvoice} onClick={onInvoice}>

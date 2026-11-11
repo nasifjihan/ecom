@@ -45,6 +45,7 @@ import { cartLineKey, useCartPriceCheck } from "@/lib/cart-prices";
 import { AskForQuote } from "./ask-quote";
 import { CartPromotionSummary, PromoSlotStrip, promotionLines } from "@/app/_components/promotions";
 import { DeliveryEstimate } from "@/app/_components/delivery-estimate";
+import { MobileBar } from "@/app/_components/mobile-bar";
 
 function formatBDT(n: number) {
   return formatMoney(n, "BDT");
@@ -84,7 +85,7 @@ export default function CartPage() {
       </div>
 
 
-      <div className="grid lg:grid-cols-[1fr_380px] gap-6 lg:gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 lg:gap-8">
         <section>
           {!mounted ? (
             <div className="space-y-4">
@@ -184,12 +185,12 @@ export default function CartPage() {
                             </div>
                           )}
                           {item.flashSale && (
-                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10">
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-500/10">
                               <Zap className="h-3 w-3" /> {item.flashSale.name}
                             </div>
                           )}
                           {item.bulk && (
-                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10">
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10">
                               <Layers className="h-3 w-3" />{" "}
                               {item.bulk.business ? t("Business price, {n}+", { n: item.bulk.minQty }) : t("Bulk price, {n}+", { n: item.bulk.minQty })}
                             </div>
@@ -219,15 +220,15 @@ export default function CartPage() {
                                 if (item.qty <= 1) removeItem(item.productId, item.variantId);
                                 else updateQty(item.productId, item.variantId, item.qty - 1);
                               }}
-                              className="h-9 w-8 flex items-center justify-center hover:bg-accent transition-colors"
+                              className="h-10 w-10 flex items-center justify-center hover:bg-accent transition-colors"
                               aria-label={t("Decrease quantity")}
                             >
                               <Minus className="h-3.5 w-3.5" />
                             </button>
-                            <span className="h-9 min-w-[2.5rem] flex items-center justify-center font-semibold text-sm border-x px-2">{item.qty}</span>
+                            <span className="h-10 min-w-[2.5rem] flex items-center justify-center font-semibold text-sm border-x px-2">{item.qty}</span>
                             <button
                               onClick={() => updateQty(item.productId, item.variantId, item.qty + 1)}
-                              className="h-9 w-8 flex items-center justify-center hover:bg-accent transition-colors"
+                              className="h-10 w-10 flex items-center justify-center hover:bg-accent transition-colors"
                               aria-label={t("Increase quantity")}
                             >
                               <Plus className="h-3.5 w-3.5" />
@@ -276,7 +277,7 @@ export default function CartPage() {
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
                   <span className="text-muted-foreground">{t("Shipping and taxes calculated at checkout.")}</span>
                 </div>
-                <div className="flex gap-2 justify-end">
+                <div className="flex flex-wrap gap-2 justify-end">
                   <Button variant="outline" asChild>
                     <Link href="/products">
                       <ArrowLeft className="h-4 w-4 mr-2" /> {t("Continue Shopping")}
@@ -306,7 +307,7 @@ export default function CartPage() {
                       <img src={p.image} alt={p.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-white text-xs">
                         <div className="font-semibold line-clamp-1">{p.title}</div>
-                        <div className="text-[11px] opacity-90">{formatBDT(p.price)}</div>
+                        <div className="text-xs opacity-90">{formatBDT(p.price)}</div>
                       </div>
                     </Link>
                   ))}
@@ -328,7 +329,7 @@ export default function CartPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground flex items-center gap-2">
                     {t("Subtotal")}
-                    <Badge variant="secondary" className="text-[10px] px-1.5">{t("{n} items", { n: itemCount })}</Badge>
+                    <Badge variant="secondary" className="text-xs px-1.5">{t("{n} items", { n: itemCount })}</Badge>
                   </span>
                   <span className="font-medium">{formatBDT(subtotal)}</span>
                 </div>
@@ -355,7 +356,7 @@ export default function CartPage() {
                   <span className="font-semibold text-sm">{promoLines.length ? t("After offers") : t("Subtotal")}</span>
                   <div className="text-right">
                     <div className="text-2xl font-black text-primary">{formatBDT(afterOffers)}</div>
-                    <div className="text-[11px] text-muted-foreground">{t("Before delivery and VAT")}</div>
+                    <div className="text-xs text-muted-foreground">{t("Before delivery and VAT")}</div>
                   </div>
                 </div>
               </div>
@@ -392,24 +393,40 @@ export default function CartPage() {
               <div className="grid grid-cols-3 gap-2 pt-2">
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Truck className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">{t("Nationwide")}</span>
-                  <span className="text-[9px] text-muted-foreground">{t("Delivery")}</span>
+                  <span className="text-xs font-semibold">{t("Nationwide")}</span>
+                  <span className="text-xs text-muted-foreground">{t("Delivery")}</span>
                 </div>
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Shield className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">{t("Secure")}</span>
-                  <span className="text-[9px] text-muted-foreground">100%</span>
+                  <span className="text-xs font-semibold">{t("Secure")}</span>
+                  <span className="text-xs text-muted-foreground">100%</span>
                 </div>
                 <div className="flex flex-col items-center text-center p-3 rounded-xl bg-muted/30">
                   <Gift className="h-5 w-5 text-primary mb-1" />
-                  <span className="text-[10px] font-semibold">{t("COD")}</span>
-                  <span className="text-[9px] text-muted-foreground">{t("Available")}</span>
+                  <span className="text-xs font-semibold">{t("COD")}</span>
+                  <span className="text-xs text-muted-foreground">{t("Available")}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
         </aside>
       </div>
+
+      {/* Phones: the checkout button stays on screen (the summary is below the items). */}
+      {mounted && !empty && (
+        <MobileBar>
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">{t("Subtotal")}</p>
+              <p className="truncate text-base font-bold">{formatBDT(afterOffers)}</p>
+            </div>
+            <Button size="lg" className="h-12 px-5 text-base" disabled={hasProblems} onClick={() => !hasProblems && (window.location.href = "/checkout")}>
+              {t("Checkout")}
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </div>
+        </MobileBar>
+      )}
     </div>
   );
 }

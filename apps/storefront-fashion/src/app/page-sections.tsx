@@ -196,13 +196,14 @@ function Features({ section }: { section: SectionOf<"features"> }) {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.4 }}
-        className={`grid grid-cols-2 ${items.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-4 p-6 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-primary/5 border`}
+        // One per row on phones: two columns left each text about 90px and wrapped it into 4-5 lines.
+        className={`grid grid-cols-1 sm:grid-cols-2 ${items.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-1 sm:gap-4 p-3 sm:p-6 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-primary/5 border`}
       >
         {items.map((f) => {
           const Icon = FEATURE_ICONS[f.icon] ?? ShoppingBag;
           return (
-            <div key={f.title} className="flex items-start gap-3 p-2">
-              <div className="h-12 w-12 rounded-xl bg-card shadow-soft flex items-center justify-center flex-shrink-0">
+            <div key={f.title} className="flex items-center sm:items-start gap-3 p-2">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-card shadow-soft flex items-center justify-center flex-shrink-0">
                 <Icon className="h-6 w-6 text-primary" />
               </div>
               <div>

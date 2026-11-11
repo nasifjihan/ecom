@@ -88,7 +88,7 @@ function CartItemRow({
           </div>
           <div className="text-right">
             <span className="font-bold">{formatMoney(lineTotal, currency)}</span>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {t("{price} each", { price: formatMoney(item.price, currency) })}
             </div>
           </div>

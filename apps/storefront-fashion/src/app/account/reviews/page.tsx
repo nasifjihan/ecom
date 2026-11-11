@@ -28,9 +28,9 @@ export default function MyReviewsPage() {
               <h2 className="font-semibold">{t("Waiting for your review")}</h2>
               <ul className="grid gap-3 xl:grid-cols-2">
                 {data.toReview.map((p) => (
-                  <li key={p.productId} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+                  <li key={p.productId} className="flex flex-wrap items-center justify-end gap-3 rounded-xl border bg-card p-3">
                     <Thumb src={p.image} alt={p.title} />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[8rem] flex-1">
                       <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
                       <p className="text-xs text-muted-foreground">{t("Order #{ref}", { ref: p.orderNumber })}</p>
                     </div>

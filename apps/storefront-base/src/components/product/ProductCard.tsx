@@ -138,29 +138,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {product.flashSale && (
                 <Badge
                   variant="destructive"
-                  className="text-[10px] font-semibold bg-gradient-to-r from-orange-500 to-rose-600 border-0"
+                  className="text-xs font-semibold bg-gradient-to-r from-orange-500 to-rose-600 border-0"
                   title={product.flashSale.name}
                 >
                   ⚡ {t("FLASH SALE")}
                 </Badge>
               )}
               {isOnSale && discountPercent && (
-                <Badge variant="destructive" className="text-[10px] font-semibold">
+                <Badge variant="destructive" className="text-xs font-semibold">
                   -{discountPercent}%
                 </Badge>
               )}
               {product.isNew && (
-                <Badge variant="success" className="text-[10px] font-semibold">
+                <Badge variant="success" className="text-xs font-semibold">
                   {t("NEW")}
                 </Badge>
               )}
               {product.preOrder && (
-                <Badge variant="secondary" className="text-[10px] font-semibold">
+                <Badge variant="secondary" className="text-xs font-semibold">
                   {t("PRE-ORDER")}
                 </Badge>
               )}
               {product.badge && (
-                <Badge variant={product.badgeVariant ?? "default"} className="text-[10px] font-semibold">
+                <Badge variant={product.badgeVariant ?? "default"} className="text-xs font-semibold">
                   {product.badge}
                 </Badge>
               )}

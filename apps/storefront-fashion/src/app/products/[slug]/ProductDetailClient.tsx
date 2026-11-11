@@ -9,6 +9,7 @@ import { QuestionsSection, ReviewForm } from "./engagement-sections";
 import { RecentlyViewed } from "./recently-viewed";
 import { NotifyMe } from "./notify-me";
 import { DeliveryEstimate } from "../../_components/delivery-estimate";
+import { MobileBar } from "../../_components/mobile-bar";
 import { HoverZoom, MediaViewer, ProductVideo } from "./media-viewer";
 import { videoEmbed } from "@ecom/utils";
 import Link from "next/link";
@@ -351,30 +352,33 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
         </ol>
       </nav>
 
-      <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 mb-16">
-        <div className="space-y-3">
-          {/* minmax(0,1fr) + fixed thumb height: Swiper measures its parent, so an auto-sized
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-12 mb-10 lg:mb-16">
+        <div className="max-lg:contents lg:space-y-3">
+          {/* Phones: the photo at full width with the thumbnails in a row under it; from md up the
+              thumbnails are a column on the left (Swiper turns them at 768px).
+              minmax(0,1fr) + fixed thumb height: Swiper measures its parent, so an auto-sized
               grid track lets it grow without bound (33M px pages). */}
-          <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-[80px_minmax(0,1fr)] gap-3">
             <Swiper
               modules={[FreeMode, Navigation, Thumbs]}
-              direction="vertical"
+              direction="horizontal"
+              breakpoints={{ 768: { direction: "vertical" } }}
               spaceBetween={8}
               slidesPerView="auto"
               freeMode={true}
               watchSlidesProgress={true}
               onSwiper={setThumbsSwiper}
-              className="!w-[80px] h-[400px] md:h-[520px]"
+              className="order-2 md:order-1 !w-full md:!w-[80px] h-[64px] md:h-[520px]"
             >
               {images.map((img: string, i: number) => (
-                <SwiperSlide key={i} className="!h-[80px] !w-[80px] !flex-shrink-0">
+                <SwiperSlide key={i} className="!h-[64px] !w-[64px] md:!h-[80px] md:!w-[80px] !flex-shrink-0">
                   <div className="h-full w-full rounded-lg overflow-hidden border-2 cursor-pointer hover:border-primary transition-colors">
                     <img src={thumbOf(i, img)} alt={`${product.title} view ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
                   </div>
                 </SwiperSlide>
               ))}
               {video && (
-                <SwiperSlide className="!h-[80px] !w-[80px] !flex-shrink-0">
+                <SwiperSlide className="!h-[64px] !w-[64px] md:!h-[80px] md:!w-[80px] !flex-shrink-0">
                   <div className="relative h-full w-full rounded-lg overflow-hidden border-2 cursor-pointer hover:border-primary transition-colors bg-muted" aria-label={t("Video")}>
                     {images[0] && <img src={thumbOf(0, images[0])} alt="" loading="lazy" className="h-full w-full object-cover opacity-60" />}
                     <PlayCircle className="absolute inset-0 m-auto h-8 w-8 text-foreground drop-shadow" />
@@ -383,7 +387,7 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
               )}
             </Swiper>
 
-            <div className="relative min-w-0">
+            <div className="relative min-w-0 order-1 md:order-2">
               <Swiper modules={[Thumbs, Navigation]} thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }} className="aspect-[4/5] w-full rounded-2xl overflow-hidden border bg-muted">
                 {images.map((img: string, i: number) => (
                   <SwiperSlide key={i}>
@@ -438,40 +442,40 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-2">
+          <div className="max-lg:order-2 grid grid-cols-3 gap-2 sm:gap-3 lg:pt-2">
             {[
               { icon: <Truck className="h-5 w-5" />, title: msg("Nationwide Delivery"), desc: msg("All 64 districts") },
               { icon: <RotateCcw className="h-5 w-5" />, title: msg("Easy Returns"), desc: msg("See our return policy") },
               { icon: <ShieldCheck className="h-5 w-5" />, title: msg("Authentic"), desc: msg("100% genuine products") },
             ].map((f) => (
-              <div key={f.title} className="flex items-center gap-2 p-3 rounded-xl bg-card border">
+              <div key={f.title} className="flex flex-col items-center gap-1.5 p-2 text-center sm:flex-row sm:gap-2 sm:p-3 sm:text-left rounded-xl bg-card border">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">{f.icon}</div>
                 <div className="min-w-0">
                   <div className="text-xs font-semibold leading-tight">{t(f.title)}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight">{t(f.desc)}</div>
+                  <div className="text-xs text-muted-foreground leading-tight">{t(f.desc)}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="flex flex-col">
+        <div id="buy-box" className="max-lg:order-1 flex min-w-0 scroll-mt-20 flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex flex-wrap items-center gap-2">
               {product.brand && (
                 <Link href={`/brands/${product.brand.slug}`}>
-                  <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1 hover:bg-primary/10">
+                  <Badge variant="secondary" className="uppercase tracking-wider text-xs py-1 hover:bg-primary/10">
                     {product.brand.name}
                   </Badge>
                 </Link>
               )}
               {product.category?.name && (
-                <Badge variant="secondary" className="uppercase tracking-wider text-[10px] py-1">
+                <Badge variant="secondary" className="uppercase tracking-wider text-xs py-1">
                   {product.category.name}
                 </Badge>
               )}
               {product.sourcing && (
-                <Badge variant="outline" className="text-[11px] py-1">
+                <Badge variant="outline" className="text-xs py-1">
                   {product.sourcing === "local"
                     ? t("Made in Bangladesh")
                     : product.originCountry
@@ -842,6 +846,37 @@ function ProductDetailView({ product, related }: { product: ProductDetail; relat
       </section>
       )}
       <RecentlyViewed productId={product.id} />
+
+      {/* Phones: the buy buttons stay on screen. With no size picked yet, they go back to the options. */}
+      {inStock && (
+        <MobileBar>
+          <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              className="h-12 min-w-0 flex-1 px-3 text-base"
+              onClick={() => {
+                if (hasVariants && !selectedVariant) document.getElementById("buy-box")?.scrollIntoView({ block: "start" });
+                handleAddToCart();
+              }}
+            >
+              <ShoppingCart className="mr-2 h-5 w-5 shrink-0" />
+              <span className="truncate">{product.preOrder ? t("Pre-order now") : t("Add to Cart")}</span>
+            </Button>
+            <Button
+              size="lg"
+              variant="secondary"
+              className="h-12 shrink-0 px-4"
+              onClick={() => {
+                if (hasVariants && !selectedVariant) document.getElementById("buy-box")?.scrollIntoView({ block: "start" });
+                if (addToCart()) router.push("/checkout");
+              }}
+            >
+              <Zap className="mr-1.5 h-5 w-5" />
+              {t("Buy now")}
+            </Button>
+          </div>
+        </MobileBar>
+      )}
     </div>
   );
 }

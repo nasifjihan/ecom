@@ -124,7 +124,7 @@ export default function ThankYouPage() {
       <div className="container py-10">
         <div className="animate-pulse max-w-4xl mx-auto">
           <div className="h-40 w-full mb-6 rounded-3xl bg-muted" />
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="h-72 rounded-2xl bg-muted" />
             <div className="h-72 rounded-2xl bg-muted" />
           </div>
@@ -254,7 +254,7 @@ export default function ThankYouPage() {
         </div>
       </motion.div>
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         <div className="lg:col-span-2 space-y-6">
           {order.payment?.canPayOnline && (
             <OnlinePaymentCard orderKey={orderKey} payment={order.payment} currency={order.currency} outcome={searchParams.get("payment")} />
@@ -313,7 +313,7 @@ export default function ThankYouPage() {
                       </div>
                       <div className="text-right py-0.5 flex-shrink-0">
                         <p className="font-bold">{formatBDT(lineTotal)}</p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {it.qty} × {formatBDT(it.price)}
                         </p>
                       </div>
@@ -383,7 +383,7 @@ export default function ThankYouPage() {
             </CardContent>
           </Card>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">

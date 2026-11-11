@@ -28,7 +28,7 @@ export default function QuotePage() {
 
   return (
     <AccountShell title={msg("Quote")}>
-      <Link href="/account/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/account/quotes" className="inline-flex items-center gap-1 py-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> {t("All quotes")}
       </Link>
       {isLoading ? (

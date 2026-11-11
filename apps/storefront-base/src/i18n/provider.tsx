@@ -57,7 +57,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     <button
       type="button"
       onClick={() => setLocale(other)}
-      className={className ?? "rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"}
+      className={className ?? "rounded-md px-2 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"}
       aria-label={t("Change language")}
       title={t("Change language")}
       lang={other}

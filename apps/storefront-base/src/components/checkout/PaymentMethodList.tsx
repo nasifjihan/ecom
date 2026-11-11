@@ -211,9 +211,9 @@ export function PaymentMethodList({
     <div className="mt-4 p-4 rounded-xl bg-muted/40 border space-y-4 animate-fade-in">
       <div className="flex items-center gap-2 mb-2">
         <div className="flex gap-1.5">
-          <span className="px-2 py-1 text-[10px] font-bold rounded bg-blue-100 text-blue-700">VISA</span>
-          <span className="px-2 py-1 text-[10px] font-bold rounded bg-red-100 text-red-700">MC</span>
-          <span className="px-2 py-1 text-[10px] font-bold rounded bg-indigo-100 text-indigo-700">AMEX</span>
+          <span className="px-2 py-1 text-xs font-bold rounded bg-blue-100 text-blue-700">VISA</span>
+          <span className="px-2 py-1 text-xs font-bold rounded bg-red-100 text-red-700">MC</span>
+          <span className="px-2 py-1 text-xs font-bold rounded bg-indigo-100 text-indigo-700">AMEX</span>
         </div>
       </div>
       <Controller
@@ -312,7 +312,7 @@ export function PaymentMethodList({
           </FormItem>
         )}
       />
-      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <Shield className="h-3.5 w-3.5 text-green-600" />
         🔒 {t("Payments secured by Stripe — your card details are encrypted and never stored on our servers.")}
       </p>
@@ -375,7 +375,7 @@ export function PaymentMethodList({
                   className="font-mono uppercase"
                 />
               </FormControl>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {t("Haven't paid yet? Leave it empty and add it later from your order page. We confirm the order once we see the payment.")}
               </p>
             </FormItem>
@@ -408,7 +408,7 @@ export function PaymentMethodList({
             <FormControl>
               <Input placeholder={t("From your bank's confirmation")} {...field} value={field.value ?? ""} />
             </FormControl>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {t("You can also add it later from your order page. We confirm the order once the money arrives (usually 1–2 working days).")}
             </p>
           </FormItem>
@@ -436,13 +436,13 @@ export function PaymentMethodList({
       </div>
       <Separator className="my-3" />
       <div className="flex flex-wrap gap-2">
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">Visa</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">Mastercard</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">bKash</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">Nagad</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">Rocket</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">DBBL Nexus</span>
-        <span className="px-2 py-1 text-[10px] rounded bg-background border">{t("+20 more")}</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">Visa</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">Mastercard</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">bKash</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">Nagad</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">Rocket</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">DBBL Nexus</span>
+        <span className="px-2 py-1 text-xs rounded bg-background border">{t("+20 more")}</span>
       </div>
     </div>
   );
@@ -475,7 +475,7 @@ export function PaymentMethodList({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{t(gw.brandName)}</span>
                     {gw.extraFee != null && gw.extraFee > 0 && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                      <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
                         +{formatMoney(gw.extraFee, currency)}
                       </Badge>
                     )}

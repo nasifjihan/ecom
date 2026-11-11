@@ -54,13 +54,13 @@ export function CheckoutStepper({
                   disabled={!isClickable}
                   onClick={() => isClickable && onStepClick?.(step.id)}
                   className={cn(
-                    "relative group flex items-center justify-center",
+                    "relative group flex flex-col items-center justify-center",
                     isClickable && "cursor-pointer",
                   )}
                 >
                   <div
                     className={cn(
-                      "w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-sm md:text-base transition-all border-2",
+                      "w-9 h-9 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-sm md:text-base transition-all border-2",
                       isCompleted && "bg-primary border-primary text-primary-foreground",
                       isCurrent && !isCompleted && "bg-primary border-primary text-primary-foreground ring-4 ring-primary/20",
                       !isCompleted && !isCurrent && "bg-muted border-muted text-muted-foreground",
@@ -76,6 +76,8 @@ export function CheckoutStepper({
                     <div
                       className={cn(
                         "text-xs md:text-sm font-semibold whitespace-nowrap",
+                        // Five labels don't fit a phone: only the current step is named there.
+                        !isCurrent && "hidden sm:block",
                         isCurrent && "text-primary",
                         isCompleted && !isCurrent && "text-foreground",
                         !isCompleted && !isCurrent && "text-muted-foreground",
@@ -84,7 +86,7 @@ export function CheckoutStepper({
                       {t(step.label)}
                     </div>
                     {step.description && (
-                      <div className="hidden md:block text-[11px] text-muted-foreground mt-0.5 max-w-[120px]">
+                      <div className="hidden md:block text-xs text-muted-foreground mt-0.5 max-w-[120px]">
                         {t(step.description)}
                       </div>
                     )}

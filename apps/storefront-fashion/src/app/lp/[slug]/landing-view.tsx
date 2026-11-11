@@ -62,7 +62,7 @@ function Countdown({ endsAt }: { endsAt: string }) {
         {parts.map(([v, label]) => (
           <div key={label} className="min-w-14 rounded-lg bg-foreground px-2 py-1.5 text-center text-background">
             <div className="text-xl font-bold tabular-nums leading-tight">{left === null ? "--" : String(v).padStart(2, "0")}</div>
-            <div className="text-[11px] opacity-80">{label}</div>
+            <div className="text-xs opacity-80">{label}</div>
           </div>
         ))}
       </div>

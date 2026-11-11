@@ -69,7 +69,7 @@ export function DeliveryEstimate({ subtotal, weightKG, qty, extraDays = 0 }: { s
           <MapPin className="h-4 w-4 text-primary" />
           {place.district ? t("Deliver to {place}", { place: [place.upazila, place.district].filter(Boolean).join(", ") }) : t("Delivery charge and time")}
         </span>
-        <button type="button" onClick={() => setEditing((e) => !e)} className="text-xs font-medium text-primary hover:underline">
+        <button type="button" onClick={() => setEditing((e) => !e)} className="-my-2 -mr-2 px-2 py-2 text-sm font-medium text-primary hover:underline">
           {place.district ? t("Change") : t("Choose area")}
         </button>
       </div>

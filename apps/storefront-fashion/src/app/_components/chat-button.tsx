@@ -77,7 +77,11 @@ export function ChatButton({ settings }: { settings: ChatButtonSettings | null |
   const one = links.length === 1 ? links[0]! : null;
 
   return (
-    <div className={cn("fixed z-40 flex flex-col items-end gap-2 pb-[env(safe-area-inset-bottom)]", comparing ? "bottom-20" : "bottom-4", settings?.side === "left" ? "left-4 items-start" : "right-4")}>
+    // Above a page's fixed phone bar (--bar, see mobile-bar.tsx); from md up, above the compare bar.
+    <div
+      style={{ bottom: "calc(var(--bar, 0px) + 1rem)" }}
+      className={cn("fixed z-40 flex flex-col items-end gap-2 pb-[env(safe-area-inset-bottom)]", comparing && "md:!bottom-20", settings?.side === "left" ? "left-4 items-start" : "right-4")}
+    >
       <BackToTop />
       {open &&
         links.map((l) => (

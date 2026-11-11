@@ -120,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       )}
     >
       <div className="container">
-        <div className="flex h-16 items-center gap-4 lg:h-20">
+        <div className="flex h-16 items-center gap-2 sm:gap-4 lg:h-20">
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               className="lg:hidden p-2 -ml-2 rounded-md hover:bg-accent"
@@ -237,7 +237,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
             <LanguageSwitcher />
             {modeSwitch && <ModeSwitch />}
             <Link href="/search" className="p-2 rounded-md hover:bg-accent md:hidden" aria-label={t("Search")}>

@@ -66,17 +66,17 @@ export function CouponApplyInput({
             <div className="text-sm font-semibold text-green-800 flex items-center gap-2">
               <span className="uppercase tracking-wide">{applied.couponCode}</span>
               {applied.discountType === "PERCENTAGE" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                   {t("Percentage")}
                 </span>
               )}
               {applied.discountType === "FIXED" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                   {t("Fixed")}
                 </span>
               )}
               {applied.freeShipping && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                   {t("Free Shipping")}
                 </span>
               )}
@@ -150,7 +150,7 @@ export function CouponApplyInput({
       )}
 
       {!isApplied && !hasError && (
-        <p className="text-[11px] text-muted-foreground px-1">
+        <p className="text-xs text-muted-foreground px-1">
           💡 {t("Have a promo code? Enter it above to unlock exclusive discounts.")}
         </p>
       )}

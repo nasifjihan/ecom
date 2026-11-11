@@ -249,7 +249,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <SalesCodeCapture />
           <CartSync />
           <ChatButton settings={site?.chatButton} />
-          <CompareTray />
+          <CompareTray chatSide={site?.chatButton?.enabled ? site.chatButton.side : null} />
         </Providers>
         </>
         )}

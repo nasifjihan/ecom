@@ -34,7 +34,7 @@ export default async function BlogPostView({ params }: Props) {
 
   return (
     <article className="container max-w-3xl py-10 md:py-14">
-      <Link href="/blog" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/blog" className="inline-flex items-center gap-1 py-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> All posts
       </Link>
       <p className="mt-6 text-sm text-muted-foreground">

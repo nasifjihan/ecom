@@ -575,10 +575,10 @@ export default function ProductsPage() {
                           <span className="text-sm text-muted-foreground line-through">{formatMoney(p.compareAtPrice)}</span>
                         )}
                         {p.isOnSale && p.discountPercent && (
-                          <Badge variant="destructive" className="text-[10px]">-{p.discountPercent}%</Badge>
+                          <Badge variant="destructive" className="text-xs">-{p.discountPercent}%</Badge>
                         )}
                         {p.flashSale && (
-                          <Badge variant="destructive" className="text-[10px] bg-gradient-to-r from-orange-500 to-rose-600 border-0">
+                          <Badge variant="destructive" className="text-xs bg-gradient-to-r from-orange-500 to-rose-600 border-0">
                             ⚡ {t("Flash sale")}
                           </Badge>
                         )}

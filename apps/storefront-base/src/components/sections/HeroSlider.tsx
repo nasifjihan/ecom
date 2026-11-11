@@ -96,7 +96,8 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({
         }
         navigation={showNavigation}
         onSlideChange={(swiper) => onSlideChange?.(swiper.activeIndex)}
-        className="h-full w-full"
+        // Phones swipe; the arrows sat on top of the headline there.
+        className="h-full w-full max-md:[&_.swiper-button-next]:hidden max-md:[&_.swiper-button-prev]:hidden"
       >
         {slides.map((slide) => (
           <SwiperSlide key={slide.id} className="h-full">
