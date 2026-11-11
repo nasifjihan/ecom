@@ -552,14 +552,15 @@ export default function EditProductPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {product?.status === "published" && !product.deletedAt && (
+              {/* The product is loaded with its status in capitals (catalog-api-slice fromApiProduct). */}
+              {product?.status === "PUBLISHED" && !product.deletedAt && (
                 <Button type="button" variant="outline" asChild>
                   <a href={`${STOREFRONT_URL}/products/${product.slug}`} target="_blank" rel="noreferrer">
                     <Eye className="mr-2 h-4 w-4" /> View on store
                   </a>
                 </Button>
               )}
-              {product?.status === "published" && !product.deletedAt && (
+              {product?.status === "PUBLISHED" && !product.deletedAt && (
                 <Button type="button" variant="outline" asChild title="A page for ads and Facebook posts, with an order form">
                   <a href={`/online-store/landing-pages/new?productId=${product.id}`}>Make landing page</a>
                 </Button>
@@ -1428,12 +1429,12 @@ export default function EditProductPage() {
                       {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                       Save Draft
                     </Button>
-                    <Button type="button" variant="outline" className="w-full" asChild disabled={product?.status !== "published"}>
+                    <Button type="button" variant="outline" className="w-full" asChild disabled={product?.status !== "PUBLISHED"}>
                       <a
                         href={`${STOREFRONT_URL}/products/${product?.slug ?? ""}`}
                         target="_blank"
                         rel="noreferrer"
-                        title={product?.status === "published" ? "View on store" : "Publish it to see it on the store"}
+                        title={product?.status === "PUBLISHED" ? "View on store" : "Publish it to see it on the store"}
                         aria-label="View on store"
                       >
                         <Eye className="h-4 w-4" />
